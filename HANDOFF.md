@@ -1,7 +1,7 @@
 # HANDOFF.md
 
 ## Last Updated
-2026-04-25 (repo rename)
+2026-04-25 (repo rename + Day 1 local CI scaffold)
 
 ## Project Status
 🟡 In progress — design package complete and audited; no code or art yet. Working title locked as **Pledge & Crown**.
@@ -56,7 +56,7 @@ Prioritized for the incoming session:
 1. **TESS + RF policy final clearance on "Pledge & Crown"** — required before any public asset, domain registration, or repo rename. ~30 minutes.
 2. **Decide remaining open questions** (HANDOFF §"Open questions" 2–5) — leaderboards in MVP, licensing model, distribution platform priority, Temple-in-marketing. Each is design-impacting.
 3. ~~**Repo rename**~~ — done 2026-04-25: `J:\cargoandcrowns\` → `J:\pledgeandcrowns\`. Audit any external references (skills, scheduled tasks, wiki entries) that still point at the old path.
-4. **Day 1 of critical path** — register `pledgeandcrown.dev` (or alt), create GitHub org, scaffold `scripts/ci.ps1` + pre-commit hook (NOT GitHub Actions).
+4. **Day 1 of critical path** — register `pledgeandcrown.dev` (or alt), create GitHub org. ~~scaffold `scripts/ci.ps1` + pre-commit hook~~ done 2026-04-25 (commits 6838264, ceaed94). Hook is installed in `.git/hooks/pre-commit`; `ci.ps1` is a no-op until `Cargo.toml` exists. PS 5.1 gotcha logged: scripts must be ASCII-only (no em-dashes) because PS 5.1 reads UTF-8-without-BOM as ANSI.
 5. **Day 2 — style bible reference image gen** — 10 images per `design/04-art-handoff-prompts.md`. Do not bulk-gen until the 10 are approved.
 6. **Day 3 onward** — Bevy scaffold per `design/06-mvp-scope.md`. Verify current stable Bevy at scaffold time; pin and document.
 
@@ -67,7 +67,7 @@ Prioritized for the incoming session:
 - **Pledge & Crown is the title.** Internal-only until TESS clears. Don't push it to any public surface yet.
 - **The Borrow Checker still exists** — as the Act 2 boss. Don't rename the boss along with the game.
 - **Bevy version is intentionally unpinned** in CLAUDE.md and `05-tech-architecture.md`. Doc text was written against 0.14; verify current stable at scaffold time and pin then.
-- **The repo is not a git repo yet** (`Is a git repository: false`). Day 1 of the critical path creates it.
+- **Repo is now a git repo** as of 2026-04-25. `main` branch, two commits. No remote yet — GitHub org creation is still pending.
 - **Compile API design hard rule:** player input never touches `Cargo.toml`. Server owns the manifest. If a future session designs a "user crates" or "player imports" feature, that's a v2+ conversation — not MVP.
 - **GitHub Actions is banned on Matt's account** (global rule). Local CI only. The design docs now reflect this; do not re-introduce GH Actions.
 
