@@ -1,5 +1,5 @@
 # Installs the pre-commit hook into .git/hooks/.
-# Run once after `git init` (or after fresh clone).
+# Run once after 'git init' (or after fresh clone).
 # powershell -ExecutionPolicy Bypass -File scripts/install-hooks.ps1
 
 $ErrorActionPreference = "Stop"
@@ -20,7 +20,4 @@ if (-not (Test-Path $hookSrc)) {
 }
 
 Copy-Item -Force $hookSrc $hookPath
-# Git for Windows respects shebang; mark executable bit via git update-index for visibility.
-git update-index --chmod=+x $hookSrc 2>$null
-
 Write-Host "[ok] pre-commit hook installed at $hookPath" -ForegroundColor Green

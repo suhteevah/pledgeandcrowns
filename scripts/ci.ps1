@@ -1,17 +1,17 @@
-# Pledge & Crown — Local CI
+# Pledge and Crown - Local CI
 # Runs: cargo fmt --check, cargo check, clippy (warnings as errors), tests.
-# Per global rules: GitHub Actions is BANNED. This is the only CI.
+# GitHub Actions is BANNED per global rule. This is the only CI.
 # Invoke: powershell -ExecutionPolicy Bypass -File scripts/ci.ps1
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
 
-Write-Host "=== Pledge & Crown CI ===" -ForegroundColor Cyan
+Write-Host "=== Pledge and Crown CI ===" -ForegroundColor Cyan
 Write-Host "repo: $repoRoot"
 
 if (-not (Test-Path "Cargo.toml")) {
-    Write-Host "[skip] No Cargo.toml yet — Rust scaffold not in place. CI is a no-op." -ForegroundColor Yellow
+    Write-Host "[skip] No Cargo.toml yet - Rust scaffold not in place. CI is a no-op." -ForegroundColor Yellow
     exit 0
 }
 
