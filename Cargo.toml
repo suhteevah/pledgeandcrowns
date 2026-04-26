@@ -1,0 +1,53 @@
+[workspace]
+resolver = "3"
+members = [
+    "game",
+    "compile-api",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+authors = ["Matt Gates <mmichels88@gmail.com>"]
+license = "TBD"
+repository = "https://github.com/suhteevah/pledge-and-crown"
+
+[workspace.dependencies]
+# Game engine. Pinned to current stable as of 2026-03-04.
+# Doc text was written against 0.14; we scaffold against 0.18 and iterate.
+bevy = { version = "0.18", default-features = false }
+bevy_egui = "0.39"
+bevy_ecs_tilemap = "0.18"
+bevy_kira_audio = "0.25"
+egui_code_editor = "0.2"
+
+# Logging. Verbose tracing everywhere per global rule.
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+# Errors.
+anyhow = "1"
+thiserror = "2"
+
+# Serde / persistence.
+serde = { version = "1", features = ["derive"] }
+bincode = "2"
+
+# Async runtime (for compile-api).
+tokio = { version = "1", features = ["full"] }
+axum = "0.8"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace", "cors"] }
+
+[profile.release]
+codegen-units = 1
+lto = "fat"
+opt-level = 3
+
+# Bevy recommends opt-level=1 for dev to keep iteration speed sane.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3

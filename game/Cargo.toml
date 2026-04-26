@@ -1,0 +1,43 @@
+[package]
+name = "pledge_and_crown"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Pledge & Crown - the Rust-teaching pixel-art RPG."
+
+[features]
+# `dev` enables hot-reload, debug overlays, verbose tracing.
+default = []
+dev = ["bevy/dynamic_linking"]
+
+[dependencies]
+bevy = { workspace = true, features = [
+    "bevy_winit",
+    "bevy_window",
+    "bevy_render",
+    "bevy_core_pipeline",
+    "bevy_sprite",
+    "bevy_text",
+    "bevy_ui",
+    "bevy_state",
+    "bevy_asset",
+    "bevy_log",
+    "x11",
+    "wayland",
+    "png",
+    "default_font",
+] }
+bevy_egui.workspace = true
+bevy_ecs_tilemap.workspace = true
+bevy_kira_audio.workspace = true
+egui_code_editor.workspace = true
+
+tracing.workspace = true
+tracing-subscriber.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+bincode.workspace = true
