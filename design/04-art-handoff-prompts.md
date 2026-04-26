@@ -1,6 +1,6 @@
 # 04 — Art Handoff Prompts
 
-> Copy-paste ready prompts for image generation. Every prompt below assumes the **Style Bible v1.0** rules (`03-art-style-bible.md`) and prepends a **Style Suffix** that locks the constraints. Do not edit the Style Suffix without bumping the bible version.
+> Copy-paste ready prompts for image generation. Every prompt below assumes the **Style Bible v2.0** rules (`03-art-style-bible.md` — "Heraldic Code" palette) and prepends a **Style Suffix** that locks the constraints. Do not edit the Style Suffix without bumping the bible version.
 
 ## How to use this document
 
@@ -17,19 +17,41 @@ Append this to **every** generation prompt unless explicitly noted. Treat it as 
 
 ```
 Pixel art, 16-bit / SNES-era aesthetic, hand-crafted feel. Strict pixel grid,
-no anti-aliasing within sprites, integer-multiple scalable. 1-pixel dark outline
-on all character and object sprites (palette-derived, never pure black).
+no anti-aliasing within sprites, integer-multiple scalable. 1-pixel outline on
+all character and object sprites using Coalblack (#161313), never pure black.
 Lighting from top-left at 45 degrees, hard-edged shading bands of three or fewer
-per surface, no gradients except in skies and magical effects. Color palette
-is the EDG32-RUST 32-color palette: Rust oranges (#be4a2f, #d77643), warm reds
-(#a22633, #e43b44), forge yellows (#feae34, #fee761), forge greens (#63c74d,
-#3e8948), deep teals (#193c3e, #265c42), royal blues (#124e89, #0099db),
-cool greys (#8b9bb4, #5a6988), deep navy (#262b44, #181425), magic magentas
-(#68386c, #b55088), and parchment cream (#ead4aa, #c0cbdc). No off-palette colors.
-No text, no signage with text, no logos. No extra fingers, no melted features,
-no over-detailed hair. Cohesive Stardew-Valley-meets-Factorio mood. Resolution
-[RESOLUTION]. [SUBJECT-SPECIFIC INSTRUCTIONS].
+per surface, no gradients except in skies and magical effects.
+
+Color palette is the custom 32-color "Heraldic Code" palette (split-complementary
+@ 350° anchor + 140°/178° pair, +42° gold accent, +270° magic flicker):
+Burgundy ramp - Inkblood #1B0810, Crypt #3E1220, Oxblood #6B1F35 (PRIMARY BRAND),
+Wineflesh #982D52, Dusty rose #C56883, Pink quartz #EBC2CC.
+Gold ramp - Bog umber #2D1F0A, Bronze #5E4116, Antique brass #9C7026,
+Old gold #D2A53F (THE CROWN), Brass leaf #F0D27D, Parchment cream #FCEFC8.
+Teal ramp (the Borrow Checker's domain) - Abyssal #062123, Deep teal #154548,
+Main teal #2A8482, Bright teal #5BB8AF, Mist teal #A4DED4.
+Forest ramp - Mossbed #142A19, Pine #27502E, Forest #487E40, Spring meadow #82B450,
+Hayfield #C9DC97.
+Neutrals - Coalblack #161313, Basalt #3E3833, Stone grey #7A7064, Aged paper #BFB2A0.
+Magic violet (sparing, <5% of frame) - Royal arcane #3A1559, Mage glow #9D6FE0.
+Cool counterweight - Cobalt deep #0E2E54, Cobalt #377AB8.
+Alarms / specular - Alarm scarlet #E63946 (errors only), Specular white #FFFFFF (<=1%).
+
+No off-palette colors. No text, no signage with text, no logos. No extra fingers,
+no melted features, no over-detailed hair. Cohesive heraldic-manuscript-meets-
+Stardew-Valley mood (warm parchment + heraldic burgundy + cool teal magic),
+deliberately NOT a generic warm-orange pixel-art palette. Resolution [RESOLUTION].
+[SUBJECT-SPECIFIC INSTRUCTIONS].
 ```
+
+### Skin tones
+
+The palette has no dedicated flesh ramp. Pull skin tones from the existing ramps to
+maintain diversity without bloating the palette:
+- Pale skin: **Pink quartz** highlight, **Dusty rose** mid, **Wineflesh** shadow.
+- Olive skin: **Brass leaf** highlight, **Antique brass** mid, **Bronze** shadow.
+- Dark skin: **Antique brass** highlight, **Bronze** mid, **Bog umber** shadow.
+Pick one ramp per character; do not mix.
 
 For each prompt below, replace `[RESOLUTION]` and `[SUBJECT-SPECIFIC INSTRUCTIONS]` from the per-prompt template.
 
@@ -43,9 +65,9 @@ For each prompt below, replace `[RESOLUTION]` and `[SUBJECT-SPECIFIC INSTRUCTION
 [STYLE SUFFIX with:
   RESOLUTION = 32×32 pixels, transparent background.
   SUBJECT = Front-facing human adventurer, idle pose.
-  Wearing a simple traveler's tunic in deep blue (#124e89), a tan leather belt,
+  Wearing a simple traveler's tunic in Cobalt deep (#0E2E54), a tan leather belt,
   brown boots, and a small satchel at the hip. Short hair, friendly face, neutral
-  expression. Holding a wooden staff with a small rust-orange crystal at the tip.
+  expression. Holding a wooden staff with a small Old gold (#D2A53F) crystal at the tip.
   Light skin tone, but designed for easy palette-swap to other skin tones in
   post-production. Single still frame; this is the idle base pose.]
 ```
@@ -57,9 +79,11 @@ For each prompt below, replace `[RESOLUTION]` and `[SUBJECT-SPECIFIC INSTRUCTION
   RESOLUTION = 32×32 pixels, transparent background.
   SUBJECT = A small, friendly crab character. Round body, two large expressive
   eyes on stalks, two front claws raised in a welcoming gesture. Body color is
-  a warm rust orange (#be4a2f to #d77643 shading), with a slightly lighter
-  belly. The crab is whimsical and approachable, NOT the official Rust Foundation
-  Ferris mascot — distinct silhouette, lighter coloration, slightly more cartoonish
+  heraldic burgundy — Wineflesh (#982D52) midtone with Old gold (#D2A53F) highlights
+  on claw-tips and shell ridges, Crypt (#3E1220) shadows underneath, and a slightly
+  lighter Dusty rose (#C56883) belly. The crab is whimsical and approachable, NOT
+  the official Rust Foundation Ferris mascot — distinct silhouette (burgundy-and-gold,
+  not orange), slightly more cartoonish
   proportions. Standing on tiny feet, looking up and to the right as if narrating.
   Single still frame, idle pose.]
 ```
@@ -70,9 +94,9 @@ For each prompt below, replace `[RESOLUTION]` and `[SUBJECT-SPECIFIC INSTRUCTION
 [STYLE SUFFIX with:
   RESOLUTION = 64×64 pixels, transparent background.
   SUBJECT = A tall, austere robed figure standing on a stone bridge. Robe is
-  deep navy (#262b44) with embroidered glowing cyan (#2ce8f5) reference symbols
+  Cobalt deep (#0E2E54) with embroidered glowing Main teal (#2A8482) reference symbols
   (ampersand "&" and ampersand-mut "&mut" runes) along the hem and sleeves.
-  Hood pulled low, face mostly in shadow but two faint cyan-glowing eyes visible.
+  Hood pulled low, face mostly in shadow but two faint Bright teal (#5BB8AF) eyes visible.
   Holding a tall iron staff topped with a balance scale. Posture is upright,
   formal, slightly intimidating but not evil — he is doing his job. The robe
   has subtle motion as if a faint magical wind moves it. Single still frame.]
@@ -89,8 +113,9 @@ For each prompt below, replace `[RESOLUTION]` and `[SUBJECT-SPECIFIC INSTRUCTION
   path corner, (5) cobblestone, (6) wooden fence horizontal, (7) wooden fence
   corner, (8) stone well top-half, (9) stone well bottom-half, (10) wildflower
   patch (yellow), (11) wildflower patch (red), (12) bush, (13) sapling tree,
-  (14) hay bale, (15) wooden cart, (16) signpost (no text). All in the warm
-  Hearthstone Village palette (browns, grass greens, cream).]
+  (14) hay bale, (15) wooden cart, (16) signpost (no text). All in the Hearthstone
+  Village palette (Bog umber / Bronze browns, Forest / Pine / Spring meadow grass
+  greens, Parchment cream).]
 ```
 
 ### REF-05: Trait Mage's Tower interior tile sample sheet
@@ -98,14 +123,14 @@ For each prompt below, replace `[RESOLUTION]` and `[SUBJECT-SPECIFIC INSTRUCTION
 ```
 [STYLE SUFFIX with:
   RESOLUTION = 128×128 pixels (8×8 grid of 16×16 tiles, white grid lines for clarity).
-  SUBJECT = Mystical tower interior tile reference sheet. Order: (1) purple
-  marble floor plain, (2) purple marble with gold inlay rune, (3) cyan-glowing
-  magic circle floor section, (4) staircase up, (5) staircase down, (6) purple
-  brick wall, (7) wall with gold sconce (lit), (8) wall with bookshelf, (9)
+  SUBJECT = Mystical tower interior tile reference sheet. Order: (1) Royal arcane
+  marble floor plain, (2) Royal arcane marble with Old gold inlay rune, (3) Mage glow
+  magic circle floor section, (4) staircase up, (5) staircase down, (6) Royal arcane
+  brick wall, (7) wall with Old gold sconce (lit), (8) wall with bookshelf, (9)
   arched doorway, (10) crystal pedestal, (11) levitating spell book, (12) brazier
-  with cyan flame, (13) ornate carpet edge, (14) tall window with starlight,
+  with Mage glow flame, (13) ornate carpet edge, (14) tall window with starlight,
   (15) wizard table with potions, (16) crystal ball stand. Colors lean into
-  deep purples (#68386c), gold (#feae34), and arcane cyan (#2ce8f5).]
+  Royal arcane (#3A1559), Old gold (#D2A53F), and Mage glow (#9D6FE0).]
 ```
 
 ### REF-06: Code Editor frame
@@ -118,15 +143,16 @@ For each prompt below, replace `[RESOLUTION]` and `[SUBJECT-SPECIFIC INSTRUCTION
     "COMMIT" (text rendered as pixel-font shapes only, no font rendering inside
     the image — these are placeholder glyphs).
   - Main area divided 60/40 left/right.
-  - Left panel: parchment-cream background (#ead4aa), rusty iron-bound border,
-    looks like an old open book where code would go. Show NO code text yet —
-    just the empty parchment with subtle leather binding on the left edge.
+  - Left panel: Parchment cream background (#FCEFC8), iron-bound border in
+    Basalt with Oxblood rivet accents, looks like an old open book where code
+    would go. Show NO code text yet — just the empty parchment with subtle
+    leather binding on the left edge.
   - Right panel: divided into two stacked sub-panels with the same iron border
-    style. Top sub-panel for "GOAL" (parchment color, slightly darker cream
-    #c28569). Bottom sub-panel for "COMPILER OUTPUT" (dark navy #262b44 to
-    suggest a slate or terminal). All borders use rivets at the corners.
-  - Outer frame: hand-drawn pixel double-line border in iron grey (#5a6988)
-    with rust accents at the corners.
+    style. Top sub-panel for "GOAL" (Aged paper #BFB2A0 — slightly darker cream).
+    Bottom sub-panel for "COMPILER OUTPUT" (Cobalt deep #0E2E54 to suggest a
+    slate or terminal). All borders use rivets at the corners.
+  - Outer frame: hand-drawn pixel double-line border in Stone grey (#7A7064)
+    with Oxblood (#6B1F35) accents at the corners.
   No text, no code, no labels — this is the empty UI shell.]
 ```
 
@@ -138,8 +164,8 @@ For each prompt below, replace `[RESOLUTION]` and `[SUBJECT-SPECIFIC INSTRUCTION
   SUBJECT = A small green-skinned goblin, idle pose, looking right. Hunched
   posture, pointed ears, mischievous expression (not evil — opportunistic).
   Wearing scraps of brown leather armor over a tattered tunic. Holding a
-  rusty short sword in the right hand. Skin tone uses #3e8948 with #265c42
-  shadows. Single still frame, idle.]
+  rusty short sword in the right hand. Skin tone uses Forest (#487E40) with
+  Pine (#27502E) shadows. Single still frame, idle.]
 ```
 
 ### REF-08: Healing Potion icon
@@ -147,10 +173,10 @@ For each prompt below, replace `[RESOLUTION]` and `[SUBJECT-SPECIFIC INSTRUCTION
 ```
 [STYLE SUFFIX with:
   RESOLUTION = 16×16 pixels, transparent background.
-  SUBJECT = A small glass potion bottle filled with bright red liquid (#e43b44),
+  SUBJECT = A small glass potion bottle filled with Alarm scarlet liquid (#E63946),
   cork stopper at the top, slight highlight on the upper-left of the glass to
-  show roundness. Tag/label area on the bottle is a tiny cream rectangle (no
-  text). Designed to read clearly at 16×16 even in a busy inventory grid.]
+  show roundness. Tag/label area on the bottle is a tiny Parchment cream rectangle
+  (no text). Designed to read clearly at 16×16 even in a busy inventory grid.]
 ```
 
 ### REF-09: World map cinematic background
@@ -159,12 +185,12 @@ For each prompt below, replace `[RESOLUTION]` and `[SUBJECT-SPECIFIC INSTRUCTION
 [STYLE SUFFIX with:
   RESOLUTION = 320×180 pixels.
   SUBJECT = A painted-pixel-art world map showing all 11 zones in a single
-  continent-style layout. From south to north: Hearthstone Village (warm
-  greens), Borrow Bridge crossing a great gorge, Guildhall City (red brick
-  rooftops), Trait Mage's Tower (tall purple spire), the Tavern (small lit
-  building at a crossroads), Iron Vale Forge (industrial smoke), Briney Cove
-  (coastal, sea blue), The Vault (mountain entrance, gold gleam), Forbidden
-  Library (dark cathedral silhouette), Throne of the Compiler (silver
+  continent-style layout. From south to north: Hearthstone Village (Forest /
+  Spring meadow greens), Borrow Bridge crossing a great gorge, Guildhall City
+  (Oxblood brick rooftops), Trait Mage's Tower (tall Royal arcane spire), the
+  Tavern (small lit building at a crossroads), Iron Vale Forge (industrial smoke),
+  Briney Cove (coastal, Cobalt sea), The Vault (mountain entrance, Old gold gleam),
+  Forbidden Library (dark cathedral silhouette), Throne of the Compiler (silver
   citadel atop a peak), and the Temple (a stained-glass cathedral floating
   in clouds, slightly off the map at the top). Stylized, cohesive, painted
   pixel-art map style with pin markers for each zone (small flame icons in
@@ -177,14 +203,15 @@ For each prompt below, replace `[RESOLUTION]` and `[SUBJECT-SPECIFIC INSTRUCTION
 [STYLE SUFFIX with:
   RESOLUTION = 640×360 pixels.
   SUBJECT = Title screen for the game. Top two-thirds: the working title
-  "CARGO & CROWNS" rendered as a pixel-art logo — stylized blocky letters
-  in rust orange (#be4a2f) with a darker outline (#733e39) and small gold
-  crown accents above the letters. Below the title, in smaller pixel-letters,
-  the tagline "AN RPG WHERE THE COMPILER IS A BOSS" in cream (#ead4aa).
-  Bottom third: a hero shot showing the player character and Ferris guide
-  standing in front of the Borrow Bridge at sunset, the Borrow Checker
-  silhouetted at the far end. Sky is a gradient from rust orange (top) to
-  deep navy (bottom). The whole composition reads "epic but cozy."]
+  "PLEDGE & CROWN" rendered as a pixel-art logo — stylized blocky letters
+  in Oxblood (#6B1F35) with a Bog umber (#2D1F0A) outline and small Old gold
+  (#D2A53F) crown accents above the letters. Below the title, in smaller
+  pixel-letters, the tagline "AN RPG WHERE THE COMPILER IS A BOSS" in Parchment
+  cream (#FCEFC8). Bottom third: a hero shot showing the player character and
+  Ferris guide standing in front of the Borrow Bridge at sunset, the Borrow
+  Checker silhouetted at the far end. Sky is a gradient from Oxblood (top)
+  through Wineflesh to Cobalt deep (bottom). The whole composition reads
+  "epic but cozy."]
 ```
 
 ---

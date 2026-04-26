@@ -30,41 +30,128 @@ These rules apply to every asset without exception. If a generated image violate
 | Cinematic / cutscene art     | 320×180 (1×) → upscaled | Backgrounds for talky moments      |
 | Title screen / promo art     | 640×360 (1×)    | The exception; bigger but still pixel |
 
-## Palette
+## Palette — "Heraldic Code" (custom, 32 colors, v2.0)
 
-Lock to a 32-color custom palette. We use a Rust-themed adaptation of the **Endesga 32 (EDG32)** palette as the base, with two custom Rust-orange shifts:
+We do **not** use a stock pixel-art palette (EDG32, Apollo, Pico-8). Stock palettes give us indistinguishable-from-every-other-pixel-game art, and EDG32 specifically would push us into the same warm-orange register as the Rust mascot, the Anthropic brand, and roughly half of every pixel-art game on itch.io. We need a unique signature.
+
+Instead the palette is *derived from a named harmonic structure* on the HSL color wheel. This makes per-zone palettes, syntax-highlighting choices, and asset-gen prompts all defensible from one source rather than picked by feel.
+
+### Harmonic structure
 
 ```
-EDG32-RUST palette (hex):
-#be4a2f  #d77643  #ead4aa  #e4a672  #b86f50  #733e39  #3e2731  #a22633
-#e43b44  #f77622  #feae34  #fee761  #63c74d  #3e8948  #265c42  #193c3e
-#124e89  #0099db  #2ce8f5  #ffffff  #c0cbdc  #8b9bb4  #5a6988  #3a4466
-#262b44  #181425  #ff0044  #68386c  #b55088  #f6757a  #e8b796  #c28569
+                ANCHOR
+              350° burgundy  (the Crown / pledge / heraldry)
+                   |
+        +52° |     |     | -180° complement direction
+   gold      |     |     |
+   42°       |     |     |
+  (analog.   |     |     |---- split-complementary pair:
+   accent)   |     |          178°  teal-cyan   (code, the Borrow Checker)
+             |     |          140°  forest-green (foliage, world)
+             |     |
+             |     +---- +280° tetradic flicker:
+             |              270°  arcane violet (magic only, sparing)
+             |
+             +-- cool counterweight at 215°: cobalt blue (sea, sky)
 ```
 
-The first row leans into Rust's signature oranges and warm rusts. Cool tones come from the middle rows. The bottom row gives us flesh tones and accent magentas for magic effects.
+- **Split-complementary** at 350° (anchor) ↔ 140° + 178° (cool pair). This gives us a stable warm/cool tension without the "two opposites screaming at each other" problem of a pure complementary scheme.
+- **Analogous warm accent** at 42° (gold). Sits close enough to the anchor to belong to the same warm family but distinct enough to function as a second brand color. Crown + gold = traditional heraldic pairing, on purpose.
+- **Tetradic flicker** at 270° (violet). Completes a loose tetrad with the anchor and the split-comp pair. Used **only** for magic effects and the Trait Mage's Tower — under 5% of any non-magic frame.
+- **Cool counterweight** at 215° (cobalt). Not part of the harmony proper; included so sea/sky zones have a non-teal blue option without breaking the structure.
+- **Achromatic axis** is warm-biased (parchment-cream → coal-black), which keeps unsaturated areas in conversation with the gold rather than fighting it.
 
-**Reasoning for sticking with a known palette:** EDG32 is well-known in the indie pixel-art community, has documented best-practice usage examples, and our minor tweaks keep us recognisable to that audience.
+The dominant brand color is **oxblood burgundy** (#6B1F35) — the "Pledge & Crown" wordmark, key UI accents, and the player's heraldic motif all key off it. Rust the *language* is referenced through aged-iron grays in the world, **never** through orange: that's a deliberate dodge of the obvious-to-the-point-of-cliché choice.
 
-**License note.** EDG32 is published by Endesga on Lospec under the Creative Commons / public-pixel-palette norms; commercial use is permitted but **a credit line in the game's About screen and end-of-demo screen is required** (e.g. "Palette adapted from EDG32 by Endesga"). Confirm the exact license terms on Lospec before launch and pin the citation text in the credits doc.
+### The 32 colors
+
+Each color has a role name; reference colors by name in prompts and code, never by raw hex.
+
+**Burgundy ramp — anchor (hue ~352°):** primary brand, blood, heraldry, Pledge UI accents.
+```
+#1B0810  Inkblood        — outline / deepest shadow on red surfaces
+#3E1220  Crypt           — deep heraldic shadow
+#6B1F35  Oxblood         — PRIMARY BRAND — wordmark, banners
+#982D52  Wineflesh       — main mid-tone for cloth, banners
+#C56883  Dusty rose      — soft fabric highlight
+#EBC2CC  Pink quartz     — pale rim light, blush
+```
+
+**Gold ramp — analogous accent (hue ~42°):** the literal Crown, treasure, parchment, achievement.
+```
+#2D1F0A  Bog umber       — gold deepest shadow
+#5E4116  Bronze          — antique metal mid-shadow
+#9C7026  Antique brass   — gold mid-tone
+#D2A53F  Old gold        — THE CROWN — coins, rim light on metal
+#F0D27D  Brass leaf      — bright highlight on metal
+#FCEFC8  Parchment cream — primary UI surface, paper
+```
+
+**Teal ramp — split-complementary (hue ~178°):** the Borrow Checker's domain, code, magic-of-rules.
+```
+#062123  Abyssal         — code-editor cursor, deep magic shadow
+#154548  Deep teal       — borrow-checker's robe shadow
+#2A8482  Main teal       — borrow-checker's signature, type sigils
+#5BB8AF  Bright teal     — magic emission, ice highlights
+#A4DED4  Mist teal       — magic glow rim, fog
+```
+
+**Forest/spring green ramp — split-complementary (hue ~140°):** foliage, world, Hearthstone, life.
+```
+#142A19  Mossbed         — foliage shadow
+#27502E  Pine            — tree trunks, dark grass
+#487E40  Forest          — primary grass
+#82B450  Spring meadow   — fresh growth, lit grass
+#C9DC97  Hayfield        — pale grass, wheat, sun-bleached straw
+```
+
+**Warm-biased neutrals:** outlines, stone, paper.
+```
+#161313  Coalblack       — universal outline color (NEVER #000000)
+#3E3833  Basalt          — stone shadow, code-editor frame
+#7A7064  Stone grey      — stone mid-tone, distant terrain
+#BFB2A0  Aged paper      — old documents, faded parchment
+```
+
+**Tetradic violet (hue ~270°):** magic only. The Forbidden Library, Trait Mage's Tower, spell effects.
+```
+#3A1559  Royal arcane    — magic shadow, corruption
+#9D6FE0  Mage glow       — spell emission, runes
+```
+
+**Cool counterweight + alarms + specular:**
+```
+#0E2E54  Cobalt deep     — night sky, abyssal sea
+#377AB8  Cobalt          — daytime water, ice
+#E63946  Alarm scarlet   — error highlights, panic UI (distinct from anchor)
+#FFFFFF  Specular white  — pure highlights only, ≤1% of any frame
+```
+
+### Why this avoids the "AI-generated pixel art" smell
+
+- **Named harmony, not vibes.** Every color has a role and a position on the wheel. When a generation comes back and we ask "is this on-palette?" the question has an answer.
+- **Underused hue territories.** Most pixel-art games default to either NES-throwback or warm-orange-and-teal. We sit in burgundy + gold + cool-pair, a heraldic-manuscript register that's rare in the indie pixel space.
+- **Scarcity discipline.** Specular white and arcane violet are gated to <5% of any frame. Most palettes get muddy because every color competes; ours has a strict hierarchy (anchor > split-comp pair > accent > flicker).
 
 ## Visual themes per zone
 
-Each act has its own dominant palette range pulled from the master palette. This gives zones identity without breaking style.
+Each act draws a dominant subset from the 32-color palette by **role name**, never by raw hex. This both keeps zones distinct and forces every prompt/asset to stay inside the harmonic structure.
 
-| Zone                          | Dominant range                          | Mood                                    |
-|-------------------------------|-----------------------------------------|-----------------------------------------|
-| Hearthstone Village (Act 1)   | Warm browns + grass greens + cream     | Cozy, safe, golden hour                |
-| Borrow Bridge (Act 2)         | Stone grey + ice blue + faint orange   | Solemn, austere, important             |
-| Guildhall Quarter (Act 3)     | Brick reds + tavern yellows + black     | Bustling, urban, lived-in              |
-| Trait Mage's Tower (Act 4)    | Deep purples + magic cyan + gold        | Mystical, vertical, awe                |
-| Tavern (Act 5)                | Lamplight oranges + smoky greys         | Warm-but-treacherous, low light        |
-| Iron Vale Forge (Act 6)       | Industrial grey + forge orange + soot   | Mechanical, smoky, honest              |
-| Briney Cove (Act 7)           | Sea blues + sand + lighthouse white     | Open, wind-swept, slightly chaotic     |
-| The Vault (Act 8)             | Gold + deep blue + arcane green         | Ancient, secretive, treasure-rich      |
-| Forbidden Library (Act 9)     | Dark purple + corrupted red + parchment | Dangerous, dim, with red glitches       |
-| Throne of the Compiler (Act 10)| Silver + chrome + sunlight white         | Climactic, vast, celestial             |
-| The Temple (Act 11)           | Stained-glass primary RGB + gold         | Reverent-meets-glitchy, hand-of-god     |
+| Zone                          | Dominant roles                                                              | Mood                                    |
+|-------------------------------|-----------------------------------------------------------------------------|-----------------------------------------|
+| Hearthstone Village (Act 1)   | Forest, Spring meadow, Hayfield, Parchment cream + Old gold accents          | Cozy, golden hour, safe                |
+| Borrow Bridge (Act 2)         | Stone grey, Basalt, Deep teal, Main teal, Brass leaf accents (banners)       | Solemn — teal is the Borrow Checker's domain |
+| Guildhall Quarter (Act 3)     | Oxblood, Wineflesh, Aged paper, Coalblack, Old gold trim                     | Bustling urban heraldry                |
+| Trait Mage's Tower (Act 4)    | Royal arcane, Mage glow, Old gold, Cobalt deep, Specular white runes         | Mystical, vertical, awe                |
+| Tavern (Act 5)                | Bronze, Antique brass, Basalt, Wineflesh, Crypt shadows                      | Lamplight, smoky, warm-but-treacherous |
+| Iron Vale Forge (Act 6)       | Basalt, Coalblack, Bronze, Stone grey + Alarm scarlet (forge fire only)      | Mechanical, smoky, honest              |
+| Briney Cove (Act 7)           | Cobalt deep, Cobalt, Mist teal, Hayfield (sand), Parchment cream             | Open, wind-swept                       |
+| The Vault (Act 8)             | Old gold, Brass leaf, Bog umber, Cobalt deep, Mist teal                       | Ancient, treasure-rich                 |
+| Forbidden Library (Act 9)     | Royal arcane, Crypt, Aged paper, Alarm scarlet (corruption glitches only)    | Dangerous, dim, glitchy                |
+| Throne of the Compiler (Act 10)| Stone grey, Aged paper, Specular white, Brass leaf, Cobalt deep              | Climactic, vast, celestial             |
+| The Temple (Act 11)           | Oxblood + Main teal + Forest (the split-comp triangle) + Old gold + Mage glow | Reverent-meets-glitchy stained glass   |
+
+The Temple's stained-glass effect is intentionally the literal split-complementary triad of the palette structure — when the player reaches the climactic religious zone, they're seeing the *harmonic skeleton* of the whole game's color system rendered as light through glass. This is also a curriculum payoff: by Act 11 the player has used every color family the game knows.
 
 ## Animation conventions
 
@@ -81,13 +168,14 @@ Bosses get more animation states (intro, phase-2 transformation, defeat). Docume
 
 - **Font:** Pixel-perfect. Use [m6x11plus](https://managore.itch.io/m6x11) or equivalent open-source pixel font. **No web fonts**, **no system fonts**.
 - **Window frames:** Hand-drawn pixel borders, 2-pixel double-line with corner ornaments. Corners are rusty/iron-bound, never plastic-looking.
-- **Code editor frame:** Inset bevel, parchment-cream background (`#ead4aa`), syntax highlighting using palette colors only:
-  - Keywords: `#be4a2f` (rust orange)
-  - Types: `#0099db` (cool blue)
-  - Strings: `#63c74d` (forge green)
-  - Comments: `#8b9bb4` (cool grey)
-  - Numbers: `#feae34` (warm yellow)
-  - Errors: `#e43b44` (alarm red)
+- **Code editor frame:** Inset bevel, **Parchment cream** (`#FCEFC8`) background, **Basalt** (`#3E3833`) frame, syntax highlighting drawn from palette role names only. The keyword/type pairing is deliberately the anchor + split-complementary teal — the two highest-frequency token classes form the same harmonic conversation as the rest of the game:
+  - Keywords (`fn`, `let`, `mut`): **Wineflesh** `#982D52`
+  - Types (`String`, `&mut T`): **Main teal** `#2A8482` — the Borrow Checker's signature color, on purpose
+  - Strings: **Forest** `#487E40`
+  - Comments: **Stone grey** `#7A7064`
+  - Numbers / literals: **Old gold** `#D2A53F`
+  - Errors / underline squiggles: **Alarm scarlet** `#E63946`
+  - Cursor: **Abyssal** `#062123`
 - **Buttons:** Two states — idle (slight bevel up) and pressed (bevel down + 1px offset).
 - **Icons:** 16×16 or 24×24 with the same outline rule as characters.
 
@@ -113,7 +201,7 @@ Generate exactly these 10 reference images first. They serve as the "lock the lo
 7. **Generic goblin enemy** — 32×32, idle pose with weapon, mid-range threat read.
 8. **Healing Potion icon** — 16×16, in the inventory style.
 9. **World map cinematic background** — 320×180, painted in our pixel-art style, showing all 11 zones at a high level.
-10. **Title screen / wordmark** — 640×360, the game's logo over a hero shot of the world. Working title placeholder ("CARGO & CROWNS") in pixel font.
+10. **Title screen / wordmark** — 640×360, the game's logo over a hero shot of the world. Working title "PLEDGE & CROWN" in pixel font, **Oxblood** wordmark with **Old gold** rim, on a **Parchment cream** banner over a **Cobalt deep** sky.
 
 Once these 10 are approved, the rest of asset gen can proceed in batches with confidence.
 
@@ -123,5 +211,5 @@ This document is versioned. Any change to the palette, the resolution table, or 
 
 ---
 
-**Bible version:** 1.0
+**Bible version:** 2.0 — palette swapped from EDG32-RUST to "Heraldic Code" (split-complementary @ 350° anchor + 140°/178° pair, +42° gold accent, +270° magic flicker). Per-zone roles, editor syntax colors, and reference-image titles updated to match.
 **Last updated:** 2026-04-25

@@ -26,7 +26,7 @@ flowers (5) dirt path straight horizontal (6) dirt path straight vertical
 (7) dirt path corner NE (8) dirt path corner NW (9) dirt path corner SE
 (10) dirt path corner SW (11) dirt path T-intersection (12) cobblestone A
 (13) cobblestone B (14) wood planks horizontal (15) wood planks vertical
-(16) wood plank corner. Warm brown + grass green palette dominant.
+(16) wood plank corner. Bog umber / Bronze browns + Forest / Spring meadow grass green palette dominant.
 ```
 
 ### Props and structures
@@ -59,8 +59,8 @@ door (4) wall corner (5) thatch roof straight (6) thatch roof corner
 bridge tile set. Order: (1) bridge plank straight (2) bridge plank with
 moss (3) bridge railing left (4) bridge railing right (5) bridge support
 column (6) bridge edge cracking (7) keystone center (8) bridge end ramp.
-Stone grey (#5a6988) dominant with ice blue (#0099db) accents in cracks.
-Slight glowing-rune carvings here and there.
+Stone grey (#7A7064) dominant with Cobalt (#377AB8) accents in cracks.
+Slight glowing Main teal rune carvings here and there.
 ```
 
 ### Gorge backdrop
@@ -68,52 +68,54 @@ Slight glowing-rune carvings here and there.
 ```
 [STYLE SUFFIX] RESOLUTION = 320×180. SUBJECT = Riftwater Gorge backdrop,
 parallax-ready painted-pixel-art landscape. Foreground: bridge edge.
-Mid-ground: chasm walls dropping into mist. Far ground: a roaring blue
-river far below. Sky: pale cyan-cream gradient with a few faint rune-like
-sigils floating in the air around the bridge level. Mood: solemn, important,
-slightly otherworldly.
+Mid-ground: chasm walls dropping into mist. Far ground: a roaring Cobalt
+river far below. Sky: Mist teal to Parchment cream gradient with a few faint
+rune-like sigils floating in the air around the bridge level. Mood: solemn,
+important, slightly otherworldly.
 ```
 
 ### Decorative runes
 
 ```
 [STYLE SUFFIX] RESOLUTION = 64×64 (2×2 grid of 32×32). SUBJECT = Floating
-glyph tiles for Borrow Bridge. (1) ampersand "&" rune glowing cyan
-(2) "&mut" rune glowing slightly more intense cyan (3) lifetime tick "'a"
-rune glowing pale gold (4) generic decorative rune. Each on transparent
-background, designed to float above the bridge as ambient details.
+glyph tiles for Borrow Bridge. (1) ampersand "&" rune glowing Main teal
+(#2A8482) (2) "&mut" rune glowing slightly more intense Bright teal (#5BB8AF)
+(3) lifetime tick "'a" rune glowing Old gold (#D2A53F) (4) generic decorative
+rune. Each on transparent background, designed to float above the bridge as
+ambient details.
 ```
 
 ## Guildhall Quarter (Act 3) — STUB, generate when Act 3 in scope
 
 ```
 [STYLE SUFFIX] RESOLUTION = 128×128 (8×8 grid). SUBJECT = Guildhall Quarter
-city tile sheet. Cobblestone, brick walls, banner colors per guild (red
-warriors, blue mages, green rangers, gold artificers). Defer detail until
-Act 3 work begins.
+city tile sheet. Cobblestone, brick walls, banner colors per guild (Oxblood
+warriors, Cobalt mages, Forest rangers, Old gold artificers). Defer detail
+until Act 3 work begins.
 ```
 
 ## Trait Mage's Tower (Act 4) — STUB
 
 ```
 [STYLE SUFFIX] RESOLUTION = 128×128 (8×8 grid). SUBJECT = Tower interior tile
-sheet. Purple marble floors, gold-inlaid runes, magic circles, arcane bookshelves,
-crystal pedestals. Defer until Act 4 work begins.
+sheet. Royal arcane marble floors, Old gold-inlaid runes, magic circles, arcane
+bookshelves, crystal pedestals. Defer until Act 4 work begins.
 ```
 
 ## Iron Vale Forge (Act 6) — STUB
 
 ```
 [STYLE SUFFIX] RESOLUTION = 128×128 (8×8 grid). SUBJECT = Industrial forge
-tile sheet. Iron-grey floors, conveyor belts (animated 4-frame), forge fires
-(animated), assembly tables, ore piles. Defer until Act 6 work begins.
+tile sheet. Basalt / Stone grey floors, Bronze conveyor belts (animated 4-frame),
+Alarm scarlet forge fires (animated), assembly tables, ore piles. Defer until
+Act 6 work begins.
 ```
 
 ## Briney Cove (Act 7) — STUB
 
 ```
 [STYLE SUFFIX] RESOLUTION = 128×128 (8×8 grid). SUBJECT = Coastal town tile
-sheet. Wooden piers, rope coils, fishing nets, sand, sea (animated 4-frame),
+sheet. Wooden piers, rope coils, fishing nets, sand, Cobalt sea (animated 4-frame),
 lighthouse stone. Defer until Act 7 work begins.
 ```
 
@@ -121,7 +123,7 @@ lighthouse stone. Defer until Act 7 work begins.
 
 ```
 [STYLE SUFFIX] RESOLUTION = 128×128 (8×8 grid). SUBJECT = Vault interior tile
-sheet. Gold floor tiles, deep blue marble walls, glowing artifact pedestals,
+sheet. Old gold floor tiles, Cobalt deep marble walls, glowing artifact pedestals,
 arcane lockboxes, treasure piles. Defer until Act 8 work begins.
 ```
 
@@ -129,9 +131,9 @@ arcane lockboxes, treasure piles. Defer until Act 8 work begins.
 
 ```
 [STYLE SUFFIX] RESOLUTION = 128×128 (8×8 grid). SUBJECT = Library tile sheet.
-Dark purple walls, parchment-cream floors, towering bookshelves, candles,
-glitch-corrupted floor sections (red glitch artifacts only — palette only,
-no real RGB noise). Defer until Act 9 work begins.
+Royal arcane walls, Parchment cream floors, towering bookshelves, candles,
+glitch-corrupted floor sections (Alarm scarlet glitch artifacts only — palette
+only, no real RGB noise). Defer until Act 9 work begins.
 ```
 
 ## Throne of the Compiler (Act 10) — STUB
@@ -146,8 +148,8 @@ chrome accents, throne dais, ornate balustrades. Defer until Act 10 work begins.
 
 ```
 [STYLE SUFFIX] RESOLUTION = 128×128 (8×8 grid). SUBJECT = Stained-glass cathedral
-tile sheet. Stone floors, stained-glass window edges (red/blue/gold panes), pew
-rows, altar steps, candelabras. Defer until Temple build begins (post-MVP).
+tile sheet. Stone floors, stained-glass window edges (Oxblood / Cobalt / Old gold
+panes), pew rows, altar steps, candelabras. Defer until Temple build begins (post-MVP).
 ```
 
 ---

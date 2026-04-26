@@ -11,18 +11,18 @@
 
 ```
 [STYLE SUFFIX] RESOLUTION = 32×32 transparent. SUBJECT = Front-facing human
-adventurer, idle, deep-blue tunic (#124e89), tan leather belt, brown boots,
-hip satchel, short brown hair, neutral expression, wooden staff with rust-orange
-crystal tip. Light skin (designed for palette swap).
+adventurer, idle, Cobalt deep tunic (#0E2E54), tan leather belt, brown boots,
+hip satchel, short brown hair, neutral expression, wooden staff with Old gold
+(#D2A53F) crystal tip. Light skin (designed for palette swap).
 ```
 
 ### Default — female preset
 
 ```
 [STYLE SUFFIX] RESOLUTION = 32×32 transparent. SUBJECT = Front-facing human
-adventurer, idle, forest-green hooded cloak (#3e8948), tan trousers, brown boots,
+adventurer, idle, Forest hooded cloak (#487E40), tan trousers, brown boots,
 hip pouch, brown braid over one shoulder, neutral expression, wooden staff
-with rust-orange crystal tip. Light skin (designed for palette swap).
+with Old gold (#D2A53F) crystal tip. Light skin (designed for palette swap).
 ```
 
 ### Player walk-cycle frames (×4 directions, ×4 frames each)
@@ -48,14 +48,14 @@ frame 3 = strike connect, frame 4 = recovery, frame 5 = return to idle.
 ```
 [STYLE SUFFIX] RESOLUTION = 32×32 transparent. SUBJECT = Same player character,
 casting animation frame <0..5> of 6. Both arms raised, crystal at staff tip
-glowing brighter each frame, magic particles (rust-orange and cyan) gathering.
+glowing brighter each frame, magic particles (Old gold and Mage glow violet) gathering.
 ```
 
 ### Player hit + death
 
 ```
 [STYLE SUFFIX] RESOLUTION = 32×32 transparent. SUBJECT = Same player character,
-hit-flash frame, full character whitened to palette cream (#ead4aa) silhouette,
+hit-flash frame, full character whitened to Parchment cream (#FCEFC8) silhouette,
 single frame.
 ```
 
@@ -72,9 +72,11 @@ frame 2 = collapsed, frame 3 = silhouette only fading.
 ```
 [STYLE SUFFIX] RESOLUTION = 32×32 transparent. SUBJECT = Small friendly crab
 mascot character, NOT the official Rust Foundation Ferris (distinct silhouette,
-lighter shell, more cartoonish). Round body, expressive eyes on stalks, two
-front claws raised in welcome. Body warm rust orange (#be4a2f / #d77643), lighter
-belly. Idle pose, looking up-right as if narrating. Single still frame.
+burgundy-and-gold instead of orange, more cartoonish). Round body, expressive
+eyes on stalks, two front claws raised in welcome. Body Wineflesh (#982D52) midtone
+with Old gold (#D2A53F) highlights on claw-tips and shell ridges, Crypt (#3E1220)
+shadows underneath, Dusty rose (#C56883) belly. Idle pose, looking up-right as if
+narrating. Single still frame.
 ```
 
 ### Ferris walk (×4 directions, ×4 frames)
@@ -108,15 +110,15 @@ Single frame.
 
 ```
 [STYLE SUFFIX] RESOLUTION = 32×32 transparent. SUBJECT = Elderly human, kind
-expression, long grey beard, simple cream robe (#ead4aa) with rust-orange
-sash, wooden staff with no crystal, slightly hunched. Idle frame.
+expression, long grey beard, simple Parchment cream robe (#FCEFC8) with Oxblood
+(#6B1F35) sash, wooden staff with no crystal, slightly hunched. Idle frame.
 ```
 
 ### Hearthstone Innkeeper
 
 ```
 [STYLE SUFFIX] RESOLUTION = 32×32 transparent. SUBJECT = Stout middle-aged
-woman, apron over rust-orange dress, hair tied up, holding a wooden ladle.
+woman, apron over Oxblood (#6B1F35) dress, hair tied up, holding a wooden ladle.
 Welcoming expression. Idle frame.
 ```
 
@@ -144,11 +146,11 @@ A = farmer with hoe, B = merchant with small box, C = traveler with backpack.
 
 ```
 [STYLE SUFFIX] RESOLUTION = 64×64 transparent. SUBJECT = Tall austere robed
-figure on stone bridge. Deep navy robe (#262b44) with embroidered glowing
-cyan ampersand and "&mut" rune symbols along hem and sleeves. Hood pulled
-low, two cyan-glowing eyes faintly visible in the shadow. Iron staff topped
-with balance scale. Upright formal posture. Subtle robe motion as if magical
-breeze. Idle frame.
+figure on stone bridge. Cobalt deep robe (#0E2E54) with embroidered glowing
+Main teal (#2A8482) ampersand and "&mut" rune symbols along hem and sleeves.
+Hood pulled low, two Bright teal-glowing (#5BB8AF) eyes faintly visible in
+the shadow. Iron staff topped with balance scale. Upright formal posture.
+Subtle robe motion as if magical breeze. Idle frame.
 ```
 
 #### Pointing (rejection animation)
@@ -163,25 +165,25 @@ in disapproval, robe swept by gesture. Single frame.
 
 ```
 [STYLE SUFFIX] RESOLUTION = 64×64 transparent. SUBJECT = Same Borrow Checker,
-both arms raised slightly, robe glowing at the hems with cyan light, head
-slightly bowed in respect. Single frame.
+both arms raised slightly, robe glowing at the hems with Bright teal (#5BB8AF)
+light, head slightly bowed in respect. Single frame.
 ```
 
 #### Glow phase (used during boss fight stage transitions)
 
 ```
 [STYLE SUFFIX] RESOLUTION = 64×64 transparent. SUBJECT = Same Borrow Checker,
-all rune symbols glowing brighter, eye glow brighter, faint cyan aura around
-entire body. Frame for stage-transition impact moment.
+all rune symbols glowing brighter, eye glow brighter, faint Mist teal (#A4DED4)
+aura around entire body. Frame for stage-transition impact moment.
 ```
 
 ### Two Travellers NPC pair (Act 2 encounter)
 
 ```
 [STYLE SUFFIX] RESOLUTION = 32×32 transparent each. SUBJECT = Two travellers
-on a road, variant A and B. A = scholar with parchment scroll, simple brown
-robe. B = wanderer with walking stick, blue cloak. Both reaching toward a
-shared scroll between them.
+on a road, variant A and B. A = scholar with parchment scroll, simple Bog umber
+brown robe. B = wanderer with walking stick, Cobalt (#377AB8) cloak. Both reaching
+toward a shared scroll between them.
 ```
 
 ### The Mutable Quill (NPC who needs `&mut`)
@@ -198,24 +200,25 @@ goose-quill pen poised over the air as if waiting to write. Single frame.
 
 ```
 [STYLE SUFFIX] RESOLUTION = 32×32 transparent. SUBJECT = Adult human bandit,
-brown leather vest, red bandana over lower face, short sword in right hand,
-crouched aggressive stance. Skin tone: light. Single frame.
+brown leather vest, Alarm scarlet (#E63946) bandana over lower face, short sword
+in right hand, crouched aggressive stance. Skin tone: light. Single frame.
 ```
 
 ### Goblin (Act 2 encounter)
 
 ```
 [STYLE SUFFIX] RESOLUTION = 32×32 transparent. SUBJECT = Small green goblin
-(#3e8948 with #265c42 shadows), pointed ears, opportunistic smirk, brown
-leather scraps, rusty short sword, hunched. Single frame.
+(Forest #487E40 mid with Pine #27502E shadows), pointed ears, opportunistic
+smirk, brown leather scraps, rusty short sword, hunched. Single frame.
 ```
 
 ### Bridge Wraith (mid-bridge enemy in Act 2)
 
 ```
 [STYLE SUFFIX] RESOLUTION = 48×48 transparent. SUBJECT = Translucent ghostly
-figure made of pale blue mist (#c0cbdc with cyan #2ce8f5 highlights), no
-clearly defined limbs, two glowing white eye-points. Floating. Single frame.
+figure made of pale mist (Aged paper #BFB2A0 base with Mist teal #A4DED4
+highlights), no clearly defined limbs, two glowing Specular white eye-points.
+Floating. Single frame.
 ```
 
 ## Future-act NPCs (defer until earlier batches approved)

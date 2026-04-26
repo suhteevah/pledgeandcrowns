@@ -24,10 +24,10 @@ The only boss required for MVP. Treat with extra care.
 
 ```
 [STYLE SUFFIX] RESOLUTION = 64×64 transparent. SUBJECT = Tall austere robed
-figure standing on a stone bridge surface. Deep navy robe (#262b44) with
-embroidered glowing cyan ampersand "&" and "&mut" rune symbols along hem
-and sleeves. Hood pulled low, two faint cyan-glowing eye-points visible
-in shadow. Iron staff in right hand, topped with a balance scale. Posture:
+figure standing on a stone bridge surface. Cobalt deep robe (#0E2E54) with
+embroidered glowing Main teal (#2A8482) ampersand "&" and "&mut" rune symbols
+along hem and sleeves. Hood pulled low, two faint Bright teal-glowing (#5BB8AF)
+eye-points visible in shadow. Iron staff in right hand, topped with a balance scale. Posture:
 upright, formal, judicial. Robe has subtle motion as if magical breeze.
 Idle frame 0 of 4 — base position.
 ```
@@ -54,7 +54,7 @@ idle frame 3 of 4 — return position, eye glow dimming back to baseline.
 [STYLE SUFFIX] RESOLUTION = 64×64 transparent. SUBJECT = Same Borrow Checker,
 right hand extended forward, index finger pointing directly at viewer, head
 tilted slightly down in disapproval. Robe swept back by gesture. Eyes glowing
-intense alarm-red (#e43b44) instead of cyan. Single frame.
+intense Alarm scarlet (#E63946) instead of teal. Single frame.
 ```
 
 ### Borrow Checker — Approving (acceptance animation, plays when player code passes)
@@ -62,15 +62,15 @@ intense alarm-red (#e43b44) instead of cyan. Single frame.
 ```
 [STYLE SUFFIX] RESOLUTION = 64×64 transparent. SUBJECT = Same Borrow Checker,
 both arms raised slightly outward in formal acknowledgment, robe glowing at
-hems with bright cyan light, head bowed slightly in respect. Single frame.
+hems with bright Bright teal (#5BB8AF) light, head bowed slightly in respect. Single frame.
 ```
 
 ### Borrow Checker — Phase transition (between boss stages)
 
 ```
 [STYLE SUFFIX] RESOLUTION = 64×64 transparent. SUBJECT = Same Borrow Checker,
-all rune symbols glowing intensely, eye glow at maximum, faint cyan aura
-surrounding entire body, robe hem floating up as if suspended. Used for the
+all rune symbols glowing intensely, eye glow at maximum, faint Mist teal (#A4DED4)
+aura surrounding entire body, robe hem floating up as if suspended. Used for the
 between-stage impact moment. Single frame.
 ```
 
@@ -90,27 +90,27 @@ Each stage gets a small overlay element that frames the encounter:
 
 ```
 [STYLE SUFFIX] RESOLUTION = 96×96 transparent. SUBJECT = Floating glowing
-cyan ampersand "&" rune, decorative element to overlay during Stage 1
-(simple borrow). Pixel-art glow effect, animated 4-frame loop, rotating
+Main teal (#2A8482) ampersand "&" rune, decorative element to overlay during
+Stage 1 (simple borrow). Pixel-art glow effect, animated 4-frame loop, rotating
 slowly clockwise. Single frame from loop.
 ```
 
 ```
 [STYLE SUFFIX] RESOLUTION = 96×96 transparent. SUBJECT = Floating glowing
-cyan "&mut" rune cluster, overlay for Stage 2 (mutable borrow). Slightly
-more intense glow than Stage 1 rune.
+Bright teal (#5BB8AF) "&mut" rune cluster, overlay for Stage 2 (mutable borrow).
+Slightly more intense glow than Stage 1 rune.
 ```
 
 ```
 [STYLE SUFFIX] RESOLUTION = 96×96 transparent. SUBJECT = Floating glowing
-"'a" lifetime tick rune, pale gold (#feae34) instead of cyan. Overlay for
+"'a" lifetime tick rune, Old gold (#D2A53F) instead of teal. Overlay for
 Stage 3 (lifetime annotation).
 ```
 
 ```
 [STYLE SUFFIX] RESOLUTION = 96×96 transparent. SUBJECT = Three intertwined
 runes (ampersand, &mut, 'a) forming a triangular composition, all glowing
-their respective colors (cyan, brighter cyan, pale gold). Overlay for Stage
+their respective colors (Main teal, Bright teal, Old gold). Overlay for Stage
 4 (final integration puzzle).
 ```
 
@@ -120,32 +120,32 @@ their respective colors (cyan, brighter cyan, pale gold). Overlay for Stage
 
 ```
 [STYLE SUFFIX] RESOLUTION = 64×64 transparent. SUBJECT = Shapeshifter wraith
-in form 1: "Solid" — armored knightly silhouette, dark navy plate (#262b44),
-glowing red visor slit (#e43b44), heavy two-handed sword. Idle pose.
+in form 1: "Solid" — armored knightly silhouette, Cobalt deep plate (#0E2E54),
+glowing Alarm scarlet visor slit (#E63946), heavy two-handed sword. Idle pose.
 ```
 
 ```
 [STYLE SUFFIX] RESOLUTION = 64×64 transparent. SUBJECT = Same wraith
-transitioning to form 2: "Mist" — body partially dissolved into pale grey-blue
-vapor (#c0cbdc), armor pieces floating loose, sword becoming translucent.
+transitioning to form 2: "Mist" — body partially dissolved into pale vapor
+(Aged paper #BFB2A0), armor pieces floating loose, sword becoming translucent.
 ```
 
 ```
 [STYLE SUFFIX] RESOLUTION = 64×64 transparent. SUBJECT = Wraith in form 2:
 "Mist" — fully vaporous, no solid body, just a swirling pillar of pale
-mist with two glowing red eye-points and a hint of sword-shape inside.
+mist with two glowing Alarm scarlet eye-points and a hint of sword-shape inside.
 ```
 
 ```
 [STYLE SUFFIX] RESOLUTION = 64×64 transparent. SUBJECT = Wraith transitioning
-to form 3: "Shadow" — vapor condensing into solid darkness, navy and black
-silhouette emerging.
+to form 3: "Shadow" — vapor condensing into solid darkness, Cobalt deep and
+Coalblack silhouette emerging.
 ```
 
 ```
 [STYLE SUFFIX] RESOLUTION = 64×64 transparent. SUBJECT = Wraith in form 3:
-"Shadow" — pure dark silhouette (#181425), red eye-points, holds a sword
-made of pure shadow with red highlights.
+"Shadow" — pure dark silhouette (Coalblack #161313), Alarm scarlet eye-points,
+holds a sword made of pure shadow with Alarm scarlet highlights.
 ```
 
 ```
@@ -161,10 +161,11 @@ into three. Used in the boss reveal moment that tests non-exhaustive match.
 
 ```
 [STYLE SUFFIX] RESOLUTION = 96×96 transparent. SUBJECT = Three-headed
-chimera. Body of a lion (rust-orange #d77643), three necks extending: left
-head = goat (white/grey, fire-element flames coming from mouth), center
-head = lion (golden, water-element), right head = eagle (#feae34, earth-
-element, brown feathers). Wings spread half-outward. Standing on stone
+chimera. Body of a lion (Antique brass #9C7026 with Bronze shadows), three
+necks extending: left head = goat (Aged paper / Stone grey, fire-element flames
+coming from mouth), center head = lion (Old gold #D2A53F, water-element), right
+head = eagle (Old gold #D2A53F, earth-element, Bog umber brown feathers). Wings
+spread half-outward. Standing on stone
 floor of mage tower. Idle pose.
 ```
 
@@ -178,7 +179,8 @@ eagle). Wings raised high.
 ```
 [STYLE SUFFIX] RESOLUTION = 96×96 transparent. SUBJECT = Chimera reveal of
 fourth head: a fourth neck has emerged from the back, ending in a serpent
-head crackling with violet plasma (#b55088 / #2ce8f5 mix). Other three heads
+head crackling with violet plasma (Mage glow #9D6FE0 / Bright teal #5BB8AF mix).
+Other three heads
 look surprised. Used for the mid-fight twist.
 ```
 
@@ -195,10 +197,10 @@ fading magic.
 ```
 [STYLE SUFFIX] RESOLUTION = 96×96 transparent. SUBJECT = The Tavernkeeper
 revealed as a powerful figure: an enormous bearded innkeeper (warm peasant
-build but huge, 2x normal NPC scale), in lamplight orange tones, holding
-a giant ledger book in one hand and a tankard in the other, standing
-behind a tavern counter that stretches across the lower edge of the canvas.
-Eyes glow forge-yellow (#feae34) with bookkeeper's intensity. Idle pose.
+build but huge, 2x normal NPC scale), in lamplight Old gold and Antique brass
+tones, holding a giant ledger book in one hand and a tankard in the other,
+standing behind a tavern counter that stretches across the lower edge of the
+canvas. Eyes glow Old gold (#D2A53F) with bookkeeper's intensity. Idle pose.
 ```
 
 ```
@@ -221,10 +223,11 @@ player passed.
 
 ```
 [STYLE SUFFIX] RESOLUTION = 128×128 transparent. SUBJECT = Massive
-mechanical golem made of forge-iron and conveyor-belt segments. Body has
-visible iterator-pipeline mechanisms: belts running across the chest,
-gear-pumps for shoulders, glowing forge-orange furnace heart visible
-behind iron grating. Two huge fists, articulated arms, columnar legs.
+mechanical golem made of forge-iron (Basalt / Stone grey) and Bronze conveyor-
+belt segments. Body has visible iterator-pipeline mechanisms: belts running
+across the chest, gear-pumps for shoulders, glowing Alarm scarlet (#E63946)
+furnace heart visible behind iron grating. Two huge fists, articulated arms,
+columnar legs.
 Steam venting from joints. Idle pose, slight steam animation.
 ```
 
@@ -232,7 +235,7 @@ Steam venting from joints. Idle pose, slight steam animation.
 [STYLE SUFFIX] RESOLUTION = 128×128 transparent. SUBJECT = Same Forge-Golem
 attacking: one fist raised high, other fist extending forward as if
 hammering the ground, conveyor belts on chest spinning faster (motion lines),
-forge heart glowing brighter.
+forge heart (Alarm scarlet) glowing brighter.
 ```
 
 ```
@@ -255,9 +258,10 @@ dimming, steam venting wildly, kneeling pose with one fist on the ground.
 ```
 [STYLE SUFFIX] RESOLUTION = 128×128 transparent. SUBJECT = Sea-serpent
 hydra with six heads emerging from churning water at the canvas bottom.
-Each head a slightly different shade of sea-blue (#124e89 / #0099db /
-#2ce8f5 variations), scales with cyan highlights, glowing white eyes.
-Heads positioned at varied heights and angles. Body submerged. Idle pose.
+Each head a slightly different shade of sea-blue (Cobalt deep #0E2E54 /
+Cobalt #377AB8 / Bright teal #5BB8AF variations), scales with Mist teal
+highlights, glowing Specular white eyes. Heads positioned at varied heights
+and angles. Body submerged. Idle pose.
 ```
 
 ```
@@ -287,10 +291,11 @@ glowing eye-points fading.
 
 ```
 [STYLE SUFFIX] RESOLUTION = 96×96 transparent. SUBJECT = The Memory Warden:
-an austere armored guardian in deep-blue and gold plate armor (#124e89 /
-#feae34), face hidden behind a visored helm with cyan eye-slits. Holds two
-ornate keys, one in each hand: left key glowing rust-orange ("Box"), right
-key glowing cyan ("Rc"). Standing in the Vault interior. Idle pose.
+an austere armored guardian in Cobalt deep and Old gold plate armor (#0E2E54 /
+#D2A53F), face hidden behind a visored helm with Bright teal eye-slits. Holds
+two ornate keys, one in each hand: left key glowing Oxblood (#6B1F35) ("Box"),
+right key glowing Main teal (#2A8482) ("Rc"). Standing in the Vault interior.
+Idle pose.
 ```
 
 ```
@@ -319,7 +324,7 @@ opening behind him. Ceremonial pose of yielding.
 
 ```
 [STYLE SUFFIX] RESOLUTION = 96×96 transparent. SUBJECT = The Librarian: an
-ancient, gaunt sage in long dark-purple (#68386c) robes covered in scroll
+ancient, gaunt sage in long Royal arcane (#3A1559) robes covered in scroll
 fragments and hanging ink-pots. White-grey beard down to chest. Holding
 an enormous book that hovers open in front of him, pages flipping by
 themselves. Eyes are pure white pinpoints. Surrounded by floating books
@@ -329,9 +334,9 @@ and scroll fragments. Idle pose.
 ```
 [STYLE SUFFIX] RESOLUTION = 96×96 transparent. SUBJECT = Same Librarian
 casting an unsafe spell: the floating book in front of him is now glowing
-alarm-red (#e43b44), tendrils of corruption-magic (red glitch-pixel artifacts,
-palette only) extending from the book toward the viewer, his eyes glowing
-red instead of white.
+Alarm scarlet (#E63946), tendrils of corruption-magic (Alarm scarlet glitch-
+pixel artifacts, palette only) extending from the book toward the viewer, his
+eyes glowing Alarm scarlet instead of white.
 ```
 
 ```
@@ -425,9 +430,9 @@ his body in cathedral-style rays.
 ```
 [STYLE SUFFIX] RESOLUTION = 160×160 transparent. SUBJECT = Cantor in
 heresy phase: stained-glass panels of his body have shifted color
-(originally red panels are now magenta, blue panels are now teal, etc.),
-suggesting inversion. Scroll text appears mirrored. Slight flickering effect
-(palette-only stripe artifacts).
+(originally Oxblood panels are now Mage glow violet, Cobalt panels are now
+Main teal, etc.), suggesting inversion. Scroll text appears mirrored. Slight
+flickering effect (palette-only stripe artifacts).
 ```
 
 ```
@@ -440,7 +445,7 @@ Awaiting the player's final program.
 ```
 [STYLE SUFFIX] RESOLUTION = 160×160 transparent. SUBJECT = Cantor accepting
 the player's offering: bowing deeply, all stained-glass panels glowing
-gold (#feae34) in benediction, beams of colored light radiating out
+Old gold (#D2A53F) in benediction, beams of colored light radiating out
 toward the viewer.
 ```
 
