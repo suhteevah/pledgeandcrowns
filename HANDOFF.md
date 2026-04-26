@@ -1,14 +1,14 @@
 # HANDOFF.md
 
 ## Last Updated
-2026-04-25 (handoff — provisional TESS GREEN via indexer triangulation; art deliverables spec drafted)
+2026-04-25 (handoff — TESS authoritative GREEN; art deliverables spec drafted; cleared to register domain + GH org + file 1(b) ITU)
 
 ## Project Status
 🟡 In progress — design package complete, Bevy 0.18 workspace scaffolded and compiling green through full local CI (fmt/check/clippy/test), palette redesigned around a defensible color-theory structure ("Heraldic Code"). No art assets yet. Working title locked as **Pledge & Crown**.
 
 ## What Was Done This Session (2026-04-25 evening)
 
-- **TESS sweep on "Pledge & Crown" — provisional GREEN.** Authoritative USPTO TESS path blocked by AWS WAF/CloudFront 403 against every automated browser path tried (Wraith native, Wraith CDP-stealth, headless Chrome via WebFetch). Pivoted to indexer triangulation: `site:trademarks.justia.com "pledge and crown"` = 0 hits, `site:trademarks.justia.com "pledge crown"` = 0 hits, `site:trademarkelite.com "pledge and crown"` = 0 hits, general `"pledge & crown"` web search = no gaming/software TM hits (only generic political-oath / Crown-Holdings / CROWN Act / ESO "Pledge of Mara" and the unrelated "The Old King's Crown" board game by Eerie Idol Games). All three indexers mirror USPTO and Google indexes them — a triple-zero is strong evidence no live US mark exists on the exact phrase in classes 9 or 41. RF Trademark Policy clean ("pledge" and "crown" not on protected-mark list). **Authoritative TESS still pending — Matt to run in real Chrome (5 min) before filing 1(b) ITU, printing physical marketing, or commissioning logo lockup beyond v1 wordmark.** Domain registration + GitHub org creation are safe to proceed on the provisional clearance.
+- **TESS sweep on "Pledge & Crown" — AUTHORITATIVE GREEN.** Matt ran the search in his real Chrome and downloaded the result xlsx (broad sweep, 500-record cap, search term `pledge & crown`). Hard findings: **zero marks anywhere in USPTO contain both "PLEDGE" and "CROWN"**; 5 LIVE PLEDGE-prefix marks in IC 009/041 (none gaming — Port Nexus enterprise software, Indonesian sports foundation, Texas fitness DBA, TN consulting); 52 LIVE CROWN-containing marks in IC 009/041 (23 are bare CROWN — Crown Battery, Crown Audio, Crown Equipment, Crown Financial Ministries, Crown Melbourne casino, Amazon CROWN, etc.; 29 are differently-prefixed compounds). Under 2(d) likelihood-of-confusion analysis the leading distinctive qualifier "PLEDGE &" gives strong commercial-impression separation from bare CROWN and from any other compound. RF Trademark Policy clean (neither word on protected-mark list). **Cleared to:** register `pledgeandcrown.dev`, create GitHub org, file 1(b) ITU in IC 009 + IC 041, commission logo lockup and marketing. Earlier note about "indirect/indexer triangulation" is superseded — authoritative source agrees with indexers. Source xlsx files: `C:\Users\Matt\Downloads\tmSearchResults2026-04-25.xlsx` (50-row narrow) + ` (1).xlsx` (500-row broad).
 - **`design/04b-art-deliverables.md` written.** Companion to bible v2.0 + handoff-prompts v1.0 — covers the gaps identified for handing the visual art to a contractor: master asset manifest (~180 deliverables for MVP, prioritized A/B/C, mapped to Acts 1–2 + Borrow Checker), file format spec (PNG-32 / sRGB / single-frame / pivot rules), authoritative animation frame-count table, filename + folder convention promoted out of CLAUDE.md, approval workflow (2-round reference gate, batches of 20, palette-conformance auto-rejection), IP/licensing stance (work-for-hire default + portfolio carve-out), explicit out-of-scope (audio, marketing, 3D).
 
 ## Earlier This Session — Initial Audit + Scaffold
@@ -56,7 +56,7 @@
 
 ## Blocking Issues
 
-- **Authoritative TESS confirm on "Pledge & Crown"** — provisional GREEN via indexer triangulation (Justia, TrademarkElite, Google all 0 hits) is good enough for domain + GitHub org, NOT for ITU filing or paid marketing. USPTO TESS direct is hard-blocked by AWS WAF against all automated paths; Matt must run it in his real Chrome before public filing or print spend. ~5 min, blocking only the "do not yet" actions listed in §What Was Done above.
+- ~~**Authoritative TESS confirm on "Pledge & Crown"**~~ — done 2026-04-25 evening, GREEN. No remaining trademark blocker.
 - **Open design questions 2–5** — leaderboards in MVP, licensing model (recommendation: dual-license), distribution platform priority, Temple-in-marketing. Each is design-impacting; needs Matt's call.
 - **No GitHub remote** yet — local-only repo. Org creation pending TESS clearance.
 
