@@ -1,7 +1,7 @@
 # HANDOFF.md
 
 ## Last Updated
-2026-04-25 (repo rename + Day 1 CI + Bevy scaffold + Heraldic Code palette v2)
+2026-04-25 (handoff — Wraith MCP wired; awaiting GPU smoke test before TESS sweep)
 
 ## Project Status
 🟡 In progress — design package complete, Bevy 0.18 workspace scaffolded and compiling green through full local CI (fmt/check/clippy/test), palette redesigned around a defensible color-theory structure ("Heraldic Code"). No art assets yet. Working title locked as **Pledge & Crown**.
@@ -51,7 +51,9 @@
 
 ## Blocking Issues
 
-None. All blockers from the audit are resolved in-doc. Code-side blockers are unknown until scaffolding starts.
+- **TESS clearance on "Pledge & Crown"** — gates domain, GitHub org, marketing. Matt is currently running a Wraith GPU smoke test; once Wraith is verified working in a fresh session, the TESS sweep can run via Wraith MCP. Until then, do not run TESS via `claude-in-chrome` (Matt explicitly asked for Wraith).
+- **Open design questions 2–5** — leaderboards in MVP, licensing model (recommendation: dual-license), distribution platform priority, Temple-in-marketing. Each is design-impacting; needs Matt's call.
+- **No GitHub remote** yet — local-only repo. Org creation pending TESS clearance.
 
 ## What's Next
 
@@ -74,6 +76,8 @@ Prioritized for the incoming session:
 - **PS 5.1 ASCII gotcha** (logged from CI scaffolding): Windows PowerShell 5.1 reads UTF-8-without-BOM as ANSI/Windows-1252, which garbles em-dashes and breaks parsing of `.ps1` files. All scripts in `scripts/` are ASCII-only. Don't add em-dashes or smart quotes to .ps1 files.
 - **Pre-commit hook is real CI.** It runs cargo fmt/check/clippy/test on every commit and blocks bad commits. To bypass for a WIP, use `git commit --no-verify` — but per global rules, don't unless you have to.
 - **Commit messages with embedded double-quotes** must be passed via `git commit -F <file>` on Windows (PowerShell heredocs don't escape `"` cleanly through to git's argv parser). Single-quoted arg names like `"Heraldic Code"` in a commit message will be misparsed.
+- **Wraith MCP wired into this project** as of 2026-04-25 in `~/.claude.json` → `projects['J:/pledgeandcrowns'].mcpServers['wraith-browser']` (stdio, `J:/wraith-browser/target/release/wraith-browser.exe serve`). **Will not load until next session restart.** Backup of pre-patch config at `~/.claude.json.bak-20260425-180938`. If the `serve` subcommand isn't right, that's where to fix it — `args` array in the JSON.
+- **Wraith GPU smoke test in progress on Matt's side.** When that completes and Wraith is verified working, restart this session and the `mcp__wraith*` tools will surface; first task should be the TESS sweep on "Pledge & Crown" (exact phrase + classes 9 and 41, live + dead, plus a Rust Foundation Trademark Policy sanity check).
 - **Repo is now a git repo** as of 2026-04-25. `main` branch, two commits. No remote yet — GitHub org creation is still pending.
 - **Compile API design hard rule:** player input never touches `Cargo.toml`. Server owns the manifest. If a future session designs a "user crates" or "player imports" feature, that's a v2+ conversation — not MVP.
 - **GitHub Actions is banned on Matt's account** (global rule). Local CI only. The design docs now reflect this; do not re-introduce GH Actions.
