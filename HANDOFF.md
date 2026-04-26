@@ -1,10 +1,10 @@
 # HANDOFF.md
 
 ## Last Updated
-2026-04-25 (repo rename + Day 1 local CI scaffold)
+2026-04-25 (repo rename + Day 1 CI + Bevy scaffold + Heraldic Code palette v2)
 
 ## Project Status
-🟡 In progress — design package complete and audited; no code or art yet. Working title locked as **Pledge & Crown**.
+🟡 In progress — design package complete, Bevy 0.18 workspace scaffolded and compiling green through full local CI (fmt/check/clippy/test), palette redesigned around a defensible color-theory structure ("Heraldic Code"). No art assets yet. Working title locked as **Pledge & Crown**.
 
 ## What Was Done This Session
 
@@ -34,12 +34,16 @@
 - Design package coherent and self-consistent across all 9 design docs + 4 prompt files.
 - All 8 audit flags reflected in the docs that own them (no orphan TODOs).
 - Title selected, etymology documented in CLAUDE.md and 00-vision.md.
+- **Bevy 0.18 workspace boots and passes full CI.** `game/` has tracing-instrumented main + lib + Camera2d. `compile-api/` is a stub bin that proves the workspace compiles end-to-end. Pinned versions: bevy 0.18, bevy_egui 0.39, bevy_ecs_tilemap 0.18, bevy_kira_audio 0.25, egui_code_editor 0.2.
+- **Local CI fully wired.** `scripts/ci.ps1` (fmt + check + clippy -D warnings + test) runs on every commit via `scripts/pre-commit.sh` → `.git/hooks/pre-commit`. Cold full run ~12 min on i9-11900K; warm runs ~5 sec.
+- **Palette v2.0 ("Heraldic Code")** locked. 32 colors derived from a named harmonic structure (split-complementary @ 350° anchor + 140°/178° pair, +42° gold accent, +270° magic flicker). Every color has a role name; prompts reference roles, not raw hexes. Sweep across 5 prompt files replaced ~97 color references; zero residual EDG32 hexes.
 
 **Not yet done (expected):**
-- Bevy project scaffold.
-- Style bible reference image generation (10 images).
-- Compile-API prototype on Hetzner.
+- ~~Bevy project scaffold.~~ done 2026-04-25 (commit d7fa659).
+- Style bible reference image generation (10 images, REF-01..REF-10 in `design/04-art-handoff-prompts.md`).
+- Compile-API prototype on Hetzner (currently a stub).
 - Vertical slice (Acts 1–2 + Borrow Checker boss).
+- Game subsystems: world, party, combat, editor, compile_client, sandbox, town, persistence, audio. Currently only a Camera2d on a blank window.
 
 **Stubbed / pending decisions:**
 - Repo directory renamed `J:\cargoandcrowns\` → `J:\pledgeandcrowns\` (plural, not the singular `pledgeandcrown` originally planned — keep this in mind when reading older notes/skills that may still point at the old path). Internal product/crate naming (`Pledge & Crown`, `pledge-and-crown`, `pledge_and_crown`) is unchanged.
@@ -57,8 +61,8 @@ Prioritized for the incoming session:
 2. **Decide remaining open questions** (HANDOFF §"Open questions" 2–5) — leaderboards in MVP, licensing model, distribution platform priority, Temple-in-marketing. Each is design-impacting.
 3. ~~**Repo rename**~~ — done 2026-04-25: `J:\cargoandcrowns\` → `J:\pledgeandcrowns\`. Audit any external references (skills, scheduled tasks, wiki entries) that still point at the old path.
 4. **Day 1 of critical path** — register `pledgeandcrown.dev` (or alt), create GitHub org. ~~scaffold `scripts/ci.ps1` + pre-commit hook~~ done 2026-04-25 (commits 6838264, ceaed94). Hook is installed in `.git/hooks/pre-commit`; `ci.ps1` is a no-op until `Cargo.toml` exists. PS 5.1 gotcha logged: scripts must be ASCII-only (no em-dashes) because PS 5.1 reads UTF-8-without-BOM as ANSI.
-5. **Day 2 — style bible reference image gen** — 10 images per `design/04-art-handoff-prompts.md`. Do not bulk-gen until the 10 are approved.
-6. **Day 3 onward** — Bevy scaffold per `design/06-mvp-scope.md`. Verify current stable Bevy at scaffold time; pin and document.
+5. **Day 2 — style bible reference image gen** — 10 images per `design/04-art-handoff-prompts.md`. Do not bulk-gen until the 10 are approved. Prompts already use the new Heraldic Code palette by role name — no further prompt edits needed before gen.
+6. ~~**Day 3 onward** — Bevy scaffold~~ — done 2026-04-25 (Bevy 0.18 scaffolded, not 0.14 as the doc anticipated).
 
 ## Notes for Next Session
 
@@ -66,7 +70,10 @@ Prioritized for the incoming session:
 - **The 8 audit findings are reflected in the docs** — do not re-diagnose them. If anything in `05-tech-architecture.md` §2 (compile-time RCE defense) feels under-specified, that's a real concern; if it feels redundant, that's the audit being thorough.
 - **Pledge & Crown is the title.** Internal-only until TESS clears. Don't push it to any public surface yet.
 - **The Borrow Checker still exists** — as the Act 2 boss. Don't rename the boss along with the game.
-- **Bevy version is intentionally unpinned** in CLAUDE.md and `05-tech-architecture.md`. Doc text was written against 0.14; verify current stable at scaffold time and pin then.
+- **Bevy is now pinned to 0.18.** Doc text in `05-tech-architecture.md` was written against 0.14 and references some old API patterns (e.g. window resolution as floats — Bevy 0.18 only accepts u32). Treat the doc's code samples as intent, not literal. The workspace `Cargo.toml` is the source of truth for versions.
+- **PS 5.1 ASCII gotcha** (logged from CI scaffolding): Windows PowerShell 5.1 reads UTF-8-without-BOM as ANSI/Windows-1252, which garbles em-dashes and breaks parsing of `.ps1` files. All scripts in `scripts/` are ASCII-only. Don't add em-dashes or smart quotes to .ps1 files.
+- **Pre-commit hook is real CI.** It runs cargo fmt/check/clippy/test on every commit and blocks bad commits. To bypass for a WIP, use `git commit --no-verify` — but per global rules, don't unless you have to.
+- **Commit messages with embedded double-quotes** must be passed via `git commit -F <file>` on Windows (PowerShell heredocs don't escape `"` cleanly through to git's argv parser). Single-quoted arg names like `"Heraldic Code"` in a commit message will be misparsed.
 - **Repo is now a git repo** as of 2026-04-25. `main` branch, two commits. No remote yet — GitHub org creation is still pending.
 - **Compile API design hard rule:** player input never touches `Cargo.toml`. Server owns the manifest. If a future session designs a "user crates" or "player imports" feature, that's a v2+ conversation — not MVP.
 - **GitHub Actions is banned on Matt's account** (global rule). Local CI only. The design docs now reflect this; do not re-introduce GH Actions.
