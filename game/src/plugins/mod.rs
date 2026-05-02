@@ -13,6 +13,7 @@ pub mod npc;
 pub mod player;
 pub mod progress;
 pub mod state;
+pub mod stub_grader;
 pub mod title;
 pub mod world;
 
