@@ -70,3 +70,46 @@ fn mission_progress_round_trip() {
     assert_eq!(p.cleared_count(), 2);
     assert!(!p.is_cleared("borrow_preview"));
 }
+
+#[test]
+fn mission_progress_disk_round_trip() {
+    // Use a per-test subdir under the system temp dir so parallel runs
+    // don't stomp on each other. The validator pins the filename to
+    // `save.bincode` — we honor that here.
+    let dir = std::env::temp_dir().join(format!(
+        "pledge-and-crown-test-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("save.bincode");
+
+    let mut p = MissionProgress::default();
+    p.mark_cleared("intro_let_binding");
+    p.mark_cleared("double_function");
+    p.save_to(&path).expect("save_to should succeed");
+
+    let loaded = MissionProgress::load_from(&path).expect("load_from should succeed");
+    assert_eq!(loaded.cleared_count(), 2);
+    assert!(loaded.is_cleared("intro_let_binding"));
+    assert!(loaded.is_cleared("double_function"));
+    assert!(!loaded.is_cleared("borrow_preview"));
+
+    // Loading from a missing path is a fresh state, not an error.
+    let missing = dir.join("does_not_exist").join("save.bincode");
+    let fresh = MissionProgress::load_from(&missing).unwrap();
+    assert_eq!(fresh.cleared_count(), 0);
+
+    // Filename validation rejects anything other than `save.bincode`.
+    let bad = dir.join("etc-passwd");
+    let err = MissionProgress::load_from(&bad).unwrap_err();
+    assert!(
+        err.to_string().contains("save.bincode"),
+        "rejection message should name the required filename, got: {err}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}

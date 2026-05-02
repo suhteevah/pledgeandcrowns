@@ -226,13 +226,16 @@ impl Plugin for MissionPlugin {
         tracing::debug!("MissionPlugin::build");
         app.init_resource::<MissionRegistry>()
             .init_resource::<ActiveMission>()
+            .init_resource::<CompletionView>()
             .add_systems(
                 Update,
-                handle_interact_key.run_if(in_state(GameState::InGame)),
+                (handle_interact_key, dismiss_completion_on_escape)
+                    .run_if(in_state(GameState::InGame)),
             )
             .add_systems(
                 EguiPrimaryContextPass,
-                draw_interaction_prompt.run_if(in_state(GameState::InGame)),
+                (draw_interaction_prompt, draw_completion_panel)
+                    .run_if(in_state(GameState::InGame)),
             );
     }
 }
@@ -242,12 +245,22 @@ pub struct ActiveMission {
     pub current: Option<Mission>,
 }
 
+/// Shown after a player F-talks to a cleared NPC. Recaps the lesson
+/// before letting them re-enter the editor to revisit. Cleared by Esc
+/// or by pressing F again (which falls through to opening the editor).
+#[derive(Resource, Default)]
+pub struct CompletionView {
+    pub mission_id: Option<String>,
+}
+
 fn handle_interact_key(
     keys: Res<ButtonInput<KeyCode>>,
     nearby: Res<NearbyNpc>,
     registry: Res<MissionRegistry>,
+    progress: Res<MissionProgress>,
     mut editor: ResMut<EditorState>,
     mut active: ResMut<ActiveMission>,
+    mut completion: ResMut<CompletionView>,
 ) {
     if !keys.just_pressed(KeyCode::KeyF) {
         return;
@@ -269,11 +282,32 @@ fn handle_interact_key(
         return;
     };
 
+    let cleared = progress.is_cleared(mission.id);
+    let viewing_this = completion
+        .mission_id
+        .as_deref()
+        .is_some_and(|id| id == mission.id);
+
+    // Cleared NPC + first F-press → completion recap, do NOT reopen
+    // editor yet. Player must press F again (or Esc to dismiss) before
+    // we drop them back into the code.
+    if cleared && !viewing_this {
+        tracing::info!("showing completion view for {}", mission.id);
+        completion.mission_id = Some(mission.id.to_string());
+        active.current = Some(mission);
+        return;
+    }
+
+    // Either: not cleared (regular flow) OR cleared and player pressed
+    // F a second time while viewing the completion (revisit flow).
+    completion.mission_id = None;
+
     tracing::info!(
-        "starting mission {} from {} ({})",
+        "starting mission {} from {} ({}, revisit={})",
         mission.id,
         mission.npc_name,
-        entry.name
+        entry.name,
+        cleared
     );
 
     editor.source = mission.starter_code.to_string();
@@ -283,14 +317,27 @@ fn handle_interact_key(
     active.current = Some(mission);
 }
 
+fn dismiss_completion_on_escape(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut completion: ResMut<CompletionView>,
+) {
+    if keys.just_pressed(KeyCode::Escape) && completion.mission_id.is_some() {
+        tracing::debug!("completion view dismissed via Escape");
+        completion.mission_id = None;
+    }
+}
+
 fn draw_interaction_prompt(
     mut contexts: EguiContexts,
     nearby: Res<NearbyNpc>,
     editor: Res<EditorState>,
     active: Res<ActiveMission>,
     progress: Res<MissionProgress>,
+    completion: Res<CompletionView>,
 ) {
-    if editor.open {
+    // Don't double up — the completion panel and editor each own the
+    // screen real estate for their own flows.
+    if editor.open || completion.mission_id.is_some() {
         return;
     }
     let Some(entry) = nearby.current.as_ref() else {
@@ -314,4 +361,105 @@ fn draw_interaction_prompt(
             }
             ui.small(format!("missions cleared: {}", progress.cleared_count()));
         });
+}
+
+fn draw_completion_panel(
+    mut contexts: EguiContexts,
+    completion: Res<CompletionView>,
+    registry: Res<MissionRegistry>,
+) {
+    let Some(mission_id) = completion.mission_id.as_deref() else {
+        return;
+    };
+    let Some(mission) = registry.missions.iter().find(|m| m.id == mission_id) else {
+        return;
+    };
+    let Ok(ctx) = contexts.ctx_mut() else {
+        return;
+    };
+
+    egui::Window::new("mission complete")
+        .title_bar(false)
+        .resizable(false)
+        .collapsible(false)
+        .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+        .min_width(420.0)
+        .show(ctx, |ui| {
+            ui.heading(format!("✓ {}", mission.npc_name));
+            ui.small(format!("encounter: {}", mission.id));
+            ui.separator();
+            ui.label(mission.prompt);
+            ui.separator();
+            // Show the Concept section of the tutorial as a recap. It's
+            // the section players most often want to re-read; the others
+            // (Syntax/Task/Hint) are revealed again when they reopen the
+            // editor.
+            ui.small(extract_section(mission.tutorial, "## Concept"));
+            ui.separator();
+            ui.label("[F] revisit  ·  [Esc] close");
+        });
+}
+
+/// Pull the body of a `## Heading` section out of a tutorial string —
+/// inclusive of the heading line, exclusive of the next `## ` line. If
+/// the section is missing, the full tutorial is returned (better to
+/// over-show than to silently drop the recap).
+fn extract_section(tutorial: &str, heading: &str) -> String {
+    let Some(start) = tutorial.find(heading) else {
+        return tutorial.to_string();
+    };
+    let after = &tutorial[start..];
+    if let Some(rel_next) = after[heading.len()..].find("## ") {
+        after[..heading.len() + rel_next].trim_end().to_string()
+    } else {
+        after.trim_end().to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extract_section_pulls_only_the_named_section() {
+        let tut = "## Concept\nfirst body\n\n## Syntax\nsecond body\n\n## Task\nthird";
+        let got = extract_section(tut, "## Concept");
+        assert!(got.contains("first body"));
+        assert!(!got.contains("second body"));
+        assert!(!got.contains("third"));
+    }
+
+    #[test]
+    fn extract_section_returns_tail_when_heading_is_last() {
+        let tut = "## Concept\nfirst\n\n## Hint\nlast hint body";
+        let got = extract_section(tut, "## Hint");
+        assert!(got.contains("last hint body"));
+        assert!(!got.contains("first"));
+    }
+
+    #[test]
+    fn extract_section_falls_back_to_full_tutorial_when_heading_missing() {
+        let tut = "no headings at all in this string";
+        let got = extract_section(tut, "## Concept");
+        assert_eq!(got, tut);
+    }
+
+    #[test]
+    fn extract_section_works_against_real_mission_tutorials() {
+        let reg = MissionRegistry::default();
+        for m in &reg.missions {
+            let concept = extract_section(m.tutorial, "## Concept");
+            assert!(
+                concept.contains("## Concept"),
+                "mission {} concept extraction lost its heading",
+                m.id
+            );
+            // Mustn't bleed into the next section.
+            assert!(
+                !concept.contains("## Syntax"),
+                "mission {} concept section bled into Syntax",
+                m.id
+            );
+        }
+    }
 }

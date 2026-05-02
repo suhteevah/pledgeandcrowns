@@ -37,7 +37,7 @@ thiserror = "2"
 
 # Serde / persistence.
 serde = { version = "1", features = ["derive"] }
-bincode = "2"
+bincode = { version = "2", features = ["serde"] }
 
 # Async runtime (for compile-api).
 tokio = { version = "1", features = ["full"] }
