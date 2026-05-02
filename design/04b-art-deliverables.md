@@ -164,6 +164,34 @@ Rules:
 - Marketing assets — Steam capsule, itch.io banner, social-media cards. These are post-MVP, post-TESS-clearance, and depend on the final wordmark lockup.
 - 3D / vector / animation rigs. The game is hand-pixeled 2D. No Spine, no DragonBones, no Aseprite-only proprietary formats — final delivery is flat PNGs.
 
-## 8. Revision history
+## 9. Rendered REF manifest
+
+Refs landed against the bible. Source `.jsx` lives at `design/art/refs/ref-NN-<slug>.jsx`; rendered PNG at `design/art/refs/png/REFNN.png`. Game-asset wiring (where applicable) is in `game/src/assets.rs::ALL_SPRITE_PATHS` and `game/src/plugins/npc.rs::NPC_ROSTER`.
+
+| REF | Asset | Resolution | Source JSX | Spec | Wired sprite path |
+|-----|-------|------------|------------|------|-------------------|
+| 01 | Player character | 32×32 | ref-01-player.jsx | (bible §Reference set) | `sprites/player.png` |
+| 02 | Ferris guide | 32×32 | ref-02-ferris.jsx | (bible §Reference set) | `sprites/ferris.png` |
+| 03 | Borrow Checker NPC | 64×64 | ref-03-borrow-checker.jsx | (bible §Reference set) | `sprites/borrow_checker.png` |
+| 04 | Hearthstone Village tiles | 16×16 ×16 | ref-04-tiles-village.jsx | (bible §Reference set) | `sprites/tiles_village.png` |
+| 05 | Trait Mage's Tower tiles | 16×16 ×16 | ref-05-tiles-tower.jsx | (bible §Reference set) | (Act 4, not yet loaded) |
+| 06 | Code editor frame | 640×360 | ref-06-editor.jsx | (bible §Reference set) | (egui, not bevy sprite) |
+| 07 | Goblin enemy | 32×32 | ref-07-goblin.jsx | (bible §Reference set) | (Act 1 enemy, not yet loaded) |
+| 08 | Healing potion icon | 16×16 | ref-08-potion.jsx | (bible §Reference set) | (inventory, not yet loaded) |
+| 09 | World map cinematic | 320×180 | ref-09-worldmap-v2.jsx | (bible §Reference set) | `sprites/worldmap.png` (asset present, not registered) |
+| 10 | Title screen wordmark | 640×360 | ref-10-title.jsx | (bible §Reference set) | `sprites/title.png` |
+| 11 | The Smith | 32×32 | ref-11-smith.jsx | specs/smith.md | `sprites/npc/smith_idle_0.png` |
+| 12 | The Cartographer | 32×32 | ref-12-cartographer.jsx | specs/cartographer.md | `sprites/npc/cartographer_idle_0.png` |
+| 13 | The Trait Mage | 32×32 | ref-13-trait-mage.jsx | specs/trait-mage.md | `sprites/npc/trait_mage_idle_0.png` |
+| 14 | The Bellringer | 32×32 | ref-14-bellringer.jsx | specs/bellringer.md | `sprites/npc/bellringer_idle_0.png` |
+| 15 | The Cooper | 32×32 | ref-15-cooper.jsx | specs/cooper.md | `sprites/npc/cooper_idle_0.png` |
+
+**NPC batches landed:**
+- Batch 1 (2026-05-02) — REF-11..15: Smith, Cartographer, Trait Mage, Bellringer, Cooper. Specs in `design/art/specs/`. Replaces SPRITE_PLAYER placeholders for the corresponding entries in `NPC_ROSTER`.
+
+**Remaining placeholders** (still using `SPRITE_PLAYER`): Oracle, Herald, Twin, Tinker (Act-1 prelude P1); Forgewright, Linguist, Pilgrim, Drillmaster, Reckoner, Quartermaster, Auditor, Chronicler, Alchemist, Heraldic Sage (Act-2 P2). See `game/src/plugins/npc.rs` for live truth.
+
+## 10. Revision history
 
 - **1.0 (2026-04-25)** — initial spec. Companions to bible v2.0 and handoff-prompts v1.0.
+- **1.1 (2026-05-02)** — added §9 Rendered REF manifest; logged NPC batch 1 (Smith, Cartographer, Trait Mage, Bellringer, Cooper).
