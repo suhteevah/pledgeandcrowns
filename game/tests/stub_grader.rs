@@ -73,6 +73,31 @@ fn main() {
     println!("{n}");
 }"#
         }
+        "borrow_mut" => {
+            r#"fn bump(x: &mut i32) { *x = 99; }
+fn main() { let mut n = 0; bump(&mut n); println!("{n}"); }"#
+        }
+        "string_vs_str" => {
+            r#"fn greet(name: &str) { println!("hi {name}"); }
+fn main() { let s = String::from("you"); greet(&s); greet("anon"); }"#
+        }
+        "option_unwrap_or" => {
+            r#"fn safe(x: Option<i32>) -> i32 { x.unwrap_or(0) }
+fn main() { println!("{}", safe(Some(7))); }"#
+        }
+        "for_in_range" => {
+            r#"fn main() {
+    for i in 0..10 {
+        println!("{i}");
+    }
+}"#
+        }
+        "closure_basic" => {
+            r#"fn main() {
+    let add = |a, b| a + b;
+    println!("{}", add(2, 3));
+}"#
+        }
         _ => return None,
     })
 }

@@ -54,10 +54,12 @@ fn requires_all(source: &str, needles: &[&str]) -> Result<(), String> {
 
 /// Re-implementation of the server's per-encounter pattern checks.
 ///
-/// Returns `Some(verdict)` for any of the 11 missions currently shipped
-/// in `MissionRegistry::default()`, or `None` for an unknown encounter
-/// id (the caller falls back to the existing `[client error]` path so
-/// unexpected ids aren't silently graded as a freeform pass).
+/// Returns `Some(verdict)` for any mission currently shipped in
+/// `MissionRegistry::default()`, or `None` for an unknown encounter id
+/// (the caller falls back to the existing `[client error]` path so
+/// unexpected ids aren't silently graded as a freeform pass). The
+/// `stub_covers_every_mission_in_the_registry` test in `tests/stub_grader.rs`
+/// will scream if a new mission is added without a stub arm here.
 pub fn stub_verdict(encounter_id: &str, source: &str) -> Option<StubVerdict> {
     let v = match encounter_id {
         "intro_let_binding" => match requires_all(source, &["let answer", "42"]) {
@@ -168,6 +170,77 @@ pub fn stub_verdict(encounter_id: &str, source: &str) -> Option<StubVerdict> {
                 StubVerdict::fail("the Herald squints — read the field with `.name`")
             } else {
                 StubVerdict::pass("the Herald unfurls the scroll. \"so named, so numbered.\"")
+            }
+        }
+        "borrow_mut" => {
+            if !source.contains("fn bump") {
+                StubVerdict::fail("the Forgewright glares — missing required: `fn bump`")
+            } else if !source.contains("&mut i32") {
+                StubVerdict::fail(
+                    "the Forgewright glares — the parameter must be `&mut i32` (exclusive borrow)",
+                )
+            } else if !source.contains("*x") {
+                StubVerdict::fail(
+                    "the Forgewright glares — write through the reference with a `*x` deref",
+                )
+            } else {
+                StubVerdict::pass(
+                    "the Forgewright nods. \"one writer, one anvil — the borrow holds.\"",
+                )
+            }
+        }
+        "string_vs_str" => {
+            if !source.contains("fn greet") {
+                StubVerdict::fail("the Linguist tilts her head — missing required: `fn greet`")
+            } else if !source.contains("&str") {
+                StubVerdict::fail(
+                    "the Linguist tilts her head — the parameter type should be `&str`",
+                )
+            } else if !source.contains("String::from") {
+                StubVerdict::fail(
+                    "the Linguist tilts her head — call `greet` once with a `String::from(...)` value",
+                )
+            } else {
+                StubVerdict::pass(
+                    "the Linguist smiles. \"one signature, two callers — &str unifies them.\"",
+                )
+            }
+        }
+        "option_unwrap_or" => {
+            if !source.contains("Option<") {
+                StubVerdict::fail("the Pilgrim shakes his head — missing required: `Option<`")
+            } else if !source.contains(".unwrap_or(") {
+                StubVerdict::fail(
+                    "the Pilgrim shakes his head — collapse the absent case with `.unwrap_or(default)`",
+                )
+            } else {
+                StubVerdict::pass(
+                    "the Pilgrim raises his lantern. \"the absent path lit a default.\"",
+                )
+            }
+        }
+        "for_in_range" => {
+            if !source.contains("for ") {
+                StubVerdict::fail("the Drillmaster barks — missing required: `for `")
+            } else if !source.contains(" in ") {
+                StubVerdict::fail("the Drillmaster barks — `for` needs a binding `in` an iterable")
+            } else if !source.contains("0..10") && !source.contains("0 .. 10") {
+                StubVerdict::fail("the Drillmaster barks — iterate the exact range `0..10`")
+            } else {
+                StubVerdict::pass("the Drillmaster claps once. \"ten paces, exact and ordered.\"")
+            }
+        }
+        "closure_basic" => {
+            if !source.contains("let add") {
+                StubVerdict::fail("the Reckoner's quill hovers — missing required: `let add`")
+            } else if !source.contains("= |") {
+                StubVerdict::fail(
+                    "the Reckoner's quill hovers — bind a closure literal with `= |...|`",
+                )
+            } else if !source.contains("+ b") && !source.contains("+b") {
+                StubVerdict::fail("the Reckoner's quill hovers — the body should compute `a + b`")
+            } else {
+                StubVerdict::pass("the Reckoner inks the ledger. \"summed in a single stroke.\"")
             }
         }
         _ => return None,
