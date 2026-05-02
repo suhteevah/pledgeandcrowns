@@ -10,6 +10,8 @@
 
 use crate::plugins::editor::EditorState;
 use crate::plugins::npc::NearbyNpc;
+use crate::plugins::progress::MissionProgress;
+use crate::plugins::state::GameState;
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, EguiPrimaryContextPass, egui};
 
@@ -60,8 +62,14 @@ impl Plugin for MissionPlugin {
         tracing::debug!("MissionPlugin::build");
         app.init_resource::<MissionRegistry>()
             .init_resource::<ActiveMission>()
-            .add_systems(Update, handle_interact_key)
-            .add_systems(EguiPrimaryContextPass, draw_interaction_prompt);
+            .add_systems(
+                Update,
+                handle_interact_key.run_if(in_state(GameState::InGame)),
+            )
+            .add_systems(
+                EguiPrimaryContextPass,
+                draw_interaction_prompt.run_if(in_state(GameState::InGame)),
+            );
     }
 }
 
@@ -116,9 +124,9 @@ fn draw_interaction_prompt(
     nearby: Res<NearbyNpc>,
     editor: Res<EditorState>,
     active: Res<ActiveMission>,
+    progress: Res<MissionProgress>,
 ) {
     if editor.open {
-        // Don't compete with the editor window for screen real estate.
         return;
     }
     let Some(entry) = nearby.current.as_ref() else {
@@ -128,14 +136,18 @@ fn draw_interaction_prompt(
         return;
     };
 
+    let cleared = progress.is_cleared(entry.mission_id);
+    let mark = if cleared { "[done] " } else { "" };
+
     egui::Window::new("interact")
         .title_bar(false)
         .resizable(false)
         .anchor(egui::Align2::CENTER_BOTTOM, egui::Vec2::new(0.0, -24.0))
         .show(ctx, |ui| {
-            ui.label(format!("[F] talk to {}", entry.name));
+            ui.label(format!("{mark}[F] talk to {}", entry.name));
             if let Some(m) = active.current.as_ref().filter(|m| m.id == entry.mission_id) {
                 ui.small(m.prompt);
             }
+            ui.small(format!("missions cleared: {}", progress.cleared_count()));
         });
 }

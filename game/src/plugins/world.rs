@@ -10,6 +10,7 @@
 //! and a handful of flowers/bushes for life. Real procedural village
 //! generation lands when Act 1 content arrives.
 
+use crate::plugins::state::GameState;
 use bevy::prelude::*;
 use bevy_ecs_tilemap::prelude::*;
 
@@ -45,7 +46,7 @@ impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
         tracing::debug!("WorldPlugin::build");
         app.add_plugins(TilemapPlugin)
-            .add_systems(Startup, spawn_village);
+            .add_systems(OnEnter(GameState::InGame), spawn_village);
     }
 }
 

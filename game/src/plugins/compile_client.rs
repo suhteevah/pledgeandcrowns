@@ -8,6 +8,7 @@
 //! `design/05-tech-architecture.md` §2.
 
 use crate::plugins::editor::EditorState;
+use crate::plugins::progress::MissionProgress;
 use bevy::prelude::*;
 use bevy::tasks::IoTaskPool;
 use crossbeam_channel::{Receiver, Sender, unbounded};
@@ -28,10 +29,17 @@ struct CompileResponse {
     stderr: String,
 }
 
+/// What the worker task ships back to the main loop after a request.
+struct CompileOutcome {
+    encounter_id: String,
+    formatted: String,
+    ok: bool,
+}
+
 #[derive(Resource)]
 pub struct CompileChannel {
-    sender: Sender<String>,
-    receiver: Receiver<String>,
+    sender: Sender<CompileOutcome>,
+    receiver: Receiver<CompileOutcome>,
 }
 
 impl Default for CompileChannel {
@@ -66,22 +74,38 @@ fn dispatch_pending_compile(mut state: ResMut<EditorState>, channel: Res<Compile
     state.last_compile_result = Some("compiling…".to_string());
     tracing::info!("dispatching compile job ({} bytes)", source.len());
 
+    let encounter_for_task = encounter_id.clone();
     IoTaskPool::get()
         .spawn(async move {
-            let msg = match send_compile(source, encounter_id).await {
-                Ok(resp) => format_response(&resp),
-                Err(e) => format!("[client error] {e}"),
+            let (formatted, ok) = match send_compile(source, encounter_for_task.clone()).await {
+                Ok(resp) => (format_response(&resp), resp.ok),
+                Err(e) => (format!("[client error] {e}"), false),
             };
-            // Recipient may have dropped (app closing); discard send errors.
-            let _ = sender.send(msg);
+            let _ = sender.send(CompileOutcome {
+                encounter_id: encounter_for_task,
+                formatted,
+                ok,
+            });
         })
         .detach();
 }
 
-fn drain_results(channel: Res<CompileChannel>, mut state: ResMut<EditorState>) {
-    while let Ok(msg) = channel.receiver.try_recv() {
-        tracing::info!("compile result: {msg}");
-        state.last_compile_result = Some(msg);
+fn drain_results(
+    channel: Res<CompileChannel>,
+    mut editor: ResMut<EditorState>,
+    mut progress: ResMut<MissionProgress>,
+) {
+    while let Ok(outcome) = channel.receiver.try_recv() {
+        tracing::info!(
+            "compile result: encounter={} ok={} {}",
+            outcome.encounter_id,
+            outcome.ok,
+            outcome.formatted
+        );
+        if outcome.ok {
+            progress.mark_cleared(&outcome.encounter_id);
+        }
+        editor.last_compile_result = Some(outcome.formatted);
     }
 }
 

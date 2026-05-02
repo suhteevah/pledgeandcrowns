@@ -7,6 +7,7 @@
 //! This plugin only owns NPC spawning and proximity detection.
 
 use crate::plugins::player::Player;
+use crate::plugins::state::GameState;
 use bevy::prelude::*;
 
 const NPC_SCALE: f32 = 1.5;
@@ -37,8 +38,11 @@ impl Plugin for NpcPlugin {
     fn build(&self, app: &mut App) {
         tracing::debug!("NpcPlugin::build");
         app.init_resource::<NearbyNpc>()
-            .add_systems(Startup, spawn_npcs)
-            .add_systems(Update, detect_nearby_npc);
+            .add_systems(OnEnter(GameState::InGame), spawn_npcs)
+            .add_systems(
+                Update,
+                detect_nearby_npc.run_if(in_state(GameState::InGame)),
+            );
     }
 }
 

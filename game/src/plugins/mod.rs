@@ -10,6 +10,9 @@ pub mod editor;
 pub mod mission;
 pub mod npc;
 pub mod player;
+pub mod progress;
+pub mod state;
+pub mod title;
 pub mod world;
 
 /// Bootstrap plugin. Spawns the camera and mounts the day-6 subsystems
@@ -21,6 +24,9 @@ impl Plugin for CorePlugin {
     fn build(&self, app: &mut App) {
         tracing::debug!("CorePlugin::build");
         app.add_systems(Startup, setup_camera).add_plugins((
+            state::StatePlugin,
+            title::TitlePlugin,
+            progress::ProgressPlugin,
             world::WorldPlugin,
             player::PlayerPlugin,
             npc::NpcPlugin,

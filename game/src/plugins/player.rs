@@ -6,6 +6,7 @@
 //! animation states yet. Bounded by `world::WORLD_HALF_*` so the
 //! player can't walk off the painted background.
 
+use crate::plugins::state::GameState;
 use crate::plugins::world::{WORLD_HALF_H, WORLD_HALF_W};
 use bevy::prelude::*;
 
@@ -25,8 +26,13 @@ pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         tracing::debug!("PlayerPlugin::build");
-        app.add_systems(Startup, spawn_player)
-            .add_systems(Update, (move_player, camera_follow_player).chain());
+        app.add_systems(OnEnter(GameState::InGame), spawn_player)
+            .add_systems(
+                Update,
+                (move_player, camera_follow_player)
+                    .chain()
+                    .run_if(in_state(GameState::InGame)),
+            );
     }
 }
 
