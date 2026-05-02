@@ -7,6 +7,8 @@ use bevy::prelude::*;
 
 pub mod compile_client;
 pub mod editor;
+pub mod mission;
+pub mod npc;
 pub mod player;
 pub mod world;
 
@@ -21,7 +23,9 @@ impl Plugin for CorePlugin {
         app.add_systems(Startup, setup_camera).add_plugins((
             world::WorldPlugin,
             player::PlayerPlugin,
+            npc::NpcPlugin,
             editor::EditorPlugin,
+            mission::MissionPlugin,
             compile_client::CompileClientPlugin,
         ));
     }

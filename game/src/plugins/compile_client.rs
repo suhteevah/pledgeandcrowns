@@ -61,7 +61,7 @@ fn dispatch_pending_compile(mut state: ResMut<EditorState>, channel: Res<Compile
 
     let source = state.source.clone();
     let sender = channel.sender.clone();
-    let encounter_id = "day-6-stub".to_string();
+    let encounter_id = state.encounter_id.clone();
 
     state.last_compile_result = Some("compiling…".to_string());
     tracing::info!("dispatching compile job ({} bytes)", source.len());

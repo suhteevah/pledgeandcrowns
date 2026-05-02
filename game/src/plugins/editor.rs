@@ -27,6 +27,10 @@ pub struct EditorState {
     /// `compile_client` plugin reads this each frame, dispatches the
     /// network request, and resets it.
     pub compile_pending: bool,
+    /// Mission identifier sent to the compile-API so it can branch
+    /// validation per encounter. Set by the mission system on F-press;
+    /// defaults to the freeform sandbox encounter.
+    pub encounter_id: String,
 }
 
 impl Default for EditorState {
@@ -36,6 +40,7 @@ impl Default for EditorState {
             source: STARTER_CODE.to_string(),
             last_compile_result: None,
             compile_pending: false,
+            encounter_id: "freeform".to_string(),
         }
     }
 }

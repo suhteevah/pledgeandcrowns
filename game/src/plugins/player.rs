@@ -9,6 +9,9 @@
 use crate::plugins::world::{WORLD_HALF_H, WORLD_HALF_W};
 use bevy::prelude::*;
 
+/// Camera lerp factor per second; 1.0 = snap, 0.0 = never moves.
+const CAMERA_FOLLOW_SPEED: f32 = 6.0;
+
 const PLAYER_SCALE: f32 = 2.0;
 const PLAYER_NATIVE: f32 = 32.0;
 const PLAYER_DISPLAY: f32 = PLAYER_NATIVE * PLAYER_SCALE;
@@ -23,8 +26,27 @@ impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         tracing::debug!("PlayerPlugin::build");
         app.add_systems(Startup, spawn_player)
-            .add_systems(Update, move_player);
+            .add_systems(Update, (move_player, camera_follow_player).chain());
     }
+}
+
+fn camera_follow_player(
+    time: Res<Time>,
+    player_q: Query<&Transform, (With<Player>, Without<Camera2d>)>,
+    mut cam_q: Query<&mut Transform, With<Camera2d>>,
+) {
+    let Ok(player) = player_q.single() else {
+        return;
+    };
+    let Ok(mut cam) = cam_q.single_mut() else {
+        return;
+    };
+    let target = player.translation.truncate();
+    let current = cam.translation.truncate();
+    let alpha = (CAMERA_FOLLOW_SPEED * time.delta_secs()).clamp(0.0, 1.0);
+    let next = current.lerp(target, alpha);
+    cam.translation.x = next.x;
+    cam.translation.y = next.y;
 }
 
 fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
