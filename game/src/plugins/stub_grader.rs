@@ -185,7 +185,7 @@ pub fn stub_verdict(encounter_id: &str, source: &str) -> Option<StubVerdict> {
                 )
             } else {
                 StubVerdict::pass(
-                    "the Forgewright nods. \"one writer, one anvil — the borrow holds.\"",
+                    "the Forgewright nods. \"one writer at the forge — the borrow holds.\"",
                 )
             }
         }
@@ -202,7 +202,7 @@ pub fn stub_verdict(encounter_id: &str, source: &str) -> Option<StubVerdict> {
                 )
             } else {
                 StubVerdict::pass(
-                    "the Linguist smiles. \"one signature, two callers — &str unifies them.\"",
+                    "the Linguist smiles. \"one tongue, two voices — &str carries both.\"",
                 )
             }
         }
@@ -269,7 +269,7 @@ pub fn stub_verdict(encounter_id: &str, source: &str) -> Option<StubVerdict> {
                 )
             } else {
                 StubVerdict::pass(
-                    "the Auditor closes the ledger. \"the Auditor accepts: errors travel upward.\"",
+                    "the Auditor marks the tally. \"errors travel upward — the books balance.\"",
                 )
             }
         }
@@ -285,9 +285,7 @@ pub fn stub_verdict(encounter_id: &str, source: &str) -> Option<StubVerdict> {
                     "the Chronicler shakes his head — print with the debug formatter `{:?}`",
                 )
             } else {
-                StubVerdict::pass(
-                    "the Chronicler dips his quill. \"derived, not authored — the Chronicler approves.\"",
-                )
+                StubVerdict::pass("the Chronicler dips his quill. \"derived, not authored.\"")
             }
         }
         "iter_map_collect" => {
@@ -302,9 +300,7 @@ pub fn stub_verdict(encounter_id: &str, source: &str) -> Option<StubVerdict> {
                     "the Alchemist stirs — the closure should bind one element as `|x|`",
                 )
             } else {
-                StubVerdict::pass(
-                    "the Alchemist decants the flask. \"the Alchemist measures: every drop transmuted.\"",
-                )
+                StubVerdict::pass("the Alchemist decants the flask. \"every drop transmuted.\"")
             }
         }
         "enum_match" => {
@@ -320,7 +316,7 @@ pub fn stub_verdict(encounter_id: &str, source: &str) -> Option<StubVerdict> {
                 )
             } else {
                 StubVerdict::pass(
-                    "the Heraldic Sage raises a banner. \"every quarter named, the Heraldic Sage salutes.\"",
+                    "the Heraldic Sage opens the book of arms. \"every variant named, every blazon read.\"",
                 )
             }
         }

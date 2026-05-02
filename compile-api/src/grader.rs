@@ -155,7 +155,9 @@ pub fn grade(encounter_id: &str, source: &str) -> Verdict {
                     "the Forgewright glares — write through the reference with a `*x` deref",
                 )
             } else {
-                Verdict::pass("the Forgewright nods. \"one writer, one anvil — the borrow holds.\"")
+                Verdict::pass(
+                    "the Forgewright nods. \"one writer at the forge — the borrow holds.\"",
+                )
             }
         }
         // ── Mission 13: function takes `&str`, callable with both
@@ -172,7 +174,7 @@ pub fn grade(encounter_id: &str, source: &str) -> Verdict {
                 )
             } else {
                 Verdict::pass(
-                    "the Linguist smiles. \"one signature, two callers — &str unifies them.\"",
+                    "the Linguist smiles. \"one tongue, two voices — &str carries both.\"",
                 )
             }
         }
@@ -255,7 +257,7 @@ pub fn grade(encounter_id: &str, source: &str) -> Verdict {
                 Verdict::fail("the Auditor's pen taps — propagate the error with the `?` operator")
             } else {
                 Verdict::pass(
-                    "the Auditor closes the ledger. \"the Auditor accepts: errors travel upward.\"",
+                    "the Auditor marks the tally. \"errors travel upward — the books balance.\"",
                 )
             }
         }
@@ -272,9 +274,7 @@ pub fn grade(encounter_id: &str, source: &str) -> Verdict {
                     "the Chronicler shakes his head — print with the debug formatter `{:?}`",
                 )
             } else {
-                Verdict::pass(
-                    "the Chronicler dips his quill. \"derived, not authored — the Chronicler approves.\"",
-                )
+                Verdict::pass("the Chronicler dips his quill. \"derived, not authored.\"")
             }
         }
         // ── Mission 20: iter().map().collect() into a Vec.
@@ -286,9 +286,7 @@ pub fn grade(encounter_id: &str, source: &str) -> Verdict {
             } else if !source.contains("|x|") && !source.contains("|x |") {
                 Verdict::fail("the Alchemist stirs — the closure should bind one element as `|x|`")
             } else {
-                Verdict::pass(
-                    "the Alchemist decants the flask. \"the Alchemist measures: every drop transmuted.\"",
-                )
+                Verdict::pass("the Alchemist decants the flask. \"every drop transmuted.\"")
             }
         }
         // ── Mission 21: define an enum, match on its variants.
@@ -305,7 +303,7 @@ pub fn grade(encounter_id: &str, source: &str) -> Verdict {
                 )
             } else {
                 Verdict::pass(
-                    "the Heraldic Sage raises a banner. \"every quarter named, the Heraldic Sage salutes.\"",
+                    "the Heraldic Sage opens the book of arms. \"every variant named, every blazon read.\"",
                 )
             }
         }
