@@ -6,7 +6,10 @@
 //! Mission registry + dialogue + editor handoff live in `mission.rs`.
 //! This plugin only owns NPC spawning and proximity detection.
 
-use crate::assets::{SPRITE_BORROW_CHECKER, SPRITE_FERRIS, SPRITE_PLAYER};
+use crate::assets::{
+    SPRITE_BELLRINGER, SPRITE_BORROW_CHECKER, SPRITE_CARTOGRAPHER, SPRITE_COOPER, SPRITE_FERRIS,
+    SPRITE_PLAYER, SPRITE_SMITH, SPRITE_TRAIT_MAGE,
+};
 use crate::plugins::player::Player;
 use crate::plugins::state::GameState;
 use bevy::prelude::*;
@@ -60,8 +63,7 @@ pub const NPC_ROSTER: &[NpcSpec] = &[
     NpcSpec {
         name: "Trait Mage",
         mission_id: "double_function",
-        // Placeholder art until the Trait Mage REF lands.
-        sprite_path: SPRITE_PLAYER,
+        sprite_path: SPRITE_TRAIT_MAGE,
         pos: (-48.0, 32.0),
         native_px: 32.0,
     },
@@ -75,21 +77,21 @@ pub const NPC_ROSTER: &[NpcSpec] = &[
     NpcSpec {
         name: "The Smith",
         mission_id: "mut_binding",
-        sprite_path: SPRITE_PLAYER, // placeholder until Smith art lands
+        sprite_path: SPRITE_SMITH,
         pos: (-96.0, -32.0),
         native_px: 32.0,
     },
     NpcSpec {
         name: "The Cartographer",
         mission_id: "if_else_sign",
-        sprite_path: SPRITE_PLAYER, // placeholder
+        sprite_path: SPRITE_CARTOGRAPHER,
         pos: (0.0, 96.0),
         native_px: 32.0,
     },
     NpcSpec {
         name: "The Bellringer",
         mission_id: "loop_break",
-        sprite_path: SPRITE_PLAYER, // placeholder until Bellringer art lands
+        sprite_path: SPRITE_BELLRINGER,
         pos: (144.0, 32.0),
         native_px: 32.0,
     },
@@ -110,7 +112,7 @@ pub const NPC_ROSTER: &[NpcSpec] = &[
     NpcSpec {
         name: "The Cooper",
         mission_id: "vec_iter",
-        sprite_path: SPRITE_PLAYER, // placeholder
+        sprite_path: SPRITE_COOPER,
         pos: (160.0, -32.0),
         native_px: 32.0,
     },

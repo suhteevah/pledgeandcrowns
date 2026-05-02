@@ -2041,12 +2041,217 @@ window.REF10 = REF10;
 window.REF10_ROLES = ['O','W','R','Y','K','<','A','S','V','B','X','I','G','L','N','Z','C','#','T','!','>','P'];
 
 </script>
+<script type="text/babel" data-presets="env,react">
+// REF-11 — The Smith (NPC batch 1)
+const REF11_GRID = [
+  '................................',
+  '................................',
+  '................................',
+  '..........XXXXXXXX..............',
+  '.........XZZZZZZZX..............',
+  '........XZZNNNNZZZX.............',
+  '........XZNNNNNNNNX.............',
+  '........XPPPPPPRRWX.............',
+  '........XXPPRRRRRWX.............',
+  '........X.PRRRRRRRX.............',
+  '........XX.X.X.X.XX.............',
+  '........XPPPPRRRRWX.............',
+  '.......XZNNNNNNNNNNX............',
+  '.......XZNNNZZZNNNZX............',
+  '........XXNNZZZZNNX.............',
+  '........XZZZZZZZZZX.............',
+  '.......XYOOOOOOOOOYX...XSSX.....',
+  '......XYOOWWWOOOOOOYX..XBBSX....',
+  '......XYOWWWWOOOOOOYX..XBBLSX...',
+  '......XYOWWWWOOOOOYYX..XBBSSX...',
+  '......XYOOWWOOOOOYYYX...XSSX....',
+  '......XYOOOOOOOOOYYYX...XZSX....',
+  '......XYOOOOOOOOYYYYX...XZZX....',
+  '......XXXNGGGGGGNXXXX...XZZX....',
+  '......XYYOOOOOOOOOYYX...XZZX....',
+  '......XYYOOWWOOWOOYYX...XZZX....',
+  '......XYYOOWWOOWOOYYX...XZZX....',
+  '......XYFFFFFFFFFFFYX...XZZX....',
+  '......XFFFFXXXXFFFFFX...........',
+  '......XZZZZX..XZZZZZX...........',
+  '......XZUUZX..XZUUZZX...........',
+  '......XXXXXX..XXXXXXX...........',
+];
+window.REF11 = function REF11({ scale = 8 }) {
+  return <PixelArt grid={REF11_GRID} scale={scale} title="REF-11 The Smith" />;
+};
+window.REF11_GRID = REF11_GRID;
+</script>
+<script type="text/babel" data-presets="env,react">
+// REF-12 — The Cartographer (NPC batch 1)
+const REF12_GRID = [
+  '................................',
+  '................................',
+  '................................',
+  '..........XXXXXXXX..............',
+  '.........XYYYBBBBYX.............',
+  '........XYYBBSBBBBYX............',
+  '........XYBBSBBBBBYX............',
+  '........XPRPPPPRRWX.............',
+  '........X.PPRRRRRWX.............',
+  '........XX.XX.XX.XX.............',
+  '........X.PPRRRRRWX.............',
+  '.........XPPRRRRWX..............',
+  '.........XYBBYYBBYX.............',
+  '........X<<<<<<<<<<X............',
+  '.......X<<>>><<<<<<<X...........',
+  '......X<<>>>><<<<<<<<X..........',
+  '......X<>>>><<<<<<<<<X.....XX...',
+  '......X<<>>><<<<<<<<<X....XGGX..',
+  '......X<<>><<<<<<<<<<X...XGLLGX.',
+  '......X<<>><<<<<<<<<<X...XLPSGX.',
+  '......X<<>><<<XZZNNNVX...XGLLGX.',
+  '......X<<>><<<XNNNVVVX....XGGX..',
+  '......X<<>><<<XCEXCEX......XX...',
+  '......X<<>>><<XCEEECX...........',
+  '......X<<<>><<XCEGECX...........',
+  '......X<<<<<<<XCCEEX............',
+  '......X<XGGGGGGGGGGGX...........',
+  '......X<<>>><<<<<<<<<X..........',
+  '......X<<>>><<<<<<<<<X..........',
+  '......XXXX<<<<<<<<XXXX..........',
+  '......XZZX..XX..XXZZX...........',
+  '......XUUX..XX..XXUUX...........',
+];
+window.REF12 = function REF12({ scale = 8 }) {
+  return <PixelArt grid={REF12_GRID} scale={scale} title="REF-12 The Cartographer" />;
+};
+window.REF12_GRID = REF12_GRID;
+</script>
+<script type="text/babel" data-presets="env,react">
+// REF-13 — The Trait Mage (NPC batch 1)
+const REF13_GRID = [
+  '................................',
+  '................................',
+  '............XXXXXX..............',
+  '...........XKKKKKKX...........X.',
+  '..........XK*KKKK*KX.........XBX',
+  '.........XKKYYBBBYKX........XSBX',
+  '.........XKYBBBBYBKX........XBSX',
+  '.........XPPRRRRRWWX.......XGNGX',
+  '........XX.PPRRRRWWX......XGL%GX',
+  '........XPXIXPRXIXWX......XG%%LX',
+  '........XPRRRRRRRRWX......XGL%GX',
+  '........X.PPRRRRRWX........XGNX.',
+  '........XX.XYYYYXX..........XBX.',
+  '........XOOOOOOOOOX..........XBX',
+  '.......XOOOWWWWOOOOX.........XBX',
+  '.......XOWWWWWWOOOYX.........XBX',
+  '......XOOWWWWWWWOOYYX........XBX',
+  '......XOOWOOWWWWOOYYX........XBX',
+  '......XOOWOOOWWWOOYYX........XBX',
+  '......XOOOOOOOOOOOYYX........XBX',
+  '......XOOOOOOOOOOOOYX........XBX',
+  '......XGGGGNNNNNGGGGX........XBX',
+  '......XLOOOOOOOOOOOLX........XBX',
+  '......XLOOWWOOOWWOOLX........XBX',
+  '......XLOOWWOOOWWOOLX........XBX',
+  '......XLOOOOOOOOOOOLX........XBX',
+  '......XLOOOOOWOOOOOLX........XBX',
+  '.....XLOOOOOOOOOOOOOLX.......XBX',
+  '.....XLOOOOOOOOOOOOOLX.......XBX',
+  '.....XLLOOOOOOOOOOOLLX.......XBX',
+  '.....XGGGGGGGGGGGGGGGX.......XBX',
+  '.....XXXXXXXXXXXXXXXXX.......XXX',
+];
+window.REF13 = function REF13({ scale = 8 }) {
+  return <PixelArt grid={REF13_GRID} scale={scale} title="REF-13 The Trait Mage" />;
+};
+window.REF13_GRID = REF13_GRID;
+</script>
+<script type="text/babel" data-presets="env,react">
+// REF-14 — The Bellringer (NPC batch 1)
+const REF14_GRID = [
+  '................................',
+  '......XXXXXXXXXXXXXXXXXXXX......',
+  '.....XGGGGGGGLGGGGGGGGGGGGX.....',
+  '.....XGUUUUUUUUUUUUUUUUUGGX.....',
+  '......XXXXXXNNXXXXXXXXXXXX......',
+  '...M..........XNX..........M....',
+  '..MM..........XNX..........MM...',
+  '...M..........XZX...........M...',
+  '..............XNX...............',
+  '..........XXXXXNXXXX............',
+  '.........XZZNNNNNZZZX...........',
+  '.........XZNNNNNNNNZX...........',
+  '........XPPPRRRRRRWWX...........',
+  '........X.PPRRRRRRWX............',
+  '........XX.X.X.X.XXX............',
+  '........X.PPRRRRRRWX............',
+  '........XXXPPRRRRWXX............',
+  '.........XEEEEEEEEX.............',
+  '........XEEEEEEEEEEX............',
+  '.......XEEEEEEFEEEEEX...........',
+  '.......XEEEEEFFFEEEEX...........',
+  '.......XEEEEFFFFEEEEX...........',
+  '.......XZZZZGNGZZZZZX...........',
+  '.......XEEEEEFFFEEEEX...........',
+  '.......XEEEEFFFFEEEEX...........',
+  '.......XFFFFXXXXFFFFX...........',
+  '........XBBBX..XBBBX............',
+  '........XBBBX..XBBBX............',
+  '........XBBBX..XBBBX............',
+  '........XZZZX..XZZZX............',
+  '........XZUUX..XZUUX............',
+  '........XXXXX..XXXXX............',
+];
+window.REF14 = function REF14({ scale = 8 }) {
+  return <PixelArt grid={REF14_GRID} scale={scale} title="REF-14 The Bellringer" />;
+};
+window.REF14_GRID = REF14_GRID;
+</script>
+<script type="text/babel" data-presets="env,react">
+// REF-15 — The Cooper (NPC batch 1)
+const REF15_GRID = [
+  '................................',
+  '................................',
+  '................................',
+  '......XXXXXXXX..................',
+  '.....XYYYBBBBYX.................',
+  '....XYBBBBBBBBYX................',
+  '....XYBBBBBBBBBX................',
+  '....XPPPPPPRRWWX................',
+  '....X.PPRRRRRRWX................',
+  '....XX.X.XX.X.XX................',
+  '....X.PPRRRRRRWX................',
+  '....XXPPPRRRRRWX................',
+  '...XQQQQQQQQQQQQX...............',
+  '..XZZZQQQQQQQQZZZX...XSSSSSSSX..',
+  '.XZNNZQQQQQQQQZNNZX..XGGGGGGGX..',
+  '.XZNNZQQQQQQQQZNNZX..XSSSSSSSX..',
+  '.XZZZZQQQQQQQQZZZZX..XZNNZNNZX..',
+  '.XZZZZQQQQQQQQZZZZX..XZNNZNNZX..',
+  '.XUUZZZZZZZZZZZZUUX..XSSSSSSSX..',
+  '.XUUUUUUUUUUUUUUUUX..XZNNZNNZX..',
+  '.XGGGGGGGGGGGGGGGGX..XZNNZNNZX..',
+  '..XZZUZZGGGGZZUZZX...XSSSSSSSX..',
+  '..XZZZZZZZZZZZZZZX...XZNNZNNZX..',
+  '..XZUZZUUUUUUZZUZX...XZNNZNNZX..',
+  '..XUUZUUUUUUUUZUUX...XZNNZNNZX..',
+  '..XUUZUUUUUUUUZUUX..XPRRWX......',
+  '..XUUUXXXXXXXXUUUX..XPPRWX......',
+  '..XZZZX......XZZZX...XXXX.......',
+  '..XZUZX......XZUZX..............',
+  '..XXXXX......XXXXX..............',
+  '................................',
+  '................................',
+];
+window.REF15 = function REF15({ scale = 8 }) {
+  return <PixelArt grid={REF15_GRID} scale={scale} title="REF-15 The Cooper" />;
+};
+window.REF15_GRID = REF15_GRID;
+</script>
 </head>
 <body>
   <div id="status">loading...</div>
   <div id="root"></div>
   <script type="text/babel" data-presets="env,react">
-    const REFS = ['REF01','REF02','REF03','REF04','REF05','REF06','REF07','REF08','REF09','REF10'];
+    const REFS = ['REF01','REF02','REF03','REF04','REF05','REF06','REF07','REF08','REF09','REF10','REF11','REF12','REF13','REF14','REF15'];
     window.__refs = {};
     window.__refs_done = false;
     function App() {
