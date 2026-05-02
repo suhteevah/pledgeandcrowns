@@ -19,6 +19,9 @@ Thumbs.db
 /scratch/
 /logs/
 
+# Reference-art renderer scratch (see scripts/render-refs.md)
+/scripts/.refs-snapshot.json
+
 # Secrets — never commit
 .env
 .env.*

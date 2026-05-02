@@ -1,7 +1,7 @@
 # HANDOFF.md
 
 ## Last Updated
-2026-05-01 (handoff — 10 reference art images shipped as JSX/ASCII grid in `design/art/`; remote wired to GitHub)
+2026-05-02 (handoff — 10 reference PNGs rendered + committed; PNG export pipeline live)
 
 ## Project Status
 🟡 In progress — design package complete, Bevy 0.18 workspace scaffolded and compiling green through full local CI (fmt/check/clippy/test), palette redesigned around a defensible color-theory structure ("Heraldic Code"). No art assets yet. Working title locked as **Pledge & Crown**.
@@ -17,9 +17,16 @@
 - **Bible v2.0 reference-image-set milestone is COMPLETE.** Bulk asset gen is unblocked.
 - **GitHub remote wired.** `origin = https://github.com/suhteevah/pledgeandcrowns.git`. *Note: this is Matt's personal namespace, not the planned `pledgeandcrown` org. Worth confirming whether the org was created and if the repo should be transferred, or if personal-namespace is the chosen path. Not a blocker.*
 
-## Known gaps from this delivery
+## Reference-art PNG export pipeline
 
-- **No PNG exports.** The `04b-art-deliverables.md` contractor spec requires PNG-32 single-frame. The JSX grids are the source-of-truth, but a JSX→PNG renderer is needed before a contractor can take hand-off. Plan: small Node/Rust script that walks `refs/`, extracts the GRID const + palette code legend per file, writes one PNG per ref. Defer until first contractor hire is imminent.
+PNG exports of all 10 references now live at `design/art/refs/png/REF01..REF10.png`. Contractor-deliverable contract per `04b-art-deliverables.md` §2 is satisfied. Native pixel sizes verified: 32×32 (player/Ferris/goblin), 64×64 (Borrow Checker / village tiles / tower tiles), 16×16 (potion), 320×180 (worldmap), 640×360 (editor frame, title screen).
+
+Workflow is a 2-step manual flow because Babel-standalone can't load external `text/babel src=` files over `file://` (Chrome treats sibling .jsx as cross-origin under file: scheme). Bundled into `scripts/`:
+- `render-refs-inline.html` — self-contained harness that inlines all .jsx + palette + the renderer; mounts every REFxx React component, captures each canvas as a PNG data URL into `window.__refs`.
+- `render-refs.py` — zero-dep decoder; reads `scripts/.refs-snapshot.json` (gitignored), writes PNGs to `design/art/refs/png/`.
+- `render-refs.md` — workflow docs.
+
+CI does NOT run this. PNGs are committed artifacts. Re-run only when a `.jsx` ref source changes.
 
 ## What Was Done This Session (2026-05-01)
 
