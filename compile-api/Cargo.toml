@@ -29,6 +29,14 @@ thiserror.workspace = true
 serde.workspace = true
 uuid = { version = "1", features = ["v4"] }
 
+# WASM execution sandbox. Pinned to wasmtime/wasmtime-wasi 44.0 (released
+# in lockstep). The `p1` feature on wasmtime-wasi exposes the WASIp1 /
+# preview1 surface used by `_start`-style WASI modules emitted by
+# wasm32-wasip1 Rust toolchains.
+wasmtime = "44"
+wasmtime-wasi = { version = "44", features = ["p1"] }
+
 [dev-dependencies]
 reqwest = { workspace = true }
 serde_json = "1"
+wat = "1"
