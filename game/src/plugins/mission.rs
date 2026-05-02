@@ -260,6 +260,116 @@ and `) =` (pattern close + assign).",
                     starter_code: "fn main() {\n    let _pair = (3, 4);\n    // destructure into a and b in a single let, then print both\n}\n",
                 },
                 Mission {
+                    id: "borrow_mut",
+                    npc_name: "The Forgewright",
+                    prompt: "Take an `&mut i32` and write through the deref.",
+                    tutorial: "## Concept\n\
+An exclusive (mutable) borrow `&mut T` lets a function change the value \
+the caller still owns. While the `&mut` is live, no other borrow — read \
+or write — may exist; the Borrow Checker enforces this at compile time. \
+That single-writer rule is what makes Rust data races a compile error \
+rather than a runtime gremlin.\n\n\
+## Syntax\n\
+```\nfn set_to(x: &mut i32, v: i32) {\n    *x = v;   // deref to write\n}\nlet mut n = 0;\nset_to(&mut n, 7);\n```\n\
+The `*x` deref is required to assign through the reference; without it \
+you'd be reassigning the local `x` binding (the reference itself), not \
+the value it points at.\n\n\
+## Task\n\
+Write `fn bump(x: &mut i32)` that sets `*x` to a new value. Then call it \
+from `main` against a mutable local.\n\n\
+## Hint\n\
+The grader requires `fn bump`, the parameter type `&mut i32`, and a \
+`*x` deref in the body.",
+                    starter_code: "fn _todo(_x: i32) {}\n\nfn main() {\n    let mut _n = 0;\n    // call your function with a mutable borrow of _n\n    println!(\"{_n}\");\n}\n",
+                },
+                Mission {
+                    id: "string_vs_str",
+                    npc_name: "The Linguist",
+                    prompt: "Write a function that takes `&str` and call it with both a `String` and a literal.",
+                    tutorial: "## Concept\n\
+Rust has two string types: `String` (owned, growable, heap) and `&str` \
+(borrowed slice, often backed by a literal in the binary). A function \
+that accepts `&str` is the most general signature: callers pass string \
+literals directly, and `String` values coerce automatically when borrowed \
+with `&` (via `Deref<Target=str>`). Reach for `String` only when you \
+need ownership — otherwise prefer `&str`.\n\n\
+## Syntax\n\
+```\nfn greet(name: &str) {\n    println!(\"hi {name}\");\n}\nlet s = String::from(\"world\");\ngreet(&s);       // String → &str by deref coercion\ngreet(\"static\"); // &'static str literal\n```\n\
+The same `greet` body serves both call sites with zero allocation.\n\n\
+## Task\n\
+Write `fn greet(name: &str)`. From `main`, build a `String` and call \
+`greet` against it, then call `greet` once more with a string literal.\n\n\
+## Hint\n\
+The grader requires `fn greet`, the type `&str`, and a `String::from` \
+caller in `main`.",
+                    starter_code: "fn _todo(_n: i32) {}\n\nfn main() {\n    // define a function above that takes a string slice,\n    // then call it once with a String and once with a literal\n}\n",
+                },
+                Mission {
+                    id: "option_unwrap_or",
+                    npc_name: "The Pilgrim",
+                    prompt: "Collapse an `Option<i32>` to `i32` with `.unwrap_or(default)`.",
+                    tutorial: "## Concept\n\
+`Option<T>` carries a value or nothing, and Rust forces you to handle \
+both. A `match` is exhaustive but verbose; the standard library ships a \
+family of *combinators* — `.unwrap_or`, `.unwrap_or_else`, `.map`, \
+`.and_then` — that collapse common cases into one line. `.unwrap_or(d)` \
+returns the inner value if `Some`, otherwise `d`. Different idiom from \
+`match`; both are fluent Rust.\n\n\
+## Syntax\n\
+```\nfn safe(x: Option<i32>) -> i32 {\n    x.unwrap_or(0)\n}\nassert_eq!(safe(Some(5)), 5);\nassert_eq!(safe(None), 0);\n```\n\
+`.unwrap_or_else(|| compute())` defers the default computation when it's \
+expensive — but for a constant, plain `.unwrap_or` is the right call.\n\n\
+## Task\n\
+Implement `fn safe(x: Option<i32>) -> i32` using `.unwrap_or` to return \
+`0` when `x` is `None`.\n\n\
+## Hint\n\
+The grader requires both `Option<` and `.unwrap_or(`. Don't reach for \
+`match` on this one — that's the previous mission.",
+                    starter_code: "fn safe(_x: i32) -> i32 {\n    // collapse the absent case to a default with a combinator\n    -1\n}\n\nfn main() {\n    println!(\"{}\", safe(0));\n}\n",
+                },
+                Mission {
+                    id: "for_in_range",
+                    npc_name: "The Drillmaster",
+                    prompt: "Iterate the half-open range `0..10` with a `for` loop.",
+                    tutorial: "## Concept\n\
+`for` in Rust is sugar over the iterator protocol — under the hood it \
+calls `IntoIterator::into_iter` on the right-hand side and walks the \
+result. The simplest iterable is the half-open range `a..b`, which \
+yields each integer from `a` (inclusive) up to `b` (exclusive). Prefer \
+`for` over hand-rolled `while` whenever you're walking a known sequence.\n\n\
+## Syntax\n\
+```\nfor i in 0..10 {\n    println!(\"{i}\");   // prints 0 through 9\n}\nfor x in vec![1, 2, 3] { /* ... */ }\n```\n\
+Use `0..=10` (with `=`) for an inclusive upper bound. The loop variable \
+is a fresh binding each iteration; you don't need `mut`.\n\n\
+## Task\n\
+Write a `main` that iterates `i` over `0..10` and prints each value.\n\n\
+## Hint\n\
+The grader requires `for `, ` in `, and the literal range `0..10`.",
+                    starter_code: "fn main() {\n    // walk the range 0..10 with a for loop, printing each step\n    println!(\"todo\");\n}\n",
+                },
+                Mission {
+                    id: "closure_basic",
+                    npc_name: "The Reckoner",
+                    prompt: "Bind a two-argument closure to `add` and call it.",
+                    tutorial: "## Concept\n\
+A *closure* is an anonymous function that can capture variables from its \
+defining scope. Rust closures look like `|args| expr` and behave like \
+values — you bind one to a name with `let`, pass it to higher-order \
+functions, or return it from a function. The compiler infers parameter \
+and return types from how the closure is used.\n\n\
+## Syntax\n\
+```\nlet add = |a, b| a + b;\nassert_eq!(add(2, 3), 5);\nlet greet = |name: &str| println!(\"hi {name}\");\n```\n\
+A multi-line body uses braces: `|x| { let y = x + 1; y * 2 }`. Closures \
+that capture by move use the `move` keyword; we'll meet those later.\n\n\
+## Task\n\
+Bind a closure named `add` that takes two parameters `a` and `b` and \
+returns their sum. Then call it from `main` and print the result.\n\n\
+## Hint\n\
+The grader requires `let add`, the closure-literal opener `= |`, and \
+the body fragment `+ b`.",
+                    starter_code: "fn main() {\n    let _todo = 0;\n    // bind a closure named `add` that returns a + b, then call it\n    println!(\"{_todo}\");\n}\n",
+                },
+                Mission {
                     id: "while_loop",
                     npc_name: "The Tinker",
                     prompt: "Use a `while` loop to count down from five to zero.",

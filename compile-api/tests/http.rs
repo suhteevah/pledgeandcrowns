@@ -153,6 +153,51 @@ async fn compile_passes_while_loop() {
 }
 
 #[tokio::test]
+async fn compile_passes_borrow_mut() {
+    let addr = spawn_server().await;
+    let src = "fn bump(x: &mut i32) { *x = 99; }";
+    let (_, body) = post_compile(addr, "borrow_mut", src).await;
+    assert!(body.ok);
+    assert!(body.stdout.contains("Forgewright"));
+}
+
+#[tokio::test]
+async fn compile_passes_string_vs_str() {
+    let addr = spawn_server().await;
+    let src = r#"fn greet(name: &str) { let _ = name; } fn main() { let s = String::from("x"); greet(&s); }"#;
+    let (_, body) = post_compile(addr, "string_vs_str", src).await;
+    assert!(body.ok);
+    assert!(body.stdout.contains("Linguist"));
+}
+
+#[tokio::test]
+async fn compile_passes_option_unwrap_or() {
+    let addr = spawn_server().await;
+    let src = "fn safe(x: Option<i32>) -> i32 { x.unwrap_or(0) }";
+    let (_, body) = post_compile(addr, "option_unwrap_or", src).await;
+    assert!(body.ok);
+    assert!(body.stdout.contains("Pilgrim"));
+}
+
+#[tokio::test]
+async fn compile_passes_for_in_range() {
+    let addr = spawn_server().await;
+    let src = "fn main() { for i in 0..10 { let _ = i; } }";
+    let (_, body) = post_compile(addr, "for_in_range", src).await;
+    assert!(body.ok);
+    assert!(body.stdout.contains("Drillmaster"));
+}
+
+#[tokio::test]
+async fn compile_passes_closure_basic() {
+    let addr = spawn_server().await;
+    let src = "fn main() { let add = |a, b| a + b; let _ = add(1, 2); }";
+    let (_, body) = post_compile(addr, "closure_basic", src).await;
+    assert!(body.ok);
+    assert!(body.stdout.contains("Reckoner"));
+}
+
+#[tokio::test]
 async fn compile_unknown_encounter_falls_through_to_freeform() {
     let addr = spawn_server().await;
     let (_, body) = post_compile(addr, "no_such_mission", "fn main() {}").await;
