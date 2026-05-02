@@ -5,6 +5,7 @@
 
 use bevy::prelude::*;
 
+pub mod editor;
 pub mod player;
 pub mod world;
 
@@ -16,8 +17,11 @@ pub struct CorePlugin;
 impl Plugin for CorePlugin {
     fn build(&self, app: &mut App) {
         tracing::debug!("CorePlugin::build");
-        app.add_systems(Startup, setup_camera)
-            .add_plugins((world::WorldPlugin, player::PlayerPlugin));
+        app.add_systems(Startup, setup_camera).add_plugins((
+            world::WorldPlugin,
+            player::PlayerPlugin,
+            editor::EditorPlugin,
+        ));
     }
 }
 

@@ -33,7 +33,6 @@ bevy = { workspace = true, features = [
 bevy_egui.workspace = true
 bevy_ecs_tilemap.workspace = true
 bevy_kira_audio.workspace = true
-egui_code_editor.workspace = true
 
 tracing.workspace = true
 tracing-subscriber.workspace = true

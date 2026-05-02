@@ -21,7 +21,11 @@ bevy = { version = "0.18", default-features = false }
 bevy_egui = "0.39"
 bevy_ecs_tilemap = "0.18"
 bevy_kira_audio = "0.25"
-egui_code_editor = "0.2"
+# egui_code_editor 0.2 (latest) pins egui ^0.34; bevy_egui 0.39 ships
+# egui ^0.33. Diamond unfixable upstream as of 2026-05-02. Hand-rolled
+# Rust syntax highlighter via TextEdit::multiline + LayoutJob lives in
+# game/src/plugins/editor.rs.
+# egui_code_editor = "0.2"
 
 # Logging. Verbose tracing everywhere per global rule.
 tracing = "0.1"

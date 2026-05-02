@@ -1,0 +1,4 @@
+# Build artifacts go to G: because J: is the small/full drive.
+# Override per shell with CARGO_TARGET_DIR if desired.
+[build]
+target-dir = "G:/cargo-target/pledgeandcrown"
