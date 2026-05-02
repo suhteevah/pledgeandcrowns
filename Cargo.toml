@@ -45,6 +45,12 @@ axum = "0.8"
 tower = "0.5"
 tower-http = { version = "0.6", features = ["trace", "cors"] }
 
+# HTTP client for the in-game editor -> compile-API round trip.
+# rustls-tls keeps us off OpenSSL on Windows; we only hit 127.0.0.1
+# in dev but pinning the TLS backend matters when the API moves to
+# the Hetzner VPS.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
 [profile.release]
 codegen-units = 1
 lto = "fat"

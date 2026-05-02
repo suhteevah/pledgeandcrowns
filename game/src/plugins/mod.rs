@@ -5,6 +5,7 @@
 
 use bevy::prelude::*;
 
+pub mod compile_client;
 pub mod editor;
 pub mod player;
 pub mod world;
@@ -21,6 +22,7 @@ impl Plugin for CorePlugin {
             world::WorldPlugin,
             player::PlayerPlugin,
             editor::EditorPlugin,
+            compile_client::CompileClientPlugin,
         ));
     }
 }

@@ -23,6 +23,10 @@ pub struct EditorState {
     pub open: bool,
     pub source: String,
     pub last_compile_result: Option<String>,
+    /// Set by the editor UI when "Compile" is clicked. The
+    /// `compile_client` plugin reads this each frame, dispatches the
+    /// network request, and resets it.
+    pub compile_pending: bool,
 }
 
 impl Default for EditorState {
@@ -31,6 +35,7 @@ impl Default for EditorState {
             open: false,
             source: STARTER_CODE.to_string(),
             last_compile_result: None,
+            compile_pending: false,
         }
     }
 }
@@ -93,10 +98,9 @@ fn draw_editor(mut contexts: EguiContexts, mut state: ResMut<EditorState>) {
             });
 
             ui.horizontal(|ui| {
-                if ui.button("Compile (stub)").clicked() {
-                    tracing::info!("compile clicked. source bytes: {}", state.source.len());
-                    state.last_compile_result =
-                        Some(format!("[stub] received {} bytes", state.source.len()));
+                if ui.button("Compile").clicked() {
+                    tracing::info!("compile clicked ({} source bytes)", state.source.len());
+                    state.compile_pending = true;
                 }
                 if let Some(msg) = &state.last_compile_result {
                     ui.label(msg);
