@@ -8,6 +8,14 @@ license = "AGPL-3.0-or-later"
 repository.workspace = true
 description = "Pledge & Crown - server-side compile-to-WASM API. See design/05-tech-architecture.md sec 2."
 
+[lib]
+name = "pledge_compile_api"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pledge_compile_api"
+path = "src/main.rs"
+
 [dependencies]
 tokio.workspace = true
 axum.workspace = true
@@ -19,3 +27,7 @@ tracing-subscriber.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
 serde.workspace = true
+
+[dev-dependencies]
+reqwest = { workspace = true }
+serde_json = "1"
