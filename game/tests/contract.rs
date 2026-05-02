@@ -13,6 +13,7 @@
 //!      forgot to add a grader case").
 
 use pledge_and_crown::plugins::mission::MissionRegistry;
+use pledge_and_crown::plugins::stub_grader::stub_verdict;
 use pledge_compile_api::grader::grade;
 
 /// Canonical correct solutions. MUST cover every mission id in the
@@ -174,6 +175,44 @@ fn unmodified_starter_code_does_not_trivially_win() {
         assert!(
             !v.ok,
             "mission `{}` is trivially solved by submitting the starter_code unchanged: {v:?}",
+            m.id
+        );
+    }
+}
+
+#[test]
+fn server_and_stub_flavor_agree_byte_for_byte() {
+    // Stub_grader duplicates the server's flavor strings on purpose
+    // (game crate must not depend on pledge_compile_api at runtime).
+    // The previous integration miss (190fdda) was caused by *wording*
+    // drift, not missing arms — the existing coverage test only
+    // catches the latter. This test catches both.
+    //
+    // Strip the `[stub] ` prefix the stub adds at the boundary, then
+    // compare to the server's stdout/stderr verbatim.
+    let reg = MissionRegistry::default();
+    for m in &reg.missions {
+        let src = canonical_solution(m.id).expect("checked elsewhere");
+        let server = grade(m.id, src);
+        let stub = stub_verdict(m.id, src)
+            .unwrap_or_else(|| panic!("stub_verdict missing arm for `{}`", m.id));
+        assert_eq!(
+            server.ok, stub.ok,
+            "ok flag drift on `{}`: server={} stub={}",
+            m.id, server.ok, stub.ok
+        );
+        // Stub messages carry the `[stub] ` marker; strip it before
+        // comparing to the server's verbatim flavor text.
+        let stub_stdout = stub.stdout.strip_prefix("[stub] ").unwrap_or(&stub.stdout);
+        let stub_stderr = stub.stderr.strip_prefix("[stub] ").unwrap_or(&stub.stderr);
+        assert_eq!(
+            server.stdout, stub_stdout,
+            "stdout drift on canonical `{}`",
+            m.id
+        );
+        assert_eq!(
+            server.stderr, stub_stderr,
+            "stderr drift on canonical `{}`",
             m.id
         );
     }

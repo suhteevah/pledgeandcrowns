@@ -56,9 +56,15 @@ async fn compile_real_passes_canonical_intro() {
         "expected [real] marker, got stdout={:?}",
         body.stdout
     );
+    // /compile-real returns cargo's verdict only — no per-encounter
+    // pattern-grader flavor stitched in. Mixing the two answered
+    // different questions ("did the code compile?" vs "did you use
+    // the right construct?") and could ship contradictory verdicts
+    // (ok=true with a "missing required: ..." stderr). Per-encounter
+    // flavor returns when the wasmtime execution layer wires in.
     assert!(
-        body.stdout.contains("Ferris"),
-        "expected Ferris flavor text, got stdout={:?}",
+        body.stdout.contains("cargo check: ok") || body.stdout == "[real]",
+        "expected cargo verdict marker, got stdout={:?}",
         body.stdout
     );
 }

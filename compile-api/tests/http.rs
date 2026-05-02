@@ -59,6 +59,24 @@ async fn compile_rejects_empty_source() {
 }
 
 #[tokio::test]
+async fn compile_rejects_oversized_source() {
+    let addr = spawn_server().await;
+    // 65 KiB — just over the 64 KiB cap. The pattern grader is fast
+    // for any input but we cap at the route boundary so the cargo
+    // path (and rustc's parser) never sees an unbounded body.
+    let big = "// pad\n".repeat(10_000);
+    assert!(big.len() > 64 * 1024);
+    let (status, body) = post_compile(addr, "intro_let_binding", &big).await;
+    assert_eq!(status.as_u16(), 413);
+    assert!(!body.ok);
+    assert!(
+        body.stderr.contains("exceeds limit"),
+        "stderr should explain the cap, got: {}",
+        body.stderr
+    );
+}
+
+#[tokio::test]
 async fn compile_passes_intro_solution() {
     let addr = spawn_server().await;
     let src = "fn main() { let answer = 42; }";

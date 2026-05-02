@@ -172,17 +172,59 @@ fn run_cargo_check(manifest_path: &Path) -> Result<CargoVerdict> {
         .to_str()
         .ok_or_else(|| anyhow!("cargo_grader: manifest path not valid UTF-8"))?;
 
+    // The sandbox is the manifest's parent. We anchor cwd + the build
+    // target dir there so the parent process's `CARGO_TARGET_DIR` (and
+    // any other cargo-flavored env vars) cannot leak into the player
+    // build — that would defeat the per-invocation isolation premise.
+    let sandbox = manifest_path
+        .parent()
+        .ok_or_else(|| anyhow!("cargo_grader: manifest path has no parent"))?;
+    let sandbox_target = sandbox.join("target");
+
     tracing::debug!("cargo_grader: running cargo check on {}", manifest_str);
     let started = Instant::now();
-    let mut child = Command::new("cargo")
-        .arg("check")
+    let mut cmd = Command::new("cargo");
+    cmd.arg("check")
         .arg("--offline")
         .arg("--quiet")
         .arg("--manifest-path")
         .arg(manifest_str)
+        .current_dir(sandbox)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    // Strip the inherited environment and rebuild it from a small
+    // allowlist. Without this, `CARGO_TARGET_DIR` (Matt's machine has
+    // it set workspace-wide) would point cargo back at the parent
+    // build dir, smuggling state between invocations and breaking
+    // sandbox cleanup.
+    cmd.env_clear();
+    for name in [
+        "PATH",                   // resolve `cargo`, `rustc`, linker
+        "CARGO_HOME",             // toolchain cache
+        "RUSTUP_HOME",            // rustup root
+        "USERPROFILE",            // Windows: HOME analogue
+        "HOME",                   // Unix: home
+        "TEMP",                   // Windows: temp dir cargo uses for fingerprints
+        "TMP",                    // Windows: same, alt name
+        "TMPDIR",                 // Unix: temp dir
+        "SYSTEMROOT",             // Windows: required for some msvc tooling
+        "PROCESSOR_ARCHITECTURE", // Windows: rustc host detection
+    ] {
+        if let Ok(v) = std::env::var(name) {
+            cmd.env(name, v);
+        }
+    }
+    // Pin the cargo build dir to the sandbox so it lives and dies
+    // with the rest of the per-invocation state.
+    cmd.env("CARGO_TARGET_DIR", &sandbox_target);
+    // Disable colored diagnostics so captured stderr is clean text
+    // rather than a stream of ANSI escapes the player would see in
+    // the editor.
+    cmd.env("CARGO_TERM_COLOR", "never");
+
+    let mut child = cmd
         .spawn()
         .context("cargo_grader: failed to spawn cargo check")?;
 
