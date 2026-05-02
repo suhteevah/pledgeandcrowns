@@ -170,9 +170,9 @@ Refs landed against the bible. Source `.jsx` lives at `design/art/refs/ref-NN-<s
 
 | REF | Asset | Resolution | Source JSX | Spec | Wired sprite path |
 |-----|-------|------------|------------|------|-------------------|
-| 01 | Player character | 32×32 | ref-01-player.jsx | (bible §Reference set) | `sprites/player.png` |
-| 02 | Ferris guide | 32×32 | ref-02-ferris.jsx | (bible §Reference set) | `sprites/ferris.png` |
-| 03 | Borrow Checker NPC | 64×64 | ref-03-borrow-checker.jsx | (bible §Reference set) | `sprites/borrow_checker.png` |
+| 01 | Player character | 32×32 | ref-01-player.jsx | (bible §Reference set) | `sprites/player/player_idle_0.png` |
+| 02 | Ferris guide | 32×32 | ref-02-ferris.jsx | (bible §Reference set) | `sprites/npc/ferris_idle_0.png` |
+| 03 | Borrow Checker NPC | 64×64 | ref-03-borrow-checker.jsx | (bible §Reference set) | `sprites/npc/borrow_checker_idle_0.png` |
 | 04 | Hearthstone Village tiles | 16×16 ×16 | ref-04-tiles-village.jsx | (bible §Reference set) | `sprites/tiles_village.png` |
 | 05 | Trait Mage's Tower tiles | 16×16 ×16 | ref-05-tiles-tower.jsx | (bible §Reference set) | (Act 4, not yet loaded) |
 | 06 | Code editor frame | 640×360 | ref-06-editor.jsx | (bible §Reference set) | (egui, not bevy sprite) |

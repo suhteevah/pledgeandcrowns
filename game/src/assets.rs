@@ -3,9 +3,14 @@
 //! Tests read this module to verify the files exist on disk; runtime
 //! plugins read it so a renamed file fails compile, not at startup.
 
-pub const SPRITE_PLAYER: &str = "sprites/player.png";
-pub const SPRITE_FERRIS: &str = "sprites/ferris.png";
-pub const SPRITE_BORROW_CHECKER: &str = "sprites/borrow_checker.png";
+// Migrated 2026-05-02 from flat `sprites/X.png` to the
+// `sprites/{category}/{name}_{frame}.png` convention from CLAUDE.md.
+// All NPCs (including Ferris and the Borrow Checker) live under
+// `sprites/npc/`; the player sprite gets its own category dir so
+// future protagonist animation frames have a home.
+pub const SPRITE_PLAYER: &str = "sprites/player/player_idle_0.png";
+pub const SPRITE_FERRIS: &str = "sprites/npc/ferris_idle_0.png";
+pub const SPRITE_BORROW_CHECKER: &str = "sprites/npc/borrow_checker_idle_0.png";
 pub const SPRITE_TILES_VILLAGE: &str = "sprites/tiles_village.png";
 pub const SPRITE_TITLE: &str = "sprites/title.png";
 
