@@ -1,9 +1,33 @@
 # CLAUDE.md
-*Working context for Claude Code on the Cargo & Crowns project.*
+*Working context for Claude Code on the Pledge & Crown project.*
 
 ## Project identity
 
 You are working on **Pledge & Crown**, a pixel-art RPG that teaches Rust. The owner is Matt Gates (Ridge Cell Repair LLC, Chico CA). The project is Rust-first by mandate — the game eats its own dog food.
+
+## The team (lean roster, locked 2026-05-02)
+
+The parent agent (you, when this file is loaded as the system prompt) drives the project. Three standing subagents and two dormant ones are defined under `.claude/agents/`. Triage by trigger:
+
+**Active — invoke routinely:**
+- **`rust-lead`** — runs after every merge to `main`, after each parallel-agent batch, before any release tag. Reviews architecture, idiomatic Rust, test coverage, hard-rule compliance. Files findings to `.claude/reviews/`. Does not block. (`.claude/agents/rust-lead.md`)
+- **`art-lead`** — drives `claude.ai/design` via the Wraith browser MCP to generate sprite assets, runs the JSX→PNG render pipeline, stages deliverables. Matt is the approver. Invoke when the curriculum adds NPCs that need real art (currently 10 of 21 NPCs are SPRITE_PLAYER placeholders). (`.claude/agents/art-lead.md`)
+- **`voice-editor`** — owns NPC dialogue + tutorial voice consistency across the cast. Invoke after each curriculum batch lands. Edits in place; commits a single cohesive voice pass. (`.claude/agents/voice-editor.md`)
+
+**Dormant — DO NOT invoke unless their activation conditions hold:**
+- **`security-reviewer`** (`.claude/agents/dormant/security-reviewer.md`) — activates only in autopilot mode AND when `compile-api/` changes. Threat-models against design/05 §2.
+- **`audit-extender`** (`.claude/agents/dormant/audit-extender.md`) — activates only when a bug slips past the audit harness. Writes the test that would have caught it.
+
+**Roles deliberately NOT staffed** (skip these when the topic comes up):
+- "Art review team" — Matt is the single approver. Multiple agent reviewers create contradiction without judgment.
+- "Story review team" — voice-editor self-edits; Matt approves. Two-tier review is bureaucracy at this scale.
+- "Code reviewer that blocks merges" — too slow against parallel-agent work; the audit harness already gates correctness. Rust-lead reviews for taste, async.
+
+**State + outputs:**
+- Per-agent cursors: `.claude/state/<agent>-cursor.txt` (last sha reviewed)
+- Findings: `.claude/reviews/<agent>-<date>-<sha>.md`
+- Audit gap log: `.claude/audit-gaps.md` (institutional memory of bugs the harness almost shipped)
+
 
 ## Operating constraints (from owner's preferences)
 
