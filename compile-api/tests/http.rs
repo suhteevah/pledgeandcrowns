@@ -97,6 +97,34 @@ async fn compile_passes_borrow_preview() {
 }
 
 #[tokio::test]
+async fn compile_passes_loop_break() {
+    let addr = spawn_server().await;
+    let src = "fn main() { let mut n = 1; loop { if n >= 100 { break n; } n *= 2; }; }";
+    let (_, body) = post_compile(addr, "loop_break", src).await;
+    assert!(body.ok);
+    assert!(body.stdout.contains("Bellringer"));
+}
+
+#[tokio::test]
+async fn compile_passes_match_option() {
+    let addr = spawn_server().await;
+    let src = "fn f(x: Option<i32>) -> i32 { match x { Some(n) => n, None => 0 } }";
+    let (_, body) = post_compile(addr, "match_option", src).await;
+    assert!(body.ok);
+    assert!(body.stdout.contains("Oracle"));
+}
+
+#[tokio::test]
+async fn compile_passes_struct_basic() {
+    let addr = spawn_server().await;
+    let src = r#"struct Knight { name: String, hp: i32 }
+fn main() { let k = Knight { name: String::from("g"), hp: 1 }; println!("{}", k.name); }"#;
+    let (_, body) = post_compile(addr, "struct_basic", src).await;
+    assert!(body.ok);
+    assert!(body.stdout.contains("Herald"));
+}
+
+#[tokio::test]
 async fn compile_unknown_encounter_falls_through_to_freeform() {
     let addr = spawn_server().await;
     let (_, body) = post_compile(addr, "no_such_mission", "fn main() {}").await;

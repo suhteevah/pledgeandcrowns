@@ -77,6 +77,48 @@ pub fn grade(encounter_id: &str, source: &str) -> Verdict {
                 Verdict::pass("the Cartographer nods. \"three roads diverge — well chosen.\"")
             }
         }
+        // ── Mission 6: `loop` with `break value;` to return from a loop.
+        "loop_break" => {
+            if !source.contains("loop") {
+                Verdict::fail("the Bellringer waits — missing required: `loop`")
+            } else if !source.contains("break") {
+                Verdict::fail("the Bellringer waits — missing required: `break`")
+            } else if !source.contains("*= 2") && !source.contains("*=2") {
+                Verdict::fail(
+                    "the Bellringer waits — the value should double each iteration: `*= 2`",
+                )
+            } else {
+                Verdict::pass(
+                    "the Bellringer pulls the rope. \"the loop yielded its prize — 128.\"",
+                )
+            }
+        }
+        // ── Mission 7: match on Option<i32>, handle Some/None.
+        "match_option" => {
+            if !source.contains("match") {
+                Verdict::fail("the Oracle's eyes are closed — missing required: `match`")
+            } else if !source.contains("Some(") {
+                Verdict::fail("the Oracle's eyes are closed — missing required: `Some(`")
+            } else if !source.contains("None") {
+                Verdict::fail("the Oracle's eyes are closed — missing required: `None`")
+            } else {
+                Verdict::pass("the Oracle exhales. \"both paths walked. nothing slips through.\"")
+            }
+        }
+        // ── Mission 8: define a struct with named fields and read one.
+        "struct_basic" => {
+            if !source.contains("struct Knight") {
+                Verdict::fail("the Herald squints — missing required: `struct Knight`")
+            } else if !source.contains("name:") {
+                Verdict::fail("the Herald squints — Knight needs a `name:` field")
+            } else if !source.contains("hp:") {
+                Verdict::fail("the Herald squints — Knight needs an `hp:` field")
+            } else if !source.contains(".name") {
+                Verdict::fail("the Herald squints — read the field with `.name`")
+            } else {
+                Verdict::pass("the Herald unfurls the scroll. \"so named, so numbered.\"")
+            }
+        }
         _ => Verdict::pass(format!(
             "[freeform] received {} bytes. encounter `{encounter_id}` has no grader yet.",
             source.len()
@@ -224,6 +266,19 @@ mod tests {
         let borrow_solution = r#"fn main() { let value = 1; let r = &value; println!("{r}"); }"#;
         assert!(!grade("intro_let_binding", borrow_solution).ok);
         assert!(!grade("double_function", borrow_solution).ok);
+
+        let loop_solution =
+            "fn main() { let mut n = 1; loop { if n >= 100 { break n; } n *= 2; }; }";
+        assert!(!grade("intro_let_binding", loop_solution).ok);
+        assert!(!grade("match_option", loop_solution).ok);
+
+        let match_solution = "fn f(x: Option<i32>) -> i32 { match x { Some(n) => n, None => 0 } }";
+        assert!(!grade("loop_break", match_solution).ok);
+        assert!(!grade("struct_basic", match_solution).ok);
+
+        let struct_solution = "struct Knight { name: String, hp: i32 } fn main() { let k = Knight { name: String::new(), hp: 0 }; let _ = k.name; }";
+        assert!(!grade("loop_break", struct_solution).ok);
+        assert!(!grade("match_option", struct_solution).ok);
     }
 
     // ── mut_binding ────────────────────────────────────────────────
@@ -274,5 +329,116 @@ mod tests {
         let v = grade("if_else_sign", src);
         assert!(!v.ok);
         assert!(v.stderr.contains("< 0"));
+    }
+
+    // ── loop_break ────────────────────────────────────────────────
+
+    #[test]
+    fn loop_break_pass_canonical() {
+        let src = r#"fn main() {
+    let mut n = 1;
+    let result = loop {
+        if n >= 100 { break n; }
+        n *= 2;
+    };
+    println!("{result}");
+}"#;
+        assert!(grade("loop_break", src).ok);
+    }
+
+    #[test]
+    fn loop_break_pass_no_space_in_multiply() {
+        let src = "fn main() { let mut n = 1; loop { if n >= 100 { break; } n *=2; } }";
+        assert!(grade("loop_break", src).ok);
+    }
+
+    #[test]
+    fn loop_break_fail_no_loop() {
+        let src = "fn main() { let n = 128; println!(\"{n}\"); }";
+        let v = grade("loop_break", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains("loop"));
+    }
+
+    #[test]
+    fn loop_break_fail_no_doubling() {
+        let src = "fn main() { let mut n = 0; loop { if n >= 100 { break; } n += 1; } }";
+        let v = grade("loop_break", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains("*= 2"));
+    }
+
+    // ── match_option ──────────────────────────────────────────────
+
+    #[test]
+    fn match_option_pass_canonical() {
+        let src = r#"fn unwrap_or_zero(x: Option<i32>) -> i32 {
+    match x {
+        Some(n) => n,
+        None => 0,
+    }
+}"#;
+        assert!(grade("match_option", src).ok);
+    }
+
+    #[test]
+    fn match_option_fail_no_match() {
+        let src = "fn f(x: Option<i32>) -> i32 { x.unwrap_or(0) }";
+        let v = grade("match_option", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains("match"));
+    }
+
+    #[test]
+    fn match_option_fail_no_some_arm() {
+        let src = "fn f(x: Option<i32>) -> i32 { match x { _ => 0 } }";
+        let v = grade("match_option", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains("Some("));
+    }
+
+    #[test]
+    fn match_option_fail_no_none_arm() {
+        let src = "fn f(x: Option<i32>) -> i32 { match x { Some(n) => n, _ => 0 } }";
+        let v = grade("match_option", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains("None"));
+    }
+
+    // ── struct_basic ──────────────────────────────────────────────
+
+    #[test]
+    fn struct_pass_canonical() {
+        let src = r#"struct Knight { name: String, hp: i32 }
+
+fn main() {
+    let k = Knight { name: String::from("Garin"), hp: 30 };
+    println!("{} {}", k.name, k.hp);
+}"#;
+        assert!(grade("struct_basic", src).ok);
+    }
+
+    #[test]
+    fn struct_fail_no_struct() {
+        let src = "fn main() { let name = \"x\"; println!(\"{name}\"); }";
+        let v = grade("struct_basic", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains("struct Knight"));
+    }
+
+    #[test]
+    fn struct_fail_missing_hp_field() {
+        let src = "struct Knight { name: String } fn main() { let k = Knight { name: String::new() }; println!(\"{}\", k.name); }";
+        let v = grade("struct_basic", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains("hp:"));
+    }
+
+    #[test]
+    fn struct_fail_no_field_access() {
+        let src = "struct Knight { name: String, hp: i32 } fn main() {}";
+        let v = grade("struct_basic", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains(".name"));
     }
 }

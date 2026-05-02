@@ -86,6 +86,27 @@ pub const NPC_ROSTER: &[NpcSpec] = &[
         pos: (0.0, 96.0),
         native_px: 32.0,
     },
+    NpcSpec {
+        name: "The Bellringer",
+        mission_id: "loop_break",
+        sprite_path: SPRITE_PLAYER, // placeholder until Bellringer art lands
+        pos: (144.0, 32.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Oracle",
+        mission_id: "match_option",
+        sprite_path: SPRITE_PLAYER, // placeholder
+        pos: (-144.0, 0.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Herald",
+        mission_id: "struct_basic",
+        sprite_path: SPRITE_PLAYER, // placeholder
+        pos: (-32.0, -96.0),
+        native_px: 32.0,
+    },
 ];
 
 pub struct NpcSpec {

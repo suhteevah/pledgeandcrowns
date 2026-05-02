@@ -150,6 +150,70 @@ The grader requires `if `, `else`, and a literal comparison `< 0` to \
 appear. The canonical body is a three-arm `if` / `else if` / `else`.",
                     starter_code: "fn sign(_n: i32) -> &'static str {\n    // three branches, one per sign\n    \"replace me\"\n}\n\nfn main() {\n    println!(\"{}\", sign(-3));\n}\n",
                 },
+                Mission {
+                    id: "loop_break",
+                    npc_name: "The Bellringer",
+                    prompt: "Use `loop` to find the first power of two at or above one hundred.",
+                    tutorial: "## Concept\n\
+Rust has three loop constructs: `loop` (infinite), `while` (predicate), \
+and `for` (iterator). The infinite `loop` is the only one that can return \
+a value: `break expr;` exits the loop and yields `expr` as the loop's \
+value. That makes `let result = loop { ... };` an idiomatic accumulator \
+pattern when the exit condition isn't easily expressed as a `while`.\n\n\
+## Syntax\n\
+```\nlet first_big = loop {\n    if n >= threshold { break n; }\n    n *= 2;\n};\n```\n\
+The semicolon after the closing brace is required because `let` is a \
+statement.\n\n\
+## Task\n\
+Starting from `1`, double the value each iteration until it reaches at \
+least `100`, then break and return that value.\n\n\
+## Hint\n\
+The grader looks for `loop`, `break`, and `*= 2` (the doubling step).",
+                    starter_code: "fn main() {\n    let mut _n = 1;\n    // loop until _n >= 100, doubling each step, then break the value\n    println!(\"{_n}\");\n}\n",
+                },
+                Mission {
+                    id: "match_option",
+                    npc_name: "The Oracle",
+                    prompt: "Pattern-match an `Option<i32>` — return the inner value or zero.",
+                    tutorial: "## Concept\n\
+`Option<T>` is Rust's standard \"maybe a value\" type. Instead of `null`, \
+the language forces you to handle the absent case explicitly: `Some(T)` \
+holds a value, `None` doesn't. `match` is the exhaustive way to inspect \
+it — the compiler refuses to compile if you forget an arm.\n\n\
+## Syntax\n\
+```\nmatch maybe {\n    Some(n) => n,\n    None => 0,\n}\n```\n\
+Match arms produce values; the whole `match` is an expression. Each arm \
+must produce the same type. Use `=>` (fat arrow), not `->`.\n\n\
+## Task\n\
+Implement `unwrap_or_zero(x: Option<i32>) -> i32` using a `match` with \
+both `Some` and `None` arms.\n\n\
+## Hint\n\
+The grader requires `match`, `Some(`, and `None` to all appear. \
+Don't shortcut with `.unwrap_or(0)` — this mission is teaching `match`.",
+                    starter_code: "fn unwrap_or_zero(_x: Option<i32>) -> i32 {\n    // pattern-match and return the inner value or 0\n    -1\n}\n\nfn main() {\n    println!(\"{}\", unwrap_or_zero(Some(7)));\n}\n",
+                },
+                Mission {
+                    id: "struct_basic",
+                    npc_name: "The Herald",
+                    prompt: "Define a `Knight` struct with `name` and `hp`, then read the name back.",
+                    tutorial: "## Concept\n\
+A `struct` groups related values under one type with named fields. \
+Fields are private outside the defining module by default; you'd add \
+`pub` to expose them. Construction uses the `TypeName { field: value, .. }` \
+literal; access uses `instance.field`.\n\n\
+## Syntax\n\
+```\nstruct Point { x: i32, y: i32 }\nlet p = Point { x: 3, y: 4 };\nprintln!(\"{}\", p.x);\n```\n\
+Fields are reordering-tolerant in the literal — name them, don't position \
+them. There is no implicit constructor; you list every field unless you \
+write a `fn new(...) -> Self` impl.\n\n\
+## Task\n\
+Define `struct Knight` with a `name: String` and `hp: i32`. In `main`, \
+build one and `println!` its name.\n\n\
+## Hint\n\
+The grader looks for `struct Knight`, `name:`, `hp:`, and `.name` in \
+the source.",
+                    starter_code: "// define Knight here\n\nfn main() {\n    // build a Knight and print its name\n}\n",
+                },
             ],
         }
     }

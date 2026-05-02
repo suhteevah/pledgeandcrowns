@@ -34,6 +34,30 @@ fn canonical_solution(encounter_id: &str) -> Option<&'static str> {
     if n < 0 { "neg" } else if n == 0 { "zero" } else { "pos" }
 }"#
         }
+        "loop_break" => {
+            r#"fn main() {
+    let mut n = 1;
+    let _ = loop {
+        if n >= 100 { break n; }
+        n *= 2;
+    };
+}"#
+        }
+        "match_option" => {
+            r#"fn unwrap_or_zero(x: Option<i32>) -> i32 {
+    match x {
+        Some(n) => n,
+        None => 0,
+    }
+}"#
+        }
+        "struct_basic" => {
+            r#"struct Knight { name: String, hp: i32 }
+fn main() {
+    let k = Knight { name: String::from("Garin"), hp: 30 };
+    let _ = k.name;
+}"#
+        }
         _ => return None,
     })
 }

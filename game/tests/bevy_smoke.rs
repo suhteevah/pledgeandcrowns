@@ -34,7 +34,7 @@ fn state_plugin_starts_in_title() {
 }
 
 #[test]
-fn mission_plugin_publishes_three_missions() {
+fn mission_plugin_publishes_registry() {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins)
         .add_plugins(StatesPlugin)
@@ -42,10 +42,12 @@ fn mission_plugin_publishes_three_missions() {
         .add_plugins(MissionPlugin);
     app.update();
     let registry = app.world().resource::<MissionRegistry>();
-    assert_eq!(
-        registry.missions.len(),
-        5,
-        "MissionRegistry should ship with the 5 missions wired so far"
+    // Lower-bound check rather than exact: curriculum grows over time.
+    // The registry/contract suites enforce per-mission invariants.
+    assert!(
+        registry.missions.len() >= 5,
+        "MissionRegistry should ship at least the 5 prelude missions, got {}",
+        registry.missions.len()
     );
     let active = app.world().resource::<ActiveMission>();
     assert!(
