@@ -128,6 +128,41 @@ pub const NPC_ROSTER: &[NpcSpec] = &[
         pos: (-160.0, 64.0),
         native_px: 32.0,
     },
+    NpcSpec {
+        name: "The Forgewright",
+        mission_id: "borrow_mut",
+        sprite_path: SPRITE_PLAYER, // placeholder
+        pos: (-200.0, -100.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Linguist",
+        mission_id: "string_vs_str",
+        sprite_path: SPRITE_PLAYER, // placeholder
+        pos: (200.0, 100.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Pilgrim",
+        mission_id: "option_unwrap_or",
+        sprite_path: SPRITE_PLAYER, // placeholder
+        pos: (-80.0, 130.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Drillmaster",
+        mission_id: "for_in_range",
+        sprite_path: SPRITE_PLAYER, // placeholder
+        pos: (80.0, 130.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Reckoner",
+        mission_id: "closure_basic",
+        sprite_path: SPRITE_PLAYER, // placeholder
+        pos: (-200.0, 130.0),
+        native_px: 32.0,
+    },
 ];
 
 pub struct NpcSpec {

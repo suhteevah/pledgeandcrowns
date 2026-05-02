@@ -141,6 +141,80 @@ pub fn grade(encounter_id: &str, source: &str) -> Verdict {
                 Verdict::pass("the Tinker pockets the spring. \"counted down, gear by gear.\"")
             }
         }
+        // ── Mission 12: take `&mut T`, mutate through the deref. Act 2:
+        // exclusive borrow + interior mutation through a reference.
+        "borrow_mut" => {
+            if !source.contains("fn bump") {
+                Verdict::fail("the Forgewright glares — missing required: `fn bump`")
+            } else if !source.contains("&mut i32") {
+                Verdict::fail(
+                    "the Forgewright glares — the parameter must be `&mut i32` (exclusive borrow)",
+                )
+            } else if !source.contains("*x") {
+                Verdict::fail(
+                    "the Forgewright glares — write through the reference with a `*x` deref",
+                )
+            } else {
+                Verdict::pass("the Forgewright nods. \"one writer, one anvil — the borrow holds.\"")
+            }
+        }
+        // ── Mission 13: function takes `&str`, callable with both
+        // `String` (via `&s`) and a string literal. Act 2: deref coercion
+        // and the `String` vs `&str` distinction.
+        "string_vs_str" => {
+            if !source.contains("fn greet") {
+                Verdict::fail("the Linguist tilts her head — missing required: `fn greet`")
+            } else if !source.contains("&str") {
+                Verdict::fail("the Linguist tilts her head — the parameter type should be `&str`")
+            } else if !source.contains("String::from") {
+                Verdict::fail(
+                    "the Linguist tilts her head — call `greet` once with a `String::from(...)` value",
+                )
+            } else {
+                Verdict::pass(
+                    "the Linguist smiles. \"one signature, two callers — &str unifies them.\"",
+                )
+            }
+        }
+        // ── Mission 14: handle a missing `Option<T>` with `.unwrap_or`.
+        // Act 2: idiomatic non-`match` Option handling.
+        "option_unwrap_or" => {
+            if !source.contains("Option<") {
+                Verdict::fail("the Pilgrim shakes his head — missing required: `Option<`")
+            } else if !source.contains(".unwrap_or(") {
+                Verdict::fail(
+                    "the Pilgrim shakes his head — collapse the absent case with `.unwrap_or(default)`",
+                )
+            } else {
+                Verdict::pass("the Pilgrim raises his lantern. \"the absent path lit a default.\"")
+            }
+        }
+        // ── Mission 15: `for i in 0..N` range iteration. Act 2: the
+        // for-loop is the iterator-protocol entry point.
+        "for_in_range" => {
+            if !source.contains("for ") {
+                Verdict::fail("the Drillmaster barks — missing required: `for `")
+            } else if !source.contains(" in ") {
+                Verdict::fail("the Drillmaster barks — `for` needs a binding `in` an iterable")
+            } else if !source.contains("0..10") && !source.contains("0 .. 10") {
+                Verdict::fail("the Drillmaster barks — iterate the exact range `0..10`")
+            } else {
+                Verdict::pass("the Drillmaster claps once. \"ten paces, exact and ordered.\"")
+            }
+        }
+        // ── Mission 16: bind a two-argument closure to a name and
+        // invoke it. Act 2 entry to closures + `Fn` traits.
+        "closure_basic" => {
+            if !source.contains("let add") {
+                Verdict::fail("the Reckoner's quill hovers — missing required: `let add`")
+            } else if !source.contains("= |") {
+                Verdict::fail("the Reckoner's quill hovers — bind a closure literal with `= |...|`")
+            } else if !source.contains("+ b") && !source.contains("+b") {
+                Verdict::fail("the Reckoner's quill hovers — the body should compute `a + b`")
+            } else {
+                Verdict::pass("the Reckoner inks the ledger. \"summed in a single stroke.\"")
+            }
+        }
         // ── Mission 8: define a struct with named fields and read one.
         "struct_basic" => {
             if !source.contains("struct Knight") {
@@ -327,6 +401,39 @@ mod tests {
         let while_solution = "fn main() { let mut n = 3; while n > 0 { n -= 1; } let _ = n; }";
         assert!(!grade("vec_iter", while_solution).ok);
         assert!(!grade("tuple_destructure", while_solution).ok);
+
+        // ── Act 2 additions ──
+        let borrow_mut_solution = "fn bump(x: &mut i32) { *x = 99; }";
+        assert!(!grade("borrow_preview", borrow_mut_solution).ok);
+        assert!(!grade("mut_binding", borrow_mut_solution).ok);
+        assert!(!grade("string_vs_str", borrow_mut_solution).ok);
+
+        let str_solution = r#"fn greet(name: &str) { let _ = name; } fn main() { let s = String::from("x"); greet(&s); }"#;
+        assert!(!grade("borrow_preview", str_solution).ok);
+        assert!(!grade("borrow_mut", str_solution).ok);
+        assert!(!grade("option_unwrap_or", str_solution).ok);
+
+        let unwrap_or_solution = "fn safe(x: Option<i32>) -> i32 { x.unwrap_or(0) }";
+        assert!(!grade("match_option", unwrap_or_solution).ok);
+        assert!(!grade("for_in_range", unwrap_or_solution).ok);
+
+        let for_solution = "fn main() { for i in 0..10 { let _ = i; } }";
+        assert!(!grade("while_loop", for_solution).ok);
+        assert!(!grade("loop_break", for_solution).ok);
+        assert!(!grade("closure_basic", for_solution).ok);
+
+        let closure_solution = "fn main() { let add = |a, b| a + b; let _ = add(1, 2); }";
+        assert!(!grade("intro_let_binding", closure_solution).ok);
+        assert!(!grade("for_in_range", closure_solution).ok);
+        assert!(!grade("borrow_mut", closure_solution).ok);
+
+        // Existing solutions must not pass new graders.
+        assert!(!grade("borrow_mut", borrow_solution).ok);
+        assert!(!grade("borrow_mut", "fn main() { let mut x = 0; x += 1; }").ok);
+        assert!(!grade("string_vs_str", borrow_solution).ok);
+        assert!(!grade("option_unwrap_or", match_solution).ok);
+        assert!(!grade("for_in_range", while_solution).ok);
+        assert!(!grade("closure_basic", "fn main() { let answer = 42; }").ok);
     }
 
     // ── mut_binding ────────────────────────────────────────────────
@@ -581,5 +688,156 @@ fn main() {
         let v = grade("while_loop", src);
         assert!(!v.ok);
         assert!(v.stderr.contains("-= 1"));
+    }
+
+    // ── borrow_mut ────────────────────────────────────────────────
+
+    #[test]
+    fn borrow_mut_pass_canonical() {
+        let src = "fn bump(x: &mut i32) { *x = 99; }";
+        assert!(grade("borrow_mut", src).ok);
+    }
+
+    #[test]
+    fn borrow_mut_pass_with_assignment_expr() {
+        let src = "fn bump(x: &mut i32) { *x = *x + 1; } fn main() {}";
+        assert!(grade("borrow_mut", src).ok);
+    }
+
+    #[test]
+    fn borrow_mut_fail_no_mut_borrow() {
+        let src = "fn bump(x: &i32) -> i32 { *x }";
+        let v = grade("borrow_mut", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains("&mut i32"));
+    }
+
+    #[test]
+    fn borrow_mut_fail_no_deref() {
+        let src = "fn bump(x: &mut i32) { let _ = x; }";
+        let v = grade("borrow_mut", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains("*x"));
+    }
+
+    // ── string_vs_str ─────────────────────────────────────────────
+
+    #[test]
+    fn string_vs_str_pass_canonical() {
+        let src = r#"fn greet(name: &str) { println!("hi {name}"); }
+fn main() { let s = String::from("you"); greet(&s); greet("anon"); }"#;
+        assert!(grade("string_vs_str", src).ok);
+    }
+
+    #[test]
+    fn string_vs_str_pass_minimal() {
+        let src = "fn greet(n: &str) { let _ = n; } fn main() { let s = String::from(\"x\"); greet(&s); }";
+        assert!(grade("string_vs_str", src).ok);
+    }
+
+    #[test]
+    fn string_vs_str_fail_no_str_param() {
+        let src = "fn greet(name: String) { let _ = name; } fn main() { let s = String::from(\"x\"); greet(s); }";
+        let v = grade("string_vs_str", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains("&str"));
+    }
+
+    #[test]
+    fn string_vs_str_fail_no_string_caller() {
+        let src = "fn greet(name: &str) { let _ = name; } fn main() { greet(\"anon\"); }";
+        let v = grade("string_vs_str", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains("String::from"));
+    }
+
+    // ── option_unwrap_or ──────────────────────────────────────────
+
+    #[test]
+    fn option_unwrap_or_pass_canonical() {
+        let src = "fn safe(x: Option<i32>) -> i32 { x.unwrap_or(0) }";
+        assert!(grade("option_unwrap_or", src).ok);
+    }
+
+    #[test]
+    fn option_unwrap_or_pass_with_nonzero_default() {
+        let src = "fn safe(x: Option<i32>) -> i32 { x.unwrap_or(42) }";
+        assert!(grade("option_unwrap_or", src).ok);
+    }
+
+    #[test]
+    fn option_unwrap_or_fail_no_option_type() {
+        let src = "fn safe(x: i32) -> i32 { x }";
+        let v = grade("option_unwrap_or", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains("Option<"));
+    }
+
+    #[test]
+    fn option_unwrap_or_fail_used_match_instead() {
+        let src = "fn safe(x: Option<i32>) -> i32 { match x { Some(n) => n, None => 0 } }";
+        let v = grade("option_unwrap_or", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains(".unwrap_or("));
+    }
+
+    // ── for_in_range ──────────────────────────────────────────────
+
+    #[test]
+    fn for_in_range_pass_canonical() {
+        let src = "fn main() { for i in 0..10 { println!(\"{i}\"); } }";
+        assert!(grade("for_in_range", src).ok);
+    }
+
+    #[test]
+    fn for_in_range_pass_spaced_range() {
+        let src = "fn main() { for i in 0 .. 10 { let _ = i; } }";
+        assert!(grade("for_in_range", src).ok);
+    }
+
+    #[test]
+    fn for_in_range_fail_used_while_instead() {
+        let src = "fn main() { let mut i = 0; while i < 10 { i += 1; } }";
+        let v = grade("for_in_range", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains("for "));
+    }
+
+    #[test]
+    fn for_in_range_fail_wrong_range() {
+        let src = "fn main() { for i in 0..5 { let _ = i; } }";
+        let v = grade("for_in_range", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains("0..10"));
+    }
+
+    // ── closure_basic ─────────────────────────────────────────────
+
+    #[test]
+    fn closure_basic_pass_canonical() {
+        let src = "fn main() { let add = |a, b| a + b; println!(\"{}\", add(2, 3)); }";
+        assert!(grade("closure_basic", src).ok);
+    }
+
+    #[test]
+    fn closure_basic_pass_no_space_before_b() {
+        let src = "fn main() { let add = |a, b| a +b; let _ = add(1, 2); }";
+        assert!(grade("closure_basic", src).ok);
+    }
+
+    #[test]
+    fn closure_basic_fail_used_fn_instead() {
+        let src = "fn add(a: i32, b: i32) -> i32 { a + b } fn main() { let _ = add(1, 2); }";
+        let v = grade("closure_basic", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains("let add"));
+    }
+
+    #[test]
+    fn closure_basic_fail_wrong_body() {
+        let src = "fn main() { let add = |a, b| a * 2 + 0; let _ = add(1, 2); }";
+        let v = grade("closure_basic", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains("+ b"));
     }
 }
