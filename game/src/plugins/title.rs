@@ -2,6 +2,7 @@
 //! Title screen. REF-10 painted backdrop scaled to fill the window;
 //! Space transitions to GameState::InGame.
 
+use crate::assets::SPRITE_TITLE;
 use crate::plugins::state::GameState;
 use bevy::prelude::*;
 
@@ -27,7 +28,7 @@ fn spawn_title_art(mut commands: Commands, asset_server: Res<AssetServer>) {
     tracing::info!("spawning title art (REF-10)");
     commands.spawn((
         Sprite {
-            image: asset_server.load("sprites/title.png"),
+            image: asset_server.load(SPRITE_TITLE),
             custom_size: Some(Vec2::new(
                 TITLE_NATIVE_W * TITLE_SCALE,
                 TITLE_NATIVE_H * TITLE_SCALE,

@@ -6,6 +6,7 @@
 //! Mission registry + dialogue + editor handoff live in `mission.rs`.
 //! This plugin only owns NPC spawning and proximity detection.
 
+use crate::assets::{SPRITE_BORROW_CHECKER, SPRITE_FERRIS, SPRITE_PLAYER};
 use crate::plugins::player::Player;
 use crate::plugins::state::GameState;
 use bevy::prelude::*;
@@ -46,42 +47,54 @@ impl Plugin for NpcPlugin {
     }
 }
 
+/// Static description of the NPCs that get spawned. Tests read this
+/// to assert every NPC's mission_id resolves to a real mission.
+pub const NPC_ROSTER: &[NpcSpec] = &[
+    NpcSpec {
+        name: "Ferris",
+        mission_id: "intro_let_binding",
+        sprite_path: SPRITE_FERRIS,
+        pos: (48.0, 0.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "Trait Mage",
+        mission_id: "double_function",
+        // Placeholder art until the Trait Mage REF lands.
+        sprite_path: SPRITE_PLAYER,
+        pos: (-48.0, 32.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Borrow Checker",
+        mission_id: "borrow_preview",
+        sprite_path: SPRITE_BORROW_CHECKER,
+        pos: (96.0, -64.0),
+        native_px: 64.0,
+    },
+];
+
+pub struct NpcSpec {
+    pub name: &'static str,
+    pub mission_id: &'static str,
+    pub sprite_path: &'static str,
+    pub pos: (f32, f32),
+    pub native_px: f32,
+}
+
 fn spawn_npcs(mut commands: Commands, asset_server: Res<AssetServer>) {
-    // Ferris — the friendly tutorial guide. Just east of spawn on the road.
-    spawn_npc(
-        &mut commands,
-        &asset_server,
-        "Ferris",
-        "intro_let_binding",
-        "sprites/ferris.png",
-        Vec2::new(48.0, 0.0),
-        32.0,
-    );
-
-    // Trait Mage — Act 1 second mission, by the well plaza.
-    spawn_npc(
-        &mut commands,
-        &asset_server,
-        "Trait Mage",
-        "double_function",
-        "sprites/player.png", // placeholder — Trait Mage art arrives later
-        Vec2::new(-48.0, 32.0),
-        32.0,
-    );
-
-    // The Borrow Checker — south of road as a lurking ominous figure
-    // for the Act 2 boss preview mission.
-    spawn_npc(
-        &mut commands,
-        &asset_server,
-        "The Borrow Checker",
-        "borrow_preview",
-        "sprites/borrow_checker.png",
-        Vec2::new(96.0, -64.0),
-        64.0,
-    );
-
-    tracing::info!("spawned 3 NPCs");
+    for spec in NPC_ROSTER {
+        spawn_npc(
+            &mut commands,
+            &asset_server,
+            spec.name,
+            spec.mission_id,
+            spec.sprite_path,
+            Vec2::new(spec.pos.0, spec.pos.1),
+            spec.native_px,
+        );
+    }
+    tracing::info!("spawned {} NPCs", NPC_ROSTER.len());
 }
 
 fn spawn_npc(

@@ -6,6 +6,7 @@
 //! animation states yet. Bounded by `world::WORLD_HALF_*` so the
 //! player can't walk off the painted background.
 
+use crate::assets::SPRITE_PLAYER;
 use crate::plugins::state::GameState;
 use crate::plugins::world::{WORLD_HALF_H, WORLD_HALF_W};
 use bevy::prelude::*;
@@ -59,7 +60,7 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     tracing::info!("spawning player at origin (REF-01, scale {PLAYER_SCALE}x)");
     commands.spawn((
         Sprite {
-            image: asset_server.load("sprites/player.png"),
+            image: asset_server.load(SPRITE_PLAYER),
             custom_size: Some(Vec2::splat(PLAYER_DISPLAY)),
             ..default()
         },

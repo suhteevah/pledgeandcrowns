@@ -10,6 +10,7 @@
 //! and a handful of flowers/bushes for life. Real procedural village
 //! generation lands when Act 1 content arrives.
 
+use crate::assets::SPRITE_TILES_VILLAGE;
 use crate::plugins::state::GameState;
 use bevy::prelude::*;
 use bevy_ecs_tilemap::prelude::*;
@@ -88,7 +89,7 @@ fn pick_tile(x: u32, y: u32) -> u32 {
 fn spawn_village(mut commands: Commands, asset_server: Res<AssetServer>) {
     tracing::info!("spawning Hearthstone Village tilemap ({MAP_W}x{MAP_H})");
 
-    let texture = asset_server.load("sprites/tiles_village.png");
+    let texture = asset_server.load(SPRITE_TILES_VILLAGE);
     let map_size = TilemapSize { x: MAP_W, y: MAP_H };
     let tile_size = TilemapTileSize {
         x: TILE_PX,

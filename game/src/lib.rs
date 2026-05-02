@@ -7,6 +7,7 @@
 
 use bevy::prelude::*;
 
+pub mod assets;
 pub mod plugins;
 
 /// Build and run the game. Blocks until the window closes.

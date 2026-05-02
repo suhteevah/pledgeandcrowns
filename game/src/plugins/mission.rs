@@ -32,23 +32,28 @@ impl Default for MissionRegistry {
     fn default() -> Self {
         Self {
             missions: vec![
+                // Starters are deliberately neutral templates — they
+                // must NOT contain the grader's required tokens, or
+                // the player could submit them unchanged and pass.
+                // The contract suite (game/tests/contract.rs) enforces
+                // this invariant.
                 Mission {
                     id: "intro_let_binding",
                     npc_name: "Ferris",
-                    prompt: "Greetings! Bind the value 42 to a variable named `answer`.",
-                    starter_code: "// Bind the value 42 to a variable named `answer`.\nfn main() {\n    let answer = ;\n    println!(\"{answer}\");\n}\n",
+                    prompt: "Greetings! Bind the integer forty-two to a variable named answer.",
+                    starter_code: "fn main() {\n    let _todo = 0;\n    println!(\"{_todo}\");\n}\n",
                 },
                 Mission {
                     id: "double_function",
                     npc_name: "Trait Mage",
-                    prompt: "Define a function `double` that returns its `i32` argument times two.",
-                    starter_code: "fn double(/* fill in */) -> i32 {\n    // return n * 2\n}\n\nfn main() {\n    println!(\"{}\", double(21));\n}\n",
+                    prompt: "Define a function `double` that returns its `i32` argument multiplied by two.",
+                    starter_code: "fn _todo() {}\n\nfn main() {\n    // call your function with 21 and print the result\n}\n",
                 },
                 Mission {
                     id: "borrow_preview",
                     npc_name: "The Borrow Checker",
-                    prompt: "You are not yet ready. But try: take an immutable reference to `value` and print it.",
-                    starter_code: "fn main() {\n    let value = String::from(\"borrow me\");\n    let r = /* &value */;\n    println!(\"{r}\");\n}\n",
+                    prompt: "You are not yet ready. But try: take an immutable reference to a binding named `value` and pass it to a print macro.",
+                    starter_code: "fn main() {\n    let value = String::from(\"sample\");\n    // build a reference to the binding above and print it\n}\n",
                 },
             ],
         }
