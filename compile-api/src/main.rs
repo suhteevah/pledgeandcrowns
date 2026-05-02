@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 //! Pledge & Crown compile API - stub.
 //!
 //! Real implementation per `design/05-tech-architecture.md` section 2:

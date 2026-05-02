@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
-license.workspace = true
+license = "AGPL-3.0-or-later"
 repository.workspace = true
 description = "Pledge & Crown - server-side compile-to-WASM API. See design/05-tech-architecture.md sec 2."
 

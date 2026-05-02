@@ -4,6 +4,12 @@
 
 Free demo (Acts 1–2) drives top-of-funnel via itch.io and the Rust community. Paid full game ($24.99 single, $14.99 student-discounted, $49.99 deluxe with HolyC Temple early-access) on Steam and itch.io once Acts 1–4 ship. B2B team licensing ($50/seat, minimum 5 seats) for companies onboarding Rust devs as the long-tail revenue. Total addressable market: small but devout. Beat the existing Rust learning resources on engagement, not on price.
 
+## Marketing decisions (locked 2026-05-01)
+
+- **Distribution sequence:** itch.io free demo (day 30) → itch.io paid early-access (~day 90) → Steam paid (~day 180). itch ships in hours with no review gate; Steam needs $100 + 5–30 day review. Build proof on itch first, launch on Steam with a wishlist already warmed by itch traction.
+- **HolyC Temple in MVP marketing:** **surprise reveal**, NOT day-1 tease. Day-1 framing the project as "edgy meme" alienates the serious Rust learners who are the core audience. Earn the Rust community first; reveal Temple as a flex around day 90–180 once the game has credibility. Phase-3 deluxe edition ($49.99 with Temple early-access) is the first paid surface where Temple is mentioned publicly.
+- **Leaderboards:** deferred to v1.1 (post-Phase 1). Adds backend dependency that doesn't move the needle on the day-30 itch launch. Revisit after first $5K of revenue proves player engagement is real.
+
 ## Revenue model: phased
 
 ### Phase 0 — MVP (Days 1–30)

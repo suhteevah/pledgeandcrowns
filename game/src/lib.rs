@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 //! Pledge & Crown - library root.
 //!
 //! `main.rs` initialises tracing and calls `run()` here. All Bevy

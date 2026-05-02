@@ -1,10 +1,21 @@
 # HANDOFF.md
 
 ## Last Updated
-2026-04-25 (handoff — TESS authoritative GREEN; art deliverables spec drafted; cleared to register domain + GH org + file 1(b) ITU)
+2026-05-01 (handoff — all 4 open design decisions locked; SPDX headers + LICENSE files committed; only Matt-only action items remain)
 
 ## Project Status
 🟡 In progress — design package complete, Bevy 0.18 workspace scaffolded and compiling green through full local CI (fmt/check/clippy/test), palette redesigned around a defensible color-theory structure ("Heraldic Code"). No art assets yet. Working title locked as **Pledge & Crown**.
+
+## What Was Done This Session (2026-05-01)
+
+- **Locked all 4 outstanding design decisions** (Q2 leaderboards, Q3 licensing, Q4 distribution, Q5 Temple marketing). See "Open questions for Matt" below — all five are now resolved.
+- **Implemented dual-license (Q3) end-to-end:**
+  - `Cargo.toml` workspace `license = "TBD"` removed; per-crate licenses set: `game` = MIT, `compile-api` = AGPL-3.0-or-later.
+  - SPDX headers added to all 4 .rs files (`game/src/{main,lib}.rs`, `game/src/plugins/mod.rs`, `compile-api/src/main.rs`).
+  - Repo-root `LICENSE-MIT` written, `LICENSE-AGPL` downloaded from gnu.org, `LICENSE.md` written explaining the dual-license rationale + contributor terms + AGPL-only-applies-to-server clarification.
+  - CLAUDE.md hard rule on SPDX headers updated from "all files use AGPL" to per-crate split with rationale.
+- **Locked distribution + Temple marketing in `design/07-monetization.md`** under new "Marketing decisions (locked 2026-05-01)" section. Includes the leaderboards-deferred call so all three Phase-decisions live in one doc.
+- **Domain + GH org availability verified.** RDAP confirmed all 9 candidate domains available; `pledgeandcrown` available on GitHub. Action items moved to Matt's queue.
 
 ## What Was Done This Session (2026-04-25 evening)
 
@@ -101,10 +112,19 @@ Prioritized for the incoming session:
 ## Open questions for Matt
 
 1. ~~**Naming.**~~ Resolved 2026-04-25: **Pledge & Crown**.
-2. **Leaderboards in MVP?** Single-player only, or async leaderboards from day one? Adds backend dependency, boosts retention.
-3. **Licensing.** AGPL-3.0 doesn't fit binary-distributed games. Recommendation: **dual-license** — AGPL+CLA for compile-API server, MIT or proprietary for game binary + assets. Matches Wraith pattern.
-4. **Distribution: itch.io demo + Steam paid, or itch.io paid + Steam later?** itch.io ships faster, no review gate.
-5. **HolyC Temple in MVP marketing?** Day-one tease frames the long roadmap, or save for surprise reveal?
+2. ~~**Leaderboards in MVP?**~~ Resolved 2026-05-01: **deferred to v1.1**. Backend dep doesn't move the needle on day-30 itch launch; revisit after first $5K of revenue.
+3. ~~**Licensing.**~~ Resolved 2026-05-01: **dual-license** — `game/` crate is MIT, `compile-api/` crate is AGPL-3.0-or-later. SPDX headers added to all .rs files; `LICENSE-MIT`, `LICENSE-AGPL`, and `LICENSE.md` (rationale + contributor terms) committed at repo root.
+4. ~~**Distribution.**~~ Resolved 2026-05-01: **itch.io free demo (day 30) → itch.io paid early-access (day 90) → Steam paid (day 180)**. Locked in `design/07-monetization.md` §"Marketing decisions".
+5. ~~**HolyC Temple in MVP marketing?**~~ Resolved 2026-05-01: **surprise reveal**, not day-1 tease. First public mention is the deluxe-edition pricing on the Phase-3 Steam page (~day 180). Locked in `design/07-monetization.md` §"Marketing decisions".
+
+**No remaining design-decision blockers. All open items below are action items, not decisions.**
+
+## Action items for Matt (require Matt-only access)
+
+- **Register `pledgeandcrown.dev` and `pledgeandcrown.com`** at Cloudflare (~$22/yr total). Both confirmed available via RDAP 2026-05-01.
+- **Create GitHub org `pledgeandcrown`** at https://github.com/organizations/new (name confirmed available 2026-05-01). Then add the local repo as origin and push `main`.
+- **File 1(b) intent-to-use trademark** for "Pledge & Crown" in IC 009 + IC 041 via USPTO TEAS (~$700, 2× $350). Optional but recommended now that TESS is GREEN.
+- **Generate the 10 reference art images** per `design/04-art-handoff-prompts.md` §"Reference Image Set". Approval gates all bulk asset gen.
 
 ## Known risks
 

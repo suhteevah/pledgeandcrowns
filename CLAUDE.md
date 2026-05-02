@@ -36,7 +36,10 @@ You are working on **Pledge & Crown**, a pixel-art RPG that teaches Rust. The ow
 
 ## File creation conventions
 
-- All Rust source uses `// SPDX-License-Identifier: AGPL-3.0-or-later` header (matches Wraith Browser / OpenClaw licensing pattern).
+- Rust source SPDX headers depend on which crate the file lives in (decision Q3, 2026-05-01):
+  - Files under `game/` → `// SPDX-License-Identifier: MIT`
+  - Files under `compile-api/` → `// SPDX-License-Identifier: AGPL-3.0-or-later`
+  - Rationale: MIT on the game binary keeps Steam/itch distribution unencumbered (Steam's TOS restricts copyleft on the binary itself). AGPL on the compile-API server is the moat against API competitors and matches the Wraith pattern. Player code submitted to the API is the player's; the AGPL only governs the server.
 - All shell scripts go in `scripts/` as `.ps1` (Windows) or `.sh` (Linux server). Never inline.
 - Asset files: `assets/sprites/{category}/{name}_{frame}.png`, e.g. `assets/sprites/npc/borrow_checker_idle_0.png`.
 

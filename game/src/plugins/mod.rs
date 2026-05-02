@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 //! Plugin assembly. Each subsystem is its own Bevy plugin so that
 //! integration tests can mount them in isolation. See
 //! `design/05-tech-architecture.md` section 4 for the planned layout.

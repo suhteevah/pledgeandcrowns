@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 //! Pledge & Crown - main entry point.
 //!
 //! Sets up tracing, then hands off to the Bevy app builder in `lib.rs`.
