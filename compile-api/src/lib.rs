@@ -3,6 +3,7 @@
 //! and the grader so integration tests can drive the same code paths
 //! the binary uses.
 
+pub mod cargo_grader;
 pub mod grader;
 
 use axum::{Json, Router, http::StatusCode, response::IntoResponse, routing::get, routing::post};
