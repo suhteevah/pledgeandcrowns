@@ -103,6 +103,39 @@ fn main() { println!("{}", safe(Some(7))); }"#
     println!("{}", add(2, 3));
 }"#
         }
+        "slice_basic" => {
+            r#"fn sum_slice(xs: &[i32]) -> i32 { xs.iter().sum() }
+fn main() { let _ = sum_slice(&[1, 2, 3]); }"#
+        }
+        "result_question_mark" => {
+            r#"fn parse_int(s: &str) -> Result<i32, String> {
+    let n = s.parse::<i32>().map_err(|e| e.to_string())?;
+    Ok(n)
+}
+fn main() { let _ = parse_int("42"); }"#
+        }
+        "derive_debug" => {
+            r#"#[derive(Debug)]
+struct Item { name: String }
+fn main() { let item = Item { name: String::from("ring") }; println!("{item:?}"); }"#
+        }
+        "iter_map_collect" => {
+            r#"fn main() {
+    let v = vec![1, 2, 3];
+    let doubled: Vec<i32> = v.iter().map(|x| x * 2).collect();
+    let _ = doubled;
+}"#
+        }
+        "enum_match" => {
+            r#"enum Direction { North, South }
+fn name(d: Direction) -> &'static str {
+    match d {
+        Direction::North => "n",
+        Direction::South => "s",
+    }
+}
+fn main() { let _ = name(Direction::North); }"#
+        }
         _ => return None,
     })
 }

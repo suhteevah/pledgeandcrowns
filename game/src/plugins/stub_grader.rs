@@ -243,6 +243,87 @@ pub fn stub_verdict(encounter_id: &str, source: &str) -> Option<StubVerdict> {
                 StubVerdict::pass("the Reckoner inks the ledger. \"summed in a single stroke.\"")
             }
         }
+        "slice_basic" => {
+            if !source.contains("fn sum_slice") {
+                StubVerdict::fail("the Quartermaster squints — missing required: `fn sum_slice`")
+            } else if !source.contains("&[i32]") {
+                StubVerdict::fail(
+                    "the Quartermaster squints — the parameter must be a slice `&[i32]`",
+                )
+            } else if !source.contains(".iter()") {
+                StubVerdict::fail("the Quartermaster squints — walk the slice with `.iter()`")
+            } else {
+                StubVerdict::pass(
+                    "the Quartermaster ticks the manifest. \"a window into the stores — counted, not claimed.\"",
+                )
+            }
+        }
+        "result_question_mark" => {
+            if !source.contains("Result<") {
+                StubVerdict::fail("the Auditor's pen taps — missing required: `Result<`")
+            } else if !source.contains(".parse") {
+                StubVerdict::fail("the Auditor's pen taps — call `.parse` on a string source")
+            } else if !source.contains("?;") && !source.contains("?\n") {
+                StubVerdict::fail(
+                    "the Auditor's pen taps — propagate the error with the `?` operator",
+                )
+            } else {
+                StubVerdict::pass(
+                    "the Auditor closes the ledger. \"the Auditor accepts: errors travel upward.\"",
+                )
+            }
+        }
+        "derive_debug" => {
+            if !source.contains("#[derive(Debug)]") {
+                StubVerdict::fail(
+                    "the Chronicler shakes his head — missing required: `#[derive(Debug)]`",
+                )
+            } else if !source.contains("struct Item") {
+                StubVerdict::fail("the Chronicler shakes his head — define `struct Item`")
+            } else if !source.contains(":?") {
+                StubVerdict::fail(
+                    "the Chronicler shakes his head — print with the debug formatter `{:?}`",
+                )
+            } else {
+                StubVerdict::pass(
+                    "the Chronicler dips his quill. \"derived, not authored — the Chronicler approves.\"",
+                )
+            }
+        }
+        "iter_map_collect" => {
+            if !source.contains(".map(") {
+                StubVerdict::fail("the Alchemist stirs — missing required: `.map(`")
+            } else if !source.contains(".collect") {
+                StubVerdict::fail(
+                    "the Alchemist stirs — finish with `.collect` to gather the result",
+                )
+            } else if !source.contains("|x|") && !source.contains("|x |") {
+                StubVerdict::fail(
+                    "the Alchemist stirs — the closure should bind one element as `|x|`",
+                )
+            } else {
+                StubVerdict::pass(
+                    "the Alchemist decants the flask. \"the Alchemist measures: every drop transmuted.\"",
+                )
+            }
+        }
+        "enum_match" => {
+            if !source.contains("enum Direction") {
+                StubVerdict::fail("the Heraldic Sage frowns — missing required: `enum Direction`")
+            } else if !source.contains("match ") {
+                StubVerdict::fail(
+                    "the Heraldic Sage frowns — inspect the variant with a `match ` expression",
+                )
+            } else if !source.contains("Direction::") {
+                StubVerdict::fail(
+                    "the Heraldic Sage frowns — name a variant with the `Direction::` path",
+                )
+            } else {
+                StubVerdict::pass(
+                    "the Heraldic Sage raises a banner. \"every quarter named, the Heraldic Sage salutes.\"",
+                )
+            }
+        }
         _ => return None,
     };
     Some(v)

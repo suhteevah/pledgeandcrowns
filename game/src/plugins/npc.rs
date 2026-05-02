@@ -163,6 +163,41 @@ pub const NPC_ROSTER: &[NpcSpec] = &[
         pos: (-200.0, 130.0),
         native_px: 32.0,
     },
+    NpcSpec {
+        name: "The Quartermaster",
+        mission_id: "slice_basic",
+        sprite_path: SPRITE_PLAYER, // placeholder
+        pos: (-100.0, 100.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Auditor",
+        mission_id: "result_question_mark",
+        sprite_path: SPRITE_PLAYER, // placeholder
+        pos: (100.0, -130.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Chronicler",
+        mission_id: "derive_debug",
+        sprite_path: SPRITE_PLAYER, // placeholder
+        pos: (220.0, -64.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Alchemist",
+        mission_id: "iter_map_collect",
+        sprite_path: SPRITE_PLAYER, // placeholder
+        pos: (-220.0, 0.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Heraldic Sage",
+        mission_id: "enum_match",
+        sprite_path: SPRITE_PLAYER, // placeholder
+        pos: (0.0, -130.0),
+        native_px: 32.0,
+    },
 ];
 
 pub struct NpcSpec {

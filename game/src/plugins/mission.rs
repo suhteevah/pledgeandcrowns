@@ -370,6 +370,120 @@ the body fragment `+ b`.",
                     starter_code: "fn main() {\n    let _todo = 0;\n    // bind a closure named `add` that returns a + b, then call it\n    println!(\"{_todo}\");\n}\n",
                 },
                 Mission {
+                    id: "slice_basic",
+                    npc_name: "The Quartermaster",
+                    prompt: "Write `sum_slice(xs: &[i32]) -> i32` that sums a borrowed slice.",
+                    tutorial: "## Concept\n\
+A slice `&[T]` is a borrowed view into a contiguous run of `T`s — a \
+pointer plus a length. It owns nothing; the buffer behind it lives \
+elsewhere (a `Vec`, an array, a string). Functions that read sequence \
+data should take `&[T]`, not `&Vec<T>` — `&Vec<T>` is strictly less \
+flexible because every `&Vec<T>` coerces to `&[T]` but not the reverse. \
+Same lesson as `&str` vs `String`: prefer the borrowed view.\n\n\
+## Syntax\n\
+```\nfn first(xs: &[i32]) -> Option<&i32> { xs.iter().next() }\nlet v = vec![1, 2, 3];\nfirst(&v);          // Vec<i32> -> &[i32]\nfirst(&[10, 20]);   // array -> &[i32]\n```\n\
+The `.iter()` method on a slice yields `&T`s; chain it with `.sum`, \
+`.max`, `.filter`, etc.\n\n\
+## Task\n\
+Define `fn sum_slice(xs: &[i32]) -> i32` that returns the sum of the \
+slice, then call it from `main` against a small literal array.\n\n\
+## Hint\n\
+The grader requires `fn sum_slice`, the slice type `&[i32]`, and a \
+`.iter()` call somewhere in the body.",
+                    starter_code: "fn _todo(_n: i32) -> i32 { 0 }\n\nfn main() {\n    // define sum_slice above with a slice parameter, then call it\n}\n",
+                },
+                Mission {
+                    id: "result_question_mark",
+                    npc_name: "The Auditor",
+                    prompt: "Parse a string into an integer and propagate the error with `?`.",
+                    tutorial: "## Concept\n\
+`Result<T, E>` is the standard error-carrying type — `Ok(T)` on success, \
+`Err(E)` on failure. The `?` operator at the end of a fallible expression \
+either unwraps the `Ok` and continues, or short-circuits the function \
+with the `Err` value (after running it through `From` if needed). It \
+turns ten lines of `match` into one — the idiomatic way to write \
+fallible code in Rust.\n\n\
+## Syntax\n\
+```\nfn parse_pair(a: &str, b: &str) -> Result<(i32, i32), String> {\n    let x = a.parse::<i32>().map_err(|e| e.to_string())?;\n    let y = b.parse::<i32>().map_err(|e| e.to_string())?;\n    Ok((x, y))\n}\n```\n\
+`?` works on `Option` too — `None` short-circuits the function, returning \
+`None`. The function's return type must match.\n\n\
+## Task\n\
+Write `fn parse_int(s: &str) -> Result<i32, String>` that uses `.parse` \
+and `?` to short-circuit on failure, returning `Ok(n)` on success.\n\n\
+## Hint\n\
+The grader requires `Result<`, `.parse`, and a `?` operator (followed by \
+`;` or a newline) to all appear.",
+                    starter_code: "fn parse_int(_s: &str) -> i32 {\n    // change the signature to return Result, then propagate the parse error with ?\n    0\n}\n\nfn main() {\n    let _ = parse_int(\"42\");\n}\n",
+                },
+                Mission {
+                    id: "derive_debug",
+                    npc_name: "The Chronicler",
+                    prompt: "Derive `Debug` on `struct Item` and print one with `{:?}`.",
+                    tutorial: "## Concept\n\
+Rust's `Debug` trait is the developer-facing formatting trait — what you \
+get from `{:?}` and `{:#?}`. You almost never write a `Debug` impl by \
+hand: the `#[derive(Debug)]` attribute generates one mechanically from \
+the struct's fields, as long as every field is itself `Debug`. The \
+parallel `Display` trait is the user-facing one (`{}`); that one you \
+*do* write manually because the format is a UX choice.\n\n\
+## Syntax\n\
+```\n#[derive(Debug)]\nstruct Point { x: i32, y: i32 }\nlet p = Point { x: 3, y: 4 };\nprintln!(\"{p:?}\");      // Point { x: 3, y: 4 }\nprintln!(\"{p:#?}\");     // pretty-printed across lines\n```\n\
+You can derive several traits at once: `#[derive(Debug, Clone, PartialEq)]`.\n\n\
+## Task\n\
+Define `struct Item` with at least one field, derive `Debug`, build one \
+in `main`, and print it with the debug formatter.\n\n\
+## Hint\n\
+The grader requires `#[derive(Debug)]`, `struct Item`, and `:?` (the \
+debug formatter) to all appear.",
+                    starter_code: "// add a derive attribute, then define struct Item\nstruct Item { name: String }\n\nfn main() {\n    let _item = Item { name: String::from(\"ring\") };\n    // print _item using the debug formatter\n}\n",
+                },
+                Mission {
+                    id: "iter_map_collect",
+                    npc_name: "The Alchemist",
+                    prompt: "Map a Vec through `|x| x * 2` and `collect` into a new Vec.",
+                    tutorial: "## Concept\n\
+The iterator triple — `iter` / `map` / `collect` — is Rust's most common \
+data-shaping idiom. `.iter()` produces a stream of `&T`. `.map(f)` \
+transforms each item lazily — no allocation yet, just a chain of \
+adapters. `.collect()` is the consumer that materialises the chain into \
+a concrete container; the target type (often `Vec<_>`) is inferred from \
+the binding's annotation or specified with a turbofish.\n\n\
+## Syntax\n\
+```\nlet v = vec![1, 2, 3];\nlet doubled: Vec<i32> = v.iter().map(|x| x * 2).collect();\n// or with a turbofish:\nlet doubled = v.iter().map(|x| x * 2).collect::<Vec<_>>();\n```\n\
+The closure receives `&i32` here; arithmetic auto-derefs so `x * 2` \
+works without an explicit `*x`.\n\n\
+## Task\n\
+Build a `Vec<i32>`, map each element through a `|x|` closure that \
+doubles it, and collect the result into a new `Vec`.\n\n\
+## Hint\n\
+The grader requires `.map(`, `.collect`, and a single-element closure \
+binder `|x|`.",
+                    starter_code: "fn main() {\n    let v = vec![1, 2, 3];\n    // chain iter / map / collect into a new Vec\n    let _ = v;\n}\n",
+                },
+                Mission {
+                    id: "enum_match",
+                    npc_name: "The Heraldic Sage",
+                    prompt: "Define `enum Direction` with several variants and match on it.",
+                    tutorial: "## Concept\n\
+A Rust `enum` is a *sum type*: a value is exactly one of a fixed set of \
+named variants. Variants can be unit (`North`), tuple (`Move(i32, i32)`), \
+or struct-like (`Hit { damage: u32 }`). `match` is the way to inspect \
+one: the compiler verifies the arms cover every variant, so adding a \
+new variant later forces you to update every match site — the language \
+prevents you from silently forgetting a case.\n\n\
+## Syntax\n\
+```\nenum Shape { Circle(f32), Square(f32) }\nfn area(s: Shape) -> f32 {\n    match s {\n        Shape::Circle(r) => 3.14 * r * r,\n        Shape::Square(side) => side * side,\n    }\n}\n```\n\
+Use the path syntax `EnumName::Variant` to construct or match a variant. \
+You can also `use Shape::*;` inside a function to drop the prefix.\n\n\
+## Task\n\
+Define `enum Direction` with at least two variants, then write a function \
+that takes a `Direction` and uses `match` to map each variant to a value.\n\n\
+## Hint\n\
+The grader requires `enum Direction`, a `match ` expression, and at \
+least one `Direction::` variant path.",
+                    starter_code: "// define enum Direction with several variants\n\nfn main() {\n    // match on a Direction value and produce something\n}\n",
+                },
+                Mission {
                     id: "while_loop",
                     npc_name: "The Tinker",
                     prompt: "Use a `while` loop to count down from five to zero.",

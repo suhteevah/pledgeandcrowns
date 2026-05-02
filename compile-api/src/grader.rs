@@ -229,6 +229,86 @@ pub fn grade(encounter_id: &str, source: &str) -> Verdict {
                 Verdict::pass("the Herald unfurls the scroll. \"so named, so numbered.\"")
             }
         }
+        // ── Mission 17: take a `&[i32]` slice. Act 2: borrowing a
+        // contiguous view without owning the buffer.
+        "slice_basic" => {
+            if !source.contains("fn sum_slice") {
+                Verdict::fail("the Quartermaster squints — missing required: `fn sum_slice`")
+            } else if !source.contains("&[i32]") {
+                Verdict::fail("the Quartermaster squints — the parameter must be a slice `&[i32]`")
+            } else if !source.contains(".iter()") {
+                Verdict::fail("the Quartermaster squints — walk the slice with `.iter()`")
+            } else {
+                Verdict::pass(
+                    "the Quartermaster ticks the manifest. \"a window into the stores — counted, not claimed.\"",
+                )
+            }
+        }
+        // ── Mission 18: propagate a `Result` with the `?` operator.
+        // Act 2: error short-circuiting without `match`.
+        "result_question_mark" => {
+            if !source.contains("Result<") {
+                Verdict::fail("the Auditor's pen taps — missing required: `Result<`")
+            } else if !source.contains(".parse") {
+                Verdict::fail("the Auditor's pen taps — call `.parse` on a string source")
+            } else if !source.contains("?;") && !source.contains("?\n") {
+                Verdict::fail("the Auditor's pen taps — propagate the error with the `?` operator")
+            } else {
+                Verdict::pass(
+                    "the Auditor closes the ledger. \"the Auditor accepts: errors travel upward.\"",
+                )
+            }
+        }
+        // ── Mission 19: derive Debug on a struct, then `{:?}` print it.
+        "derive_debug" => {
+            if !source.contains("#[derive(Debug)]") {
+                Verdict::fail(
+                    "the Chronicler shakes his head — missing required: `#[derive(Debug)]`",
+                )
+            } else if !source.contains("struct Item") {
+                Verdict::fail("the Chronicler shakes his head — define `struct Item`")
+            } else if !source.contains(":?") {
+                Verdict::fail(
+                    "the Chronicler shakes his head — print with the debug formatter `{:?}`",
+                )
+            } else {
+                Verdict::pass(
+                    "the Chronicler dips his quill. \"derived, not authored — the Chronicler approves.\"",
+                )
+            }
+        }
+        // ── Mission 20: iter().map().collect() into a Vec.
+        "iter_map_collect" => {
+            if !source.contains(".map(") {
+                Verdict::fail("the Alchemist stirs — missing required: `.map(`")
+            } else if !source.contains(".collect") {
+                Verdict::fail("the Alchemist stirs — finish with `.collect` to gather the result")
+            } else if !source.contains("|x|") && !source.contains("|x |") {
+                Verdict::fail("the Alchemist stirs — the closure should bind one element as `|x|`")
+            } else {
+                Verdict::pass(
+                    "the Alchemist decants the flask. \"the Alchemist measures: every drop transmuted.\"",
+                )
+            }
+        }
+        // ── Mission 21: define an enum, match on its variants.
+        "enum_match" => {
+            if !source.contains("enum Direction") {
+                Verdict::fail("the Heraldic Sage frowns — missing required: `enum Direction`")
+            } else if !source.contains("match ") {
+                Verdict::fail(
+                    "the Heraldic Sage frowns — inspect the variant with a `match ` expression",
+                )
+            } else if !source.contains("Direction::") {
+                Verdict::fail(
+                    "the Heraldic Sage frowns — name a variant with the `Direction::` path",
+                )
+            } else {
+                Verdict::pass(
+                    "the Heraldic Sage raises a banner. \"every quarter named, the Heraldic Sage salutes.\"",
+                )
+            }
+        }
         _ => Verdict::pass(format!(
             "[freeform] received {} bytes. encounter `{encounter_id}` has no grader yet.",
             source.len()
@@ -434,6 +514,38 @@ mod tests {
         assert!(!grade("option_unwrap_or", match_solution).ok);
         assert!(!grade("for_in_range", while_solution).ok);
         assert!(!grade("closure_basic", "fn main() { let answer = 42; }").ok);
+
+        // ── Act 2 wave 2 additions ──
+        let slice_solution = "fn sum_slice(xs: &[i32]) -> i32 { xs.iter().sum() }";
+        assert!(!grade("vec_iter", slice_solution).ok);
+        assert!(!grade("borrow_mut", slice_solution).ok);
+        assert!(!grade("string_vs_str", slice_solution).ok);
+
+        let result_qm_solution = "fn parse_int(s: &str) -> Result<i32, String> { let n = s.parse::<i32>().map_err(|e| e.to_string())?; Ok(n) }";
+        assert!(!grade("option_unwrap_or", result_qm_solution).ok);
+        assert!(!grade("match_option", result_qm_solution).ok);
+
+        let derive_debug_solution = "#[derive(Debug)] struct Item { name: String } fn main() { let i = Item { name: String::new() }; println!(\"{i:?}\"); }";
+        assert!(!grade("struct_basic", derive_debug_solution).ok);
+        assert!(!grade("string_vs_str", derive_debug_solution).ok);
+
+        let iter_map_solution = "fn main() { let v = vec![1, 2]; let _: Vec<i32> = v.iter().map(|x| x * 2).collect(); }";
+        assert!(!grade("vec_iter", iter_map_solution).ok);
+        assert!(!grade("closure_basic", iter_map_solution).ok);
+
+        let enum_match_solution = "enum Direction { N, S } fn f(d: Direction) -> i32 { match d { Direction::N => 1, Direction::S => 0 } }";
+        assert!(!grade("match_option", enum_match_solution).ok);
+        assert!(!grade("struct_basic", enum_match_solution).ok);
+
+        // Existing solutions must not pass the new graders.
+        assert!(!grade("slice_basic", borrow_solution).ok);
+        assert!(!grade("slice_basic", vec_solution).ok);
+        assert!(!grade("result_question_mark", match_solution).ok);
+        assert!(!grade("derive_debug", struct_solution).ok);
+        assert!(!grade("iter_map_collect", vec_solution).ok);
+        assert!(!grade("iter_map_collect", closure_solution).ok);
+        assert!(!grade("enum_match", match_solution).ok);
+        assert!(!grade("enum_match", struct_solution).ok);
     }
 
     // ── mut_binding ────────────────────────────────────────────────
@@ -839,5 +951,170 @@ fn main() { let s = String::from("you"); greet(&s); greet("anon"); }"#;
         let v = grade("closure_basic", src);
         assert!(!v.ok);
         assert!(v.stderr.contains("+ b"));
+    }
+
+    // ── slice_basic ───────────────────────────────────────────────
+
+    #[test]
+    fn slice_basic_pass_canonical() {
+        let src = "fn sum_slice(xs: &[i32]) -> i32 { xs.iter().sum() }";
+        assert!(grade("slice_basic", src).ok);
+    }
+
+    #[test]
+    fn slice_basic_pass_with_loop_body() {
+        let src =
+            "fn sum_slice(xs: &[i32]) -> i32 { let mut s = 0; for x in xs.iter() { s += *x; } s }";
+        assert!(grade("slice_basic", src).ok);
+    }
+
+    #[test]
+    fn slice_basic_fail_no_slice_param() {
+        let src = "fn sum_slice(xs: Vec<i32>) -> i32 { xs.iter().sum() }";
+        let v = grade("slice_basic", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains("&[i32]"));
+    }
+
+    #[test]
+    fn slice_basic_fail_used_indexing_only() {
+        let src = "fn sum_slice(xs: &[i32]) -> i32 { xs[0] }";
+        let v = grade("slice_basic", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains(".iter()"));
+    }
+
+    // ── result_question_mark ──────────────────────────────────────
+
+    #[test]
+    fn result_qm_pass_canonical() {
+        let src = r#"fn parse_int(s: &str) -> Result<i32, String> {
+    let n = s.parse::<i32>().map_err(|e| e.to_string())?;
+    Ok(n)
+}"#;
+        assert!(grade("result_question_mark", src).ok);
+    }
+
+    #[test]
+    fn result_qm_pass_inline_qmark_newline() {
+        let src = "fn f() -> Result<i32, String> { let n: i32 = \"1\".parse().map_err(|e: std::num::ParseIntError| e.to_string())?\n;Ok(n) }";
+        assert!(grade("result_question_mark", src).ok);
+    }
+
+    #[test]
+    fn result_qm_fail_no_result_type() {
+        let src = "fn f() -> i32 { \"42\".parse::<i32>().unwrap() }";
+        let v = grade("result_question_mark", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains("Result<"));
+    }
+
+    #[test]
+    fn result_qm_fail_no_question_mark() {
+        let src = "fn f() -> Result<i32, String> { let n = \"1\".parse::<i32>().unwrap(); Ok(n) }";
+        let v = grade("result_question_mark", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains("?"));
+    }
+
+    // ── derive_debug ──────────────────────────────────────────────
+
+    #[test]
+    fn derive_debug_pass_canonical() {
+        let src = r#"#[derive(Debug)]
+struct Item { name: String }
+fn main() { let item = Item { name: String::from("ring") }; println!("{item:?}"); }"#;
+        assert!(grade("derive_debug", src).ok);
+    }
+
+    #[test]
+    fn derive_debug_pass_with_qmark_format() {
+        let src = "#[derive(Debug)] struct Item { name: String } fn main() { let i = Item { name: String::new() }; println!(\"{:?}\", i); }";
+        assert!(grade("derive_debug", src).ok);
+    }
+
+    #[test]
+    fn derive_debug_fail_no_derive() {
+        let src = "struct Item { name: String } fn main() { let i = Item { name: String::new() }; println!(\"{i:?}\"); }";
+        let v = grade("derive_debug", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains("#[derive(Debug)]"));
+    }
+
+    #[test]
+    fn derive_debug_fail_used_display_format() {
+        let src = "#[derive(Debug)] struct Item { name: String } fn main() { let i = Item { name: String::new() }; println!(\"{}\", i.name); }";
+        let v = grade("derive_debug", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains(":?"));
+    }
+
+    // ── iter_map_collect ──────────────────────────────────────────
+
+    #[test]
+    fn iter_map_collect_pass_canonical() {
+        let src = "fn main() { let v = vec![1, 2, 3]; let doubled: Vec<i32> = v.iter().map(|x| x * 2).collect(); let _ = doubled; }";
+        assert!(grade("iter_map_collect", src).ok);
+    }
+
+    #[test]
+    fn iter_map_collect_pass_with_turbofish() {
+        let src =
+            "fn main() { let v = [1, 2]; let _ = v.iter().map(|x| x + 1).collect::<Vec<_>>(); }";
+        assert!(grade("iter_map_collect", src).ok);
+    }
+
+    #[test]
+    fn iter_map_collect_fail_no_map() {
+        let src = "fn main() { let v = vec![1, 2, 3]; let _: Vec<&i32> = v.iter().collect(); }";
+        let v = grade("iter_map_collect", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains(".map("));
+    }
+
+    #[test]
+    fn iter_map_collect_fail_no_collect() {
+        let src = "fn main() { let v = vec![1, 2, 3]; let s: i32 = v.iter().map(|x| x * 2).sum(); let _ = s; }";
+        let v = grade("iter_map_collect", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains(".collect"));
+    }
+
+    // ── enum_match ────────────────────────────────────────────────
+
+    #[test]
+    fn enum_match_pass_canonical() {
+        let src = r#"enum Direction { North, South, East, West }
+fn name(d: Direction) -> &'static str {
+    match d {
+        Direction::North => "n",
+        Direction::South => "s",
+        Direction::East => "e",
+        Direction::West => "w",
+    }
+}"#;
+        assert!(grade("enum_match", src).ok);
+    }
+
+    #[test]
+    fn enum_match_pass_minimal_two_variants() {
+        let src = "enum Direction { Up, Down } fn f(d: Direction) -> i32 { match d { Direction::Up => 1, Direction::Down => 0 } }";
+        assert!(grade("enum_match", src).ok);
+    }
+
+    #[test]
+    fn enum_match_fail_no_enum_decl() {
+        let src = "fn name(d: i32) -> &'static str { match d { 0 => \"n\", _ => \"x\" } }";
+        let v = grade("enum_match", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains("enum Direction"));
+    }
+
+    #[test]
+    fn enum_match_fail_no_variant_path() {
+        let src = "enum Direction { North } fn f(_d: Direction) -> i32 { match 0 { _ => 0 } }";
+        let v = grade("enum_match", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains("Direction::"));
     }
 }

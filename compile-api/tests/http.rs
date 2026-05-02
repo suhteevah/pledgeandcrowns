@@ -198,6 +198,52 @@ async fn compile_passes_closure_basic() {
 }
 
 #[tokio::test]
+async fn compile_passes_slice_basic() {
+    let addr = spawn_server().await;
+    let src = "fn sum_slice(xs: &[i32]) -> i32 { xs.iter().sum() }";
+    let (_, body) = post_compile(addr, "slice_basic", src).await;
+    assert!(body.ok);
+    assert!(body.stdout.contains("Quartermaster"));
+}
+
+#[tokio::test]
+async fn compile_passes_result_question_mark() {
+    let addr = spawn_server().await;
+    let src = "fn parse_int(s: &str) -> Result<i32, String> { let n = s.parse::<i32>().map_err(|e| e.to_string())?; Ok(n) }";
+    let (_, body) = post_compile(addr, "result_question_mark", src).await;
+    assert!(body.ok);
+    assert!(body.stdout.contains("Auditor"));
+}
+
+#[tokio::test]
+async fn compile_passes_derive_debug() {
+    let addr = spawn_server().await;
+    let src = "#[derive(Debug)] struct Item { name: String } fn main() { let i = Item { name: String::new() }; println!(\"{i:?}\"); }";
+    let (_, body) = post_compile(addr, "derive_debug", src).await;
+    assert!(body.ok);
+    assert!(body.stdout.contains("Chronicler"));
+}
+
+#[tokio::test]
+async fn compile_passes_iter_map_collect() {
+    let addr = spawn_server().await;
+    let src =
+        "fn main() { let v = vec![1, 2, 3]; let _: Vec<i32> = v.iter().map(|x| x * 2).collect(); }";
+    let (_, body) = post_compile(addr, "iter_map_collect", src).await;
+    assert!(body.ok);
+    assert!(body.stdout.contains("Alchemist"));
+}
+
+#[tokio::test]
+async fn compile_passes_enum_match() {
+    let addr = spawn_server().await;
+    let src = "enum Direction { N, S } fn f(d: Direction) -> i32 { match d { Direction::N => 1, Direction::S => 0 } }";
+    let (_, body) = post_compile(addr, "enum_match", src).await;
+    assert!(body.ok);
+    assert!(body.stdout.contains("Heraldic Sage"));
+}
+
+#[tokio::test]
 async fn compile_unknown_encounter_falls_through_to_freeform() {
     let addr = spawn_server().await;
     let (_, body) = post_compile(addr, "no_such_mission", "fn main() {}").await;
