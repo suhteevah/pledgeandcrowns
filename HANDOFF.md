@@ -1,14 +1,50 @@
 # HANDOFF.md
 
 ## Last Updated
-2026-05-02 (handoff — 10 reference PNGs rendered + committed; PNG export pipeline live)
+2026-05-02 (handoff — game is playable end-to-end; 5 missions with full tutorials; 46-test audit harness)
 
 ## Project Status
-🟡 In progress — design package complete, Bevy 0.18 workspace scaffolded and compiling green through full local CI (fmt/check/clippy/test), palette redesigned around a defensible color-theory structure ("Heraldic Code"). No art assets yet. Working title locked as **Pledge & Crown**.
+🟢 Playable MVP — title screen → village → 5 NPCs → tutorial-rich code editor → live compile-API round-trip → mission progression. Workspace passes 46-test audit on every commit. Real `cargo build`/wasmtime sandbox per design/05 §2 still pending; v0 grader is pattern-based.
 
-## What Was Done This Session (2026-05-01 evening)
+## What Was Done This Session (2026-05-02, day 6→8 push)
 
-- **10 reference images delivered** by Matt as a Claude-Project bundle, extracted into `design/art/`. Format is unconventional but excellent: each REF is an ASCII pixel grid (e.g. `'........XXXXXX................'`) with single-char palette codes (X=Coalblack outline, P=Pink quartz, etc.), wrapped in a renderable `.jsx` component. Palette compliance is mathematically guaranteed because every char must resolve through `palette.js`. Files:
+End-to-end Rust-teaching loop is live. Run `cargo run -p pledge_compile_api` in one terminal and `cargo run -p pledge_and_crown` in another; title screen → Space → Hearthstone Village → walk to any of 5 NPCs → F → editor opens with full tutorial sidebar (Concept / Syntax / Task / Hint) + starter code → write the answer → Compile → server grades and pipes flavor verdict back. Cleared missions show `[done]`.
+
+**Plumbing shipped (commits `8d5f199`..`a6ee7df`):**
+
+- `WorldPlugin` (`game/src/plugins/world.rs`) — 30×20 `bevy_ecs_tilemap` grid sourced from `tiles_village.png` (REF-04 atlas, 16 tile types). Hand-laid: dirt road across middle, cobblestone plaza around a 2-tile stone well, signpost at east edge of road, deterministic flora sprinkles. `TilemapAnchor::Center` (deprecated `get_tilemap_center_transform` replaced).
+- `PlayerPlugin` — REF-01 sprite at 2× scale, WASD/arrow movement, world-bounds clamp. Camera lerp-follows the player at 6.0/sec; clamped so the void beyond the tilemap can't enter the viewport.
+- `setup_camera` in `mod.rs` uses `OrthographicProjection` + `ScalingMode::FixedVertical { viewport_height: 180.0 }` (the latter imported from `bevy::camera`, NOT in prelude).
+- `NpcPlugin` (`game/src/plugins/npc.rs`) — `NPC_ROSTER` static spec table drives spawning. 5 NPCs: Ferris, Trait Mage, Borrow Checker, Smith, Cartographer. Proximity system maintains `NearbyNpc` resource within 28px.
+- `EditorPlugin` (`game/src/plugins/editor.rs`) — `bevy_egui` window toggled with `E`. Hand-rolled Rust syntax highlighter on `egui::TextEdit::multiline` because of the `egui_code_editor` 0.2 ↔ `bevy_egui` 0.39 egui-version diamond (0.34 vs 0.33). Tutorial side panel renders `## Heading` and triple-backtick code fences from each mission's `tutorial: &'static str`.
+- `MissionPlugin` (`game/src/plugins/mission.rs`) — `MissionRegistry` (5 missions), `ActiveMission`, F-press handler that loads starter code into `EditorState`, `EguiPrimaryContextPass` interaction prompt.
+- `CompileClientPlugin` (`game/src/plugins/compile_client.rs`) — `IoTaskPool` + `reqwest` POST to `127.0.0.1:7878/compile`; results stream back through a `crossbeam-channel`. Successful verdicts call `MissionProgress::mark_cleared`.
+- `compile-api` split into lib + bin. `lib.rs` exposes `make_router()` so integration tests can mount the same router. `grader.rs` is the per-encounter pattern grader (5 missions wired); the freeform fallthrough catches any encounter without a grader arm.
+- `StatePlugin` + `TitlePlugin` + `ProgressPlugin` — `GameState::{Title,InGame}`, `init_state` requires `bevy::state::app::StatesPlugin` (`MinimalPlugins` doesn't include it). Title spawns REF-10 wordmark; Space/Enter transitions to InGame which gates all village/player/NPC/mission systems via `OnEnter` + `run_if(in_state(InGame))`.
+
+**Audit harness (`46/46` green every commit):**
+- `compile-api/src/grader.rs` — 22 unit tests (every mission × pass + multiple fail modes + cross-mission contamination check)
+- `compile-api/tests/http.rs` — 7 HTTP integration tests on a real axum server bound to an OS-assigned port via reqwest
+- `game/tests/assets.rs` — 3 tests: every sprite path resolves on disk, no duplicates, all PNG
+- `game/tests/registry.rs` — 6 tests: mission ids unique, NPC mission_id refs resolve, sprite paths in registry, npc names unique, tutorial substance (≥200 chars + has `## ` headers + has ``` fence)
+- `game/tests/contract.rs` — 4 cross-crate tests: every mission has a canonical solution test fixture, all canonical solutions pass the live grader, unmodified starter_code does NOT trivially win, no mission falls through to freeform
+- `game/tests/bevy_smoke.rs` — 4 minimal-app boot tests for headless plugins
+
+**Bugs the audit caught and fixed:**
+1. All 3 original starter codes leaked grader needles (e.g. intro starter said `// Bind the value 42 to a variable named answer` → grader saw `let answer` + `42` and passed). Rewrote starters as neutral `_todo` templates.
+2. Grader's `or_else` chain returned the second-attempt err message, so failure said `+=1` instead of canonical `+= 1`. Rewrote those arms with explicit conditions.
+
+**Decisions / changes from earlier today:**
+- 4 design questions locked: leaderboards deferred to v1.1, dual-license (game = MIT, compile-api = AGPL-3.0-or-later), itch.io→Steam ladder, Temple as surprise reveal.
+- SPDX headers added to all `.rs` files (MIT in `game/`, AGPL in `compile-api/`); `LICENSE-MIT`, `LICENSE-AGPL`, `LICENSE.md` at repo root.
+- TESS authoritative GREEN: zero PLEDGE+CROWN combinations in USPTO records. Cleared to file ITU and commission marketing.
+- 10 reference PNGs rendered + committed at `design/art/refs/png/`. JSX→PNG harness lives at `scripts/render-refs-inline.html` + `scripts/render-refs.py`.
+- Cargo target dir moved to `G:/cargo-target/pledgeandcrown` via `.cargo/config.toml` because J: drive was full.
+- GitHub repo transferred from `suhteevah/pledgeandcrowns` → `pledgeandcrown/pledgeandcrown` (org owned).
+
+## Earlier this calendar day (2026-05-01 evening)
+
+- **10 reference images delivered** by Matt as a Claude-Project bundle, extracted into `design/art/`. (Earlier in the day: TESS GREEN, design decisions locked, art deliverables spec, dual-license implementation, repo transfer, JSX→PNG export pipeline. Full timeline in commit log `git log --oneline`.) Format is unconventional but excellent: each REF is an ASCII pixel grid (e.g. `'........XXXXXX................'`) with single-char palette codes (X=Coalblack outline, P=Pink quartz, etc.), wrapped in a renderable `.jsx` component. Palette compliance is mathematically guaranteed because every char must resolve through `palette.js`. Files:
   - `refs/ref-01-player.jsx` … `refs/ref-10-title.jsx` (10 references, REF-09 has v1 + v2; v2 is canonical)
   - `palette.js` (32-color Heraldic Code v2.0 with role names)
   - `pixel-art.jsx` + `design-canvas.jsx` + `refs/artboard-frame.jsx` + `refs/palette-legend.jsx` (rendering scaffold)
@@ -68,57 +104,65 @@ CI does NOT run this. PNGs are committed artifacts. Re-run only when a `.jsx` re
 
 ## Current State
 
-**Working:**
-- Design package coherent and self-consistent across all 9 design docs + 4 prompt files.
-- All 8 audit flags reflected in the docs that own them (no orphan TODOs).
-- Title selected, etymology documented in CLAUDE.md and 00-vision.md.
-- **Bevy 0.18 workspace boots and passes full CI.** `game/` has tracing-instrumented main + lib + Camera2d. `compile-api/` is a stub bin that proves the workspace compiles end-to-end. Pinned versions: bevy 0.18, bevy_egui 0.39, bevy_ecs_tilemap 0.18, bevy_kira_audio 0.25, egui_code_editor 0.2.
-- **Local CI fully wired.** `scripts/ci.ps1` (fmt + check + clippy -D warnings + test) runs on every commit via `scripts/pre-commit.sh` → `.git/hooks/pre-commit`. Cold full run ~12 min on i9-11900K; warm runs ~5 sec.
-- **Palette v2.0 ("Heraldic Code")** locked. 32 colors derived from a named harmonic structure (split-complementary @ 350° anchor + 140°/178° pair, +42° gold accent, +270° magic flicker). Every color has a role name; prompts reference roles, not raw hexes. Sweep across 5 prompt files replaced ~97 color references; zero residual EDG32 hexes.
+**Working end-to-end:**
+- Title screen → InGame state machine
+- Hearthstone Village rendered as 30×20 tilemap (REF-04 atlas)
+- Player walks on tiles, WASD/arrows, world bounds clamped, camera follows with viewport clamp
+- 5 NPCs spawned at distinct positions, proximity F-press handler
+- In-game egui code editor with hand-rolled Heraldic-Code Rust syntax highlighting + tutorial side panel
+- 5 missions wired: intro_let_binding (Ferris), double_function (Trait Mage), borrow_preview (Borrow Checker), mut_binding (Smith), if_else_sign (Cartographer). Each has a 100-200 word tutorial.
+- Live HTTP round-trip game ↔ axum compile-API on `127.0.0.1:7878`
+- Per-encounter pattern grader with 3 success/fail flavor strings each
+- Mission progression tracking: cleared encounters show `[done]` in interaction prompt
+- 46-test audit harness gates every commit (assets, registry, contract, bevy_smoke, grader unit, HTTP integration)
 
-**Not yet done (expected):**
-- ~~Bevy project scaffold.~~ done 2026-04-25 (commit d7fa659).
-- Style bible reference image generation (10 images, REF-01..REF-10 in `design/04-art-handoff-prompts.md`).
-- Compile-API prototype on Hetzner (currently a stub).
-- Vertical slice (Acts 1–2 + Borrow Checker boss).
-- Game subsystems: world, party, combat, editor, compile_client, sandbox, town, persistence, audio. Currently only a Camera2d on a blank window.
+**Stubbed (intentional v0):**
+- Compile-API grader is pattern-matching, not real `cargo build` + wasmtime sandbox. Real implementation per `design/05-tech-architecture.md` §2 (server-owned `Cargo.toml`, vendored deps, `--offline`, seccomp container) is the next big chunk.
+- 2 NPCs (Smith, Cartographer) use `player.png` as placeholder art until their REFs land.
+- The 8-encounter pre-compiled stub fallback (per design/05) doesn't exist; if API is offline, game shows `[client error]`.
+- LogPlugin warning at startup (Bevy's logger collides with our pre-init tracing subscriber). Non-functional.
 
-**Stubbed / pending decisions:**
-- Repo directory renamed `J:\cargoandcrowns\` → `J:\pledgeandcrowns\` (plural, not the singular `pledgeandcrown` originally planned — keep this in mind when reading older notes/skills that may still point at the old path). Internal product/crate naming (`Pledge & Crown`, `pledge-and-crown`, `pledge_and_crown`) is unchanged.
-- Open questions 2, 3, 4, 5 in HANDOFF.md still need Matt's call (leaderboards, licensing, distribution platform, Temple-in-marketing).
+**Not yet done:**
+- Acts 3–10 missions (current 5 cover the Act 1 prelude — variables/functions/refs/mut/branches)
+- Combat system, party, persistence, audio
+- Save/load
+- Web build (wasm-bindgen unused)
+- Mobile (Tauri not scaffolded)
 
 ## Blocking Issues
 
-- ~~**Authoritative TESS confirm on "Pledge & Crown"**~~ — done 2026-04-25 evening, GREEN. No remaining trademark blocker.
-- **Open design questions 2–5** — leaderboards in MVP, licensing model (recommendation: dual-license), distribution platform priority, Temple-in-marketing. Each is design-impacting; needs Matt's call.
-- **No GitHub remote** yet — local-only repo. Org creation pending TESS clearance.
+None blocking forward motion. Open Matt-only action items:
 
-## What's Next
+- Register `pledgeandcrown.dev` + `.com` at Cloudflare (~$22/yr).
+- File 1(b) ITU at USPTO TEAS in IC 009 + IC 041 (~$700, optional).
 
-Prioritized for the incoming session:
+## What's Next (prioritized)
 
-1. **TESS + RF policy final clearance on "Pledge & Crown"** — required before any public asset, domain registration, or repo rename. ~30 minutes.
-2. **Decide remaining open questions** (HANDOFF §"Open questions" 2–5) — leaderboards in MVP, licensing model, distribution platform priority, Temple-in-marketing. Each is design-impacting.
-3. ~~**Repo rename**~~ — done 2026-04-25: `J:\cargoandcrowns\` → `J:\pledgeandcrowns\`. Audit any external references (skills, scheduled tasks, wiki entries) that still point at the old path.
-4. **Day 1 of critical path** — register `pledgeandcrown.dev` (or alt), create GitHub org. ~~scaffold `scripts/ci.ps1` + pre-commit hook~~ done 2026-04-25 (commits 6838264, ceaed94). Hook is installed in `.git/hooks/pre-commit`; `ci.ps1` is a no-op until `Cargo.toml` exists. PS 5.1 gotcha logged: scripts must be ASCII-only (no em-dashes) because PS 5.1 reads UTF-8-without-BOM as ANSI.
-5. **Day 2 — style bible reference image gen** — 10 images per `design/04-art-handoff-prompts.md`. Do not bulk-gen until the 10 are approved. Prompts already use the new Heraldic Code palette by role name — no further prompt edits needed before gen.
-6. ~~**Day 3 onward** — Bevy scaffold~~ — done 2026-04-25 (Bevy 0.18 scaffolded, not 0.14 as the doc anticipated).
+1. **Real cargo-build + wasmtime sandbox** for compile-API per `design/05-tech-architecture.md` §2. The pattern grader is fine for the demo loop but not the long-term curriculum. Server owns `Cargo.toml`, vendored deps, `cargo --offline`, single player file in `src/lib.rs`, exec the result inside wasmtime with WASI. Big chunk; design is already locked.
+2. **Mission completion dialogue** — when player talks to a cleared NPC, show a "thanks for solving it, here's what we just covered" follow-up before re-opening the editor. Currently the [done] tag is all that changes.
+3. **More missions / Act 1 content** — extend curriculum past the prelude. Suggested next: `loop_break`, `match_option`, `vec_iter`, `struct_basic`, `tuple_destructure`. Each addition is: grader arm + 4-7 unit tests + 1 HTTP test + Mission entry + canonical_solution + NPC entry + tutorial. Audit harness catches drift instantly.
+4. **Polish** — fix the LogPlugin/tracing-subscriber collision (drop our pre-init `fmt().init()`, let Bevy's LogPlugin own logging); add `bevy/bevy_picking` feature to silence the bevy_egui warning.
+5. **8 pre-compiled stub fallback** — when the live API is unreachable, ship a hard-coded "for the canonical solution this would compile" verdict so the demo isn't blocked by a server hiccup.
+6. **Save/load** — `MissionProgress` is in-memory; persist to `~/.local/share/pledge-and-crown/save.bincode` via `bincode 2` (already in deps).
 
 ## Notes for Next Session
 
-- **Read this file first.** That's a global Matt rule and applies here.
-- **The 8 audit findings are reflected in the docs** — do not re-diagnose them. If anything in `05-tech-architecture.md` §2 (compile-time RCE defense) feels under-specified, that's a real concern; if it feels redundant, that's the audit being thorough.
-- **Pledge & Crown is the title.** Internal-only until TESS clears. Don't push it to any public surface yet.
-- **The Borrow Checker still exists** — as the Act 2 boss. Don't rename the boss along with the game.
-- **Bevy is now pinned to 0.18.** Doc text in `05-tech-architecture.md` was written against 0.14 and references some old API patterns (e.g. window resolution as floats — Bevy 0.18 only accepts u32). Treat the doc's code samples as intent, not literal. The workspace `Cargo.toml` is the source of truth for versions.
-- **PS 5.1 ASCII gotcha** (logged from CI scaffolding): Windows PowerShell 5.1 reads UTF-8-without-BOM as ANSI/Windows-1252, which garbles em-dashes and breaks parsing of `.ps1` files. All scripts in `scripts/` are ASCII-only. Don't add em-dashes or smart quotes to .ps1 files.
-- **Pre-commit hook is real CI.** It runs cargo fmt/check/clippy/test on every commit and blocks bad commits. To bypass for a WIP, use `git commit --no-verify` — but per global rules, don't unless you have to.
-- **Commit messages with embedded double-quotes** must be passed via `git commit -F <file>` on Windows (PowerShell heredocs don't escape `"` cleanly through to git's argv parser). Single-quoted arg names like `"Heraldic Code"` in a commit message will be misparsed.
-- **Wraith MCP wired into this project** as of 2026-04-25 in `~/.claude.json` → `projects['J:/pledgeandcrowns'].mcpServers['wraith-browser']` (stdio, `J:/wraith-browser/target/release/wraith-browser.exe serve`). **Will not load until next session restart.** Backup of pre-patch config at `~/.claude.json.bak-20260425-180938`. If the `serve` subcommand isn't right, that's where to fix it — `args` array in the JSON.
-- **Wraith GPU smoke test in progress on Matt's side.** When that completes and Wraith is verified working, restart this session and the `mcp__wraith*` tools will surface; first task should be the TESS sweep on "Pledge & Crown" (exact phrase + classes 9 and 41, live + dead, plus a Rust Foundation Trademark Policy sanity check).
-- **Repo is now a git repo** as of 2026-04-25. `main` branch, two commits. No remote yet — GitHub org creation is still pending.
-- **Compile API design hard rule:** player input never touches `Cargo.toml`. Server owns the manifest. If a future session designs a "user crates" or "player imports" feature, that's a v2+ conversation — not MVP.
-- **GitHub Actions is banned on Matt's account** (global rule). Local CI only. The design docs now reflect this; do not re-introduce GH Actions.
+- **Read this file first.** Global Matt rule.
+- **Cargo target dir lives on G:** (`G:/cargo-target/pledgeandcrown` per `.cargo/config.toml`). Don't run cargo from anywhere assuming `target/` is in-tree — it isn't. J: drive was full at 0.1 GB; the move was forced. Do not delete the G: directory.
+- **Run the game:** terminal 1 `cargo run -p pledge_compile_api`, terminal 2 `cargo run -p pledge_and_crown`. Title screen → Space → 5 NPCs to talk to via F.
+- **Mission/grader contract is enforced by tests.** When adding a new mission: add the grader arm in `compile-api/src/grader.rs`, add a Mission entry in `game/src/plugins/mission.rs`, add an NPC to `NPC_ROSTER` in `game/src/plugins/npc.rs`, add a canonical_solution arm in `game/tests/contract.rs`. The audit suite will fail loudly if any of these drift.
+- **Tutorial structure** is `## Concept` / `## Syntax` (with ``` fences) / `## Task` / `## Hint`. Keep each 100-200 words. The `every_tutorial_meets_minimum_substance` test enforces non-emptiness, headers, and code fences.
+- **Starter codes must NOT contain grader needles.** The audit suite caught the original 3 missions trivially passing because their comments contained the solution tokens. Use `_todo` placeholders instead. The `unmodified_starter_code_does_not_trivially_win` test enforces this.
+- **egui version diamond:** `bevy_egui 0.39` ships egui 0.33; `egui_code_editor 0.2` (latest as of 2026-05-02) pins egui 0.34. Unfixable upstream. We hand-rolled the syntax highlighter via `egui::TextEdit::layouter` + `LayoutJob`. If a newer `bevy_egui` ships with egui 0.34 support, swap back.
+- **`ScalingMode` is in `bevy::camera`, NOT prelude.** `OrthographicProjection` and `Projection` are prelude. Camera setup pattern: `Projection::Orthographic(OrthographicProjection { scaling_mode: ScalingMode::FixedVertical { viewport_height: 180.0 }, ..default_2d() })`.
+- **`init_state` requires `bevy::state::app::StatesPlugin`.** `MinimalPlugins` doesn't include it; `DefaultPlugins` does. Smoke tests using `MinimalPlugins` must explicitly add `StatesPlugin`.
+- **`bevy_ecs_tilemap` 0.18 uses `TilemapAnchor`** for centring; the older `get_tilemap_center_transform` helper is `#[deprecated]` and clippy with `-D warnings` will reject it.
+- **PS 5.1 ASCII gotcha:** all `.ps1` files in `scripts/` must be ASCII-only — no em-dashes, no smart quotes. PS 5.1 reads UTF-8-without-BOM as Windows-1252 and garbles non-ASCII.
+- **Pre-commit hook is real CI** (`scripts/pre-commit.sh` → `scripts/ci.ps1`): fmt + check + clippy `-D warnings` + test. ~40s warm rebuild, ~3-7 min cold rebuild on G:. To bypass for WIP only: `git commit --no-verify` (and global rules say don't).
+- **Commit messages with embedded double-quotes** → use `git commit -m "..." -m "..."` (multiple `-m` flags) instead of `-F` heredocs. PowerShell heredocs don't escape `"` cleanly through to git's argv parser.
+- **Repo is at `pledgeandcrown/pledgeandcrown` on GitHub** (org-owned, transferred 2026-05-01). Do NOT push back to `suhteevah/pledgeandcrowns` — that URL 404s now.
+- **Compile API design hard rule:** player input never touches `Cargo.toml`. Server owns the manifest. v0 grader is pattern-matching to defer the security work; when implementing the real `cargo build` path, follow `design/05-tech-architecture.md` §2 to the letter — vendored deps, `--offline`, single player file in `src/lib.rs`.
+- **GitHub Actions is banned on Matt's account** (global rule). Local CI only.
 
 ## Critical path to MVP (30 days)
 
