@@ -9,6 +9,7 @@
 
 use crate::plugins::editor::EditorState;
 use crate::plugins::progress::MissionProgress;
+use crate::plugins::stub_grader::{StubVerdict, stub_verdict};
 use bevy::prelude::*;
 use bevy::tasks::IoTaskPool;
 use crossbeam_channel::{Receiver, Sender, unbounded};
@@ -34,6 +35,12 @@ struct CompileOutcome {
     encounter_id: String,
     formatted: String,
     ok: bool,
+    /// True iff `formatted` came from the live `compile-api` server.
+    /// Stub-fallback verdicts (server unreachable) leave this `false`
+    /// so `drain_results` will NOT call `MissionProgress::mark_cleared`
+    /// — the player must re-run their solution once the server is back
+    /// to get a real, persisted clear.
+    from_server: bool,
 }
 
 #[derive(Resource)]
@@ -77,14 +84,31 @@ fn dispatch_pending_compile(mut state: ResMut<EditorState>, channel: Res<Compile
     let encounter_for_task = encounter_id.clone();
     IoTaskPool::get()
         .spawn(async move {
-            let (formatted, ok) = match send_compile(source, encounter_for_task.clone()).await {
-                Ok(resp) => (format_response(&resp), resp.ok),
-                Err(e) => (format!("[client error] {e}"), false),
+            let (formatted, ok, from_server) = match send_compile(
+                source.clone(),
+                encounter_for_task.clone(),
+            )
+            .await
+            {
+                Ok(resp) => (format_response(&resp), resp.ok, true),
+                Err(e) => {
+                    // Live API unreachable. Try the offline stub so a
+                    // demo machine without the server isn't dead-ended.
+                    tracing::warn!(
+                        "compile-api unreachable ({e}); attempting offline stub for encounter `{}`",
+                        encounter_for_task
+                    );
+                    match stub_verdict(&encounter_for_task, &source) {
+                        Some(v) => (format_stub(&v), v.ok, false),
+                        None => (format!("[client error] {e}"), false, false),
+                    }
+                }
             };
             let _ = sender.send(CompileOutcome {
                 encounter_id: encounter_for_task,
                 formatted,
                 ok,
+                from_server,
             });
         })
         .detach();
@@ -102,8 +126,16 @@ fn drain_results(
             outcome.ok,
             outcome.formatted
         );
-        if outcome.ok {
+        // ONLY persist clears that came from the live API. Stub-fallback
+        // passes are explicitly NOT cleared so the player re-runs against
+        // the real grader once the server is back.
+        if outcome.ok && outcome.from_server {
             progress.mark_cleared(&outcome.encounter_id);
+        } else if outcome.ok && !outcome.from_server {
+            tracing::info!(
+                "stub pass for `{}` — NOT marking cleared (server was unreachable)",
+                outcome.encounter_id
+            );
         }
         editor.last_compile_result = Some(outcome.formatted);
     }
@@ -131,6 +163,22 @@ fn format_response(r: &CompileResponse) -> String {
     if !r.stderr.is_empty() {
         out.push_str("\n--stderr--\n");
         out.push_str(&r.stderr);
+    }
+    out
+}
+
+/// Format a stub verdict for display. The leading `[offline mode]`
+/// banner is load-bearing: any caller persisting these strings can use
+/// it to detect "this was not a real server response."
+fn format_stub(v: &StubVerdict) -> String {
+    let tag = if v.ok { "ok" } else { "fail" };
+    let body = if v.ok { &v.stdout } else { &v.stderr };
+    let mut out = format!("[offline mode — server unreachable]\n[{tag}] {body}");
+    // Mirror the live-path stderr block when both are populated, even
+    // though the stub keeps them mutually exclusive today.
+    if v.ok && !v.stderr.is_empty() {
+        out.push_str("\n--stderr--\n");
+        out.push_str(&v.stderr);
     }
     out
 }
