@@ -125,6 +125,34 @@ fn main() { let k = Knight { name: String::from("g"), hp: 1 }; println!("{}", k.
 }
 
 #[tokio::test]
+async fn compile_passes_vec_iter() {
+    let addr = spawn_server().await;
+    let src =
+        "fn main() { let v = vec![1, 2, 3]; let s: i32 = v.iter().sum(); println!(\"{s}\"); }";
+    let (_, body) = post_compile(addr, "vec_iter", src).await;
+    assert!(body.ok);
+    assert!(body.stdout.contains("Cooper"));
+}
+
+#[tokio::test]
+async fn compile_passes_tuple_destructure() {
+    let addr = spawn_server().await;
+    let src = "fn main() { let (a, b) = (3, 4); println!(\"{a} {b}\"); }";
+    let (_, body) = post_compile(addr, "tuple_destructure", src).await;
+    assert!(body.ok);
+    assert!(body.stdout.contains("Twin"));
+}
+
+#[tokio::test]
+async fn compile_passes_while_loop() {
+    let addr = spawn_server().await;
+    let src = "fn main() { let mut n = 5; while n > 0 { n -= 1; } println!(\"{n}\"); }";
+    let (_, body) = post_compile(addr, "while_loop", src).await;
+    assert!(body.ok);
+    assert!(body.stdout.contains("Tinker"));
+}
+
+#[tokio::test]
 async fn compile_unknown_encounter_falls_through_to_freeform() {
     let addr = spawn_server().await;
     let (_, body) = post_compile(addr, "no_such_mission", "fn main() {}").await;

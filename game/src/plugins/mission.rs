@@ -214,6 +214,72 @@ The grader looks for `struct Knight`, `name:`, `hp:`, and `.name` in \
 the source.",
                     starter_code: "// define Knight here\n\nfn main() {\n    // build a Knight and print its name\n}\n",
                 },
+                Mission {
+                    id: "vec_iter",
+                    npc_name: "The Cooper",
+                    prompt: "Sum the elements of a `Vec<i32>` using `.iter().sum()`.",
+                    tutorial: "## Concept\n\
+A `Vec<T>` is the heap-allocated growable list — Rust's analogue of \
+Python `list` or JS `Array`. The standard way to walk it is to call \
+`.iter()` for an immutable borrow of each element, then chain an \
+adapter (`.map`, `.filter`) and a consumer (`.sum`, `.collect`, \
+`.count`). Iterators are zero-cost: the compiler usually fuses them \
+into the same machine code a hand-written loop would produce.\n\n\
+## Syntax\n\
+```\nlet v = vec![1, 2, 3];\nlet total: i32 = v.iter().sum();\n```\n\
+The type annotation on the binding (`: i32`) is what tells `sum` which \
+numeric type to add into. Without it the compiler can't pick.\n\n\
+## Task\n\
+Build a `Vec<i32>`, then sum it via `.iter().sum()` and print the total.\n\n\
+## Hint\n\
+The grader looks for `vec!`, `.iter()`, and `.sum`. The annotation on \
+the binding (or a turbofish on `sum`) is required for the code to \
+actually compile, but the grader only checks tokens.",
+                    starter_code: "fn main() {\n    // build a Vec<i32>, sum it via .iter().sum(), print the total\n    println!(\"todo\");\n}\n",
+                },
+                Mission {
+                    id: "tuple_destructure",
+                    npc_name: "The Twin",
+                    prompt: "Destructure a 2-tuple in a single `let` binding.",
+                    tutorial: "## Concept\n\
+Tuples bundle a fixed number of values of possibly-different types. \
+Pattern syntax in `let` lets you peel them apart in one statement, \
+giving each component its own name. This generalises to nested tuples, \
+references, and structs — the same syntax shape works everywhere a \
+pattern is allowed.\n\n\
+## Syntax\n\
+```\nlet (x, y) = (3, 4);\nlet (a, b, _) = (1, 2, 99);   // _ ignores\n```\n\
+The pattern on the left and the value on the right must have matching \
+shape, or the compiler refuses.\n\n\
+## Task\n\
+Bind the two halves of `(3, 4)` to `a` and `b` in one `let` and print \
+both.\n\n\
+## Hint\n\
+The grader requires `let (` (the pattern open), a `,` (separator), \
+and `) =` (pattern close + assign).",
+                    starter_code: "fn main() {\n    let _pair = (3, 4);\n    // destructure into a and b in a single let, then print both\n}\n",
+                },
+                Mission {
+                    id: "while_loop",
+                    npc_name: "The Tinker",
+                    prompt: "Use a `while` loop to count down from five to zero.",
+                    tutorial: "## Concept\n\
+`while` runs its body as long as a predicate stays true. It's the right \
+choice when the exit condition is simple and side-effect-driven; when \
+you're walking a collection prefer `for x in iter`, when you need to \
+return a value prefer `loop` with `break value`.\n\n\
+## Syntax\n\
+```\nlet mut n = 5;\nwhile n > 0 {\n    n -= 1;\n}\n```\n\
+Forgetting to mutate the predicate variable is the classic infinite-loop \
+bug — Rust won't save you from logic errors, only from memory unsafety.\n\n\
+## Task\n\
+Starting from `5`, count down to `0` using a `while` loop with a `-= 1` \
+decrement.\n\n\
+## Hint\n\
+The grader requires `while `, a `> 0` predicate, and `-= 1` for the \
+decrement step.",
+                    starter_code: "fn main() {\n    let mut _n = 5;\n    // count down with a while loop and a -= 1 step\n    println!(\"{_n}\");\n}\n",
+                },
             ],
         }
     }

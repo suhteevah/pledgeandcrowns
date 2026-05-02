@@ -107,6 +107,27 @@ pub const NPC_ROSTER: &[NpcSpec] = &[
         pos: (-32.0, -96.0),
         native_px: 32.0,
     },
+    NpcSpec {
+        name: "The Cooper",
+        mission_id: "vec_iter",
+        sprite_path: SPRITE_PLAYER, // placeholder
+        pos: (160.0, -32.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Twin",
+        mission_id: "tuple_destructure",
+        sprite_path: SPRITE_PLAYER, // placeholder
+        pos: (32.0, -64.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Tinker",
+        mission_id: "while_loop",
+        sprite_path: SPRITE_PLAYER, // placeholder
+        pos: (-160.0, 64.0),
+        native_px: 32.0,
+    },
 ];
 
 pub struct NpcSpec {

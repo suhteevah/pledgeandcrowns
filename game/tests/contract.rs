@@ -58,6 +58,26 @@ fn main() {
     let _ = k.name;
 }"#
         }
+        "vec_iter" => {
+            r#"fn main() {
+    let v = vec![1, 2, 3];
+    let s: i32 = v.iter().sum();
+    println!("{s}");
+}"#
+        }
+        "tuple_destructure" => {
+            r#"fn main() {
+    let (a, b) = (3, 4);
+    println!("{a} {b}");
+}"#
+        }
+        "while_loop" => {
+            r#"fn main() {
+    let mut n = 5;
+    while n > 0 { n -= 1; }
+    println!("{n}");
+}"#
+        }
         _ => return None,
     })
 }

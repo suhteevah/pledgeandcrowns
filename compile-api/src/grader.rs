@@ -105,6 +105,42 @@ pub fn grade(encounter_id: &str, source: &str) -> Verdict {
                 Verdict::pass("the Oracle exhales. \"both paths walked. nothing slips through.\"")
             }
         }
+        // ── Mission 9: iterate a Vec and reduce. Teaches `iter`, `sum`.
+        "vec_iter" => {
+            if !source.contains("vec!") {
+                Verdict::fail("the Cooper waits — missing required: `vec!`")
+            } else if !source.contains(".iter()") {
+                Verdict::fail("the Cooper waits — call `.iter()` on the vector")
+            } else if !source.contains(".sum") {
+                Verdict::fail("the Cooper waits — finish with `.sum()` to reduce")
+            } else {
+                Verdict::pass("the Cooper hoops the barrel. \"every stave counted, sum sealed.\"")
+            }
+        }
+        // ── Mission 10: destructure a tuple in a let binding.
+        "tuple_destructure" => {
+            if !source.contains("let (") {
+                Verdict::fail("the Twin waits — missing required: `let (`")
+            } else if !source.contains(",") {
+                Verdict::fail("the Twin waits — a tuple needs a comma between its parts")
+            } else if !source.contains(") =") && !source.contains(")=") {
+                Verdict::fail("the Twin waits — close the pattern with `) =`")
+            } else {
+                Verdict::pass("the Twin grins. \"two names, one breath. cleanly split.\"")
+            }
+        }
+        // ── Mission 11: `while` loop with a decrementing counter.
+        "while_loop" => {
+            if !source.contains("while ") {
+                Verdict::fail("the Tinker frowns — missing required: `while `")
+            } else if !source.contains("> 0") && !source.contains(">0") {
+                Verdict::fail("the Tinker frowns — the predicate should test `> 0`")
+            } else if !source.contains("-= 1") && !source.contains("-=1") {
+                Verdict::fail("the Tinker frowns — decrement with `-= 1` each iteration")
+            } else {
+                Verdict::pass("the Tinker pockets the spring. \"counted down, gear by gear.\"")
+            }
+        }
         // ── Mission 8: define a struct with named fields and read one.
         "struct_basic" => {
             if !source.contains("struct Knight") {
@@ -279,6 +315,18 @@ mod tests {
         let struct_solution = "struct Knight { name: String, hp: i32 } fn main() { let k = Knight { name: String::new(), hp: 0 }; let _ = k.name; }";
         assert!(!grade("loop_break", struct_solution).ok);
         assert!(!grade("match_option", struct_solution).ok);
+
+        let vec_solution = "fn main() { let v = vec![1,2]; let _: i32 = v.iter().sum(); }";
+        assert!(!grade("tuple_destructure", vec_solution).ok);
+        assert!(!grade("while_loop", vec_solution).ok);
+
+        let tuple_solution = "fn main() { let (a, b) = (1, 2); let _ = (a, b); }";
+        assert!(!grade("vec_iter", tuple_solution).ok);
+        assert!(!grade("while_loop", tuple_solution).ok);
+
+        let while_solution = "fn main() { let mut n = 3; while n > 0 { n -= 1; } let _ = n; }";
+        assert!(!grade("vec_iter", while_solution).ok);
+        assert!(!grade("tuple_destructure", while_solution).ok);
     }
 
     // ── mut_binding ────────────────────────────────────────────────
@@ -440,5 +488,98 @@ fn main() {
         let v = grade("struct_basic", src);
         assert!(!v.ok);
         assert!(v.stderr.contains(".name"));
+    }
+
+    // ── vec_iter ──────────────────────────────────────────────────
+
+    #[test]
+    fn vec_iter_pass_canonical() {
+        let src =
+            "fn main() { let v = vec![1, 2, 3]; let s: i32 = v.iter().sum(); println!(\"{s}\"); }";
+        assert!(grade("vec_iter", src).ok);
+    }
+
+    #[test]
+    fn vec_iter_fail_no_vec_macro() {
+        let src = "fn main() { let v = [1, 2, 3]; let _: i32 = v.iter().sum(); }";
+        let v = grade("vec_iter", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains("vec!"));
+    }
+
+    #[test]
+    fn vec_iter_fail_no_iter() {
+        let src = "fn main() { let v = vec![1, 2, 3]; let _ = v.len(); }";
+        let v = grade("vec_iter", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains(".iter()"));
+    }
+
+    #[test]
+    fn vec_iter_fail_no_sum() {
+        let src = "fn main() { let v = vec![1, 2, 3]; let _ = v.iter().count(); }";
+        let v = grade("vec_iter", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains(".sum"));
+    }
+
+    // ── tuple_destructure ────────────────────────────────────────
+
+    #[test]
+    fn tuple_destructure_pass_canonical() {
+        let src = "fn main() { let (a, b) = (3, 4); println!(\"{a} {b}\"); }";
+        assert!(grade("tuple_destructure", src).ok);
+    }
+
+    #[test]
+    fn tuple_destructure_pass_no_space_in_assign() {
+        let src = "fn main() { let (a, b)=(3, 4); let _ = (a, b); }";
+        assert!(grade("tuple_destructure", src).ok);
+    }
+
+    #[test]
+    fn tuple_destructure_fail_single_binding() {
+        let src = "fn main() { let pair = (3, 4); }";
+        let v = grade("tuple_destructure", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains("let ("));
+    }
+
+    #[test]
+    fn tuple_destructure_fail_no_comma() {
+        let src = "fn main() { let (a) = (3); let _ = a; }";
+        let v = grade("tuple_destructure", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains("comma"));
+    }
+
+    // ── while_loop ────────────────────────────────────────────────
+
+    #[test]
+    fn while_loop_pass_canonical() {
+        let src = "fn main() { let mut n = 5; while n > 0 { n -= 1; } println!(\"{n}\"); }";
+        assert!(grade("while_loop", src).ok);
+    }
+
+    #[test]
+    fn while_loop_pass_no_spaces() {
+        let src = "fn main() { let mut n = 5; while n>0 { n -=1; } }";
+        assert!(grade("while_loop", src).ok);
+    }
+
+    #[test]
+    fn while_loop_fail_no_while() {
+        let src = "fn main() { let mut n = 5; loop { if n > 0 { n -= 1; } else { break; } } }";
+        let v = grade("while_loop", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains("while "));
+    }
+
+    #[test]
+    fn while_loop_fail_no_decrement() {
+        let src = "fn main() { let mut n = 5; while n > 0 { n += 1; } }";
+        let v = grade("while_loop", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains("-= 1"));
     }
 }
