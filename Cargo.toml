@@ -12,7 +12,7 @@ rust-version = "1.85"
 authors = ["Matt Gates <mmichels88@gmail.com>"]
 # Dual-licensed: game crate is MIT, compile-api crate is AGPL-3.0-or-later.
 # Per-crate `license` fields override; do not set a workspace-level license.
-repository = "https://github.com/pledgeandcrown/pledge-and-crown"
+repository = "https://github.com/pledgeandcrown/pledgeandcrown"
 
 [workspace.dependencies]
 # Game engine. Pinned to current stable as of 2026-03-04.

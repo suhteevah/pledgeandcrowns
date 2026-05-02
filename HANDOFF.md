@@ -144,7 +144,7 @@ Prioritized for the incoming session:
 ## Action items for Matt (require Matt-only access)
 
 - **Register `pledgeandcrown.dev` and `pledgeandcrown.com`** at Cloudflare (~$22/yr total). Both confirmed available via RDAP 2026-05-01.
-- ~~**Create GitHub org / repo**~~ — done 2026-05-01. Repo at `https://github.com/suhteevah/pledgeandcrowns`. *Confirm whether to also create the `pledgeandcrown` org and transfer, or stay in personal namespace.*
+- ~~**Create GitHub org / repo / transfer**~~ — done 2026-05-02. Repo at `https://github.com/pledgeandcrown/pledgeandcrown` (transferred from personal namespace + renamed). Local `origin` re-pointed to the org URL. Note: org policy forbids fine-grained PATs with lifetime > 366 days from accessing org resources, so `gh api orgs/pledgeandcrown/...` returns 403 unless the token is reissued with a shorter lifetime.
 - **File 1(b) intent-to-use trademark** for "Pledge & Crown" in IC 009 + IC 041 via USPTO TEAS (~$700, 2× $350). Optional but recommended now that TESS is GREEN.
 - ~~**Generate the 10 reference art images**~~ — done 2026-05-01. Delivered as JSX/ASCII-grid bundle in `design/art/`. Bulk asset gen is now unblocked.
 
