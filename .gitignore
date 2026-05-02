@@ -71,3 +71,6 @@ lpt6
 lpt7
 lpt8
 lpt9
+
+# Scratch commit message files used to dodge PS heredoc quoting
+.git-commit-msg.txt
