@@ -31,6 +31,36 @@ fn every_mission_has_nonempty_metadata() {
             "mission {} has empty starter_code",
             m.id
         );
+        assert!(
+            !m.tutorial.trim().is_empty(),
+            "mission {} has empty tutorial — players need to actually be taught",
+            m.id
+        );
+        assert!(
+            m.tutorial.contains("## "),
+            "mission {} tutorial has no `## Section` headers — please structure it",
+            m.id
+        );
+    }
+}
+
+#[test]
+fn every_tutorial_meets_minimum_substance() {
+    let reg = MissionRegistry::default();
+    for m in &reg.missions {
+        // 200 chars is roughly 30-40 words — cut-off below "explains anything".
+        assert!(
+            m.tutorial.len() >= 200,
+            "mission {} tutorial is only {} chars; tutorials should be 100-200 words to actually teach",
+            m.id,
+            m.tutorial.len()
+        );
+        // Sanity: must show at least one fenced code example.
+        assert!(
+            m.tutorial.contains("```"),
+            "mission {} tutorial has no code-fenced syntax example",
+            m.id
+        );
     }
 }
 

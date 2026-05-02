@@ -55,6 +55,28 @@ pub fn grade(encounter_id: &str, source: &str) -> Verdict {
             Ok(()) => Verdict::pass("the Borrow Checker stirs. \"...acceptable. for now.\""),
             Err(e) => Verdict::fail(format!("the Borrow Checker is silent — {e}")),
         },
+        // ── Mission 4: declare a mutable binding and increment it.
+        "mut_binding" => {
+            if !source.contains("let mut") {
+                Verdict::fail("the Smith eyes you — missing required: `let mut`")
+            } else if !source.contains("+= 1") && !source.contains("+=1") {
+                Verdict::fail("the Smith eyes you — missing required: `+= 1`")
+            } else {
+                Verdict::pass("the Smith taps the anvil. \"good — that one bends.\"")
+            }
+        }
+        // ── Mission 5: branch on i32 sign with if/else.
+        "if_else_sign" => {
+            if !source.contains("if ") {
+                Verdict::fail("the Cartographer frowns — missing required: `if `")
+            } else if !source.contains("else") {
+                Verdict::fail("the Cartographer frowns — missing required: `else`")
+            } else if !source.contains("< 0") && !source.contains("<0") {
+                Verdict::fail("the Cartographer frowns — missing required: `< 0`")
+            } else {
+                Verdict::pass("the Cartographer nods. \"three roads diverge — well chosen.\"")
+            }
+        }
         _ => Verdict::pass(format!(
             "[freeform] received {} bytes. encounter `{encounter_id}` has no grader yet.",
             source.len()
@@ -192,7 +214,6 @@ mod tests {
     #[test]
     fn solutions_are_not_cross_compatible() {
         let intro_solution = "fn main() { let answer = 42; }";
-        // Solving intro should not pass double_function or borrow_preview.
         assert!(!grade("double_function", intro_solution).ok);
         assert!(!grade("borrow_preview", intro_solution).ok);
 
@@ -203,5 +224,55 @@ mod tests {
         let borrow_solution = r#"fn main() { let value = 1; let r = &value; println!("{r}"); }"#;
         assert!(!grade("intro_let_binding", borrow_solution).ok);
         assert!(!grade("double_function", borrow_solution).ok);
+    }
+
+    // ── mut_binding ────────────────────────────────────────────────
+
+    #[test]
+    fn mut_pass_canonical() {
+        let src = "fn main() { let mut x = 0; x += 1; }";
+        assert!(grade("mut_binding", src).ok);
+    }
+
+    #[test]
+    fn mut_pass_no_space() {
+        let src = "fn main() { let mut x = 0; x +=1; }";
+        assert!(grade("mut_binding", src).ok);
+    }
+
+    #[test]
+    fn mut_fail_no_mut_keyword() {
+        let src = "fn main() { let x = 0; let y = x + 1; }";
+        assert!(!grade("mut_binding", src).ok);
+    }
+
+    #[test]
+    fn mut_fail_no_increment() {
+        let src = "fn main() { let mut x = 0; }";
+        let v = grade("mut_binding", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains("+= 1"));
+    }
+
+    // ── if_else_sign ──────────────────────────────────────────────
+
+    #[test]
+    fn if_else_pass_canonical() {
+        let src = r#"fn sign(n: i32) -> &'static str { if n < 0 { "neg" } else if n == 0 { "zero" } else { "pos" } }"#;
+        assert!(grade("if_else_sign", src).ok);
+    }
+
+    #[test]
+    fn if_else_fail_no_branch() {
+        let src = "fn sign(_: i32) -> &'static str { \"pos\" }";
+        assert!(!grade("if_else_sign", src).ok);
+    }
+
+    #[test]
+    fn if_else_fail_no_negative_check() {
+        let src = "fn main() { if true { } else { } }";
+        let v = grade("if_else_sign", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains("< 0"));
     }
 }

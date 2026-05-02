@@ -8,6 +8,7 @@
 //! Wineflesh, type Main teal, string Forest, comment Stone grey, number
 //! Old gold, error Alarm scarlet, cursor Abyssal.
 
+use crate::plugins::mission::ActiveMission;
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass, egui};
 
@@ -64,7 +65,11 @@ fn toggle_editor(keys: Res<ButtonInput<KeyCode>>, mut state: ResMut<EditorState>
     }
 }
 
-fn draw_editor(mut contexts: EguiContexts, mut state: ResMut<EditorState>) {
+fn draw_editor(
+    mut contexts: EguiContexts,
+    mut state: ResMut<EditorState>,
+    active: Res<ActiveMission>,
+) {
     if !state.open {
         return;
     }
@@ -73,45 +78,105 @@ fn draw_editor(mut contexts: EguiContexts, mut state: ResMut<EditorState>) {
     };
 
     egui::Window::new("Code Editor")
-        .default_width(640.0)
-        .default_height(420.0)
+        .default_width(960.0)
+        .default_height(540.0)
         .show(ctx, |ui| {
             ui.label("press E to close, Compile to evaluate");
+            ui.separator();
 
-            // Syntax-highlight layouter. egui 0.33's `Ui::fonts` closure
-            // gives `&Fonts` but `Fonts::layout_job` takes `&mut self` in
-            // this release — so we route through `Ctx::fonts_mut` instead
-            // (https://docs.rs/egui/0.33/egui/struct.Context.html#method.fonts_mut).
-            let style = ui.style().clone();
-            let ctx = ui.ctx().clone();
-            let mut layouter =
-                move |_ui: &egui::Ui, text: &dyn egui::TextBuffer, wrap_width: f32| {
-                    let mut job = highlight_rust(text.as_str(), &style);
-                    job.wrap.max_width = wrap_width;
-                    ctx.fonts_mut(|f| f.layout_job(job))
-                };
+            egui::SidePanel::left("tutorial_panel")
+                .resizable(true)
+                .default_width(360.0)
+                .show_inside(ui, |ui| {
+                    if let Some(mission) = active.current.as_ref() {
+                        ui.heading(mission.npc_name);
+                        ui.label(mission.prompt);
+                        ui.separator();
+                        egui::ScrollArea::vertical()
+                            .auto_shrink([false; 2])
+                            .show(ui, |ui| draw_tutorial(ui, mission.tutorial));
+                    } else {
+                        ui.heading("Freeform sandbox");
+                        ui.label(
+                            "Walk up to an NPC and press F to load a mission. \
+                             Anything you submit here goes through the freeform \
+                             grader, which only echoes byte counts.",
+                        );
+                    }
+                });
 
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                ui.add(
-                    egui::TextEdit::multiline(&mut state.source)
-                        .font(egui::TextStyle::Monospace)
-                        .code_editor()
-                        .desired_rows(20)
-                        .desired_width(f32::INFINITY)
-                        .layouter(&mut layouter),
-                );
-            });
+            egui::CentralPanel::default().show_inside(ui, |ui| {
+                let style = ui.style().clone();
+                let ctx_clone = ui.ctx().clone();
+                let mut layouter =
+                    move |_ui: &egui::Ui, text: &dyn egui::TextBuffer, wrap_width: f32| {
+                        let mut job = highlight_rust(text.as_str(), &style);
+                        job.wrap.max_width = wrap_width;
+                        ctx_clone.fonts_mut(|f| f.layout_job(job))
+                    };
 
-            ui.horizontal(|ui| {
-                if ui.button("Compile").clicked() {
-                    tracing::info!("compile clicked ({} source bytes)", state.source.len());
-                    state.compile_pending = true;
-                }
-                if let Some(msg) = &state.last_compile_result {
-                    ui.label(msg);
-                }
+                egui::ScrollArea::vertical()
+                    .id_salt("source_scroll")
+                    .show(ui, |ui| {
+                        ui.add(
+                            egui::TextEdit::multiline(&mut state.source)
+                                .font(egui::TextStyle::Monospace)
+                                .code_editor()
+                                .desired_rows(18)
+                                .desired_width(f32::INFINITY)
+                                .layouter(&mut layouter),
+                        );
+                    });
+
+                ui.separator();
+                ui.horizontal(|ui| {
+                    if ui.button("Compile").clicked() {
+                        tracing::info!("compile clicked ({} source bytes)", state.source.len());
+                        state.compile_pending = true;
+                    }
+                    if let Some(msg) = &state.last_compile_result {
+                        ui.label(msg);
+                    }
+                });
             });
         });
+}
+
+/// Lightweight tutorial renderer. Recognises `## Heading` lines and
+/// triple-backtick code fences; everything else is wrapped body text.
+fn draw_tutorial(ui: &mut egui::Ui, body: &str) {
+    let mut in_code = false;
+    let mut code_buf = String::new();
+    for line in body.split('\n') {
+        if line.trim() == "```" {
+            if in_code {
+                ui.add(
+                    egui::TextEdit::multiline(&mut code_buf.clone())
+                        .font(egui::TextStyle::Monospace)
+                        .desired_width(f32::INFINITY)
+                        .interactive(false),
+                );
+                code_buf.clear();
+                in_code = false;
+            } else {
+                in_code = true;
+            }
+            continue;
+        }
+        if in_code {
+            if !code_buf.is_empty() {
+                code_buf.push('\n');
+            }
+            code_buf.push_str(line);
+        } else if let Some(rest) = line.strip_prefix("## ") {
+            ui.add_space(6.0);
+            ui.heading(rest);
+        } else if line.is_empty() {
+            ui.add_space(4.0);
+        } else {
+            ui.label(line);
+        }
+    }
 }
 
 // === Hand-rolled Rust syntax highlighter ============================

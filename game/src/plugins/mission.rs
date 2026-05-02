@@ -19,7 +19,13 @@ use bevy_egui::{EguiContexts, EguiPrimaryContextPass, egui};
 pub struct Mission {
     pub id: &'static str,
     pub npc_name: &'static str,
+    /// One-sentence brief shown above the NPC's interaction prompt.
     pub prompt: &'static str,
+    /// Multi-section tutorial shown in the editor side panel once the
+    /// mission is active. Plain text with `## Section` headers; the
+    /// renderer styles them. Keep each mission ~100-200 words — the
+    /// audience is dev-curious adults, not absolute beginners.
+    pub tutorial: &'static str,
     pub starter_code: &'static str,
 }
 
@@ -40,20 +46,109 @@ impl Default for MissionRegistry {
                 Mission {
                     id: "intro_let_binding",
                     npc_name: "Ferris",
-                    prompt: "Greetings! Bind the integer forty-two to a variable named answer.",
+                    prompt: "Bind the integer forty-two to a variable named `answer`.",
+                    tutorial: "## Concept\n\
+Rust is statically typed: every value has a type known at compile time. \
+You give a value a name with `let`. Bindings are immutable by default — \
+once a name points at a value, that name can't be reassigned. This is \
+the opposite of Python or JS, where `x = 1` and later `x = 2` is normal.\n\n\
+## Syntax\n\
+```\nlet name = value;\nlet name: Type = value;  // explicit type\n```\n\
+The type annotation is usually optional; the compiler infers from the \
+value. `42` is an `i32` by default.\n\n\
+## Task\n\
+Replace the placeholder `_todo` binding with a binding named `answer` \
+holding the value `42`. Update the `println!` accordingly.\n\n\
+## Hint\n\
+The grader is looking for a `let answer` binding and the literal `42`. \
+A type annotation is allowed but not required.",
                     starter_code: "fn main() {\n    let _todo = 0;\n    println!(\"{_todo}\");\n}\n",
                 },
                 Mission {
                     id: "double_function",
                     npc_name: "Trait Mage",
-                    prompt: "Define a function `double` that returns its `i32` argument multiplied by two.",
+                    prompt: "Define `double(n: i32) -> i32` that returns `n` multiplied by two.",
+                    tutorial: "## Concept\n\
+Functions in Rust are declared with `fn`. Parameters carry an explicit \
+type — there is no implicit casting between numeric types. The return \
+type follows `->`. The last expression in the body is the return value \
+when there's no trailing semicolon (Rust calls this an *implicit return*).\n\n\
+## Syntax\n\
+```\nfn add(a: i32, b: i32) -> i32 {\n    a + b   // no semicolon = return value\n}\n```\n\
+Adding a semicolon after `a + b` would turn it into a statement and \
+return `()` (the unit type), which would not match the declared `i32` return.\n\n\
+## Task\n\
+Define a function `double` that takes a single `i32` and returns it \
+multiplied by two. Then call it from `main` with `21` and print the \
+result.\n\n\
+## Hint\n\
+The grader needs to see `fn double`, the type `i32`, and the expression \
+`* 2`. `n * 2` is the canonical body.",
                     starter_code: "fn _todo() {}\n\nfn main() {\n    // call your function with 21 and print the result\n}\n",
                 },
                 Mission {
                     id: "borrow_preview",
                     npc_name: "The Borrow Checker",
-                    prompt: "You are not yet ready. But try: take an immutable reference to a binding named `value` and pass it to a print macro.",
+                    prompt: "Take an immutable reference to `value` and pass it to a print macro.",
+                    tutorial: "## Concept\n\
+Ownership is Rust's defining feature. Each value has exactly one owner; \
+when the owner goes out of scope, the value is dropped. To use a value \
+without taking ownership, you *borrow* it via a reference: `&value` \
+(immutable) or `&mut value` (exclusive, mutable). The Borrow Checker \
+enforces the rules at compile time — no runtime cost.\n\n\
+## Syntax\n\
+```\nlet s = String::from(\"hi\");\nlet r = &s;          // borrow\nprintln!(\"{r}\");    // r is still valid; s still owns the data\n```\n\
+The macros `println!` and `format!` accept references directly via the \
+`{name}` capture syntax.\n\n\
+## Task\n\
+Bind `value` (already provided), then create an immutable reference to \
+it and print the reference. Do not move the value — just borrow it.\n\n\
+## Hint\n\
+The grader looks for `&value` and `println!`. The simplest answer is \
+`let r = &value; println!(\"{r}\");`",
                     starter_code: "fn main() {\n    let value = String::from(\"sample\");\n    // build a reference to the binding above and print it\n}\n",
+                },
+                Mission {
+                    id: "mut_binding",
+                    npc_name: "The Smith",
+                    prompt: "Declare a mutable variable, then increment it by one.",
+                    tutorial: "## Concept\n\
+`let` bindings are immutable by default — that's a deliberate Rust \
+choice that catches a class of bugs. To allow reassignment, opt in with \
+`let mut`. The `mut` keyword makes mutability visible at the binding \
+site, so a reader can tell what changes and what doesn't just by \
+scanning the code.\n\n\
+## Syntax\n\
+```\nlet mut counter = 0;\ncounter += 1;       // compound assignment\ncounter = counter + 1;  // also fine\n```\n\
+Compound-assignment operators (`+=`, `-=`, `*=`, `/=`) work the same \
+way as in C/Python.\n\n\
+## Task\n\
+Make `x` mutable, then increment it by one using the compound-assignment \
+operator.\n\n\
+## Hint\n\
+The grader requires both `let mut` and `+= 1` to appear in the source.",
+                    starter_code: "fn main() {\n    let x = 0;\n    // make x mutable, then add one\n    println!(\"{x}\");\n}\n",
+                },
+                Mission {
+                    id: "if_else_sign",
+                    npc_name: "The Cartographer",
+                    prompt: "Branch on the sign of an `i32` — negative, zero, positive.",
+                    tutorial: "## Concept\n\
+`if` in Rust is an *expression*, not just a statement — it produces a \
+value, so you can put it on the right-hand side of `let` or use it as \
+the last expression in a function. Each branch must produce the same \
+type. `else if` chains let you cover several cases.\n\n\
+## Syntax\n\
+```\nlet label = if n < 0 {\n    \"negative\"\n} else if n == 0 {\n    \"zero\"\n} else {\n    \"positive\"\n};\n```\n\
+Note: no parentheses around the condition. That's a Rust convention — \
+the braces around the bodies do the visual grouping.\n\n\
+## Task\n\
+Implement `sign(n: i32) -> &'static str` so it returns `\"neg\"`, \
+`\"zero\"`, or `\"pos\"` depending on the sign of `n`.\n\n\
+## Hint\n\
+The grader requires `if `, `else`, and a literal comparison `< 0` to \
+appear. The canonical body is a three-arm `if` / `else if` / `else`.",
+                    starter_code: "fn sign(_n: i32) -> &'static str {\n    // three branches, one per sign\n    \"replace me\"\n}\n\nfn main() {\n    println!(\"{}\", sign(-3));\n}\n",
                 },
             ],
         }

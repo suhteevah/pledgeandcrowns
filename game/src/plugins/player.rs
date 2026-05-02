@@ -52,8 +52,15 @@ fn camera_follow_player(
     let current = cam.translation.truncate();
     let alpha = (CAMERA_FOLLOW_SPEED * time.delta_secs()).clamp(0.0, 1.0);
     let next = current.lerp(target, alpha);
-    cam.translation.x = next.x;
-    cam.translation.y = next.y;
+
+    // Camera shows 320x180 world units (FixedVertical 180 in a 16:9
+    // window). Clamp the camera centre so the void beyond the tilemap
+    // never enters the viewport. Half-extents of viewport: 160x90.
+    let view_half = Vec2::new(160.0, 90.0);
+    let max = Vec2::new(WORLD_HALF_W - view_half.x, WORLD_HALF_H - view_half.y);
+    let min = -max;
+    cam.translation.x = next.x.clamp(min.x.min(0.0), max.x.max(0.0));
+    cam.translation.y = next.y.clamp(min.y.min(0.0), max.y.max(0.0));
 }
 
 fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {

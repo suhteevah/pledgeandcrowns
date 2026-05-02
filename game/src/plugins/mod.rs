@@ -3,6 +3,7 @@
 //! tests can mount them in isolation. See `design/05-tech-architecture.md`
 //! section 4 for the planned layout.
 
+use bevy::camera::ScalingMode;
 use bevy::prelude::*;
 
 pub mod compile_client;
@@ -38,6 +39,10 @@ impl Plugin for CorePlugin {
 }
 
 fn setup_camera(mut commands: Commands) {
-    tracing::info!("spawning 2d camera");
-    commands.spawn(Camera2d);
+    tracing::info!("spawning 2d camera (fixed vertical projection, 180 world units tall)");
+    let mut proj = OrthographicProjection::default_2d();
+    proj.scaling_mode = ScalingMode::FixedVertical {
+        viewport_height: 180.0,
+    };
+    commands.spawn((Camera2d, Projection::Orthographic(proj)));
 }

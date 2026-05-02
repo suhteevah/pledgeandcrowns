@@ -44,8 +44,8 @@ fn mission_plugin_publishes_three_missions() {
     let registry = app.world().resource::<MissionRegistry>();
     assert_eq!(
         registry.missions.len(),
-        3,
-        "MissionRegistry should ship with the 3 day-8 MVP missions"
+        5,
+        "MissionRegistry should ship with the 5 missions wired so far"
     );
     let active = app.world().resource::<ActiveMission>();
     assert!(

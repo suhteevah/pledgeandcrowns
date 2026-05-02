@@ -72,6 +72,20 @@ pub const NPC_ROSTER: &[NpcSpec] = &[
         pos: (96.0, -64.0),
         native_px: 64.0,
     },
+    NpcSpec {
+        name: "The Smith",
+        mission_id: "mut_binding",
+        sprite_path: SPRITE_PLAYER, // placeholder until Smith art lands
+        pos: (-96.0, -32.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Cartographer",
+        mission_id: "if_else_sign",
+        sprite_path: SPRITE_PLAYER, // placeholder
+        pos: (0.0, 96.0),
+        native_px: 32.0,
+    },
 ];
 
 pub struct NpcSpec {

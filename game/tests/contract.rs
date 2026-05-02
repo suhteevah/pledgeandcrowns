@@ -28,6 +28,12 @@ fn canonical_solution(encounter_id: &str) -> Option<&'static str> {
     println!("{r}");
 }"#
         }
+        "mut_binding" => "fn main() { let mut x = 0; x += 1; }",
+        "if_else_sign" => {
+            r#"fn sign(n: i32) -> &'static str {
+    if n < 0 { "neg" } else if n == 0 { "zero" } else { "pos" }
+}"#
+        }
         _ => return None,
     })
 }
