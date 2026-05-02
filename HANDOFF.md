@@ -1,10 +1,25 @@
 # HANDOFF.md
 
 ## Last Updated
-2026-05-01 (handoff — all 4 open design decisions locked; SPDX headers + LICENSE files committed; only Matt-only action items remain)
+2026-05-01 (handoff — 10 reference art images shipped as JSX/ASCII grid in `design/art/`; remote wired to GitHub)
 
 ## Project Status
 🟡 In progress — design package complete, Bevy 0.18 workspace scaffolded and compiling green through full local CI (fmt/check/clippy/test), palette redesigned around a defensible color-theory structure ("Heraldic Code"). No art assets yet. Working title locked as **Pledge & Crown**.
+
+## What Was Done This Session (2026-05-01 evening)
+
+- **10 reference images delivered** by Matt as a Claude-Project bundle, extracted into `design/art/`. Format is unconventional but excellent: each REF is an ASCII pixel grid (e.g. `'........XXXXXX................'`) with single-char palette codes (X=Coalblack outline, P=Pink quartz, etc.), wrapped in a renderable `.jsx` component. Palette compliance is mathematically guaranteed because every char must resolve through `palette.js`. Files:
+  - `refs/ref-01-player.jsx` … `refs/ref-10-title.jsx` (10 references, REF-09 has v1 + v2; v2 is canonical)
+  - `palette.js` (32-color Heraldic Code v2.0 with role names)
+  - `pixel-art.jsx` + `design-canvas.jsx` + `refs/artboard-frame.jsx` + `refs/palette-legend.jsx` (rendering scaffold)
+  - `Pledge & Crown - Reference Set.html` (in-browser preview using Babel-standalone)
+  - `uploads/` (frozen copies of bible + handoff prompts that the Project was given as context)
+- **Bible v2.0 reference-image-set milestone is COMPLETE.** Bulk asset gen is unblocked.
+- **GitHub remote wired.** `origin = https://github.com/suhteevah/pledgeandcrowns.git`. *Note: this is Matt's personal namespace, not the planned `pledgeandcrown` org. Worth confirming whether the org was created and if the repo should be transferred, or if personal-namespace is the chosen path. Not a blocker.*
+
+## Known gaps from this delivery
+
+- **No PNG exports.** The `04b-art-deliverables.md` contractor spec requires PNG-32 single-frame. The JSX grids are the source-of-truth, but a JSX→PNG renderer is needed before a contractor can take hand-off. Plan: small Node/Rust script that walks `refs/`, extracts the GRID const + palette code legend per file, writes one PNG per ref. Defer until first contractor hire is imminent.
 
 ## What Was Done This Session (2026-05-01)
 
@@ -122,9 +137,9 @@ Prioritized for the incoming session:
 ## Action items for Matt (require Matt-only access)
 
 - **Register `pledgeandcrown.dev` and `pledgeandcrown.com`** at Cloudflare (~$22/yr total). Both confirmed available via RDAP 2026-05-01.
-- **Create GitHub org `pledgeandcrown`** at https://github.com/organizations/new (name confirmed available 2026-05-01). Then add the local repo as origin and push `main`.
+- ~~**Create GitHub org / repo**~~ — done 2026-05-01. Repo at `https://github.com/suhteevah/pledgeandcrowns`. *Confirm whether to also create the `pledgeandcrown` org and transfer, or stay in personal namespace.*
 - **File 1(b) intent-to-use trademark** for "Pledge & Crown" in IC 009 + IC 041 via USPTO TEAS (~$700, 2× $350). Optional but recommended now that TESS is GREEN.
-- **Generate the 10 reference art images** per `design/04-art-handoff-prompts.md` §"Reference Image Set". Approval gates all bulk asset gen.
+- ~~**Generate the 10 reference art images**~~ — done 2026-05-01. Delivered as JSX/ASCII-grid bundle in `design/art/`. Bulk asset gen is now unblocked.
 
 ## Known risks
 
