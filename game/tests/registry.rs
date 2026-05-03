@@ -98,3 +98,90 @@ fn npc_names_are_unique() {
         assert!(seen.insert(npc.name), "duplicate NPC name: {}", npc.name);
     }
 }
+
+#[test]
+fn first_mission_has_no_prereq() {
+    let reg = MissionRegistry::default();
+    let first = reg.missions.first().expect("registry must have missions");
+    assert!(
+        first.prereq.is_none(),
+        "first mission `{}` must have no prereq — players need a starting point",
+        first.id
+    );
+}
+
+#[test]
+fn every_prereq_resolves_to_a_real_mission() {
+    let reg = MissionRegistry::default();
+    let known: HashSet<&str> = reg.missions.iter().map(|m| m.id).collect();
+    for m in &reg.missions {
+        if let Some(prev) = m.prereq {
+            assert!(
+                known.contains(prev),
+                "mission `{}` prereq `{}` is not a known mission id",
+                m.id,
+                prev
+            );
+        }
+    }
+}
+
+#[test]
+fn prereq_chain_is_acyclic() {
+    let reg = MissionRegistry::default();
+    // Walk each mission's prereq chain. If we ever revisit an id within
+    // a single chain, there's a cycle. Bound by registry size as a hard
+    // safety belt in case the visited-set logic is wrong.
+    let by_id: std::collections::HashMap<&str, &str> = reg
+        .missions
+        .iter()
+        .filter_map(|m| m.prereq.map(|p| (m.id, p)))
+        .collect();
+    for m in &reg.missions {
+        let mut visited = HashSet::new();
+        let mut cur = m.id;
+        for _ in 0..reg.missions.len() + 1 {
+            if !visited.insert(cur) {
+                panic!("prereq cycle detected starting from mission `{}`", m.id);
+            }
+            match by_id.get(cur) {
+                Some(prev) => cur = prev,
+                None => break,
+            }
+        }
+    }
+}
+
+#[test]
+fn every_mission_is_reachable_from_a_root() {
+    // BFS from no-prereq missions; every mission should be hit.
+    let reg = MissionRegistry::default();
+    let mut reachable: HashSet<&str> = reg
+        .missions
+        .iter()
+        .filter(|m| m.prereq.is_none())
+        .map(|m| m.id)
+        .collect();
+    // Iterate until fixed point. With strict-linear prereqs this is
+    // O(n²) worst-case, fine for ≤100 missions.
+    loop {
+        let before = reachable.len();
+        for m in &reg.missions {
+            if let Some(prev) = m.prereq
+                && reachable.contains(prev)
+            {
+                reachable.insert(m.id);
+            }
+        }
+        if reachable.len() == before {
+            break;
+        }
+    }
+    for m in &reg.missions {
+        assert!(
+            reachable.contains(m.id),
+            "mission `{}` is unreachable from any root — orphaned prereq chain",
+            m.id
+        );
+    }
+}

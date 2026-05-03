@@ -26,7 +26,24 @@ pub struct Mission {
     /// renderer styles them. Keep each mission ~100-200 words — the
     /// audience is dev-curious adults, not absolute beginners.
     pub tutorial: &'static str,
+    /// Mission id that must be cleared before this one is unlocked. The
+    /// first mission has `None`. Set linearly in `MissionRegistry::default`
+    /// — registry tests enforce no cycles, no dangling references, full
+    /// reachability from a no-prereq root.
+    pub prereq: Option<&'static str>,
     pub starter_code: &'static str,
+}
+
+impl Mission {
+    /// True when the player can start this mission. Cleared missions are
+    /// always considered unlocked (so the completion-view revisit flow
+    /// works regardless of progression rules).
+    pub fn is_unlocked(&self, progress: &MissionProgress) -> bool {
+        match self.prereq {
+            None => true,
+            Some(prev) => progress.is_cleared(prev),
+        }
+    }
 }
 
 #[derive(Resource)]
@@ -34,20 +51,31 @@ pub struct MissionRegistry {
     pub missions: Vec<Mission>,
 }
 
+impl MissionRegistry {
+    /// First not-yet-cleared mission in registry order. Drives the "next
+    /// mission" hint in the HUD so players know where to head.
+    pub fn next_locked(&self, progress: &MissionProgress) -> Option<&Mission> {
+        self.missions.iter().find(|m| !progress.is_cleared(m.id))
+    }
+
+    pub fn find(&self, id: &str) -> Option<&Mission> {
+        self.missions.iter().find(|m| m.id == id)
+    }
+}
+
 impl Default for MissionRegistry {
     fn default() -> Self {
-        Self {
-            missions: vec![
-                // Starters are deliberately neutral templates — they
-                // must NOT contain the grader's required tokens, or
-                // the player could submit them unchanged and pass.
-                // The contract suite (game/tests/contract.rs) enforces
-                // this invariant.
-                Mission {
-                    id: "intro_let_binding",
-                    npc_name: "Ferris",
-                    prompt: "Bind the integer forty-two to a variable named `answer`.",
-                    tutorial: "## Concept\n\
+        let mut missions = vec![
+            // Starters are deliberately neutral templates — they
+            // must NOT contain the grader's required tokens, or
+            // the player could submit them unchanged and pass.
+            // The contract suite (game/tests/contract.rs) enforces
+            // this invariant.
+            Mission {
+                id: "intro_let_binding",
+                npc_name: "Ferris",
+                prompt: "Bind the integer forty-two to a variable named `answer`.",
+                tutorial: "## Concept\n\
 Rust is statically typed: every value has a type known at compile time. \
 You give a value a name with `let`. Bindings are immutable by default — \
 once a name points at a value, that name can't be reassigned. This is \
@@ -62,13 +90,14 @@ holding the value `42`. Update the `println!` accordingly.\n\n\
 ## Hint\n\
 The grader is looking for a `let answer` binding and the literal `42`. \
 A type annotation is allowed but not required.",
-                    starter_code: "fn main() {\n    let _todo = 0;\n    println!(\"{_todo}\");\n}\n",
-                },
-                Mission {
-                    id: "double_function",
-                    npc_name: "Trait Mage",
-                    prompt: "Define `double(n: i32) -> i32` that returns `n` multiplied by two.",
-                    tutorial: "## Concept\n\
+                prereq: None,
+                starter_code: "fn main() {\n    let _todo = 0;\n    println!(\"{_todo}\");\n}\n",
+            },
+            Mission {
+                id: "double_function",
+                npc_name: "Trait Mage",
+                prompt: "Define `double(n: i32) -> i32` that returns `n` multiplied by two.",
+                tutorial: "## Concept\n\
 The Trait Mage frames a function as a *named spell* — same inputs, same \
 output, no surprises. Functions in Rust are declared with `fn`. \
 Parameters carry an explicit type — there is no implicit casting between \
@@ -86,13 +115,14 @@ result.\n\n\
 ## Hint\n\
 The grader needs to see `fn double`, the type `i32`, and the expression \
 `* 2`. `n * 2` is the canonical body.",
-                    starter_code: "fn _todo() {}\n\nfn main() {\n    // call your function with 21 and print the result\n}\n",
-                },
-                Mission {
-                    id: "borrow_preview",
-                    npc_name: "The Borrow Checker",
-                    prompt: "Take an immutable reference to `value` and pass it to a print macro.",
-                    tutorial: "## Concept\n\
+                prereq: None,
+                starter_code: "fn _todo() {}\n\nfn main() {\n    // call your function with 21 and print the result\n}\n",
+            },
+            Mission {
+                id: "borrow_preview",
+                npc_name: "The Borrow Checker",
+                prompt: "Take an immutable reference to `value` and pass it to a print macro.",
+                tutorial: "## Concept\n\
 Ownership is Rust's defining feature. Each value has exactly one owner; \
 when the owner goes out of scope, the value is dropped. To use a value \
 without taking ownership, you *borrow* it via a reference: `&value` \
@@ -108,13 +138,14 @@ it and print the reference. Do not move the value — just borrow it.\n\n\
 ## Hint\n\
 The grader looks for `&value` and `println!`. The simplest answer is \
 `let r = &value; println!(\"{r}\");`",
-                    starter_code: "fn main() {\n    let value = String::from(\"sample\");\n    // build a reference to the binding above and print it\n}\n",
-                },
-                Mission {
-                    id: "mut_binding",
-                    npc_name: "The Smith",
-                    prompt: "Declare a mutable variable, then increment it by one.",
-                    tutorial: "## Concept\n\
+                prereq: None,
+                starter_code: "fn main() {\n    let value = String::from(\"sample\");\n    // build a reference to the binding above and print it\n}\n",
+            },
+            Mission {
+                id: "mut_binding",
+                npc_name: "The Smith",
+                prompt: "Declare a mutable variable, then increment it by one.",
+                tutorial: "## Concept\n\
 `let` bindings are immutable by default — that's a deliberate Rust \
 choice that catches a class of bugs. To allow reassignment, opt in with \
 `let mut`. The `mut` keyword makes mutability visible at the binding \
@@ -130,13 +161,14 @@ operator.\n\n\
 ## Hint\n\
 The grader requires both `let mut` and `+= 1` to appear in the source. \
 The Smith's rule: name what changes. The `mut` keyword *is* that name.",
-                    starter_code: "fn main() {\n    let x = 0;\n    // make x mutable, then add one\n    println!(\"{x}\");\n}\n",
-                },
-                Mission {
-                    id: "if_else_sign",
-                    npc_name: "The Cartographer",
-                    prompt: "Branch on the sign of an `i32` — negative, zero, positive.",
-                    tutorial: "## Concept\n\
+                prereq: None,
+                starter_code: "fn main() {\n    let x = 0;\n    // make x mutable, then add one\n    println!(\"{x}\");\n}\n",
+            },
+            Mission {
+                id: "if_else_sign",
+                npc_name: "The Cartographer",
+                prompt: "Branch on the sign of an `i32` — negative, zero, positive.",
+                tutorial: "## Concept\n\
 `if` in Rust is an *expression*, not just a statement — it produces a \
 value, so you can put it on the right-hand side of `let` or use it as \
 the last expression in a function. Each branch must produce the same \
@@ -153,13 +185,14 @@ The Cartographer's compass picks one road at the fork; your `if` does \
 the same with the sign of `n`. The grader requires `if `, `else`, and a \
 literal comparison `< 0` to appear. The canonical body is a three-arm \
 `if` / `else if` / `else`.",
-                    starter_code: "fn sign(_n: i32) -> &'static str {\n    // three branches, one per sign\n    \"replace me\"\n}\n\nfn main() {\n    println!(\"{}\", sign(-3));\n}\n",
-                },
-                Mission {
-                    id: "loop_break",
-                    npc_name: "The Bellringer",
-                    prompt: "Use `loop` to find the first power of two at or above one hundred.",
-                    tutorial: "## Concept\n\
+                prereq: None,
+                starter_code: "fn sign(_n: i32) -> &'static str {\n    // three branches, one per sign\n    \"replace me\"\n}\n\nfn main() {\n    println!(\"{}\", sign(-3));\n}\n",
+            },
+            Mission {
+                id: "loop_break",
+                npc_name: "The Bellringer",
+                prompt: "Use `loop` to find the first power of two at or above one hundred.",
+                tutorial: "## Concept\n\
 The Bellringer's image: the rope is the loop body, the bell above is \
 the threshold, the sound is the `break` that yields a value. Rust has \
 three loop constructs: `loop` (infinite), `while` (predicate), and \
@@ -176,13 +209,14 @@ Starting from `1`, double the value each iteration until it reaches at \
 least `100`, then break and return that value.\n\n\
 ## Hint\n\
 The grader looks for `loop`, `break`, and `*= 2` (the doubling step).",
-                    starter_code: "fn main() {\n    let mut _n = 1;\n    // loop until _n >= 100, doubling each step, then break the value\n    println!(\"{_n}\");\n}\n",
-                },
-                Mission {
-                    id: "match_option",
-                    npc_name: "The Oracle",
-                    prompt: "Pattern-match an `Option<i32>` — return the inner value or zero.",
-                    tutorial: "## Concept\n\
+                prereq: None,
+                starter_code: "fn main() {\n    let mut _n = 1;\n    // loop until _n >= 100, doubling each step, then break the value\n    println!(\"{_n}\");\n}\n",
+            },
+            Mission {
+                id: "match_option",
+                npc_name: "The Oracle",
+                prompt: "Pattern-match an `Option<i32>` — return the inner value or zero.",
+                tutorial: "## Concept\n\
 The Oracle holds an orb whose top half glows and bottom half stays dark — \
 the answer present and the answer absent, both real, both seen. \
 `Option<T>` is Rust's standard \"maybe a value\" type. Instead of `null`, \
@@ -199,13 +233,14 @@ both `Some` and `None` arms.\n\n\
 ## Hint\n\
 The grader requires `match`, `Some(`, and `None` to all appear. \
 Don't shortcut with `.unwrap_or(0)` — this mission is teaching `match`.",
-                    starter_code: "fn unwrap_or_zero(_x: Option<i32>) -> i32 {\n    // pattern-match and return the inner value or 0\n    -1\n}\n\nfn main() {\n    println!(\"{}\", unwrap_or_zero(Some(7)));\n}\n",
-                },
-                Mission {
-                    id: "struct_basic",
-                    npc_name: "The Herald",
-                    prompt: "Define a `Knight` struct with `name` and `hp`, then read the name back.",
-                    tutorial: "## Concept\n\
+                prereq: None,
+                starter_code: "fn unwrap_or_zero(_x: Option<i32>) -> i32 {\n    // pattern-match and return the inner value or 0\n    -1\n}\n\nfn main() {\n    println!(\"{}\", unwrap_or_zero(Some(7)));\n}\n",
+            },
+            Mission {
+                id: "struct_basic",
+                npc_name: "The Herald",
+                prompt: "Define a `Knight` struct with `name` and `hp`, then read the name back.",
+                tutorial: "## Concept\n\
 The Herald wears a tabard of three banded fields and reads each one aloud — \
 that is what a `struct` is. \
 A `struct` groups related values under one type with named fields. \
@@ -223,13 +258,14 @@ build one and `println!` its name.\n\n\
 ## Hint\n\
 The grader looks for `struct Knight`, `name:`, `hp:`, and `.name` in \
 the source.",
-                    starter_code: "// define Knight here\n\nfn main() {\n    // build a Knight and print its name\n}\n",
-                },
-                Mission {
-                    id: "vec_iter",
-                    npc_name: "The Cooper",
-                    prompt: "Sum the elements of a `Vec<i32>` using `.iter().sum()`.",
-                    tutorial: "## Concept\n\
+                prereq: None,
+                starter_code: "// define Knight here\n\nfn main() {\n    // build a Knight and print its name\n}\n",
+            },
+            Mission {
+                id: "vec_iter",
+                npc_name: "The Cooper",
+                prompt: "Sum the elements of a `Vec<i32>` using `.iter().sum()`.",
+                tutorial: "## Concept\n\
 The Cooper's barrel is the lesson: open the lid, walk every stave, do \
 something with each, close the lid. A `Vec<T>` is the heap-allocated \
 growable list — Rust's analogue of Python `list` or JS `Array`. The \
@@ -248,13 +284,14 @@ Build a `Vec<i32>`, then sum it via `.iter().sum()` and print the total.\n\n\
 The grader looks for `vec!`, `.iter()`, and `.sum`. The annotation on \
 the binding (or a turbofish on `sum`) is required for the code to \
 actually compile, but the grader only checks tokens.",
-                    starter_code: "fn main() {\n    // build a Vec<i32>, sum it via .iter().sum(), print the total\n    println!(\"todo\");\n}\n",
-                },
-                Mission {
-                    id: "tuple_destructure",
-                    npc_name: "The Twin",
-                    prompt: "Destructure a 2-tuple in a single `let` binding.",
-                    tutorial: "## Concept\n\
+                prereq: None,
+                starter_code: "fn main() {\n    // build a Vec<i32>, sum it via .iter().sum(), print the total\n    println!(\"todo\");\n}\n",
+            },
+            Mission {
+                id: "tuple_destructure",
+                npc_name: "The Twin",
+                prompt: "Destructure a 2-tuple in a single `let` binding.",
+                tutorial: "## Concept\n\
 The Twin is one body bound to two names — left half and right half, each \
 with its own ring. Destructuring is the same trick at the binding site. \
 Tuples bundle a fixed number of values of possibly-different types. \
@@ -272,13 +309,14 @@ both.\n\n\
 ## Hint\n\
 The grader requires `let (` (the pattern open), a `,` (separator), \
 and `) =` (pattern close + assign).",
-                    starter_code: "fn main() {\n    let _pair = (3, 4);\n    // destructure into a and b in a single let, then print both\n}\n",
-                },
-                Mission {
-                    id: "borrow_mut",
-                    npc_name: "The Forgewright",
-                    prompt: "Take an `&mut i32` and write through the deref.",
-                    tutorial: "## Concept\n\
+                prereq: None,
+                starter_code: "fn main() {\n    let _pair = (3, 4);\n    // destructure into a and b in a single let, then print both\n}\n",
+            },
+            Mission {
+                id: "borrow_mut",
+                npc_name: "The Forgewright",
+                prompt: "Take an `&mut i32` and write through the deref.",
+                tutorial: "## Concept\n\
 An exclusive (mutable) borrow `&mut T` lets a function change the value \
 the caller still owns. While the `&mut` is live, no other borrow — read \
 or write — may exist; the Borrow Checker enforces this at compile time. \
@@ -295,13 +333,14 @@ from `main` against a mutable local.\n\n\
 ## Hint\n\
 The grader requires `fn bump`, the parameter type `&mut i32`, and a \
 `*x` deref in the body.",
-                    starter_code: "fn _todo(_x: i32) {}\n\nfn main() {\n    let mut _n = 0;\n    // call your function with a mutable borrow of _n\n    println!(\"{_n}\");\n}\n",
-                },
-                Mission {
-                    id: "string_vs_str",
-                    npc_name: "The Linguist",
-                    prompt: "Write a function that takes `&str` and call it with both a `String` and a literal.",
-                    tutorial: "## Concept\n\
+                prereq: None,
+                starter_code: "fn _todo(_x: i32) {}\n\nfn main() {\n    let mut _n = 0;\n    // call your function with a mutable borrow of _n\n    println!(\"{_n}\");\n}\n",
+            },
+            Mission {
+                id: "string_vs_str",
+                npc_name: "The Linguist",
+                prompt: "Write a function that takes `&str` and call it with both a `String` and a literal.",
+                tutorial: "## Concept\n\
 Rust has two string types: `String` (owned, growable, heap) and `&str` \
 (borrowed slice, often backed by a literal in the binary). A function \
 that accepts `&str` is the most general signature: callers pass string \
@@ -317,13 +356,14 @@ Write `fn greet(name: &str)`. From `main`, build a `String` and call \
 ## Hint\n\
 The grader requires `fn greet`, the type `&str`, and a `String::from` \
 caller in `main`.",
-                    starter_code: "fn _todo(_n: i32) {}\n\nfn main() {\n    // define a function above that takes a string slice,\n    // then call it once with a String and once with a literal\n}\n",
-                },
-                Mission {
-                    id: "option_unwrap_or",
-                    npc_name: "The Pilgrim",
-                    prompt: "Collapse an `Option<i32>` to `i32` with `.unwrap_or(default)`.",
-                    tutorial: "## Concept\n\
+                prereq: None,
+                starter_code: "fn _todo(_n: i32) {}\n\nfn main() {\n    // define a function above that takes a string slice,\n    // then call it once with a String and once with a literal\n}\n",
+            },
+            Mission {
+                id: "option_unwrap_or",
+                npc_name: "The Pilgrim",
+                prompt: "Collapse an `Option<i32>` to `i32` with `.unwrap_or(default)`.",
+                tutorial: "## Concept\n\
 `Option<T>` carries a value or nothing, and Rust forces you to handle \
 both. A `match` is exhaustive but verbose; the standard library ships a \
 family of *combinators* — `.unwrap_or`, `.unwrap_or_else`, `.map`, \
@@ -340,13 +380,14 @@ Implement `fn safe(x: Option<i32>) -> i32` using `.unwrap_or` to return \
 ## Hint\n\
 The grader requires both `Option<` and `.unwrap_or(`. Don't reach for \
 `match` on this one — that's the previous mission.",
-                    starter_code: "fn safe(_x: i32) -> i32 {\n    // collapse the absent case to a default with a combinator\n    -1\n}\n\nfn main() {\n    println!(\"{}\", safe(0));\n}\n",
-                },
-                Mission {
-                    id: "for_in_range",
-                    npc_name: "The Drillmaster",
-                    prompt: "Iterate the half-open range `0..10` with a `for` loop.",
-                    tutorial: "## Concept\n\
+                prereq: None,
+                starter_code: "fn safe(_x: i32) -> i32 {\n    // collapse the absent case to a default with a combinator\n    -1\n}\n\nfn main() {\n    println!(\"{}\", safe(0));\n}\n",
+            },
+            Mission {
+                id: "for_in_range",
+                npc_name: "The Drillmaster",
+                prompt: "Iterate the half-open range `0..10` with a `for` loop.",
+                tutorial: "## Concept\n\
 `for` in Rust is sugar over the iterator protocol — under the hood it \
 calls `IntoIterator::into_iter` on the right-hand side and walks the \
 result. The simplest iterable is the half-open range `a..b`, which \
@@ -360,13 +401,14 @@ is a fresh binding each iteration; you don't need `mut`.\n\n\
 Write a `main` that iterates `i` over `0..10` and prints each value.\n\n\
 ## Hint\n\
 The grader requires `for `, ` in `, and the literal range `0..10`.",
-                    starter_code: "fn main() {\n    // walk the range 0..10 with a for loop, printing each step\n    println!(\"todo\");\n}\n",
-                },
-                Mission {
-                    id: "closure_basic",
-                    npc_name: "The Reckoner",
-                    prompt: "Bind a two-argument closure to `add` and call it.",
-                    tutorial: "## Concept\n\
+                prereq: None,
+                starter_code: "fn main() {\n    // walk the range 0..10 with a for loop, printing each step\n    println!(\"todo\");\n}\n",
+            },
+            Mission {
+                id: "closure_basic",
+                npc_name: "The Reckoner",
+                prompt: "Bind a two-argument closure to `add` and call it.",
+                tutorial: "## Concept\n\
 A *closure* is an anonymous function that can capture variables from its \
 defining scope. Rust closures look like `|args| expr` and behave like \
 values — you bind one to a name with `let`, pass it to higher-order \
@@ -382,13 +424,14 @@ returns their sum. Then call it from `main` and print the result.\n\n\
 ## Hint\n\
 The grader requires `let add`, the closure-literal opener `= |`, and \
 the body fragment `+ b`.",
-                    starter_code: "fn main() {\n    let _todo = 0;\n    // bind a closure named `add` that returns a + b, then call it\n    println!(\"{_todo}\");\n}\n",
-                },
-                Mission {
-                    id: "slice_basic",
-                    npc_name: "The Quartermaster",
-                    prompt: "Write `sum_slice(xs: &[i32]) -> i32` that sums a borrowed slice.",
-                    tutorial: "## Concept\n\
+                prereq: None,
+                starter_code: "fn main() {\n    let _todo = 0;\n    // bind a closure named `add` that returns a + b, then call it\n    println!(\"{_todo}\");\n}\n",
+            },
+            Mission {
+                id: "slice_basic",
+                npc_name: "The Quartermaster",
+                prompt: "Write `sum_slice(xs: &[i32]) -> i32` that sums a borrowed slice.",
+                tutorial: "## Concept\n\
 A slice `&[T]` is a borrowed view into a contiguous run of `T`s — a \
 pointer plus a length. It owns nothing; the buffer behind it lives \
 elsewhere (a `Vec`, an array, a string). Functions that read sequence \
@@ -405,13 +448,14 @@ slice, then call it from `main` against a small literal array.\n\n\
 ## Hint\n\
 The grader requires `fn sum_slice`, the slice type `&[i32]`, and a \
 `.iter()` call somewhere in the body.",
-                    starter_code: "fn _todo(_n: i32) -> i32 { 0 }\n\nfn main() {\n    // define sum_slice above with a slice parameter, then call it\n}\n",
-                },
-                Mission {
-                    id: "result_question_mark",
-                    npc_name: "The Auditor",
-                    prompt: "Parse a string into an integer and propagate the error with `?`.",
-                    tutorial: "## Concept\n\
+                prereq: None,
+                starter_code: "fn _todo(_n: i32) -> i32 { 0 }\n\nfn main() {\n    // define sum_slice above with a slice parameter, then call it\n}\n",
+            },
+            Mission {
+                id: "result_question_mark",
+                npc_name: "The Auditor",
+                prompt: "Parse a string into an integer and propagate the error with `?`.",
+                tutorial: "## Concept\n\
 `Result<T, E>` is the standard error-carrying type — `Ok(T)` on success, \
 `Err(E)` on failure. The `?` operator at the end of a fallible expression \
 either unwraps the `Ok` and continues, or short-circuits the function \
@@ -428,13 +472,14 @@ and `?` to short-circuit on failure, returning `Ok(n)` on success.\n\n\
 ## Hint\n\
 The grader requires `Result<`, `.parse`, and a `?` operator (followed by \
 `;` or a newline) to all appear.",
-                    starter_code: "fn parse_int(_s: &str) -> i32 {\n    // change the signature to return Result, then propagate the parse error with ?\n    0\n}\n\nfn main() {\n    let _ = parse_int(\"42\");\n}\n",
-                },
-                Mission {
-                    id: "derive_debug",
-                    npc_name: "The Chronicler",
-                    prompt: "Derive `Debug` on `struct Item` and print one with `{:?}`.",
-                    tutorial: "## Concept\n\
+                prereq: None,
+                starter_code: "fn parse_int(_s: &str) -> i32 {\n    // change the signature to return Result, then propagate the parse error with ?\n    0\n}\n\nfn main() {\n    let _ = parse_int(\"42\");\n}\n",
+            },
+            Mission {
+                id: "derive_debug",
+                npc_name: "The Chronicler",
+                prompt: "Derive `Debug` on `struct Item` and print one with `{:?}`.",
+                tutorial: "## Concept\n\
 Rust's `Debug` trait is the developer-facing formatting trait — what you \
 get from `{:?}` and `{:#?}`. You almost never write a `Debug` impl by \
 hand: the `#[derive(Debug)]` attribute generates one mechanically from \
@@ -450,13 +495,14 @@ in `main`, and print it with the debug formatter.\n\n\
 ## Hint\n\
 The grader requires `#[derive(Debug)]`, `struct Item`, and `:?` (the \
 debug formatter) to all appear.",
-                    starter_code: "// add a derive attribute, then define struct Item\nstruct Item { name: String }\n\nfn main() {\n    let _item = Item { name: String::from(\"ring\") };\n    // print _item using the debug formatter\n}\n",
-                },
-                Mission {
-                    id: "iter_map_collect",
-                    npc_name: "The Alchemist",
-                    prompt: "Map a Vec through `|x| x * 2` and `collect` into a new Vec.",
-                    tutorial: "## Concept\n\
+                prereq: None,
+                starter_code: "// add a derive attribute, then define struct Item\nstruct Item { name: String }\n\nfn main() {\n    let _item = Item { name: String::from(\"ring\") };\n    // print _item using the debug formatter\n}\n",
+            },
+            Mission {
+                id: "iter_map_collect",
+                npc_name: "The Alchemist",
+                prompt: "Map a Vec through `|x| x * 2` and `collect` into a new Vec.",
+                tutorial: "## Concept\n\
 The iterator triple — `iter` / `map` / `collect` — is Rust's most common \
 data-shaping idiom. `.iter()` produces a stream of `&T`. `.map(f)` \
 transforms each item lazily — no allocation yet, just a chain of \
@@ -473,13 +519,14 @@ doubles it, and collect the result into a new `Vec`.\n\n\
 ## Hint\n\
 The grader requires `.map(`, `.collect`, and a single-element closure \
 binder `|x|`.",
-                    starter_code: "fn main() {\n    let v = vec![1, 2, 3];\n    // chain iter / map / collect into a new Vec\n    let _ = v;\n}\n",
-                },
-                Mission {
-                    id: "enum_match",
-                    npc_name: "The Heraldic Sage",
-                    prompt: "Define `enum Direction` with several variants and match on it.",
-                    tutorial: "## Concept\n\
+                prereq: None,
+                starter_code: "fn main() {\n    let v = vec![1, 2, 3];\n    // chain iter / map / collect into a new Vec\n    let _ = v;\n}\n",
+            },
+            Mission {
+                id: "enum_match",
+                npc_name: "The Heraldic Sage",
+                prompt: "Define `enum Direction` with several variants and match on it.",
+                tutorial: "## Concept\n\
 The Heraldic Sage's sash carries one stitched panel per variant — oak, \
 river, sun, azure — and a `match` arm walks left to right across the chest. \
 A Rust `enum` is a *sum type*: a value is exactly one of a fixed set of \
@@ -498,13 +545,14 @@ that takes a `Direction` and uses `match` to map each variant to a value.\n\n\
 ## Hint\n\
 The grader requires `enum Direction`, a `match ` expression, and at \
 least one `Direction::` variant path.",
-                    starter_code: "// define enum Direction with several variants\n\nfn main() {\n    // match on a Direction value and produce something\n}\n",
-                },
-                Mission {
-                    id: "while_loop",
-                    npc_name: "The Tinker",
-                    prompt: "Use a `while` loop to count down from five to zero.",
-                    tutorial: "## Concept\n\
+                prereq: None,
+                starter_code: "// define enum Direction with several variants\n\nfn main() {\n    // match on a Direction value and produce something\n}\n",
+            },
+            Mission {
+                id: "while_loop",
+                npc_name: "The Tinker",
+                prompt: "Use a `while` loop to count down from five to zero.",
+                tutorial: "## Concept\n\
 The Tinker tightens, checks, tightens again — pouch by pouch along the \
 belt — until the work is right. That cycle is `while`. \
 It runs its body as long as a predicate stays true. It's the right \
@@ -521,10 +569,18 @@ decrement.\n\n\
 ## Hint\n\
 The grader requires `while `, a `> 0` predicate, and `-= 1` for the \
 decrement step.",
-                    starter_code: "fn main() {\n    let mut _n = 5;\n    // count down with a while loop and a -= 1 step\n    println!(\"{_n}\");\n}\n",
-                },
-            ],
+                prereq: None,
+                starter_code: "fn main() {\n    let mut _n = 5;\n    // count down with a while loop and a -= 1 step\n    println!(\"{_n}\");\n}\n",
+            },
+        ];
+        // Strict-linear progression: each mission's prereq is the one
+        // listed immediately before it. Shape decision logged in HANDOFF
+        // (2026-05-03 What's Next item 1) — branching can come later
+        // when the registry has Acts 3+ to organize.
+        for i in 1..missions.len() {
+            missions[i].prereq = Some(missions[i - 1].id);
         }
+        Self { missions }
     }
 }
 
@@ -598,10 +654,25 @@ fn handle_interact_key(
     };
 
     let cleared = progress.is_cleared(mission.id);
+    let unlocked = mission.is_unlocked(&progress);
     let viewing_this = completion
         .mission_id
         .as_deref()
         .is_some_and(|id| id == mission.id);
+
+    // Locked: prereq mission not cleared yet. Don't open the editor —
+    // the prompt panel already renders the locked hint, so a no-op here
+    // is the entire interaction (player gets visual feedback, no
+    // gameplay state change). Cleared missions are always treated as
+    // unlocked, so completion-revisit still works.
+    if !cleared && !unlocked {
+        tracing::debug!(
+            "F-press on locked mission {} (prereq {:?} not cleared)",
+            mission.id,
+            mission.prereq
+        );
+        return;
+    }
 
     // Cleared NPC + first F-press → completion recap, do NOT reopen
     // editor yet. Player must press F again (or Esc to dismiss) before
@@ -649,6 +720,7 @@ fn draw_interaction_prompt(
     active: Res<ActiveMission>,
     progress: Res<MissionProgress>,
     completion: Res<CompletionView>,
+    registry: Res<MissionRegistry>,
 ) {
     // Don't double up — the completion panel and editor each own the
     // screen real estate for their own flows.
@@ -663,19 +735,44 @@ fn draw_interaction_prompt(
     };
 
     let cleared = progress.is_cleared(entry.mission_id);
-    let mark = if cleared { "[done] " } else { "" };
+    let mission = registry.find(entry.mission_id);
+    let unlocked = mission.is_some_and(|m| m.is_unlocked(&progress));
+    let prereq_npc_name = mission
+        .and_then(|m| m.prereq)
+        .and_then(|pid| registry.find(pid))
+        .map(|m| m.npc_name);
 
     egui::Window::new("interact")
         .title_bar(false)
         .resizable(false)
         .anchor(egui::Align2::CENTER_BOTTOM, egui::Vec2::new(0.0, -24.0))
         .show(ctx, |ui| {
-            ui.label(format!("{mark}[F] talk to {}", entry.name));
+            if cleared {
+                ui.label(format!("[done] [F] talk to {}", entry.name));
+            } else if !unlocked {
+                let hint = prereq_npc_name.unwrap_or("the previous mission");
+                ui.label(format!("[locked — clear {hint} first]"));
+            } else {
+                ui.label(format!("[F] talk to {}", entry.name));
+            }
             if let Some(m) = active.current.as_ref().filter(|m| m.id == entry.mission_id) {
                 ui.small(m.prompt);
             }
             ui.small(format!("missions cleared: {}", progress.cleared_count()));
         });
+
+    // Persistent "next mission" HUD pin — visible regardless of which
+    // NPC the player is standing next to, so they always know where to
+    // head if they wander off the path.
+    if let Some(next) = registry.next_locked(&progress) {
+        egui::Window::new("next_mission")
+            .title_bar(false)
+            .resizable(false)
+            .anchor(egui::Align2::LEFT_TOP, egui::Vec2::new(8.0, 8.0))
+            .show(ctx, |ui| {
+                ui.small(format!("next: {} · find {}", next.id, next.npc_name));
+            });
+    }
 }
 
 fn draw_completion_panel(
