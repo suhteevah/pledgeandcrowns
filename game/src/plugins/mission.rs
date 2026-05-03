@@ -183,6 +183,8 @@ The grader looks for `loop`, `break`, and `*= 2` (the doubling step).",
                     npc_name: "The Oracle",
                     prompt: "Pattern-match an `Option<i32>` — return the inner value or zero.",
                     tutorial: "## Concept\n\
+The Oracle holds an orb whose top half glows and bottom half stays dark — \
+the answer present and the answer absent, both real, both seen. \
 `Option<T>` is Rust's standard \"maybe a value\" type. Instead of `null`, \
 the language forces you to handle the absent case explicitly: `Some(T)` \
 holds a value, `None` doesn't. `match` is the exhaustive way to inspect \
@@ -204,6 +206,8 @@ Don't shortcut with `.unwrap_or(0)` — this mission is teaching `match`.",
                     npc_name: "The Herald",
                     prompt: "Define a `Knight` struct with `name` and `hp`, then read the name back.",
                     tutorial: "## Concept\n\
+The Herald wears a tabard of three banded fields and reads each one aloud — \
+that is what a `struct` is. \
 A `struct` groups related values under one type with named fields. \
 Fields are private outside the defining module by default; you'd add \
 `pub` to expose them. Construction uses the `TypeName { field: value, .. }` \
@@ -251,6 +255,8 @@ actually compile, but the grader only checks tokens.",
                     npc_name: "The Twin",
                     prompt: "Destructure a 2-tuple in a single `let` binding.",
                     tutorial: "## Concept\n\
+The Twin is one body bound to two names — left half and right half, each \
+with its own ring. Destructuring is the same trick at the binding site. \
 Tuples bundle a fixed number of values of possibly-different types. \
 Pattern syntax in `let` lets you peel them apart in one statement, \
 giving each component its own name. This generalises to nested tuples, \
@@ -474,6 +480,8 @@ binder `|x|`.",
                     npc_name: "The Heraldic Sage",
                     prompt: "Define `enum Direction` with several variants and match on it.",
                     tutorial: "## Concept\n\
+The Heraldic Sage's sash carries one stitched panel per variant — oak, \
+river, sun, azure — and a `match` arm walks left to right across the chest. \
 A Rust `enum` is a *sum type*: a value is exactly one of a fixed set of \
 named variants. Variants can be unit (`North`), tuple (`Move(i32, i32)`), \
 or struct-like (`Hit { damage: u32 }`). `match` is the way to inspect \
@@ -497,7 +505,9 @@ least one `Direction::` variant path.",
                     npc_name: "The Tinker",
                     prompt: "Use a `while` loop to count down from five to zero.",
                     tutorial: "## Concept\n\
-`while` runs its body as long as a predicate stays true. It's the right \
+The Tinker tightens, checks, tightens again — pouch by pouch along the \
+belt — until the work is right. That cycle is `while`. \
+It runs its body as long as a predicate stays true. It's the right \
 choice when the exit condition is simple and side-effect-driven; when \
 you're walking a collection prefer `for x in iter`, when you need to \
 return a value prefer `loop` with `break value`.\n\n\

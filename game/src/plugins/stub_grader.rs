@@ -171,7 +171,9 @@ pub fn stub_verdict(encounter_id: &str, source: &str) -> Option<StubVerdict> {
             } else if !source.contains(".name") {
                 StubVerdict::fail("the Herald squints — read the field with `.name`")
             } else {
-                StubVerdict::pass("the Herald unfurls the scroll. \"so named, so numbered.\"")
+                StubVerdict::pass(
+                    "the Herald reads the tabard. \"by name and by number — both fields announced.\"",
+                )
             }
         }
         "borrow_mut" => {
@@ -318,7 +320,7 @@ pub fn stub_verdict(encounter_id: &str, source: &str) -> Option<StubVerdict> {
                 )
             } else {
                 StubVerdict::pass(
-                    "the Heraldic Sage opens the book of arms. \"every variant named, every blazon read.\"",
+                    "the Heraldic Sage walks the sash. \"every variant a panel, every arm a blazon read.\"",
                 )
             }
         }

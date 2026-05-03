@@ -230,7 +230,9 @@ pub fn grade(encounter_id: &str, source: &str) -> Verdict {
             } else if !source.contains(".name") {
                 Verdict::fail("the Herald squints — read the field with `.name`")
             } else {
-                Verdict::pass("the Herald unfurls the scroll. \"so named, so numbered.\"")
+                Verdict::pass(
+                    "the Herald reads the tabard. \"by name and by number — both fields announced.\"",
+                )
             }
         }
         // ── Mission 17: take a `&[i32]` slice. Act 2: borrowing a
@@ -305,7 +307,7 @@ pub fn grade(encounter_id: &str, source: &str) -> Verdict {
                 )
             } else {
                 Verdict::pass(
-                    "the Heraldic Sage opens the book of arms. \"every variant named, every blazon read.\"",
+                    "the Heraldic Sage walks the sash. \"every variant a panel, every arm a blazon read.\"",
                 )
             }
         }
