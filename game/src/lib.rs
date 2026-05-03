@@ -5,7 +5,7 @@
 //! plugin assembly lives below this line so that integration tests
 //! can construct a headless `App` without going through `main`.
 
-use bevy::asset::{AssetMode, AssetPlugin};
+use bevy::asset::{AssetMetaCheck, AssetMode, AssetPlugin};
 use bevy::log::LogPlugin;
 use bevy::prelude::*;
 
@@ -38,6 +38,13 @@ pub fn run() -> anyhow::Result<()> {
                     // to every asset. We don't generate those, so the
                     // sprites never bind on wasm. Force Unprocessed.
                     mode: AssetMode::Unprocessed,
+                    // Belt-and-suspenders for wasm: AssetMetaCheck::Never
+                    // skips the `<asset>.meta` HEAD probes the asset
+                    // server otherwise issues for every load. On wasm
+                    // those 404s aren't fatal but they pollute the
+                    // network panel and slow first-frame asset binding.
+                    // (See Bevy issue #18002 / PR #10623.)
+                    meta_check: AssetMetaCheck::Never,
                     ..default()
                 })
                 // Pixel-art sampler — nearest-neighbor everywhere.

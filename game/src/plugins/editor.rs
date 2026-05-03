@@ -51,10 +51,21 @@ pub struct EditorPlugin;
 impl Plugin for EditorPlugin {
     fn build(&self, app: &mut App) {
         tracing::debug!("EditorPlugin::build");
-        app.add_plugins(EguiPlugin::default())
-            .init_resource::<EditorState>()
-            .add_systems(Update, toggle_editor)
-            .add_systems(EguiPrimaryContextPass, draw_editor);
+        // bevy_egui 0.37+ defaults to a bindless texture array (16 slots)
+        // which requires `TEXTURE_BINDING_ARRAY`. WebGL2 doesn't have it,
+        // so on wasm wgpu refuses to create the bind-group layout — and
+        // that failure cascades into the wider `Image` GPU upload path,
+        // killing all image-backed sprite rendering even though the
+        // assets fetch fine. `None` falls back to per-texture bind groups,
+        // which WebGL2 supports. Native works either way; doing this
+        // unconditionally keeps the build target-agnostic.
+        app.add_plugins(EguiPlugin {
+            bindless_mode_array_size: None,
+            ..EguiPlugin::default()
+        })
+        .init_resource::<EditorState>()
+        .add_systems(Update, toggle_editor)
+        .add_systems(EguiPrimaryContextPass, draw_editor);
     }
 }
 
