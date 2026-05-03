@@ -228,40 +228,76 @@ fn run_cargo_check(manifest_path: &Path) -> Result<CargoVerdict> {
         .spawn()
         .context("cargo_grader: failed to spawn cargo check")?;
 
-    // Watchdog: if the process exceeds the wall-clock budget, kill it.
     // Read stdout/stderr on dedicated threads with a bounded buffer so
-    // a pathological diagnostic firehose can't OOM us.
+    // a pathological diagnostic firehose can't OOM us. Each reader
+    // signals on `tx` when its pipe EOFs — i.e. when cargo's
+    // corresponding stream has closed. The watchdog uses these signals
+    // to wake immediately on a fast-finishing child rather than busy-
+    // polling `try_wait`.
     let stdout = child.stdout.take().expect("stdout was piped");
     let stderr = child.stderr.take().expect("stderr was piped");
-    let stdout_handle = thread::spawn(move || read_capped(stdout));
-    let stderr_handle = thread::spawn(move || read_capped(stderr));
-
-    // Wait for exit with timeout via a small channel-poll loop.
     let (tx, rx) = mpsc::channel::<()>();
-    let _ = tx; // keep tx alive for the loop below
+    let tx_stdout = tx.clone();
+    let tx_stderr = tx.clone();
+    let stdout_handle = thread::spawn(move || {
+        let s = read_capped(stdout);
+        let _ = tx_stdout.send(());
+        s
+    });
+    let stderr_handle = thread::spawn(move || {
+        let s = read_capped(stderr);
+        let _ = tx_stderr.send(());
+        s
+    });
+    // Drop the original tx so `rx.recv_timeout` returns Disconnected
+    // once both readers finish (rather than blocking forever on a
+    // sender that nobody else holds).
+    drop(tx);
+
+    // Watchdog: block on the reader signals until either both pipes
+    // EOF (child exited / streams closed — fast path on quick runs) or
+    // the wall-clock budget elapses. On the slow path we give up and
+    // kill the child. This is non-cancellable-sleep-free: a 5 ms run
+    // joins in 5 ms, not 10 s.
     let mut killed_for_timeout = false;
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break status,
-            Ok(None) => {
-                if started.elapsed() >= CARGO_CHECK_TIMEOUT {
-                    tracing::warn!(
-                        "cargo_grader: timing out cargo check after {:?}",
-                        CARGO_CHECK_TIMEOUT
-                    );
-                    let _ = child.kill();
-                    killed_for_timeout = true;
-                    // Drain to a final wait so handles can join.
-                    let s = child.wait().context("cargo_grader: wait after kill")?;
-                    break s;
-                }
-                let _ = rx.recv_timeout(Duration::from_millis(50));
+    loop {
+        let elapsed = started.elapsed();
+        if elapsed >= CARGO_CHECK_TIMEOUT {
+            tracing::warn!(
+                "cargo_grader: timing out cargo check after {:?}",
+                CARGO_CHECK_TIMEOUT
+            );
+            let _ = child.kill();
+            killed_for_timeout = true;
+            break;
+        }
+        let remaining = CARGO_CHECK_TIMEOUT - elapsed;
+        match rx.recv_timeout(remaining) {
+            Ok(()) => {
+                // One pipe closed; loop and wait for the other (or for
+                // the channel to disconnect, signalling both done).
+                continue;
             }
-            Err(e) => {
-                return Err(anyhow!("cargo_grader: try_wait failed: {e}"));
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                // Both reader threads dropped their tx ends -> child's
+                // stdout AND stderr have closed. The child has exited
+                // or is about to; fall through to the blocking wait.
+                break;
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                tracing::warn!(
+                    "cargo_grader: timing out cargo check after {:?}",
+                    CARGO_CHECK_TIMEOUT
+                );
+                let _ = child.kill();
+                killed_for_timeout = true;
+                break;
             }
         }
-    };
+    }
+    let status = child
+        .wait()
+        .context("cargo_grader: wait after pipes closed / kill")?;
 
     let stdout_buf = stdout_handle
         .join()
