@@ -592,14 +592,23 @@ impl Plugin for MissionPlugin {
         app.init_resource::<MissionRegistry>()
             .init_resource::<ActiveMission>()
             .init_resource::<CompletionView>()
+            .init_resource::<EpilogueView>()
             .add_systems(
                 Update,
-                (handle_interact_key, dismiss_completion_on_escape)
+                (
+                    handle_interact_key,
+                    dismiss_completion_on_escape,
+                    dismiss_epilogue_on_escape,
+                )
                     .run_if(in_state(GameState::InGame)),
             )
             .add_systems(
                 EguiPrimaryContextPass,
-                (draw_interaction_prompt, draw_completion_panel)
+                (
+                    draw_interaction_prompt,
+                    draw_completion_panel,
+                    draw_epilogue_panel,
+                )
                     .run_if(in_state(GameState::InGame)),
             );
     }
@@ -616,6 +625,16 @@ pub struct ActiveMission {
 #[derive(Resource, Default)]
 pub struct CompletionView {
     pub mission_id: Option<String>,
+}
+
+/// Win-condition flag. The epilogue panel auto-shows once
+/// `cleared_count == registry.missions.len()`. After Esc-dismissal in a
+/// session the player can revisit it via any cleared NPC's completion
+/// flow — this state just suppresses the auto-pop until they earn it
+/// again (which only matters if a future patch invalidates clears).
+#[derive(Resource, Default)]
+pub struct EpilogueView {
+    pub dismissed_this_session: bool,
 }
 
 fn handle_interact_key(
@@ -710,6 +729,31 @@ fn dismiss_completion_on_escape(
     if keys.just_pressed(KeyCode::Escape) && completion.mission_id.is_some() {
         tracing::debug!("completion view dismissed via Escape");
         completion.mission_id = None;
+    }
+}
+
+fn dismiss_epilogue_on_escape(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut epilogue: ResMut<EpilogueView>,
+    progress: Res<MissionProgress>,
+    registry: Res<MissionRegistry>,
+    completion: Res<CompletionView>,
+    editor: Res<EditorState>,
+) {
+    if !keys.just_pressed(KeyCode::Escape) {
+        return;
+    }
+    // Only dismiss when the epilogue is actually visible. Otherwise a
+    // pre-victory Esc-press would silently set the flag and the player
+    // would never see the epilogue when they clear the last mission.
+    let all_cleared = progress.cleared_count() == registry.missions.len();
+    let epilogue_visible = all_cleared
+        && !epilogue.dismissed_this_session
+        && completion.mission_id.is_none()
+        && !editor.open;
+    if epilogue_visible {
+        epilogue.dismissed_this_session = true;
+        tracing::info!("epilogue dismissed via Escape");
     }
 }
 
@@ -809,6 +853,61 @@ fn draw_completion_panel(
             ui.small(extract_section(mission.tutorial, "## Concept"));
             ui.separator();
             ui.label("[F] revisit  ·  [Esc] close");
+        });
+}
+
+/// Win-condition epilogue. Auto-shows when the player has cleared every
+/// mission in the registry. Suppressed while the editor is open or a
+/// per-mission completion panel is up so the two flows don't collide,
+/// and one Esc dismisses it for the rest of the session. Voice is the
+/// realm itself addressing the player — short, heraldic, no spoiler
+/// for future acts since none exist yet.
+fn draw_epilogue_panel(
+    mut contexts: EguiContexts,
+    progress: Res<MissionProgress>,
+    registry: Res<MissionRegistry>,
+    completion: Res<CompletionView>,
+    editor: Res<EditorState>,
+    epilogue: Res<EpilogueView>,
+) {
+    if editor.open
+        || completion.mission_id.is_some()
+        || epilogue.dismissed_this_session
+        || progress.cleared_count() != registry.missions.len()
+    {
+        return;
+    }
+    let Ok(ctx) = contexts.ctx_mut() else {
+        return;
+    };
+
+    egui::Window::new("epilogue")
+        .title_bar(false)
+        .resizable(false)
+        .collapsible(false)
+        .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+        .min_width(520.0)
+        .show(ctx, |ui| {
+            ui.heading("The realm pledges its crown.");
+            ui.separator();
+            ui.label(
+                "You have walked every road of the village and answered every \
+                 sworn question. The compiler bows. The Borrow Checker stands \
+                 down. The banners come in.",
+            );
+            ui.add_space(6.0);
+            ui.label(format!(
+                "{} of {} encounters cleared.",
+                progress.cleared_count(),
+                registry.missions.len()
+            ));
+            ui.add_space(6.0);
+            ui.small(
+                "More acts are being forged. For now: revisit any NPC with [F] \
+                 to re-read a lesson, or wander the village.",
+            );
+            ui.separator();
+            ui.label("[Esc] close");
         });
 }
 
