@@ -5,6 +5,7 @@
 //! migration arm in `load_from`.
 
 use bevy::prelude::*;
+#[cfg(not(target_arch = "wasm32"))]
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -12,6 +13,7 @@ use std::path::{Path, PathBuf};
 /// Bumped any time `SaveFile`'s on-disk shape changes. `load_from`
 /// rejects anything it doesn't recognize so we never partially-decode
 /// stale data into a current-shape struct.
+#[cfg(not(target_arch = "wasm32"))]
 const SAVE_VERSION: u32 = 1;
 
 #[derive(Resource, Default, Debug)]
@@ -35,6 +37,13 @@ impl MissionProgress {
     /// Serialize to disk via bincode 2. Creates parent dirs if needed.
     /// Atomic-ish: writes to `<path>.tmp` then renames, so a crash
     /// mid-write doesn't corrupt the live save.
+    ///
+    /// Wasm: filesystem isn't available; this is a no-op. Progress is
+    /// kept in-memory for the tab's lifetime. A localStorage path is
+    /// the planned next step (gated on the wasm image-binding bug
+    /// shipping first — no point persisting progress in a build that
+    /// can't render).
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn save_to(&self, path: &Path) -> anyhow::Result<()> {
         let path = validated_save_path(path)?;
         let file = SaveFile {
@@ -52,9 +61,19 @@ impl MissionProgress {
         Ok(())
     }
 
+    #[cfg(target_arch = "wasm32")]
+    pub fn save_to(&self, _path: &Path) -> anyhow::Result<()> {
+        // Intentional no-op on wasm — see save_to docs above.
+        Ok(())
+    }
+
     /// Load from disk. Returns `Ok(default)` if the file is missing
     /// (first run); errors only on corruption / version mismatch /
     /// unreadable I/O.
+    ///
+    /// Wasm: returns default (fresh-start). See `save_to` for the
+    /// persistence-on-web roadmap note.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn load_from(path: &Path) -> anyhow::Result<Self> {
         let path = validated_save_path(path)?;
         if !path.exists() {
@@ -78,8 +97,14 @@ impl MissionProgress {
         tracing::info!(?path, cleared = cleared.len(), "save loaded");
         Ok(Self { cleared })
     }
+
+    #[cfg(target_arch = "wasm32")]
+    pub fn load_from(_path: &Path) -> anyhow::Result<Self> {
+        Ok(Self::default())
+    }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Serialize, Deserialize, Debug)]
 struct SaveFile {
     version: u32,
@@ -91,8 +116,10 @@ struct SaveFile {
 /// at `/etc/passwd` or similar — the filename is fixed and rejected if
 /// it doesn't match. The directory is still flexible (env-resolved in
 /// production, tempdir in tests).
+#[cfg(not(target_arch = "wasm32"))]
 const SAVE_FILENAME: &str = "save.bincode";
 
+#[cfg(not(target_arch = "wasm32"))]
 fn validated_save_path(path: &Path) -> anyhow::Result<PathBuf> {
     let name = path
         .file_name()
