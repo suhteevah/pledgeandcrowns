@@ -3,8 +3,11 @@
 //! Space transitions to GameState::InGame.
 
 use crate::assets::SPRITE_TITLE;
+use crate::plugins::mission::MissionRegistry;
+use crate::plugins::progress::MissionProgress;
 use crate::plugins::state::GameState;
 use bevy::prelude::*;
+use bevy_egui::{EguiContexts, EguiPrimaryContextPass, egui};
 
 const TITLE_NATIVE_W: f32 = 640.0;
 const TITLE_NATIVE_H: f32 = 360.0;
@@ -25,8 +28,44 @@ impl Plugin for TitlePlugin {
         tracing::debug!("TitlePlugin::build");
         app.add_systems(OnEnter(GameState::Title), spawn_title_art)
             .add_systems(OnExit(GameState::Title), despawn_title_art)
-            .add_systems(Update, start_on_space.run_if(in_state(GameState::Title)));
+            .add_systems(Update, start_on_space.run_if(in_state(GameState::Title)))
+            .add_systems(
+                EguiPrimaryContextPass,
+                draw_title_overlay.run_if(in_state(GameState::Title)),
+            );
     }
+}
+
+fn draw_title_overlay(
+    mut contexts: EguiContexts,
+    progress: Res<MissionProgress>,
+    registry: Res<MissionRegistry>,
+) {
+    let Ok(ctx) = contexts.ctx_mut() else {
+        return;
+    };
+    let cleared = progress.cleared_count();
+    let total = registry.missions.len();
+
+    egui::Window::new("title_prompt")
+        .title_bar(false)
+        .resizable(false)
+        .collapsible(false)
+        .anchor(egui::Align2::CENTER_BOTTOM, egui::Vec2::new(0.0, -48.0))
+        .show(ctx, |ui| {
+            ui.heading("Press [Space] to begin");
+            if cleared == 0 {
+                ui.small("a Rust kingdom awaits its pledge");
+            } else if cleared < total {
+                ui.small(format!(
+                    "your pledge so far: {cleared} / {total} encounters cleared"
+                ));
+            } else {
+                ui.small(format!(
+                    "the realm has crowned you - {cleared} / {total} cleared"
+                ));
+            }
+        });
 }
 
 fn spawn_title_art(mut commands: Commands, asset_server: Res<AssetServer>) {
