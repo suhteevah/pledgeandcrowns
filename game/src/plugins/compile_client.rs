@@ -11,18 +11,23 @@ use crate::plugins::editor::EditorState;
 use crate::plugins::progress::MissionProgress;
 use crate::plugins::stub_grader::{StubVerdict, stub_verdict};
 use bevy::prelude::*;
+#[cfg(not(target_arch = "wasm32"))]
 use bevy::tasks::IoTaskPool;
 use crossbeam_channel::{Receiver, Sender, unbounded};
+#[cfg(not(target_arch = "wasm32"))]
 use serde::{Deserialize, Serialize};
 
+#[cfg(not(target_arch = "wasm32"))]
 const COMPILE_URL: &str = "http://127.0.0.1:7878/compile";
 
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Serialize)]
 struct CompileRequest {
     source: String,
     encounter_id: String,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Deserialize, Debug)]
 struct CompileResponse {
     ok: bool,
@@ -35,12 +40,12 @@ struct CompileOutcome {
     encounter_id: String,
     formatted: String,
     ok: bool,
-    /// True iff `formatted` came from the live `compile-api` server.
-    /// Stub-fallback verdicts (server unreachable) leave this `false`
-    /// so `drain_results` will NOT call `MissionProgress::mark_cleared`
-    /// — the player must re-run their solution once the server is back
-    /// to get a real, persisted clear.
-    from_server: bool,
+    /// True iff this verdict should persist as a `MissionProgress`
+    /// clear. On native: only live-API responses count (stub-fallback
+    /// passes leave this false so the player re-runs once the server
+    /// is back). On wasm: the stub IS the canonical grader (no local
+    /// server is reachable from a browser), so stub passes count.
+    persist_clear: bool,
 }
 
 #[derive(Resource)]
@@ -68,6 +73,13 @@ impl Plugin for CompileClientPlugin {
 
 /// If the editor's `compile_pending` flag is set, fire an async task
 /// against the compile-API and clear the flag.
+///
+/// Native: hits the live API at `127.0.0.1:7878`, falls back to the
+/// in-process stub if unreachable (stub passes do NOT count as clears).
+/// Wasm: skips the network entirely and uses the stub as the canonical
+/// grader (CORS + no localhost from a browser tab make a live API call
+/// pointless on web). Stub passes DO count as clears in that case.
+#[cfg(not(target_arch = "wasm32"))]
 fn dispatch_pending_compile(mut state: ResMut<EditorState>, channel: Res<CompileChannel>) {
     if !state.compile_pending {
         return;
@@ -84,7 +96,7 @@ fn dispatch_pending_compile(mut state: ResMut<EditorState>, channel: Res<Compile
     let encounter_for_task = encounter_id.clone();
     IoTaskPool::get()
         .spawn(async move {
-            let (formatted, ok, from_server) = match send_compile(
+            let (formatted, ok, persist_clear) = match send_compile(
                 source.clone(),
                 encounter_for_task.clone(),
             )
@@ -108,10 +120,41 @@ fn dispatch_pending_compile(mut state: ResMut<EditorState>, channel: Res<Compile
                 encounter_id: encounter_for_task,
                 formatted,
                 ok,
-                from_server,
+                persist_clear,
             });
         })
         .detach();
+}
+
+#[cfg(target_arch = "wasm32")]
+fn dispatch_pending_compile(mut state: ResMut<EditorState>, channel: Res<CompileChannel>) {
+    if !state.compile_pending {
+        return;
+    }
+    state.compile_pending = false;
+
+    let source = state.source.clone();
+    let encounter_id = state.encounter_id.clone();
+
+    tracing::info!(
+        "dispatching compile job ({} bytes, wasm stub path)",
+        source.len()
+    );
+
+    let (formatted, ok) = match stub_verdict(&encounter_id, &source) {
+        Some(v) => (format_stub_wasm(&v), v.ok),
+        None => (
+            format!("[wasm] no stub grader for encounter `{}`", encounter_id),
+            false,
+        ),
+    };
+    let _ = channel.sender.send(CompileOutcome {
+        encounter_id,
+        formatted,
+        ok,
+        // Stub IS the canonical grader on wasm — passes persist.
+        persist_clear: ok,
+    });
 }
 
 fn drain_results(
@@ -121,19 +164,17 @@ fn drain_results(
 ) {
     while let Ok(outcome) = channel.receiver.try_recv() {
         tracing::info!(
-            "compile result: encounter={} ok={} {}",
+            "compile result: encounter={} ok={} persist={} {}",
             outcome.encounter_id,
             outcome.ok,
+            outcome.persist_clear,
             outcome.formatted
         );
-        // ONLY persist clears that came from the live API. Stub-fallback
-        // passes are explicitly NOT cleared so the player re-runs against
-        // the real grader once the server is back.
-        if outcome.ok && outcome.from_server {
+        if outcome.ok && outcome.persist_clear {
             progress.mark_cleared(&outcome.encounter_id);
-        } else if outcome.ok && !outcome.from_server {
+        } else if outcome.ok && !outcome.persist_clear {
             tracing::info!(
-                "stub pass for `{}` — NOT marking cleared (server was unreachable)",
+                "non-persisting pass for `{}` (server was unreachable, stub fallback)",
                 outcome.encounter_id
             );
         }
@@ -141,6 +182,7 @@ fn drain_results(
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 async fn send_compile(source: String, encounter_id: String) -> anyhow::Result<CompileResponse> {
     let body = CompileRequest {
         source,
@@ -157,6 +199,7 @@ async fn send_compile(source: String, encounter_id: String) -> anyhow::Result<Co
     Ok(resp)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn format_response(r: &CompileResponse) -> String {
     let tag = if r.ok { "ok" } else { "fail" };
     let mut out = format!("[{tag}] {}", r.stdout);
@@ -167,15 +210,30 @@ fn format_response(r: &CompileResponse) -> String {
     out
 }
 
-/// Format a stub verdict for display. The leading `[offline mode]`
-/// banner is load-bearing: any caller persisting these strings can use
-/// it to detect "this was not a real server response."
+/// Format a stub verdict for display in native fallback mode. The
+/// leading `[offline mode]` banner is load-bearing: any caller
+/// persisting these strings can use it to detect "this was not a real
+/// server response."
+#[cfg(not(target_arch = "wasm32"))]
 fn format_stub(v: &StubVerdict) -> String {
     let tag = if v.ok { "ok" } else { "fail" };
     let body = if v.ok { &v.stdout } else { &v.stderr };
     let mut out = format!("[offline mode — server unreachable]\n[{tag}] {body}");
-    // Mirror the live-path stderr block when both are populated, even
-    // though the stub keeps them mutually exclusive today.
+    if v.ok && !v.stderr.is_empty() {
+        out.push_str("\n--stderr--\n");
+        out.push_str(&v.stderr);
+    }
+    out
+}
+
+/// Wasm-canonical stub formatter. No "offline" banner — the stub IS
+/// the grader on web, so dressing it up as a fallback would mislead
+/// the player.
+#[cfg(target_arch = "wasm32")]
+fn format_stub_wasm(v: &StubVerdict) -> String {
+    let tag = if v.ok { "ok" } else { "fail" };
+    let body = if v.ok { &v.stdout } else { &v.stderr };
+    let mut out = format!("[{tag}] {body}");
     if v.ok && !v.stderr.is_empty() {
         out.push_str("\n--stderr--\n");
         out.push_str(&v.stderr);
