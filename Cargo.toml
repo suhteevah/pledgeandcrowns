@@ -4,6 +4,7 @@ members = [
     "game",
     "compile-api",
     "tools/render-refs",
+    "tools/web-serve",
 ]
 
 [workspace.package]

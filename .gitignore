@@ -5,6 +5,7 @@ Cargo.lock.bak
 
 # Bevy / wasm build artifacts
 /web/pkg/
+/web/assets/
 /dist/
 *.wasm
 

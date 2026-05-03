@@ -1,0 +1,17 @@
+[package]
+name = "web-serve"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license = "MIT"
+repository.workspace = true
+description = "Serve the wasm web build of Pledge & Crown locally. Replaces python -m http.server in the dev pipeline (no-Python rule)."
+
+[dependencies]
+anyhow.workspace = true
+axum.workspace = true
+tokio.workspace = true
+tower-http = { workspace = true, features = ["fs", "trace"] }
+tracing.workspace = true
+tracing-subscriber.workspace = true

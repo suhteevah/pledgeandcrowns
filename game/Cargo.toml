@@ -29,6 +29,7 @@ bevy = { workspace = true, features = [
     "wayland",
     "png",
     "default_font",
+    "webgl2",
 ] }
 bevy_egui.workspace = true
 bevy_ecs_tilemap.workspace = true
