@@ -22,6 +22,14 @@ pub const SPRITE_TRAIT_MAGE: &str = "sprites/npc/trait_mage_idle_0.png";
 pub const SPRITE_BELLRINGER: &str = "sprites/npc/bellringer_idle_0.png";
 pub const SPRITE_COOPER: &str = "sprites/npc/cooper_idle_0.png";
 
+// NPC batch 2 (2026-05-02) — Oracle, Herald, Twin, Tinker, Heraldic Sage.
+// Sources: design/art/refs/ref-16..20-*.jsx, rendered via scripts/render-refs.py.
+pub const SPRITE_ORACLE: &str = "sprites/npc/oracle_idle_0.png";
+pub const SPRITE_HERALD: &str = "sprites/npc/herald_idle_0.png";
+pub const SPRITE_TWIN: &str = "sprites/npc/twin_idle_0.png";
+pub const SPRITE_TINKER: &str = "sprites/npc/tinker_idle_0.png";
+pub const SPRITE_HERALDIC_SAGE: &str = "sprites/npc/heraldic_sage_idle_0.png";
+
 /// Every asset path the game references. Used by the asset-existence
 /// audit test in `tests/assets.rs`.
 pub const ALL_SPRITE_PATHS: &[&str] = &[
@@ -35,4 +43,9 @@ pub const ALL_SPRITE_PATHS: &[&str] = &[
     SPRITE_TRAIT_MAGE,
     SPRITE_BELLRINGER,
     SPRITE_COOPER,
+    SPRITE_ORACLE,
+    SPRITE_HERALD,
+    SPRITE_TWIN,
+    SPRITE_TINKER,
+    SPRITE_HERALDIC_SAGE,
 ];

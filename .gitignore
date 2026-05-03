@@ -45,6 +45,7 @@ id_ed25519
 .claude/.credentials.json
 .claude/worktrees/
 .claude/settings.local.json
+.claude/scheduled_tasks.lock
 C:Users*
 C:Windows*
 

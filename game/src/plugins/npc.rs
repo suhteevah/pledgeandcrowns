@@ -8,7 +8,8 @@
 
 use crate::assets::{
     SPRITE_BELLRINGER, SPRITE_BORROW_CHECKER, SPRITE_CARTOGRAPHER, SPRITE_COOPER, SPRITE_FERRIS,
-    SPRITE_PLAYER, SPRITE_SMITH, SPRITE_TRAIT_MAGE,
+    SPRITE_HERALD, SPRITE_HERALDIC_SAGE, SPRITE_ORACLE, SPRITE_PLAYER, SPRITE_SMITH, SPRITE_TINKER,
+    SPRITE_TRAIT_MAGE, SPRITE_TWIN,
 };
 use crate::plugins::player::Player;
 use crate::plugins::state::GameState;
@@ -98,14 +99,14 @@ pub const NPC_ROSTER: &[NpcSpec] = &[
     NpcSpec {
         name: "The Oracle",
         mission_id: "match_option",
-        sprite_path: SPRITE_PLAYER, // placeholder
+        sprite_path: SPRITE_ORACLE,
         pos: (-144.0, 0.0),
         native_px: 32.0,
     },
     NpcSpec {
         name: "The Herald",
         mission_id: "struct_basic",
-        sprite_path: SPRITE_PLAYER, // placeholder
+        sprite_path: SPRITE_HERALD,
         pos: (-32.0, -96.0),
         native_px: 32.0,
     },
@@ -119,14 +120,14 @@ pub const NPC_ROSTER: &[NpcSpec] = &[
     NpcSpec {
         name: "The Twin",
         mission_id: "tuple_destructure",
-        sprite_path: SPRITE_PLAYER, // placeholder
+        sprite_path: SPRITE_TWIN,
         pos: (32.0, -64.0),
         native_px: 32.0,
     },
     NpcSpec {
         name: "The Tinker",
         mission_id: "while_loop",
-        sprite_path: SPRITE_PLAYER, // placeholder
+        sprite_path: SPRITE_TINKER,
         pos: (-160.0, 64.0),
         native_px: 32.0,
     },
@@ -196,7 +197,7 @@ pub const NPC_ROSTER: &[NpcSpec] = &[
     NpcSpec {
         name: "The Heraldic Sage",
         mission_id: "enum_match",
-        sprite_path: SPRITE_PLAYER, // placeholder
+        sprite_path: SPRITE_HERALDIC_SAGE,
         pos: (0.0, -130.0),
         native_px: 32.0,
     },
