@@ -39,8 +39,10 @@ Get-ChildItem G:/cargo-target/pledgeandcrown/debug/.fingerprint/pledge_compile_a
 Or just `cargo clean -p pledge_compile_api -p pledge_and_crown` (slower —
 ~20 GB rebuild).
 
-**Real fix (deferred):** give each worktree its own `CARGO_TARGET_DIR`
-under the worktree itself, e.g. via a per-worktree `.cargo/config.toml`
-override, so worktrees can never clobber each other's compiled tests.
-Open work — file an issue or write the override script before the next
-parallel-agent batch.
+**Real fix (landed 2026-05-02):** `scripts/ci.ps1` now detects worktree
+checkouts (`.git` is a file pointer rather than a directory) and pins
+`CARGO_TARGET_DIR` to `G:/cargo-target/pledgeandcrown-wt-<basename>`
+for the duration of the script. Main keeps the shared default. Pre-commit
+hooks invoke ci.ps1, so any agent commit gets isolation for free. Caveat:
+agents that run raw `cargo test` outside the script don't get isolation —
+they should set the env var themselves or invoke `scripts/ci.ps1`.
