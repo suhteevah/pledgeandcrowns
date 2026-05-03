@@ -49,6 +49,12 @@ reqwest.workspace = true
 serde_json = "1"
 crossbeam-channel = "0.5"
 
+# Wasm-only: localStorage save persistence. base64 wraps the bincode
+# bytes so they survive the JS string round-trip.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys = { version = "0.3", features = ["Window", "Storage"] }
+base64 = "0.22"
+
 [dev-dependencies]
 # Cross-crate contract harness: tests in game/tests/ assert that every
 # mission's canonical solution passes the live grader.

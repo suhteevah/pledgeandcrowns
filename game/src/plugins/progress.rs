@@ -5,7 +5,6 @@
 //! migration arm in `load_from`.
 
 use bevy::prelude::*;
-#[cfg(not(target_arch = "wasm32"))]
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -13,8 +12,13 @@ use std::path::{Path, PathBuf};
 /// Bumped any time `SaveFile`'s on-disk shape changes. `load_from`
 /// rejects anything it doesn't recognize so we never partially-decode
 /// stale data into a current-shape struct.
-#[cfg(not(target_arch = "wasm32"))]
 const SAVE_VERSION: u32 = 1;
+
+/// localStorage key the wasm build reads/writes. Versioned alongside
+/// `SAVE_VERSION` — bumping the schema means picking a new key so
+/// players' v1 saves don't try to decode as v2.
+#[cfg(target_arch = "wasm32")]
+const LOCAL_STORAGE_KEY: &str = "pledge-and-crown:save:v1";
 
 #[derive(Resource, Default, Debug)]
 pub struct MissionProgress {
@@ -63,7 +67,23 @@ impl MissionProgress {
 
     #[cfg(target_arch = "wasm32")]
     pub fn save_to(&self, _path: &Path) -> anyhow::Result<()> {
-        // Intentional no-op on wasm — see save_to docs above.
+        use base64::{Engine, engine::general_purpose::STANDARD};
+        let file = SaveFile {
+            version: SAVE_VERSION,
+            cleared: self.cleared.iter().cloned().collect(),
+        };
+        let bytes = bincode::serde::encode_to_vec(&file, bincode::config::standard())
+            .map_err(|e| anyhow::anyhow!("bincode encode: {e}"))?;
+        let encoded = STANDARD.encode(&bytes);
+        let storage = local_storage()?;
+        storage
+            .set_item(LOCAL_STORAGE_KEY, &encoded)
+            .map_err(|e| anyhow::anyhow!("localStorage set_item failed: {e:?}"))?;
+        tracing::debug!(
+            bytes = bytes.len(),
+            encoded_chars = encoded.len(),
+            "localStorage save written"
+        );
         Ok(())
     }
 
@@ -100,11 +120,58 @@ impl MissionProgress {
 
     #[cfg(target_arch = "wasm32")]
     pub fn load_from(_path: &Path) -> anyhow::Result<Self> {
-        Ok(Self::default())
+        use base64::{Engine, engine::general_purpose::STANDARD};
+        let storage = match local_storage() {
+            Ok(s) => s,
+            Err(e) => {
+                // localStorage unavailable (Safari private mode, headless,
+                // restricted environment). Not an error — start fresh.
+                tracing::warn!("localStorage unavailable: {e}; starting fresh");
+                return Ok(Self::default());
+            }
+        };
+        let encoded = match storage.get_item(LOCAL_STORAGE_KEY) {
+            Ok(Some(v)) => v,
+            Ok(None) => {
+                tracing::debug!("no localStorage save found; starting fresh");
+                return Ok(Self::default());
+            }
+            Err(e) => {
+                tracing::warn!("localStorage get_item failed: {e:?}; starting fresh");
+                return Ok(Self::default());
+            }
+        };
+        let bytes = STANDARD
+            .decode(&encoded)
+            .map_err(|e| anyhow::anyhow!("base64 decode: {e}"))?;
+        let (file, _): (SaveFile, _) =
+            bincode::serde::decode_from_slice(&bytes, bincode::config::standard())
+                .map_err(|e| anyhow::anyhow!("bincode decode: {e}"))?;
+        if file.version != SAVE_VERSION {
+            anyhow::bail!(
+                "save version mismatch: localStorage has v{}, current schema is v{}",
+                file.version,
+                SAVE_VERSION
+            );
+        }
+        let cleared: HashSet<String> = file.cleared.into_iter().collect();
+        tracing::info!(cleared = cleared.len(), "localStorage save loaded");
+        Ok(Self { cleared })
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+/// Resolve the browser's localStorage handle. Returns Err if the
+/// window or storage object is missing — caller decides whether that's
+/// fatal (save) or fall-through-to-default (load).
+#[cfg(target_arch = "wasm32")]
+fn local_storage() -> anyhow::Result<web_sys::Storage> {
+    let window = web_sys::window().ok_or_else(|| anyhow::anyhow!("no `window` global"))?;
+    window
+        .local_storage()
+        .map_err(|e| anyhow::anyhow!("window.localStorage threw: {e:?}"))?
+        .ok_or_else(|| anyhow::anyhow!("window.localStorage is null"))
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 struct SaveFile {
     version: u32,

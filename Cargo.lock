@@ -4775,6 +4775,7 @@ name = "pledge_and_crown"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64",
  "bevy",
  "bevy_ecs_tilemap",
  "bevy_egui",
@@ -4788,6 +4789,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tracing",
  "tracing-subscriber",
+ "web-sys",
 ]
 
 [[package]]
