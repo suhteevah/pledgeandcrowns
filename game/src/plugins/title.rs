@@ -8,7 +8,12 @@ use bevy::prelude::*;
 
 const TITLE_NATIVE_W: f32 = 640.0;
 const TITLE_NATIVE_H: f32 = 360.0;
-const TITLE_SCALE: f32 = 2.0;
+// Camera is FixedVertical at 180 world units; the title art is 360
+// pixels tall natively, so 0.5 maps it 1:1 to the visible area without
+// crop. (Was 2.0, which made the title 4x the viewport — only the
+// center parchment bg showed, which is why the wasm screen looked
+// "empty" until this was caught.)
+const TITLE_SCALE: f32 = 0.5;
 
 #[derive(Component)]
 struct TitleArt;

@@ -79,8 +79,16 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
 fn move_player(
     keys: Res<ButtonInput<KeyCode>>,
     time: Res<Time>,
+    editor: Res<crate::plugins::editor::EditorState>,
     mut query: Query<&mut Transform, With<Player>>,
 ) {
+    // Don't bleed gameplay movement through to the editor — typing
+    // WASD in your code would otherwise still walk the player around
+    // in the background while you were trying to write Rust.
+    if editor.open {
+        return;
+    }
+
     let Ok(mut transform) = query.single_mut() else {
         return;
     };

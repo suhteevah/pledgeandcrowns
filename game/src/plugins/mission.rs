@@ -571,6 +571,12 @@ fn handle_interact_key(
     mut active: ResMut<ActiveMission>,
     mut completion: ResMut<CompletionView>,
 ) {
+    // Same input-bleed class as WASD — F is gameplay, not text input.
+    // If the editor is open, the player is typing their solution and
+    // an F keystroke means "the letter f", not "talk to NPC".
+    if editor.open {
+        return;
+    }
     if !keys.just_pressed(KeyCode::KeyF) {
         return;
     }

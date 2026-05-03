@@ -59,9 +59,17 @@ impl Plugin for EditorPlugin {
 }
 
 fn toggle_editor(keys: Res<ButtonInput<KeyCode>>, mut state: ResMut<EditorState>) {
-    if keys.just_pressed(KeyCode::KeyE) {
-        state.open = !state.open;
-        tracing::info!("editor toggled: open={}", state.open);
+    // E opens the editor, Esc closes it. The previous E-toggles-both
+    // behaviour meant typing the letter `e` in your code closed the
+    // window mid-edit (Matt caught this on day-N). Now the close path
+    // is Esc-only and the open path doesn't fire while the editor is
+    // already open, so player typing can't accidentally toggle.
+    if !state.open && keys.just_pressed(KeyCode::KeyE) {
+        state.open = true;
+        tracing::info!("editor opened");
+    } else if state.open && keys.just_pressed(KeyCode::Escape) {
+        state.open = false;
+        tracing::info!("editor closed via Escape");
     }
 }
 
