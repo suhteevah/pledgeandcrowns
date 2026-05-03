@@ -119,9 +119,27 @@ pub fn run_wasm(
     let mut config = Config::new();
     config.consume_fuel(true);
     config.epoch_interruption(true);
-    // Defence-in-depth: deny features we don't need. Threads adds
-    // shared-memory shenanigans we explicitly do not want for student
-    // submissions.
+    // Defence-in-depth: deny every wasm feature proposal we don't
+    // explicitly need. The student curriculum compiles plain Rust to
+    // wasm32-wasip1 and exercises none of these proposals; turning each
+    // off explicitly turns "future wasmtime release silently enables a
+    // feature" from a possible regression into an instantiation error.
+    //
+    // Note on dependency ordering (per wasmtime 44 Config docs):
+    //   reference_types depends on bulk_memory
+    //   function_references depends on reference_types
+    //   gc depends on function_references
+    // We disable the whole chain. SIMD/relaxed-SIMD/multi-memory/
+    // memory64/tail-call/threads are independent toggles.
+    config.wasm_simd(false);
+    config.wasm_relaxed_simd(false);
+    config.wasm_bulk_memory(false);
+    config.wasm_multi_memory(false);
+    config.wasm_memory64(false);
+    config.wasm_reference_types(false);
+    config.wasm_function_references(false);
+    config.wasm_gc(false);
+    config.wasm_tail_call(false);
     config.wasm_threads(false);
 
     let engine = Engine::new(&config)?;
