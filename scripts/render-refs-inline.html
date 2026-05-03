@@ -2451,12 +2451,217 @@ window.REF20 = function REF20({ scale = 8 }) {
 };
 window.REF20_GRID = REF20_GRID;
 </script>
+<script type="text/babel" data-presets="env,react">
+// REF-21 — The Forgewright (NPC batch 3)
+const REF21_GRID = [
+  '................................', //  0
+  '................................', //  1
+  '................................', //  2
+  '..........XXXXXXXX..............', //  3 head top
+  '.........XZZZNNNZZX.............', //  4 hair shadow
+  '........XZNNNNNNNNZX............', //  5 hair mid
+  '........XZNNNNNNNNNX............', //  6
+  '........XPPPPPPPRWWX............', //  7 forehead
+  '........XBPPPRRRRRWX............', //  8 brow line
+  '........XX.X.XX.X.XX............', //  9 eyes
+  '........X.PPRRRRRRWX............', // 10
+  '........XZNNNNNNNNZX............', // 11 short beard top
+  '........XXZNNNNNZZXX............', // 12 beard tip
+  '.........XYYOOOOYYX.............', // 13 collar
+  '........XYYYOOOOOOYX............', // 14 apron upper
+  '........XYYOOWWWOOOX............', // 15 apron lit row
+  '........XYYOOWWWOOOX............', // 16
+  '........XSXXXXXXXXSX............', // 17 tongs cage upper
+  '........XSXBBGGBBXSX............', // 18 tongs jaws + workpiece border
+  '........XSXBLGGGBXSX............', // 19 workpiece core w/ specular L
+  '........XSXBBGGBBXSX............', // 20 workpiece lower
+  '........XSXXXXXXXXSX............', // 21 tongs cage lower
+  '........XYYOOOOOOOYX............', // 22 apron mid
+  '........XYYOOWWOOOYX............', // 23
+  '........XXNGGGGGGNXX............', // 24 belt + buckle
+  '........XYYOOOOOOOYX............', // 25 apron lower
+  '........XYYOOWWOOOYX............', // 26
+  '........XYYOOOOOOOYX............', // 27 apron hem
+  '........XZZZXXXXZZZX............', // 28 leg split / trouser tops
+  '........XZZZX..XZZZX............', // 29 boot tops
+  '........XZUUX..XZUUX............', // 30 boot mid
+  '........XXXXX..XXXXX............', // 31 soles
+];
+window.REF21 = function REF21({ scale = 8 }) {
+  return <PixelArt grid={REF21_GRID} scale={scale} title="REF-21 The Forgewright" />;
+};
+window.REF21_GRID = REF21_GRID;
+</script>
+<script type="text/babel" data-presets="env,react">
+// REF-22 — The Linguist (NPC batch 3)
+const REF22_GRID = [
+  '................................', //  0
+  '................................', //  1
+  '..........XXXXXXXX..............', //  2 head top
+  '.........XSSSVVSSSX.............', //  3 hair w/ pale top
+  '........XSSVVVVVVSSX............', //  4
+  '........XSSVVVVVVVSX............', //  5
+  '........XPPPPPPPPRRX............', //  6 forehead
+  '........XBPPRRRRRRWX............', //  7 brow line
+  '........XX.X.XX.X.XX............', //  8 eyes
+  '........X.PPRRRRRRWX............', //  9
+  '........XXPPRWWWWPXL............', // 10 mouth + speech curl pixel L
+  '........XXPPPRRRRPXX............', // 11 chin
+  '.........XYYYYYYYYX.............', // 12 collar
+  '........XYYVVVVVYYYX............', // 13 robe upper + undertunic V
+  '........XYYOOOOOOOYX............', // 14 robe lit row
+  '.....XXXXXYOOOOOOYXXXXX.........', // 15 arms outstretched begin
+  '....XUCCCCXYYYYYYYXCCCCXX.......', // 16 left book opens / right scroll begins
+  '....XUCGCCXYYYYYYYXSCCCNX.......', // 17 book clasp G + page line, scroll cap N
+  '....XUCCCCXYYYYYYYXSCCCNX.......', // 18
+  '....XUCCCCXYYYYYYYXSCCCZX.......', // 19 scroll shadow Z at right cap
+  '....XUCCCCXYYYYYYYXSCCCZX.......', // 20
+  '....XXXXXXXYYYYYYYXXXXXXX.......', // 21 book/scroll close
+  '........XYYYYYYYYYYX............', // 22 robe mid
+  '........XYYYOOOOOYYX............', // 23
+  '........XVVNNNNNNNVX............', // 24 sash V/N
+  '........XYYYOOOOOYYX............', // 25 robe lower
+  '........XYYYYYYYYYYX............', // 26
+  '........XYYYYOOOYYYX............', // 27
+  '........XYYYYYYYYYYX............', // 28 hem
+  '........XZZZXXXXZZZX............', // 29 boot tops
+  '........XZUUX..XZUUX............', // 30 boot mid
+  '........XXXXX..XXXXX............', // 31 soles
+];
+window.REF22 = function REF22({ scale = 8 }) {
+  return <PixelArt grid={REF22_GRID} scale={scale} title="REF-22 The Linguist" />;
+};
+window.REF22_GRID = REF22_GRID;
+</script>
+<script type="text/babel" data-presets="env,react">
+// REF-23 — The Pilgrim (NPC batch 3)
+const REF23_GRID = [
+  '................................', //  0
+  '................................', //  1
+  '..........XXXXXXXX..............', //  2 hood top
+  '.........XFFFFFFFFX.............', //  3 hood
+  '........XFFEEEEEEFFX............', //  4
+  '........XFEEKKKKKEFX............', //  5 hood interior shadow K
+  '........XFKKKKKKKKFX............', //  6
+  '........XFKKKKSKKKFX............', //  7 single S eye glint
+  '........XFKKKKKKKKFX............', //  8
+  '........XFEEKKKKEENX............', //  9 hood lower edge w/ N glow tint right
+  '........XVVVPPPPRRWX............', // 10 chin scarf + lower jaw
+  '........XXVVPPRRWWXX............', // 11
+  '........XFFFFFFFFFFX............', // 12 cloak collar
+  '......XXFFFEEEEEFFFXX...........', // 13 cloak shoulders
+  '.....XFHFFEEEEEEFFFFXX..........', // 14 cloak with H lit-edge highlight left
+  '.....XFFFFEEEEEEEFFFFX..XZX.....', // 15 staff begins right
+  '.....XFFFFEEEEEEEFFFFX..XZX.....', // 16
+  '.....XFFFFEEEEEEEFFFFX..XZX.....', // 17
+  '.....XFFFFEEEEEEEFFFFX..XSX.....', // 18 staff ferrule S
+  '.....XFFFFEEEEEEEFFFFX..XZX.....', // 19
+  '.....XFFFFEEEEEEEFFFFX..........', // 20 lantern hangs below opposite hand
+  '.....XFFFFFEEEEEFFFFFX..XXXX....', // 21 chain begins
+  '.....XJJJFFFFFFFFFJJJX..XZZX....', // 22 chain Z
+  '.....XJJJJFFFFFFFFJJJX.XXBBXX...', // 23 lantern cage top
+  '.....XJJJJJFFFFFJJJJJX.XBGGBX...', // 24 lantern body + glass
+  '.....XJJJJJFFFFFJJJJJX.XBLGBX...', // 25 flame core L (specular)
+  '.....XJJJJJJJJJJJJJJJX.XBGGBX...', // 26
+  '.....XJJJJJJJJJJJJJJJX.XXBBXX...', // 27 lantern cage bottom
+  '.....XJJJSSSSSSSSSJJJX..........', // 28 dust hem
+  '......XZZZX....XZZZX............', // 29 boot tops
+  '......XZUUX....XZUUX............', // 30 boot mid
+  '......XXXXX....XXXXX............', // 31 soles
+];
+window.REF23 = function REF23({ scale = 8 }) {
+  return <PixelArt grid={REF23_GRID} scale={scale} title="REF-23 The Pilgrim" />;
+};
+window.REF23_GRID = REF23_GRID;
+</script>
+<script type="text/babel" data-presets="env,react">
+// REF-24 — The Drillmaster (NPC batch 3)
+const REF24_GRID = [
+  '................................', //  0
+  '................................', //  1
+  '..........XXXXXXXX..............', //  2 head top
+  '.........XSSSSSSSSX.............', //  3 hair (close-cropped)
+  '........XSSNNNNNSSX.............', //  4
+  '........XPPPPPPPPRRX............', //  5 forehead
+  '........XBPPRRRRRWX.............', //  6 brow
+  '........XX.X.XX.X.XX............', //  7 eyes
+  '........X.PPRRRRRRWX............', //  8
+  '........XXZZZZZZZZXX............', //  9 moustache row
+  '........X.PPRWWWWPX.............', // 10 mouth
+  '.........XPPRRRRRPX.............', // 11 chin
+  '........XEEEEEEEEEEX............', // 12 collar
+  '.....XXXXEEHEEEEEEEXXXX.........', // 13 shoulders + H lit edge left
+  '....XPRRXNEEEEEEEEEXKYYX........', // 14 left arm raised palm-out + baton tucked right
+  '....XPPPXEEGGGGGEEEXKYYX........', // 15 chest stripe G
+  '....XPPRXEEEEEEEEEEXYYYX........', // 16
+  '....XPPPXEEEEEEEEEEXYYLX........', // 17 baton specular pip L
+  '....XPRRXEEEEEEEEEEXYYGX........', // 18 baton end-cap G
+  '....XPPPXEEFFFFFFEEXKYYX........', // 19
+  '....XXXXXEEFFFFFFEEXXXXX........', // 20 arms close
+  '........XEEFFFFFFEEX............', // 21 lower tunic
+  '........XEEFFFFFFEEX............', // 22
+  '........XJJJJJJJJJJX...XXXX.....', // 23 tunic deep shadow + slate begins
+  '........XZZZZZZZZZZX..XSXXSXX...', // 24 trousers + slate frame
+  '........XZZZZZZZZZZX..XNXVXNX...', // 25 slate face X w/ V tally column 1
+  '........XZZZZZZZZZZX..XNXVXNX...', // 26 tally column 2 V
+  '........XZZZZZZZZZZX..XNXVXNX...', // 27 tally column 3 V
+  '........XZZZZXXZZZZX..XSSSSSX...', // 28 leg split + slate base
+  '........XUUUUX..XUUUUX..........', // 29 boot tops (wider)
+  '........XUUUUX..XUUUUX..........', // 30 boots
+  '........XXXXXX..XXXXXX..........', // 31 soles
+];
+window.REF24 = function REF24({ scale = 8 }) {
+  return <PixelArt grid={REF24_GRID} scale={scale} title="REF-24 The Drillmaster" />;
+};
+window.REF24_GRID = REF24_GRID;
+</script>
+<script type="text/babel" data-presets="env,react">
+// REF-25 — The Reckoner (NPC batch 3)
+const REF25_GRID = [
+  '................................', //  0
+  '................................', //  1
+  '................................', //  2
+  '..........XXXXXXXX..............', //  3 head top (bowed forward, lower in frame)
+  '.........XSSSVVSSSX.............', //  4 hair w/ V hi
+  '........XSSVVVVVVSSX............', //  5
+  '........XSSVVVVVVVSX............', //  6
+  '........XPPPPPPPPRRX............', //  7 forehead (only forehead/brow visible)
+  '........XBPPRRRRRRWXN...........', //  8 brow line + earring N right
+  '........XX.X.XX.X.XX............', //  9 eyes (downcast, masked by bow)
+  '........XXPPRRRRRRPXX...........', // 10 nose bridge fragment
+  '........XYYYYYYYYYYYX...........', // 11 collar drops to shoulders
+  '......XXYYYYYYYYYYYYYXX.........', // 12 robe shoulders
+  '.....XYYYYOOOOOOOOOYYYYX........', // 13 robe upper lit row
+  '.....XYYYOOOWWWOOOOOYYYX........', // 14
+  '.....XYYYYYYYYYYYYYYYYYX........', // 15 robe mid
+  '.....XYYYYYYYYYYYYYYYYYX........', // 16
+  '....XPPPYYYYYYYYYYYYYYYX........', // 17 left hand emerges onto ledger (left side)
+  '....XPRPYYYYYYYYYYYYPPPX........', // 18 right hand emerges with quill
+  '....XPPPYYYYYYYYYYYYPRPXX.......', // 19 quill begins right
+  '....XPPPYYYYYYYYYYYYPPPXLX......', // 20 quill nib specular L
+  '....XCCCCCCCXCCCCCCCCXX.X.......', // 21 ledger top edge — left page CCCCC | right page CCCC
+  '....XCXXVCCCXCCCCCCCCCX.........', // 22 left page tally row 1 (XX) + V shadow
+  '....XCXXVCCCXCCCCCCCCCX.........', // 23 left page tally row 2
+  '....XCXXVCCCXCCCXXXXXCX.........', // 24 left tally 3 + right page sum line XXXXX
+  '....XCCCCGCCXCCCCCCCCCX.........', // 25 ribbon bookmark G left page
+  '....XUUUUUUUUUUUUUUUUUUX........', // 26 desk top U
+  '....XZZZZZZZZZZZZZZZZZZX........', // 27 desk trim Z
+  '....XUUUUUUUUUUUUUUUUUUX........', // 28 desk underside
+  '....XUUUUUUUUUUUUUUUUUUX........', // 29
+  '....XBBBBXX........XXBBBBX......', // 30 desk legs (basalt)
+  '....XBBBBXX........XXBBBBX......', // 31
+];
+window.REF25 = function REF25({ scale = 8 }) {
+  return <PixelArt grid={REF25_GRID} scale={scale} title="REF-25 The Reckoner" />;
+};
+window.REF25_GRID = REF25_GRID;
+</script>
 </head>
 <body>
   <div id="status">loading...</div>
   <div id="root"></div>
   <script type="text/babel" data-presets="env,react">
-    const REFS = ['REF01','REF02','REF03','REF04','REF05','REF06','REF07','REF08','REF09','REF10','REF11','REF12','REF13','REF14','REF15','REF16','REF17','REF18','REF19','REF20'];
+    const REFS = ['REF01','REF02','REF03','REF04','REF05','REF06','REF07','REF08','REF09','REF10','REF11','REF12','REF13','REF14','REF15','REF16','REF17','REF18','REF19','REF20','REF21','REF22','REF23','REF24','REF25'];
     window.__refs = {};
     window.__refs_done = false;
     function App() {

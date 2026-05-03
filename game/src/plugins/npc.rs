@@ -7,9 +7,10 @@
 //! This plugin only owns NPC spawning and proximity detection.
 
 use crate::assets::{
-    SPRITE_BELLRINGER, SPRITE_BORROW_CHECKER, SPRITE_CARTOGRAPHER, SPRITE_COOPER, SPRITE_FERRIS,
-    SPRITE_HERALD, SPRITE_HERALDIC_SAGE, SPRITE_ORACLE, SPRITE_PLAYER, SPRITE_SMITH, SPRITE_TINKER,
-    SPRITE_TRAIT_MAGE, SPRITE_TWIN,
+    SPRITE_BELLRINGER, SPRITE_BORROW_CHECKER, SPRITE_CARTOGRAPHER, SPRITE_COOPER,
+    SPRITE_DRILLMASTER, SPRITE_FERRIS, SPRITE_FORGEWRIGHT, SPRITE_HERALD, SPRITE_HERALDIC_SAGE,
+    SPRITE_LINGUIST, SPRITE_ORACLE, SPRITE_PILGRIM, SPRITE_PLAYER, SPRITE_RECKONER, SPRITE_SMITH,
+    SPRITE_TINKER, SPRITE_TRAIT_MAGE, SPRITE_TWIN,
 };
 use crate::plugins::player::Player;
 use crate::plugins::state::GameState;
@@ -134,35 +135,35 @@ pub const NPC_ROSTER: &[NpcSpec] = &[
     NpcSpec {
         name: "The Forgewright",
         mission_id: "borrow_mut",
-        sprite_path: SPRITE_PLAYER, // placeholder
+        sprite_path: SPRITE_FORGEWRIGHT,
         pos: (-200.0, -100.0),
         native_px: 32.0,
     },
     NpcSpec {
         name: "The Linguist",
         mission_id: "string_vs_str",
-        sprite_path: SPRITE_PLAYER, // placeholder
+        sprite_path: SPRITE_LINGUIST,
         pos: (200.0, 100.0),
         native_px: 32.0,
     },
     NpcSpec {
         name: "The Pilgrim",
         mission_id: "option_unwrap_or",
-        sprite_path: SPRITE_PLAYER, // placeholder
+        sprite_path: SPRITE_PILGRIM,
         pos: (-80.0, 130.0),
         native_px: 32.0,
     },
     NpcSpec {
         name: "The Drillmaster",
         mission_id: "for_in_range",
-        sprite_path: SPRITE_PLAYER, // placeholder
+        sprite_path: SPRITE_DRILLMASTER,
         pos: (80.0, 130.0),
         native_px: 32.0,
     },
     NpcSpec {
         name: "The Reckoner",
         mission_id: "closure_basic",
-        sprite_path: SPRITE_PLAYER, // placeholder
+        sprite_path: SPRITE_RECKONER,
         pos: (-200.0, 130.0),
         native_px: 32.0,
     },
