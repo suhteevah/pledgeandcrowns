@@ -66,6 +66,23 @@ fn draw_title_overlay(
                 ));
             }
         });
+
+    // Controls panel pinned to the bottom-right. Discoverable without
+    // cluttering in-game UI; players read it once on the title screen
+    // and remember (or re-enter title to look again).
+    egui::Window::new("title_controls")
+        .title_bar(false)
+        .resizable(false)
+        .collapsible(false)
+        .anchor(egui::Align2::RIGHT_BOTTOM, egui::Vec2::new(-12.0, -12.0))
+        .show(ctx, |ui| {
+            ui.small("controls");
+            ui.separator();
+            ui.small("[WASD]  walk");
+            ui.small("[F]     talk to NPC");
+            ui.small("[E]     open code sandbox");
+            ui.small("[Esc]   close panel / dismiss");
+        });
 }
 
 fn spawn_title_art(mut commands: Commands, asset_server: Res<AssetServer>) {
