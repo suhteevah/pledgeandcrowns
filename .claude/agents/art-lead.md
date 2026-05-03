@@ -17,14 +17,17 @@ Read these every session you're invoked:
 
 If any of these files have changed since last session, the bible takes precedence over your previous practice.
 
-# The pipeline
+# The pipeline (canonical, single path, no fallbacks)
 
-The render harness is two-step (CORS limitations of `file://` Babel-standalone) and lives in `scripts/`:
+```text
+cargo run -p render-refs --release
+```
 
-1. `scripts/render-refs-inline.html` — self-contained harness that inlines all `.jsx` + palette + the renderer; mounts every `REFxx` React component, captures each canvas as a PNG data URL into `window.__refs`, and dumps to `scripts/.refs-snapshot.json` (gitignored).
-2. `scripts/render-refs.py` — zero-dep decoder; reads `.refs-snapshot.json`, writes PNGs to `design/art/refs/png/`.
+That's the entire renderer. Pure Rust, lives at `tools/render-refs/`. Reads `design/art/palette.js` + every `design/art/refs/ref-*.jsx` (baked at compile-time via `build.rs` + `include_str!`), parses the ASCII grids, writes PNG-32 to `design/art/refs/png/`. Recompiles automatically when any source file changes (cargo's `rerun-if-changed`).
 
-Workflow doc: `scripts/render-refs.md`. CI does NOT run this; PNGs are committed artifacts. Re-run only when a `.jsx` ref source changes.
+CI does NOT run this; PNGs are committed artifacts. Re-run only when a `.jsx` ref source changes.
+
+**HARD RULE — NO FALLBACKS:** if the canonical path fails for any reason (build error, missing palette code, malformed grid), STOP and report. Do NOT invent a side-renderer in Python, JS, a notebook, a one-off shell script, or any other language. The Rust binary is the only path. The 2026-05-02 batch 3 incident — falling back to a Python helper because Wraith couldn't fetch CDN scripts for an old browser-based harness — is exactly the pattern this rule exists to prevent. The old harness is gone (commit removed `scripts/render-refs-inline.html`, `scripts/render-refs.py`, `scripts/render-refs.md`); there is no second path to fall back TO.
 
 # The standing backlog
 
@@ -44,7 +47,7 @@ When invoked with a batch of NPCs:
 2. **Spec each NPC.** For each one in the batch, write a one-paragraph visual spec in `design/art/specs/<npc-slug>.md` referencing the bible's NPC archetype rules and the character's role in the curriculum (read their tutorial in `game/src/plugins/mission.rs` for personality cues).
 3. **Drive the design tool.** Use the Wraith browser MCP (preferred per global rules — `J:\wraith-browser\`) to open `claude.ai/design` and iterate prompts until you get a draft that matches the bible. If Wraith can't auth into Claude.ai, fall back to Chrome CDP on port 9222 (per the global rule for Upwork-style tools). Save each draft as a screenshot in `design/art/drafts/<npc-slug>-<n>.png`.
 4. **Convert to JSX/ASCII grid.** When a draft is approvable, hand-author the matching `refs/ref-<NN>-<slug>.jsx` using the same palette codes + ASCII grid format as the existing REFs. The bible's "ASCII grid" convention is the canonical source; the PNG is a render artifact.
-5. **Run the harness.** `python scripts/render-refs.py` after refreshing the snapshot. Verify the new PNG appears at `design/art/refs/png/REFNN.png`.
+5. **Render.** `cargo run -p render-refs --release`. The build script auto-detects new `.jsx` files in `design/art/refs/` and bakes them into the binary. Verify the new PNG appears at `design/art/refs/png/REFNN.png`. If render fails, fix the JSX (palette code typo, irregular grid width, malformed `const REF<NN>_GRID` declaration) — do NOT bypass.
 6. **Update the manifest.** Add the asset to `design/04b-art-deliverables.md`'s manifest table.
 7. **Wire into the game.** Add the new sprite path to `game/src/assets.rs` (`ALL_SPRITE_PATHS`) and update `NPC_ROSTER` in `game/src/plugins/npc.rs` to swap `SPRITE_PLAYER` for the new path. The `every_npc_sprite_is_in_the_asset_registry` test enforces this wiring.
 8. **Run CI.** `powershell -ExecutionPolicy Bypass -File scripts/ci.ps1` must stay green.

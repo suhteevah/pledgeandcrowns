@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "game",
     "compile-api",
+    "tools/render-refs",
 ]
 
 [workspace.package]
@@ -50,6 +51,12 @@ tower-http = { version = "0.6", features = ["trace", "cors"] }
 # in dev but pinning the TLS backend matters when the API moves to
 # the Hetzner VPS.
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+# tools/render-refs only — pixel-art ASCII grids → PNG. No browser
+# dependency, no Babel, no React, no CDN. Replaced the old web harness.
+image = { version = "0.25", default-features = false, features = ["png"] }
+regex = "1"
+walkdir = "2"
 
 [profile.release]
 codegen-units = 1
