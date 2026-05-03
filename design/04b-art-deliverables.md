@@ -190,15 +190,22 @@ Refs landed against the bible. Source `.jsx` lives at `design/art/refs/ref-NN-<s
 | 18 | The Twin | 32×32 | ref-18-twin.jsx | specs/twin.md | `sprites/npc/twin_idle_0.png` |
 | 19 | The Tinker | 32×32 | ref-19-tinker.jsx | specs/tinker.md | `sprites/npc/tinker_idle_0.png` |
 | 20 | The Heraldic Sage | 32×32 | ref-20-heraldic-sage.jsx | specs/heraldic-sage.md | `sprites/npc/heraldic_sage_idle_0.png` |
+| 21 | The Forgewright | 32×32 | ref-21-forgewright.jsx | specs/forgewright.md | `sprites/npc/forgewright_idle_0.png` |
+| 22 | The Linguist | 32×32 | ref-22-linguist.jsx | specs/linguist.md | `sprites/npc/linguist_idle_0.png` |
+| 23 | The Pilgrim | 32×32 | ref-23-pilgrim.jsx | specs/pilgrim.md | `sprites/npc/pilgrim_idle_0.png` |
+| 24 | The Drillmaster | 32×32 | ref-24-drillmaster.jsx | specs/drillmaster.md | `sprites/npc/drillmaster_idle_0.png` |
+| 25 | The Reckoner | 32×32 | ref-25-reckoner.jsx | specs/reckoner.md | `sprites/npc/reckoner_idle_0.png` |
 
 **NPC batches landed:**
 - Batch 1 (2026-05-02) — REF-11..15: Smith, Cartographer, Trait Mage, Bellringer, Cooper. Specs in `design/art/specs/`. Replaces SPRITE_PLAYER placeholders for the corresponding entries in `NPC_ROSTER`.
 - Batch 2 (2026-05-02) — REF-16..20: Oracle, Herald, Twin, Tinker, Heraldic Sage (the Sage is the first Act-2 NPC shipped; the others finish Act-1 prelude P1). Specs in `design/art/specs/`. Heraldic Sage uses a foreshadowing-license cobalt sigil (~0.9% canvas, under 1% bible cap) to signpost Act 6's cool-counterweight zone — see spec for cross-ref.
+- Batch 3 (2026-05-02) — REF-21..25: Forgewright, Linguist, Pilgrim, Drillmaster, Reckoner. First half of the Act-2 cast. Specs in `design/art/specs/`. PNGs verified pixel-identical to the harness output (sample-pixel parity check against the live React canvas in Chrome). No bible-allowance exceptions used; all five sprites stay inside their assigned ramps.
 
-**Remaining placeholders** (still using `SPRITE_PLAYER`): Forgewright, Linguist, Pilgrim, Drillmaster, Reckoner, Quartermaster, Auditor, Chronicler, Alchemist (Act-2 P2). See `game/src/plugins/npc.rs` for live truth.
+**Remaining placeholders** (still using `SPRITE_PLAYER`): Quartermaster, Auditor, Chronicler, Alchemist (Act-2 P2). See `game/src/plugins/npc.rs` for live truth.
 
 ## 10. Revision history
 
 - **1.0 (2026-04-25)** — initial spec. Companions to bible v2.0 and handoff-prompts v1.0.
 - **1.1 (2026-05-02)** — added §9 Rendered REF manifest; logged NPC batch 1 (Smith, Cartographer, Trait Mage, Bellringer, Cooper).
 - **1.2 (2026-05-02)** — logged NPC batch 2 (Oracle, Herald, Twin, Tinker, Heraldic Sage). 5 of 9 P2 placeholders remain.
+- **1.3 (2026-05-02)** — logged NPC batch 3 (Forgewright, Linguist, Pilgrim, Drillmaster, Reckoner). 4 of 9 Act-2 P2 placeholders remain.

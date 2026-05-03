@@ -30,6 +30,15 @@ pub const SPRITE_TWIN: &str = "sprites/npc/twin_idle_0.png";
 pub const SPRITE_TINKER: &str = "sprites/npc/tinker_idle_0.png";
 pub const SPRITE_HERALDIC_SAGE: &str = "sprites/npc/heraldic_sage_idle_0.png";
 
+// NPC batch 3 (2026-05-02) — Forgewright, Linguist, Pilgrim, Drillmaster, Reckoner.
+// Sources: design/art/refs/ref-21..25-*.jsx; PNGs rendered direct from JSX
+// grids by the art-lead's helper (the JSX harness is the canonical source).
+pub const SPRITE_FORGEWRIGHT: &str = "sprites/npc/forgewright_idle_0.png";
+pub const SPRITE_LINGUIST: &str = "sprites/npc/linguist_idle_0.png";
+pub const SPRITE_PILGRIM: &str = "sprites/npc/pilgrim_idle_0.png";
+pub const SPRITE_DRILLMASTER: &str = "sprites/npc/drillmaster_idle_0.png";
+pub const SPRITE_RECKONER: &str = "sprites/npc/reckoner_idle_0.png";
+
 /// Every asset path the game references. Used by the asset-existence
 /// audit test in `tests/assets.rs`.
 pub const ALL_SPRITE_PATHS: &[&str] = &[
@@ -48,4 +57,9 @@ pub const ALL_SPRITE_PATHS: &[&str] = &[
     SPRITE_TWIN,
     SPRITE_TINKER,
     SPRITE_HERALDIC_SAGE,
+    SPRITE_FORGEWRIGHT,
+    SPRITE_LINGUIST,
+    SPRITE_PILGRIM,
+    SPRITE_DRILLMASTER,
+    SPRITE_RECKONER,
 ];
