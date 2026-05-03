@@ -14,6 +14,7 @@
 
 use pledge_and_crown::plugins::mission::MissionRegistry;
 use pledge_and_crown::plugins::stub_grader::stub_verdict;
+use pledge_compile_api::cargo_grader;
 use pledge_compile_api::grader::grade;
 
 /// Canonical correct solutions. MUST cover every mission id in the
@@ -214,6 +215,38 @@ fn server_and_stub_flavor_agree_byte_for_byte() {
             server.stderr, stub_stderr,
             "stderr drift on canonical `{}`",
             m.id
+        );
+    }
+}
+
+/// Slow audit: every canonical solution must also pass `cargo check`.
+///
+/// The pattern grader checks token presence, not language correctness —
+/// in principle it could approve syntactically-broken Rust as long as
+/// the right keywords appear. This test closes that loop by running
+/// every canonical solution through the real `cargo_grader::compile_check`
+/// and asserting compilation succeeds.
+///
+/// `#[ignore]` because each invocation forks a real `cargo check` (~1-3s
+/// warm × 21 missions ≈ 30-60s total). Runs alongside the other slow
+/// audits via:
+///
+/// ```text
+/// cargo test --workspace -- --ignored
+/// ```
+#[test]
+#[ignore = "slow: forks cargo check 21 times"]
+fn every_canonical_solution_passes_cargo_check() {
+    let reg = MissionRegistry::default();
+    for m in &reg.missions {
+        let src =
+            canonical_solution(m.id).expect("checked by every_mission_has_a_canonical_solution");
+        let verdict = cargo_grader::compile_check(src)
+            .unwrap_or_else(|e| panic!("cargo_grader setup failed for `{}`: {e:#}", m.id));
+        assert!(
+            verdict.ok,
+            "canonical solution for `{}` is not valid Rust per cargo check.\n--- source ---\n{src}\n--- stderr ---\n{}",
+            m.id, verdict.stderr
         );
     }
 }
