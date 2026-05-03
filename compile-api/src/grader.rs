@@ -48,7 +48,9 @@ pub fn grade(encounter_id: &str, source: &str) -> Verdict {
         "double_function" => match requires_all(source, &["fn double", "i32", "* 2"])
             .or_else(|_| requires_all(source, &["fn double", "i32", "*2"]))
         {
-            Ok(()) => Verdict::pass("the Trait Mage smiles: `double(21)` would yield 42."),
+            Ok(()) => {
+                Verdict::pass("the Trait Mage's staff hums. \"named once, doubled twice over.\"")
+            }
             Err(e) => Verdict::fail(format!("not yet — {e}")),
         },
         "borrow_preview" => match requires_all(source, &["&value", "println!"]) {
@@ -62,7 +64,7 @@ pub fn grade(encounter_id: &str, source: &str) -> Verdict {
             } else if !source.contains("+= 1") && !source.contains("+=1") {
                 Verdict::fail("the Smith eyes you — missing required: `+= 1`")
             } else {
-                Verdict::pass("the Smith taps the anvil. \"good — that one bends.\"")
+                Verdict::pass("the Smith strikes the work. \"good — that one bends.\"")
             }
         }
         // ── Mission 5: branch on i32 sign with if/else.
@@ -89,7 +91,7 @@ pub fn grade(encounter_id: &str, source: &str) -> Verdict {
                 )
             } else {
                 Verdict::pass(
-                    "the Bellringer pulls the rope. \"the loop yielded its prize — 128.\"",
+                    "the Bellringer pulls the rope — the bell sounds. \"the loop returned its number.\"",
                 )
             }
         }

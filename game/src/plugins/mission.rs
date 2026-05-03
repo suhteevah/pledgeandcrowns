@@ -69,10 +69,12 @@ A type annotation is allowed but not required.",
                     npc_name: "Trait Mage",
                     prompt: "Define `double(n: i32) -> i32` that returns `n` multiplied by two.",
                     tutorial: "## Concept\n\
-Functions in Rust are declared with `fn`. Parameters carry an explicit \
-type — there is no implicit casting between numeric types. The return \
-type follows `->`. The last expression in the body is the return value \
-when there's no trailing semicolon (Rust calls this an *implicit return*).\n\n\
+The Trait Mage frames a function as a *named spell* — same inputs, same \
+output, no surprises. Functions in Rust are declared with `fn`. \
+Parameters carry an explicit type — there is no implicit casting between \
+numeric types. The return type follows `->`. The last expression in the \
+body is the return value when there's no trailing semicolon (Rust calls \
+this an *implicit return*).\n\n\
 ## Syntax\n\
 ```\nfn add(a: i32, b: i32) -> i32 {\n    a + b   // no semicolon = return value\n}\n```\n\
 Adding a semicolon after `a + b` would turn it into a statement and \
@@ -126,7 +128,8 @@ way as in C/Python.\n\n\
 Make `x` mutable, then increment it by one using the compound-assignment \
 operator.\n\n\
 ## Hint\n\
-The grader requires both `let mut` and `+= 1` to appear in the source.",
+The grader requires both `let mut` and `+= 1` to appear in the source. \
+The Smith's rule: name what changes. The `mut` keyword *is* that name.",
                     starter_code: "fn main() {\n    let x = 0;\n    // make x mutable, then add one\n    println!(\"{x}\");\n}\n",
                 },
                 Mission {
@@ -146,8 +149,10 @@ the braces around the bodies do the visual grouping.\n\n\
 Implement `sign(n: i32) -> &'static str` so it returns `\"neg\"`, \
 `\"zero\"`, or `\"pos\"` depending on the sign of `n`.\n\n\
 ## Hint\n\
-The grader requires `if `, `else`, and a literal comparison `< 0` to \
-appear. The canonical body is a three-arm `if` / `else if` / `else`.",
+The Cartographer's compass picks one road at the fork; your `if` does \
+the same with the sign of `n`. The grader requires `if `, `else`, and a \
+literal comparison `< 0` to appear. The canonical body is a three-arm \
+`if` / `else if` / `else`.",
                     starter_code: "fn sign(_n: i32) -> &'static str {\n    // three branches, one per sign\n    \"replace me\"\n}\n\nfn main() {\n    println!(\"{}\", sign(-3));\n}\n",
                 },
                 Mission {
@@ -155,8 +160,10 @@ appear. The canonical body is a three-arm `if` / `else if` / `else`.",
                     npc_name: "The Bellringer",
                     prompt: "Use `loop` to find the first power of two at or above one hundred.",
                     tutorial: "## Concept\n\
-Rust has three loop constructs: `loop` (infinite), `while` (predicate), \
-and `for` (iterator). The infinite `loop` is the only one that can return \
+The Bellringer's image: the rope is the loop body, the bell above is \
+the threshold, the sound is the `break` that yields a value. Rust has \
+three loop constructs: `loop` (infinite), `while` (predicate), and \
+`for` (iterator). The infinite `loop` is the only one that can return \
 a value: `break expr;` exits the loop and yields `expr` as the loop's \
 value. That makes `let result = loop { ... };` an idiomatic accumulator \
 pattern when the exit condition isn't easily expressed as a `while`.\n\n\
@@ -219,12 +226,14 @@ the source.",
                     npc_name: "The Cooper",
                     prompt: "Sum the elements of a `Vec<i32>` using `.iter().sum()`.",
                     tutorial: "## Concept\n\
-A `Vec<T>` is the heap-allocated growable list — Rust's analogue of \
-Python `list` or JS `Array`. The standard way to walk it is to call \
-`.iter()` for an immutable borrow of each element, then chain an \
-adapter (`.map`, `.filter`) and a consumer (`.sum`, `.collect`, \
-`.count`). Iterators are zero-cost: the compiler usually fuses them \
-into the same machine code a hand-written loop would produce.\n\n\
+The Cooper's barrel is the lesson: open the lid, walk every stave, do \
+something with each, close the lid. A `Vec<T>` is the heap-allocated \
+growable list — Rust's analogue of Python `list` or JS `Array`. The \
+standard way to walk it is to call `.iter()` for an immutable borrow of \
+each element, then chain an adapter (`.map`, `.filter`) and a consumer \
+(`.sum`, `.collect`, `.count`). Iterators are zero-cost: the compiler \
+usually fuses them into the same machine code a hand-written loop \
+would produce.\n\n\
 ## Syntax\n\
 ```\nlet v = vec![1, 2, 3];\nlet total: i32 = v.iter().sum();\n```\n\
 The type annotation on the binding (`: i32`) is what tells `sum` which \
