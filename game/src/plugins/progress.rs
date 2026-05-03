@@ -249,3 +249,96 @@ fn autosave_on_change(progress: Res<MissionProgress>, save_path: Res<SavePath>) 
         tracing::warn!("autosave failed: {e}");
     }
 }
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::*;
+    use std::env;
+
+    fn temp_save_path() -> PathBuf {
+        // Per-test directory under the system temp dir. Uniqueness via
+        // nanos + thread id keeps parallel test runners from clobbering
+        // each other.
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let tid = format!("{:?}", std::thread::current().id());
+        let safe_tid: String = tid.chars().filter(|c| c.is_alphanumeric()).collect();
+        env::temp_dir()
+            .join(format!("pledge-progress-test-{nanos}-{safe_tid}"))
+            .join(SAVE_FILENAME)
+    }
+
+    #[test]
+    fn round_trip_preserves_cleared_set() {
+        let path = temp_save_path();
+        let mut p = MissionProgress::default();
+        p.mark_cleared("intro_let_binding");
+        p.mark_cleared("borrow_preview");
+        p.save_to(&path).expect("save should succeed");
+
+        let loaded = MissionProgress::load_from(&path).expect("load should succeed");
+        assert!(loaded.is_cleared("intro_let_binding"));
+        assert!(loaded.is_cleared("borrow_preview"));
+        assert!(!loaded.is_cleared("never_cleared"));
+        assert_eq!(loaded.cleared_count(), 2);
+
+        // Cleanup — best-effort, test passes even if it can't remove.
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn load_from_missing_file_returns_default() {
+        let path = temp_save_path();
+        // Don't create anything at the path.
+        let loaded = MissionProgress::load_from(&path).expect("missing file is not an error");
+        assert_eq!(loaded.cleared_count(), 0);
+    }
+
+    #[test]
+    fn save_path_filename_is_locked() {
+        let bad = std::env::temp_dir().join("not-the-right-name.txt");
+        let p = MissionProgress::default();
+        let err = p
+            .save_to(&bad)
+            .expect_err("non-canonical filename must be rejected");
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("save.bincode"),
+            "error should mention the canonical filename: {msg}"
+        );
+    }
+
+    #[test]
+    fn corrupt_save_load_is_an_error() {
+        let path = temp_save_path();
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, b"this is not bincode at all").unwrap();
+        let result = MissionProgress::load_from(&path);
+        assert!(
+            result.is_err(),
+            "corrupt bincode must error, not silently default"
+        );
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn save_overwrites_existing_atomically() {
+        let path = temp_save_path();
+        let mut p1 = MissionProgress::default();
+        p1.mark_cleared("a");
+        p1.save_to(&path).unwrap();
+
+        let mut p2 = MissionProgress::default();
+        p2.mark_cleared("a");
+        p2.mark_cleared("b");
+        p2.save_to(&path).unwrap();
+
+        let loaded = MissionProgress::load_from(&path).unwrap();
+        assert_eq!(loaded.cleared_count(), 2);
+        assert!(loaded.is_cleared("a"));
+        assert!(loaded.is_cleared("b"));
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+}
