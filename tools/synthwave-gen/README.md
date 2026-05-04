@@ -84,11 +84,46 @@ track; it is the place to add things you never want (vocals, low quality,
 distortion, etc.). The `_default_steps` and `_default_cfg` fields apply
 unless overridden via CLI.
 
+## Multi-GPU fanout
+
+When the rig has more than one CUDA device, dispatch the manifest
+across all of them in parallel:
+
+```powershell
+# Auto-detect cards, distribute the manifest round-robin
+powershell -ExecutionPolicy Bypass -File scripts/synthwave-fanout.ps1
+
+# Pin to specific cards
+powershell -ExecutionPolicy Bypass -File scripts/synthwave-fanout.ps1 --devices 0,1,2
+
+# All-flag pass-through still works
+powershell -ExecutionPolicy Bypass -File scripts/synthwave-fanout.ps1 --force --only title,village,epilogue
+```
+
+Each card holds its own copy of the model (~6 GB). With three P100 16 GB
+cards the full 6-track manifest cuts roughly 3x in wall-clock time:
+~5-10 min on a single 3070 Ti drops to ~2-3 min once you split it three
+ways. Single-GPU rigs see no benefit — call `synthwave-gen.ps1` directly.
+
+The fanout script reuses the venv set up by `synthwave-gen.ps1`, so run
+that script once first to install torch + deps. After that, both
+wrappers share state.
+
+Mechanics: `fanout.py` spawns one Python subprocess per card, scoped to
+that card via `CUDA_VISIBLE_DEVICES`, and gives each subprocess a slice
+of the manifest. Subprocess fanout is simpler than `torch.distributed`
+for this workload and more fault-tolerant — a card-level failure stops
+that subprocess only.
+
 ## Once a P100 is in the rig
 
 The manifest stays the same. Optional upgrades:
-- Drop `torch_dtype=torch.float16` for fp32 inference.
-- Crank `_default_steps` higher (300-500) for higher fidelity at the cost
-  of a few extra seconds per track.
+- Drop `torch_dtype=torch.float16` for fp32 inference. Pascal has no
+  fp16 acceleration so the speed difference is small; fp32 is slightly
+  more numerically stable.
+- Crank `_default_steps` higher (300-500) for higher fidelity at the
+  cost of a few extra seconds per track.
+- Use `synthwave-fanout.ps1` to dispatch across all 3 cards in parallel
+  (above).
 - Try other genres / variants by adding manifest entries — the model
   handles a much wider style range than synthwave alone.

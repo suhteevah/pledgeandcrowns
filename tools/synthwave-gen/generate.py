@@ -82,6 +82,11 @@ def main() -> int:
                         help="show plan, load no model, write no files")
     parser.add_argument("--steps", type=int, default=None,
                         help="override inference steps (manifest default applies otherwise)")
+    parser.add_argument("--device", type=int, default=0,
+                        help="CUDA device index to pin this run to. Used by the "
+                             "multi-GPU dispatch wrapper to fan one process per "
+                             "card. CUDA_VISIBLE_DEVICES at the env level still "
+                             "wins; this just selects within what torch can see.")
     args = parser.parse_args()
 
     manifest = load_manifest()
@@ -123,12 +128,18 @@ def main() -> int:
     if not torch.cuda.is_available():
         log.error("no CUDA device visible to torch; bailing (CPU inference would take hours)")
         return 3
-    device = "cuda"
-    log.info("using device=%s, torch=%s, cuda=%s",
-             device, torch.__version__, torch.version.cuda)
+    n_devices = torch.cuda.device_count()
+    if args.device >= n_devices:
+        log.error("--device %d invalid; torch sees %d CUDA device(s)", args.device, n_devices)
+        return 4
+    device = f"cuda:{args.device}"
+    torch.cuda.set_device(args.device)
+    log.info("using device=%s (of %d visible), torch=%s, cuda=%s, name=%s",
+             device, n_devices, torch.__version__, torch.version.cuda,
+             torch.cuda.get_device_name(args.device))
     log.info("VRAM total=%.1f GiB, free=%.1f GiB",
-             torch.cuda.get_device_properties(0).total_memory / 2**30,
-             (torch.cuda.mem_get_info()[0]) / 2**30)
+             torch.cuda.get_device_properties(args.device).total_memory / 2**30,
+             (torch.cuda.mem_get_info(args.device)[0]) / 2**30)
 
     log.info("loading model `%s` (fp16)", MODEL_ID)
     t0 = time.time()
@@ -140,7 +151,7 @@ def main() -> int:
     log.info("model sample_rate=%d Hz", sample_rate)
 
     for t, out in to_run:
-        log.info("=== generating `%s` ===", t["name"])
+        log.info("=== generating `%s` on %s ===", t["name"], device)
         log.debug("prompt: %s", t["prompt"])
         gen = torch.Generator(device).manual_seed(int(t["seed"]))
         t0 = time.time()
