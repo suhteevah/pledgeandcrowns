@@ -12,9 +12,9 @@
     },
     {
       "name": "village",
-      "prompt": "calm 80s synthwave village ambience, soft rolling analog pad, gentle chimes, soft DX7 bell hits, no drums or very light percussion, peaceful, evening, instrumental, 90 bpm, loopable, low intensity",
+      "prompt": "calm 80s synthwave village ambience, heavily compressed analog pad with thick warm tape saturation, lush double-tracked plate reverb tail on every voice, slow arpeggiated sub bass cycling root-fifth-octave-fifth pattern, gentle DX7 bell chimes panned wide, no drums, peaceful evening, instrumental, 90 bpm, loopable, low intensity",
       "duration_s": 30.0,
-      "seed": 1020
+      "seed": 1021
     },
     {
       "name": "mission_clear",
@@ -24,15 +24,15 @@
     },
     {
       "name": "mission_locked",
-      "prompt": "very short soft denial chime, two muted analog synth notes descending, low energy, 1 second, instrumental",
+      "prompt": "harsh negative denial sound, dissonant minor-second analog synth stab, gritty distorted bass thud, abrupt aggressive descending pitch sweep, error tone, locked-out, 1.5 seconds, instrumental, no melody, sharp attack",
       "duration_s": 2.0,
-      "seed": 1040
+      "seed": 1041
     },
     {
       "name": "editor_open",
-      "prompt": "very short UI open sound, single bright analog synth swell, 1 second, instrumental, clean, retro 80s computer terminal aesthetic",
-      "duration_s": 1.5,
-      "seed": 1050
+      "prompt": "short UI open chime, three ascending bright analog synth notes resolving on a major chord, soft attack and gentle release tail, retro 80s computer terminal boot sound, clean and welcoming, instrumental, 3 seconds",
+      "duration_s": 3.0,
+      "seed": 1051
     },
     {
       "name": "epilogue",
