@@ -143,7 +143,26 @@ def main() -> int:
 
     log.info("loading model `%s` (fp16)", MODEL_ID)
     t0 = time.time()
-    pipe = StableAudioPipeline.from_pretrained(MODEL_ID, torch_dtype=torch.float16)
+    try:
+        pipe = StableAudioPipeline.from_pretrained(MODEL_ID, torch_dtype=torch.float16)
+    except Exception as e:
+        # Common first-run failure: SAO 1.0 is a gated repo on HF.
+        # Translate the cryptic stack trace into a one-paragraph "do
+        # these three things" note so Matt isn't fishing through the
+        # diffusers internals to figure out what went wrong.
+        msg = str(e)
+        if "GatedRepoError" in repr(type(e)) or "gated" in msg.lower() or "401" in msg or "403" in msg:
+            log.error(
+                "Stable Audio Open 1.0 is a gated HuggingFace repo. To access it:\n"
+                "  1. Visit https://huggingface.co/stabilityai/stable-audio-open-1.0\n"
+                "     and click `Agree and access repository` (Stability Community License).\n"
+                "  2. Create a token at https://huggingface.co/settings/tokens (read scope is fine).\n"
+                "  3. Either run `huggingface-cli login` once and paste the token, OR set\n"
+                "     the env var HF_TOKEN=<your-token> before invoking this script.\n"
+                "Then re-run synthwave-gen.ps1."
+            )
+            return 5
+        raise
     pipe = pipe.to(device)
     log.info("model loaded in %.1fs", time.time() - t0)
 

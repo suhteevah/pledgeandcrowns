@@ -14,6 +14,22 @@ would cost more than the bench-time it would save. The driver is small
 
 ## One-time setup
 
+### 1. HuggingFace gated-repo access (Matt-action)
+
+Stable Audio Open 1.0 is a **gated** repo on HuggingFace. Skipping this
+step makes the first generation fail with a 403. Three sub-steps:
+
+1. Visit <https://huggingface.co/stabilityai/stable-audio-open-1.0> and
+   click **Agree and access repository** (Stability Community License).
+2. Create a token at <https://huggingface.co/settings/tokens>. Read
+   scope is sufficient.
+3. Either run `huggingface-cli login` once and paste the token (it gets
+   cached at `%USERPROFILE%\.cache\huggingface\token`), OR set
+   `HF_TOKEN=<your-token>` in the env before invoking the script. The
+   wrapper picks up either path.
+
+### 2. Install Python deps
+
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/synthwave-gen.ps1 --dry-run
 ```

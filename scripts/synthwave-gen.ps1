@@ -83,7 +83,17 @@ if (-not (Test-Path $Marker) -or $env:SYNTHWAVE_FORCE_DEPS) {
     Write-Host "[ok] deps already installed (delete $Marker or set SYNTHWAVE_FORCE_DEPS=1 to reinstall)"
 }
 
-# 4. Run the generator with whatever args were passed through.
+# 4. Forward HF auth into the subprocess. Stable Audio Open 1.0 is a
+#    gated repo - users must accept its license + provide a token. The
+#    Python side prints a long actionable error if this is missing;
+#    here we just make sure HF_TOKEN is plumbed through if present.
+if ($env:HF_TOKEN) {
+    Write-Host "[ok] HF_TOKEN found in env (length=$($env:HF_TOKEN.Length))"
+} else {
+    Write-Host "[..] no HF_TOKEN env var; relying on cached `huggingface-cli login` (if you've done it)"
+}
+
+# 5. Run the generator with whatever args were passed through.
 Write-Host "[..] generating tracks"
 & $VenvPy $Driver @PassThru
 $rc = $LASTEXITCODE
