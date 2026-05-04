@@ -12,7 +12,7 @@
     },
     {
       "name": "village",
-      "prompt": "Lavender Town inspired 80s synthwave, A minor, thin lonely high-register melody on top, eerie mid broken-triad arpeggio underneath, single sparse low anchor bass note, no drums, no thrumming bass, no sub-bass, melody floats above bass, plate reverb, tape warmth, melancholy evening, 75 bpm, instrumental, loopable",
+      "prompt": "Lavender Town inspired 80s synthwave, A minor, thin lonely high-register melody on top, eerie mid broken-triad arpeggio underneath, single sparse low anchor bass note on B, no drums, no thrumming bass, no sub-bass, melody floats above bass, plate reverb, tape warmth, melancholy evening, 75 bpm, instrumental, loopable",
       "duration_s": 30.0,
       "seed": 1023
     },
