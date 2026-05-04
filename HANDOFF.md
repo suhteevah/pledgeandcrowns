@@ -1,7 +1,7 @@
 # HANDOFF.md
 
 ## Last Updated
-2026-05-03 (session 2) — autonomous v1 roadmap complete: curriculum gating live, wasm rendering bug diagnosed + fixed, wasm save no-panic, wasm-canonical stub grader, win-condition epilogue, title-screen prompt + progress indicator. Remaining v1 work is Matt-blocked (NPC art via claude.ai/design) or explicitly post-MVP (wasmtime/compile-real wiring).
+2026-05-03 (session 2, second pass) — autonomous v1 roadmap complete + four non-blocking polish commits: real localStorage save persistence on wasm (replacing the no-op shims), cargo-check parity audit closing the pattern-grader gap, title-screen controls panel, and save round-trip test coverage. Remaining v1 work is Matt-blocked (NPC art via claude.ai/design, visual confirmation of wasm rendering fix) or deploy-coupled (wasmtime/compile-real wiring needs `rustup target add wasm32-wasip1` on prod).
 
 ## Project Status
 🟢 v1 functionally complete pending visual verification of the wasm rendering fix. Native: 21 missions, full progression, epilogue. Web: builds cleanly, gameplay loop wired (stub-canonical grader, in-memory progress).
@@ -43,6 +43,23 @@ Six commits, end-to-end on the "What's Next" roadmap from session 1's handoff pl
   - all done: "the realm has crowned you - N / N cleared"
 - Returning players now have both a clear way in and a visible sign of where they left off.
 
+### localStorage save persistence on wasm — `799daa8`
+- Replaces the no-op shims with a real `web_sys::Storage` round-trip. Same `SaveFile` struct + bincode encoder as native; base64-wrapped to survive the JS string boundary; stored under `pledge-and-crown:save:v1` (key versioned alongside `SAVE_VERSION`).
+- Degrades gracefully when localStorage is unavailable (Safari private mode, headless, restricted contexts) — load returns `Ok(default)`, save surfaces the error to the autosave warn path.
+- Wasm-only deps: `web-sys` (Window, Storage features) + `base64`.
+
+### Cargo-check parity audit — `e85f3fd`
+- New `#[ignore]`'d slow test in `game/tests/contract.rs`: `every_canonical_solution_passes_cargo_check` runs all 21 canonical solutions through `cargo_grader::compile_check`. Asserts the pattern grader's pass strings are real Rust, not just the right tokens.
+- Catches the latent gap that pattern grading approves on tokens, not language correctness.
+- All 21 pass in 6.76s warm. Run with `cargo test --workspace -- --ignored`.
+
+### Title-screen controls panel — `47a2d26`
+- Bottom-right pinned overlay listing the four input bindings: WASD walk, F talk, E sandbox, Esc dismiss. Players read it on the title screen, return there to look again. Avoids cluttering the in-game viewport with a persistent controls bar.
+
+### Save round-trip test coverage — `e5034ed`
+- 5 new unit tests in `progress.rs` covering native save/load: round-trip preserves cleared set, missing-file load returns default (not error), non-canonical filename is rejected, corrupt bincode is an error, successive saves overwrite atomically.
+- Wasm path uses localStorage which can't be reached from a unit test process — covered by manual browser verification instead.
+
 ### Wasm-canonical stub grader — `e72cd7a`
 - The wasm build was structurally broken: reqwest from a browser can't reach `localhost:7878` (CORS + on a hosted demo no server exists), so every Compile click went through the stub fallback, which intentionally did NOT mark cleared on native to make players re-run against the real grader. On wasm this meant: missions graded correctly, but the persist step never fired, so progression was impossible.
 - Cfg-gated the network path off on wasm. wasm `dispatch_pending_compile` runs `stub_verdict` synchronously and treats passes as canonical clears.
@@ -72,8 +89,7 @@ Six commits, end-to-end on the "What's Next" roadmap from session 1's handoff pl
 - Local server: `cargo run -p web-serve --release`, default `127.0.0.1:8080`.
 - wgpu inits via WebGL2 in Chrome.
 - Image binding **should now work** (bevy_egui bindless disabled). Visual verification: load `127.0.0.1:8080/`, expect title art (REF-10) visible, then Space → village + sprites.
-- Compile button uses the in-process stub as canonical grader (no network). Passes mark cleared. Progression works for the tab's lifetime.
-- Save persistence: in-memory only (localStorage path is the next-step enhancement).
+- Compile button uses the in-process stub as canonical grader (no network). Passes mark cleared. Progression works for the tab's lifetime AND across tab close (localStorage save lands in `pledge-and-crown:save:v1`).
 
 ### Audit harness (unchanged from session 1)
 - ~144 fast tests + 8 slow `#[ignore]`d (5 cargo_grader, 3 http_real). All passing.
@@ -94,15 +110,13 @@ Six commits, end-to-end on the "What's Next" roadmap from session 1's handoff pl
 
 ## What's Next (post-v1, prioritized)
 
-1. **`compile-real` + wasmtime exec wiring (was item 5 last session).** Compile player source to `wasm32-wasip1`, run via `wasm_runner`, capture stdout as the per-encounter flavor. Cut native compile_client over from `/compile` → `/compile-real`. Substantial: server needs `rustup target add wasm32-wasip1`, cargo skeleton changes from `[lib]` to `[[bin]]`, and the per-request cargo build adds 5-10s latency vs the current ~100ms pattern grading. Honest grading > pattern grading but not MVP-blocking.
+1. **`compile-real` + wasmtime exec wiring.** Compile player source to `wasm32-wasip1`, run via `wasm_runner`, capture stdout as the per-encounter flavor. Cut native compile_client from `/compile` → `/compile-real`. Substantial: server needs `rustup target add wasm32-wasip1` (not on Matt's box; status on Hetzner unknown), cargo skeleton changes from `[lib]` to `[[bin]]` (would break the existing cargo_grader unit tests that use lib-shaped fixtures, so a parallel skeleton or separate `compile_to_wasm()` function is the cleaner approach), and the per-request cargo build adds 5-10s latency vs the current ~100ms pattern grading. Honest grading > pattern grading but deploy-coupled.
 
-2. **localStorage save persistence on wasm.** With the rendering fix in, the tab-lifetime in-memory progress is the obvious next gap. Use `web_sys::window().local_storage()` + base64-encoded bincode bytes. Should be a small diff against `progress.rs`.
+2. **Audio pass.** `bevy_kira_audio` is in deps but no assets and no playback wiring. Title music + per-NPC interaction stings + win-condition fanfare. Needs sound design.
 
-3. **Audio pass.** `bevy_kira_audio` is in deps but no assets and no playback wiring. Title music + per-NPC interaction stings + win-condition fanfare. Would need sound design (Matt-territory or licensed pack).
+3. **Mobile / Tauri 2.0 wrapper.** Per `design/05-tech-architecture.md`. Separate workstream — Matt's `tauri-frontend` skill applies.
 
-4. **Mobile / Tauri 2.0 wrapper.** Per `design/05-tech-architecture.md`. Separate workstream — Matt's `tauri-frontend` skill applies.
-
-5. **Acts 3+ curriculum.** v1 covers Acts 1+2. New acts need new missions, new NPCs, new art. Out of v1 scope per the locked design.
+4. **Acts 3+ curriculum.** v1 covers Acts 1+2. New acts need new missions, new NPCs, new art. Out of v1 scope per the locked design.
 
 ## Notes for Next Session
 
