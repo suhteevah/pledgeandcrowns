@@ -12,9 +12,9 @@
     },
     {
       "name": "village",
-      "prompt": "calm 80s synthwave village ambience, heavily compressed analog pad with thick warm tape saturation, lush double-tracked plate reverb tail on every voice, slow arpeggiated sub bass cycling root-fifth-octave-fifth pattern, gentle DX7 bell chimes panned wide, no drums, peaceful evening, instrumental, 90 bpm, loopable, low intensity",
+      "prompt": "Lavender Town inspired 80s synthwave, A minor, thin lonely high-register melody on top, eerie mid broken-triad arpeggio underneath, single sparse low anchor bass note, no drums, no thrumming bass, no sub-bass, melody floats above bass, plate reverb, tape warmth, melancholy evening, 75 bpm, instrumental, loopable",
       "duration_s": 30.0,
-      "seed": 1021
+      "seed": 1023
     },
     {
       "name": "mission_clear",

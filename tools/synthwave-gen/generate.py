@@ -174,6 +174,31 @@ def main() -> int:
     sample_rate = pipe.vae.sampling_rate
     log.info("model sample_rate=%d Hz", sample_rate)
 
+    # Prompt-length pre-flight. The text encoder's max input is 128
+    # units; anything past that gets silently truncated from the END
+    # of the prompt - which is often where the load-bearing "no X,
+    # no Y" directives live. Surface the count loudly so prompt edits
+    # don't quietly stop applying.
+    max_len = pipe.tokenizer.model_max_length
+    print(f"[synthwave-gen] text encoder max input = {max_len}")
+    over_budget = []
+    for t, _ in to_run:
+        ids = pipe.tokenizer(t["prompt"], return_tensors="pt", truncation=False).input_ids
+        n = ids.shape[1]
+        if n > max_len:
+            over_budget.append((t["name"], n))
+            print(
+                f"[synthwave-gen][WARN] track `{t['name']}` prompt is {n} units "
+                f"(max {max_len}). TAIL WILL BE DROPPED. Edit manifest.json to fit."
+            )
+        else:
+            log.debug("track `%s` prompt is %d/%d units (ok)", t["name"], n, max_len)
+    if over_budget:
+        print(
+            f"[synthwave-gen][WARN] {len(over_budget)} prompt(s) over the "
+            f"{max_len}-unit cap: {over_budget}"
+        )
+
     for t, out in to_run:
         log.info("=== generating `%s` on %s ===", t["name"], device)
         log.debug("prompt: %s", t["prompt"])
