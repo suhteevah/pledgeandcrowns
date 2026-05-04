@@ -13,3 +13,10 @@ accelerate==1.2.1
 soundfile==0.12.1
 numpy==1.26.4
 sentencepiece==0.2.0
+# CosineDPMSolverMultistepScheduler (Stable Audio Open's default
+# scheduler) requires torchsde. Stack trace doesn't surface it
+# until the pipeline tries to instantiate.
+torchsde==0.2.6
+# Faster downloads from HF's Xet storage (avoids the per-file
+# warning + speeds up the ~10 GB initial pull).
+hf_xet==1.4.3

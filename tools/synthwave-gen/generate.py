@@ -35,6 +35,11 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     datefmt="%H:%M:%S",
 )
+# Quiet the noisy third-party loggers that flood DEBUG output during
+# HF model downloads. We still want our own DEBUG-level tracing on
+# the synthwave-gen logger.
+for noisy in ("urllib3", "filelock", "huggingface_hub.file_download"):
+    logging.getLogger(noisy).setLevel(logging.WARNING)
 log = logging.getLogger("synthwave-gen")
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
