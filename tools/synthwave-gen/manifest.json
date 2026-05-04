@@ -1,0 +1,44 @@
+{
+  "_comment": "Track manifest for the Pledge & Crown synthwave score. Each entry generates one WAV under assets/audio/<name>.wav. Stable Audio Open 1.0 outputs 44.1 kHz stereo. Seeds are pinned so re-runs reproduce; bump a seed if you want a fresh take. Edit prompts freely - re-run generate.py to overwrite.",
+  "_negative_prompt": "vocals, voice, lyrics, singing, choir, speech, narration, low quality, distorted, muffled",
+  "_default_steps": 200,
+  "_default_cfg": 7.0,
+  "tracks": [
+    {
+      "name": "title",
+      "prompt": "retro 80s synthwave intro, slow swelling analog synth pads, gated reverb snare on the 2 and 4, bright neon arpeggio in C minor, sub bass, dreamy, John Carpenter inspired, instrumental, cinematic, 100 bpm, loopable",
+      "duration_s": 30.0,
+      "seed": 1010
+    },
+    {
+      "name": "village",
+      "prompt": "calm 80s synthwave village ambience, soft rolling analog pad, gentle chimes, soft DX7 bell hits, no drums or very light percussion, peaceful, evening, instrumental, 90 bpm, loopable, low intensity",
+      "duration_s": 30.0,
+      "seed": 1020
+    },
+    {
+      "name": "mission_clear",
+      "prompt": "short triumphant 80s synthwave sting, ascending bright synth lead, gated snare hit, tape stop ending, 4 seconds, instrumental, victorious, joyful",
+      "duration_s": 4.0,
+      "seed": 1030
+    },
+    {
+      "name": "mission_locked",
+      "prompt": "very short soft denial chime, two muted analog synth notes descending, low energy, 1 second, instrumental",
+      "duration_s": 2.0,
+      "seed": 1040
+    },
+    {
+      "name": "editor_open",
+      "prompt": "very short UI open sound, single bright analog synth swell, 1 second, instrumental, clean, retro 80s computer terminal aesthetic",
+      "duration_s": 1.5,
+      "seed": 1050
+    },
+    {
+      "name": "epilogue",
+      "prompt": "celebratory 80s synthwave finale, bright major key analog synth lead, lush layered pads, slow gated drums, sweeping arpeggio, soaring, instrumental, cinematic, 110 bpm, 20 seconds, end credits",
+      "duration_s": 20.0,
+      "seed": 1060
+    }
+  ]
+}

@@ -6,6 +6,7 @@
 use bevy::camera::ScalingMode;
 use bevy::prelude::*;
 
+pub mod audio;
 pub mod compile_client;
 pub mod editor;
 pub mod mission;
@@ -35,6 +36,7 @@ impl Plugin for CorePlugin {
             editor::EditorPlugin,
             mission::MissionPlugin,
             compile_client::CompileClientPlugin,
+            audio::GameAudioPlugin,
         ));
     }
 }

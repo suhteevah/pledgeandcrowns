@@ -39,6 +39,29 @@ pub const SPRITE_PILGRIM: &str = "sprites/npc/pilgrim_idle_0.png";
 pub const SPRITE_DRILLMASTER: &str = "sprites/npc/drillmaster_idle_0.png";
 pub const SPRITE_RECKONER: &str = "sprites/npc/reckoner_idle_0.png";
 
+// Audio (Stable Audio Open generated, baked via tools/synthwave-gen).
+// Generation is a Matt-action: `powershell -ExecutionPolicy Bypass
+// -File scripts/synthwave-gen.ps1`. Files may be absent during early
+// development; AudioPlugin treats missing assets as silently inert.
+pub const AUDIO_TITLE: &str = "audio/title.wav";
+pub const AUDIO_VILLAGE: &str = "audio/village.wav";
+pub const AUDIO_MISSION_CLEAR: &str = "audio/mission_clear.wav";
+pub const AUDIO_MISSION_LOCKED: &str = "audio/mission_locked.wav";
+pub const AUDIO_EDITOR_OPEN: &str = "audio/editor_open.wav";
+pub const AUDIO_EPILOGUE: &str = "audio/epilogue.wav";
+
+/// Every audio asset path. Used by AudioPlugin to bulk-load handles
+/// at startup AND by the optional asset-existence test (skipped when
+/// the synthwave-gen tool hasn't run yet).
+pub const ALL_AUDIO_PATHS: &[&str] = &[
+    AUDIO_TITLE,
+    AUDIO_VILLAGE,
+    AUDIO_MISSION_CLEAR,
+    AUDIO_MISSION_LOCKED,
+    AUDIO_EDITOR_OPEN,
+    AUDIO_EPILOGUE,
+];
+
 /// Every asset path the game references. Used by the asset-existence
 /// audit test in `tests/assets.rs`.
 pub const ALL_SPRITE_PATHS: &[&str] = &[

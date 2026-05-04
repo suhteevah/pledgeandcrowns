@@ -1,0 +1,15 @@
+# Pledge & Crown synthwave gen — pinned deps for reproducibility.
+#
+# Torch with CUDA is a separate install (Windows wheels live on a
+# different index URL). The PowerShell wrapper handles that. Order
+# matters: torch first, then everything else against PyPI.
+#
+# torch + CUDA 12.1 wheel (Windows): installed by scripts/synthwave-gen.ps1
+#   pip install torch --index-url https://download.pytorch.org/whl/cu121
+
+diffusers==0.31.0
+transformers==4.46.3
+accelerate==1.2.1
+soundfile==0.12.1
+numpy==1.26.4
+sentencepiece==0.2.0

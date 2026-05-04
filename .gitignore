@@ -76,3 +76,8 @@ lpt9
 
 # Scratch commit message files used to dodge PS heredoc quoting
 .git-commit-msg.txt
+
+# Synthwave gen tool: venv + cached deps marker
+tools/synthwave-gen/.venv/
+tools/synthwave-gen/.synthwave-deps-installed
+
