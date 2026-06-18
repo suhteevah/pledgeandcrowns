@@ -7,10 +7,11 @@
 //! This plugin only owns NPC spawning and proximity detection.
 
 use crate::assets::{
-    SPRITE_BELLRINGER, SPRITE_BORROW_CHECKER, SPRITE_CARTOGRAPHER, SPRITE_COOPER,
-    SPRITE_DRILLMASTER, SPRITE_FERRIS, SPRITE_FORGEWRIGHT, SPRITE_HERALD, SPRITE_HERALDIC_SAGE,
-    SPRITE_LINGUIST, SPRITE_ORACLE, SPRITE_PILGRIM, SPRITE_PLAYER, SPRITE_RECKONER, SPRITE_SMITH,
-    SPRITE_TINKER, SPRITE_TRAIT_MAGE, SPRITE_TWIN,
+    SPRITE_ALCHEMIST, SPRITE_AUDITOR, SPRITE_BELLRINGER, SPRITE_BORROW_CHECKER,
+    SPRITE_CARTOGRAPHER, SPRITE_CHRONICLER, SPRITE_COOPER, SPRITE_DRILLMASTER, SPRITE_FERRIS,
+    SPRITE_FORGEWRIGHT, SPRITE_HERALD, SPRITE_HERALDIC_SAGE, SPRITE_LINGUIST, SPRITE_ORACLE,
+    SPRITE_PILGRIM, SPRITE_QUARTERMASTER, SPRITE_RECKONER, SPRITE_SMITH, SPRITE_TINKER,
+    SPRITE_TRAIT_MAGE, SPRITE_TWIN,
 };
 use crate::plugins::player::Player;
 use crate::plugins::state::GameState;
@@ -170,28 +171,28 @@ pub const NPC_ROSTER: &[NpcSpec] = &[
     NpcSpec {
         name: "The Quartermaster",
         mission_id: "slice_basic",
-        sprite_path: SPRITE_PLAYER, // placeholder
+        sprite_path: SPRITE_QUARTERMASTER,
         pos: (-100.0, 100.0),
         native_px: 32.0,
     },
     NpcSpec {
         name: "The Auditor",
         mission_id: "result_question_mark",
-        sprite_path: SPRITE_PLAYER, // placeholder
+        sprite_path: SPRITE_AUDITOR,
         pos: (100.0, -130.0),
         native_px: 32.0,
     },
     NpcSpec {
         name: "The Chronicler",
         mission_id: "derive_debug",
-        sprite_path: SPRITE_PLAYER, // placeholder
+        sprite_path: SPRITE_CHRONICLER,
         pos: (220.0, -64.0),
         native_px: 32.0,
     },
     NpcSpec {
         name: "The Alchemist",
         mission_id: "iter_map_collect",
-        sprite_path: SPRITE_PLAYER, // placeholder
+        sprite_path: SPRITE_ALCHEMIST,
         pos: (-220.0, 0.0),
         native_px: 32.0,
     },

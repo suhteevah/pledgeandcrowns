@@ -3,10 +3,11 @@
 **REF-27**, 32×32, idle, transparent bg.
 **Mission:** `result_question_mark` — parse + propagate the error with `?`.
 
-> Status: **spec drafted 2026-06-18, JSX/PNG pending.** One of the four
-> remaining `SPRITE_PLAYER` placeholders. Art *direction* only; JSX +
-> rendered PNG go through `claude.ai/design` + Matt approval per the locked
-> art process.
+> Status: **rendered + wired 2026-06-18 (first-pass).** JSX grid at
+> `ref-27-auditor.jsx`, rendered via `render-refs`, wired into `npc.rs`.
+> First-pass sprite authored from the brief below, **pending Matt's locked
+> art-review pass** (3-revision flow). The brief is the art *direction* of
+> record.
 
 ## Curriculum cue
 

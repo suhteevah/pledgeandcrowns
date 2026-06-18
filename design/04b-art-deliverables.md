@@ -195,13 +195,18 @@ Refs landed against the bible. Source `.jsx` lives at `design/art/refs/ref-NN-<s
 | 23 | The Pilgrim | 32×32 | ref-23-pilgrim.jsx | specs/pilgrim.md | `sprites/npc/pilgrim_idle_0.png` |
 | 24 | The Drillmaster | 32×32 | ref-24-drillmaster.jsx | specs/drillmaster.md | `sprites/npc/drillmaster_idle_0.png` |
 | 25 | The Reckoner | 32×32 | ref-25-reckoner.jsx | specs/reckoner.md | `sprites/npc/reckoner_idle_0.png` |
+| 26 | The Quartermaster | 32×32 | ref-26-quartermaster.jsx | specs/quartermaster.md | `sprites/npc/quartermaster_idle_0.png` |
+| 27 | The Auditor | 32×32 | ref-27-auditor.jsx | specs/auditor.md | `sprites/npc/auditor_idle_0.png` |
+| 28 | The Chronicler | 32×32 | ref-28-chronicler.jsx | specs/chronicler.md | `sprites/npc/chronicler_idle_0.png` |
+| 29 | The Alchemist | 32×32 | ref-29-alchemist.jsx | specs/alchemist.md | `sprites/npc/alchemist_idle_0.png` |
 
 **NPC batches landed:**
 - Batch 1 (2026-05-02) — REF-11..15: Smith, Cartographer, Trait Mage, Bellringer, Cooper. Specs in `design/art/specs/`. Replaces SPRITE_PLAYER placeholders for the corresponding entries in `NPC_ROSTER`.
 - Batch 2 (2026-05-02) — REF-16..20: Oracle, Herald, Twin, Tinker, Heraldic Sage (the Sage is the first Act-2 NPC shipped; the others finish Act-1 prelude P1). Specs in `design/art/specs/`. Heraldic Sage uses a foreshadowing-license cobalt sigil (~0.9% canvas, under 1% bible cap) to signpost Act 6's cool-counterweight zone — see spec for cross-ref.
 - Batch 3 (2026-05-02) — REF-21..25: Forgewright, Linguist, Pilgrim, Drillmaster, Reckoner. First half of the Act-2 cast. Specs in `design/art/specs/`. PNGs verified pixel-identical to the harness output (sample-pixel parity check against the live React canvas in Chrome). No bible-allowance exceptions used; all five sprites stay inside their assigned ramps.
+- Batch 4 (2026-06-18) — REF-26..29: Quartermaster, Auditor, Chronicler, Alchemist. Closes the last four `SPRITE_PLAYER` placeholders. Specs in `design/art/specs/`; grids authored from those specs and rendered via `cargo run -p render-refs`. The Auditor uses a documented ~0.6% Alarm-scarlet exception (the flagged `Err` seal), under the 1% cap, cross-ref the Heraldic Sage's cobalt precedent. **First-pass sprites — pending Matt's art-review pass** (the locked 3-revision approval flow); they are a deliberate upgrade from the player-clone placeholders, not a final lock.
 
-**Remaining placeholders** (still using `SPRITE_PLAYER`): Quartermaster, Auditor, Chronicler, Alchemist (Act-2 P2). See `game/src/plugins/npc.rs` for live truth.
+**Remaining placeholders:** none — all 21 NPCs now carry distinct art (batch 4 closed the last four). See `game/src/plugins/npc.rs` for live truth.
 
 ## 10. Revision history
 

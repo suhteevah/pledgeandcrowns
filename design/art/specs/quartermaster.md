@@ -3,11 +3,12 @@
 **REF-26**, 32×32, idle, transparent bg.
 **Mission:** `slice_basic` — `fn sum_slice(xs: &[i32]) -> i32`.
 
-> Status: **spec drafted 2026-06-18, JSX/PNG pending.** This is one of the
-> four remaining `SPRITE_PLAYER` placeholders (Quartermaster, Auditor,
-> Chronicler, Alchemist). The brief below is art *direction*; the JSX ref
-> + rendered PNG are generated through `claude.ai/design` and approved by
-> Matt per the locked art process (CLAUDE.md hard-rule #5).
+> Status: **rendered + wired 2026-06-18 (first-pass).** JSX grid at
+> `ref-26-quartermaster.jsx`, rendered via `render-refs`, wired into
+> `npc.rs`. This is a first-pass sprite authored from the brief below —
+> a clear upgrade from the `SPRITE_PLAYER` placeholder, **pending Matt's
+> locked art-review pass** (the 3-revision approval flow, CLAUDE.md
+> hard-rule #5). The brief below is the art *direction* of record.
 
 ## Curriculum cue
 

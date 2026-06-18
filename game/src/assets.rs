@@ -39,6 +39,16 @@ pub const SPRITE_PILGRIM: &str = "sprites/npc/pilgrim_idle_0.png";
 pub const SPRITE_DRILLMASTER: &str = "sprites/npc/drillmaster_idle_0.png";
 pub const SPRITE_RECKONER: &str = "sprites/npc/reckoner_idle_0.png";
 
+// NPC batch 4 (2026-06-18) — Quartermaster, Auditor, Chronicler, Alchemist.
+// Replaces the last four SPRITE_PLAYER placeholders. Sources:
+// design/art/refs/ref-26..29-*.jsx, rendered via `cargo run -p render-refs`.
+// First-pass sprites authored from design/art/specs/{slug}.md; pending
+// Matt's art-review pass (the locked 3-revision approval flow).
+pub const SPRITE_QUARTERMASTER: &str = "sprites/npc/quartermaster_idle_0.png";
+pub const SPRITE_AUDITOR: &str = "sprites/npc/auditor_idle_0.png";
+pub const SPRITE_CHRONICLER: &str = "sprites/npc/chronicler_idle_0.png";
+pub const SPRITE_ALCHEMIST: &str = "sprites/npc/alchemist_idle_0.png";
+
 // Audio (Stable Audio Open generated, baked via tools/synthwave-gen).
 // Generation is a Matt-action: `powershell -ExecutionPolicy Bypass
 // -File scripts/synthwave-gen.ps1`. Files may be absent during early
@@ -85,4 +95,8 @@ pub const ALL_SPRITE_PATHS: &[&str] = &[
     SPRITE_PILGRIM,
     SPRITE_DRILLMASTER,
     SPRITE_RECKONER,
+    SPRITE_QUARTERMASTER,
+    SPRITE_AUDITOR,
+    SPRITE_CHRONICLER,
+    SPRITE_ALCHEMIST,
 ];

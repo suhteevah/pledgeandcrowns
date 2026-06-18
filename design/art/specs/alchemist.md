@@ -3,10 +3,11 @@
 **REF-29**, 32×32, idle, transparent bg.
 **Mission:** `iter_map_collect` — map a `Vec` through `|x| x * 2`, `collect`.
 
-> Status: **spec drafted 2026-06-18, JSX/PNG pending.** The last of the four
-> remaining `SPRITE_PLAYER` placeholders. Art *direction* only; JSX +
-> rendered PNG go through `claude.ai/design` + Matt approval per the locked
-> art process.
+> Status: **rendered + wired 2026-06-18 (first-pass).** JSX grid at
+> `ref-29-alchemist.jsx`, rendered via `render-refs`, wired into `npc.rs`.
+> First-pass sprite authored from the brief below, **pending Matt's locked
+> art-review pass** (3-revision flow). The brief is the art *direction* of
+> record.
 
 ## Curriculum cue
 

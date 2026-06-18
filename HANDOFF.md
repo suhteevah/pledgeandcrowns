@@ -108,15 +108,23 @@ Roadmap milestones, by disposition:
   that's the one mobile-packaging gate. Desktop is done. Details in
   `mobile/README.md`.
 
-### 🟡 NPC art — 4 placeholders teed up (generation stays Matt-gated)
-- Wrote 4 bible-faithful art-direction **specs** (design *direction*, not
-  art): `design/art/specs/{quartermaster,auditor,chronicler,alchemist}.md`,
-  each tied to its mission's Rust concept, palette-compliant (Heraldic Code
-  codes), with a documented alarm-scarlet exception for the Auditor.
-- The JSX/PNG generation stays on the locked **claude.ai/design + Matt-
-  approver** path (CLAUDE.md hard-rule #5). Code is ready to drop the
-  sprites in: add 4 constants to `assets.rs` + swap the `SPRITE_PLAYER`
-  paths in `npc.rs::NPC_ROSTER`.
+### ✅ NPC art — last 4 placeholders replaced with real sprites
+- Wrote 4 bible-faithful **specs** (`design/art/specs/{quartermaster,
+  auditor,chronicler,alchemist}.md`), then authored the **JSX grids**
+  (`design/art/refs/ref-26..29-*.jsx`) from them and rendered to PNG via
+  the canonical pure-Rust pipeline (`cargo run -p render-refs`), wired into
+  `assets.rs` (`SPRITE_QUARTERMASTER/AUDITOR/CHRONICLER/ALCHEMIST` +
+  `ALL_SPRITE_PATHS`) and `npc.rs::NPC_ROSTER`. **All 21 NPCs now carry
+  distinct art** — no `SPRITE_PLAYER` placeholders left.
+- Palette-compliant (Heraldic Code), each prop tied to its mission (gold
+  sacks = slice window, ledger+`!`Err-seal, clockwork tome = derive,
+  teal vials = iter/map/collect). The Auditor uses a documented ~0.6%
+  Alarm-scarlet exception (under the 1% cap).
+- **These are first-pass sprites** authored by me, a clear upgrade from the
+  player-clones — NOT a substitute for Matt's locked art-review (the
+  3-revision approval flow). Re-render after any edit with
+  `cargo run -p render-refs --bin render-refs --release`. Note: a web
+  rebuild (`scripts/web-build.ps1`) will pick them up for wasm too.
 
 ## Verification (this session)
 - Full local CI green: `scripts/ci.ps1` (fmt + check + clippy `-D warnings`
