@@ -18,7 +18,23 @@ use crossbeam_channel::{Receiver, Sender, unbounded};
 use serde::{Deserialize, Serialize};
 
 #[cfg(not(target_arch = "wasm32"))]
-const COMPILE_URL: &str = "http://127.0.0.1:7878/compile";
+const COMPILE_API_BASE: &str = "http://127.0.0.1:7878";
+
+/// Pick the compile endpoint at request time. Defaults to the fast
+/// pattern grader at `/compile`. Set `PLEDGE_REAL_COMPILE=1` (or `true`)
+/// to route to `/compile-real`, which builds the submission to
+/// `wasm32-wasip1` and executes it in the server's hardened sandbox for
+/// an honest "compiles AND runs" verdict. The real path is opt-in
+/// because it's slower (build + run vs ~100ms pattern match) and the
+/// prod server needs a `wasm32-wasip1` toolchain installed first.
+#[cfg(not(target_arch = "wasm32"))]
+fn compile_url() -> String {
+    let real = std::env::var("PLEDGE_REAL_COMPILE")
+        .map(|v| matches!(v.trim(), "1" | "true" | "TRUE" | "yes"))
+        .unwrap_or(false);
+    let path = if real { "/compile-real" } else { "/compile" };
+    format!("{COMPILE_API_BASE}{path}")
+}
 
 #[cfg(not(target_arch = "wasm32"))]
 #[derive(Serialize)]
@@ -188,8 +204,10 @@ async fn send_compile(source: String, encounter_id: String) -> anyhow::Result<Co
         source,
         encounter_id,
     };
+    let url = compile_url();
+    tracing::debug!("compile endpoint: {url}");
     let resp = reqwest::Client::new()
-        .post(COMPILE_URL)
+        .post(url)
         .json(&body)
         .send()
         .await?

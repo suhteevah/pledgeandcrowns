@@ -584,6 +584,17 @@ decrement step.",
     }
 }
 
+/// Emitted when the player presses F against an NPC whose mission is
+/// still locked (its prereq isn't cleared). Carries the attempted
+/// mission id so consumers can log/branch. The audio plugin reads this
+/// to fire the `mission_locked` sting — keeping the locked-attempt
+/// detection here (the one place that already owns the F-press +
+/// nearby-NPC + progress reads) instead of re-deriving it in audio.rs.
+#[derive(Message, Debug, Clone)]
+pub struct MissionLockedAttempt {
+    pub mission_id: String,
+}
+
 pub struct MissionPlugin;
 
 impl Plugin for MissionPlugin {
@@ -593,6 +604,7 @@ impl Plugin for MissionPlugin {
             .init_resource::<ActiveMission>()
             .init_resource::<CompletionView>()
             .init_resource::<EpilogueView>()
+            .add_message::<MissionLockedAttempt>()
             .add_systems(
                 Update,
                 (
@@ -637,6 +649,7 @@ pub struct EpilogueView {
     pub dismissed_this_session: bool,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn handle_interact_key(
     keys: Res<ButtonInput<KeyCode>>,
     nearby: Res<NearbyNpc>,
@@ -645,6 +658,7 @@ fn handle_interact_key(
     mut editor: ResMut<EditorState>,
     mut active: ResMut<ActiveMission>,
     mut completion: ResMut<CompletionView>,
+    mut locked_attempts: MessageWriter<MissionLockedAttempt>,
 ) {
     // Same input-bleed class as WASD — F is gameplay, not text input.
     // If the editor is open, the player is typing their solution and
@@ -690,6 +704,9 @@ fn handle_interact_key(
             mission.id,
             mission.prereq
         );
+        locked_attempts.write(MissionLockedAttempt {
+            mission_id: mission.id.to_string(),
+        });
         return;
     }
 

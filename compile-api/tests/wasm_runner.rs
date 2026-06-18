@@ -141,17 +141,13 @@ fn rejects_empty_bytes() {
 }
 
 #[test]
-fn rejects_disabled_bulk_memory_feature() {
-    // Defence-in-depth check: bulk-memory is one of several wasm
-    // proposals we explicitly disable in `wasm_runner::run_wasm`'s
-    // `Config`. A module that uses `memory.copy` (a bulk-memory
-    // instruction) should fail to compile/instantiate, NOT silently run.
-    //
-    // If a future wasmtime release flips a default and we forget to
-    // deny it, this test trips before any student submission can.
-    //
-    // We expect `run_wasm` to return Err(...) at module compile time
-    // (`Module::new` fails validation when the feature is disabled).
+fn accepts_baseline_bulk_memory_feature() {
+    // bulk-memory is WebAssembly 2.0 baseline and the Rust wasm32-wasip1
+    // std emits it (memcpy/memset lower to memory.copy/memory.fill), so
+    // `run_wasm` MUST accept it — disabling it rejected every real Rust
+    // module with a "zero byte expected" translation error (the bug the
+    // build-and-run path's first end-to-end test surfaced, 2026-06-18).
+    // A zero-length memory.copy is a valid no-op under the proposal.
     let bytes = compile_wat(
         r#"
         (module
@@ -164,19 +160,44 @@ fn rejects_disabled_bulk_memory_feature() {
         "#,
     );
 
+    let v = run_wasm(&bytes, FAST_TIMEOUT_MS, DEFAULT_FUEL, DEFAULT_MEM)
+        .expect("bulk-memory is baseline and must validate + run");
+    assert!(v.ok, "expected ok=true for a bulk-memory no-op, got {v:?}");
+}
+
+#[test]
+fn rejects_disabled_simd_feature() {
+    // Defence-in-depth check, re-pointed from bulk-memory (which we now
+    // correctly allow) at a proposal we genuinely keep DENIED: SIMD.
+    // The curriculum needs no `v128`; it's real attack surface, so a
+    // module using a SIMD instruction must fail validation, NOT run.
+    //
+    // If a future wasmtime release flips the SIMD default on and we
+    // forget to re-deny it, this test trips before any student
+    // submission can. (Same guard for multi-memory/memory64/threads/
+    // tail-call/gc — SIMD is the cheap single-instruction canary.)
+    let bytes = compile_wat(
+        r#"
+        (module
+          (memory (export "memory") 1)
+          (func (export "_start")
+            (drop (v128.const i32x4 0 0 0 0))))
+        "#,
+    );
+
     let result = run_wasm(&bytes, FAST_TIMEOUT_MS, DEFAULT_FUEL, DEFAULT_MEM);
     let err = result.expect_err(
-        "module using disabled bulk-memory feature must NOT validate; \
+        "module using disabled SIMD feature must NOT validate; \
          got Ok — has the Config deny-list regressed?",
     );
     let msg = format!("{err:#}").to_lowercase();
     assert!(
-        msg.contains("bulk memory")
-            || msg.contains("bulk-memory")
-            || msg.contains("memory.copy")
+        msg.contains("simd")
+            || msg.contains("v128")
             || msg.contains("not enabled")
-            || msg.contains("disabled"),
-        "error should reference the disabled feature, got {:?}",
+            || msg.contains("disabled")
+            || msg.contains("unsupported"),
+        "error should reference the disabled SIMD feature, got {:?}",
         err
     );
 }

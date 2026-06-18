@@ -119,24 +119,40 @@ pub fn run_wasm(
     let mut config = Config::new();
     config.consume_fuel(true);
     config.epoch_interruption(true);
-    // Defence-in-depth: deny every wasm feature proposal we don't
-    // explicitly need. The student curriculum compiles plain Rust to
-    // wasm32-wasip1 and exercises none of these proposals; turning each
-    // off explicitly turns "future wasmtime release silently enables a
-    // feature" from a possible regression into an instantiation error.
+    // Defence-in-depth: deny the exotic / high-surface wasm proposals
+    // we don't need, while KEEPING the WebAssembly 2.0 baseline that the
+    // Rust `wasm32-wasip1` std actually emits.
     //
-    // Note on dependency ordering (per wasmtime 44 Config docs):
+    // Hard-won correction (2026-06-18): `bulk_memory` and
+    // `reference_types` MUST stay enabled. Current rustc lowers `memcpy`/
+    // `memset` in std to `memory.copy`/`memory.fill` (bulk-memory) and
+    // emits the reference-types table encoding — both are baseline since
+    // the WebAssembly 2.0 spec. Disabling them makes wasmtime's decoder
+    // mis-parse and reject EVERY real Rust module with a "zero byte
+    // expected" translation error. The original "students use none of
+    // these" assumption was wrong: it's the std the linker pulls in, not
+    // the student snippet, that uses them. This file's first end-to-end
+    // build-and-run test (compile-api/tests/wasm_builder.rs) is what
+    // surfaced it.
+    //
+    // Dependency chain (per wasmtime 44 Config docs):
     //   reference_types depends on bulk_memory
     //   function_references depends on reference_types
     //   gc depends on function_references
-    // We disable the whole chain. SIMD/relaxed-SIMD/multi-memory/
-    // memory64/tail-call/threads are independent toggles.
+    // We enable bulk_memory + reference_types (baseline, required) and
+    // stop the chain there: function_references / gc stay off. The
+    // genuinely exotic or concurrency-bearing proposals — SIMD,
+    // relaxed-SIMD, multi-memory, memory64, tail-call, threads (shared
+    // memory + atomics) — remain disabled; the curriculum needs none of
+    // them and each is real attack surface. sign-extension, multi-value
+    // and non-trapping float-to-int are left at wasmtime's defaults
+    // (on): they're baseline and harmless, and rustc emits them too.
+    config.wasm_bulk_memory(true);
+    config.wasm_reference_types(true);
     config.wasm_simd(false);
     config.wasm_relaxed_simd(false);
-    config.wasm_bulk_memory(false);
     config.wasm_multi_memory(false);
     config.wasm_memory64(false);
-    config.wasm_reference_types(false);
     config.wasm_function_references(false);
     config.wasm_gc(false);
     config.wasm_tail_call(false);

@@ -1,0 +1,25 @@
+# Pledge & Crown audioldm2-gen - pinned deps for reproducibility.
+#
+# Torch with CUDA is a separate install (Windows wheels live on a
+# different index URL). The PowerShell wrapper handles that. Order
+# matters: torch first, then everything else against PyPI.
+#
+# torch + CUDA 12.1 wheel (Windows): installed by scripts/audioldm2-gen.ps1
+#   pip install torch --index-url https://download.pytorch.org/whl/cu121
+
+diffusers==0.31.0
+transformers==4.46.3
+accelerate==1.2.1
+soundfile==0.12.1
+numpy==1.26.4
+# AudioLDM2's text path runs a T5 + GPT2 + CLAP stack; the T5/CLAP
+# tokenizers need sentencepiece, which the diffusers pipeline does not
+# pull in transitively. Stack trace doesn't surface it until the
+# pipeline tries to instantiate the text encoders.
+sentencepiece==0.2.0
+# AudioLDM2 also pulls a phonemizer-backed tokenizer path for some
+# prompts; librosa is used by the pipeline's mel-feature front end.
+librosa==0.10.2.post1
+# Faster downloads from HF's Xet storage (avoids the per-file warning
+# and speeds up the ~8 GB initial pull for the base model).
+hf_xet==1.4.3

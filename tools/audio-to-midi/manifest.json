@@ -1,0 +1,36 @@
+{
+  "_comment": "Track manifest for Pledge & Crown audio-to-MIDI transcription. Each entry points at a baked WAV under game/assets/audio/ and lists which Demucs stems to transcribe. The pipeline is Demucs (htdemucs 4-stem split) -> Spotify Basic Pitch (per-stem polyphonic transcription) -> one .mid per stem + a combined .mid, written under tools/audio-to-midi/out/<name>/. The whole point is the per-MIDI note-count/range report so we can see exactly what notes Stable Audio Open chose for each voice (e.g. is the bass actually anchored on B). Defaults transcribe `village` and `epilogue` (the most musical tracks); pass --all to do every track, or --only <names>. Valid stem names are htdemucs's four: bass, drums, other, vocals.",
+  "_default_tracks": ["village", "epilogue"],
+  "tracks": [
+    {
+      "name": "title",
+      "wav": "game/assets/audio/title.wav",
+      "stems": ["bass", "other"]
+    },
+    {
+      "name": "village",
+      "wav": "game/assets/audio/village.wav",
+      "stems": ["bass", "other"]
+    },
+    {
+      "name": "mission_clear",
+      "wav": "game/assets/audio/mission_clear.wav",
+      "stems": ["other"]
+    },
+    {
+      "name": "mission_locked",
+      "wav": "game/assets/audio/mission_locked.wav",
+      "stems": ["bass", "other"]
+    },
+    {
+      "name": "editor_open",
+      "wav": "game/assets/audio/editor_open.wav",
+      "stems": ["other"]
+    },
+    {
+      "name": "epilogue",
+      "wav": "game/assets/audio/epilogue.wav",
+      "stems": ["bass", "other"]
+    }
+  ]
+}

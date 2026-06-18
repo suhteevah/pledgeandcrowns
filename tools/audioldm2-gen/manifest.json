@@ -1,0 +1,80 @@
+{
+  "_comment": "SFX manifest for Pledge & Crown diegetic sound effects. Each entry generates one WAV under game/assets/audio/sfx/<name>.wav via AudioLDM2 (cvssp/audioldm2). AudioLDM2 outputs 16 kHz MONO (NOT 44.1 kHz stereo like synthwave-gen). Prompts are descriptive natural language - AudioLDM2's preferred style - not the comma-tag style of music models. Seeds are pinned so re-runs reproduce; bump a seed for a fresh take. Per-sfx `steps` and `negative_prompt` override the _default_* keys. Edit prompts freely - re-run generate.py to overwrite. LICENSE: AudioLDM2 weights are CC-BY-NC; treat output as prototype-only until licensing is confirmed (see README.md).",
+  "_default_negative_prompt": "music, melody, song, speech, voice, vocals, low quality, noisy, hum, hiss, distorted",
+  "_default_steps": 200,
+  "_default_cfg": 3.5,
+  "sfx": [
+    {
+      "name": "door_creak",
+      "prompt": "a heavy wooden door creaking open slowly on rusty iron hinges, echoing stone castle interior, single isolated sound effect, mono",
+      "negative_prompt": "music, melody, speech, voice, footsteps, low quality, noisy",
+      "duration_s": 2.5,
+      "seed": 2010,
+      "steps": 200
+    },
+    {
+      "name": "door_open",
+      "prompt": "a wooden village house door swinging open and a soft latch release, a short clean thud as it stops, quiet indoor ambiance, single isolated sound effect, mono",
+      "negative_prompt": "music, melody, speech, voice, low quality, noisy",
+      "duration_s": 2.0,
+      "seed": 2020,
+      "steps": 200
+    },
+    {
+      "name": "parchment_unfurl",
+      "prompt": "an old parchment scroll being unrolled and unfurled, dry crinkling and rustling of aged paper, quiet medieval study, single isolated sound effect, mono",
+      "negative_prompt": "music, melody, speech, voice, low quality, noisy, reverb",
+      "duration_s": 2.0,
+      "seed": 2030,
+      "steps": 200
+    },
+    {
+      "name": "footsteps_stone",
+      "prompt": "slow deliberate footsteps of leather boots walking on a cobblestone floor, four steps, echoing stone castle hall, single isolated sound effect, mono",
+      "negative_prompt": "music, melody, speech, voice, low quality, noisy",
+      "duration_s": 3.0,
+      "seed": 2040,
+      "steps": 200
+    },
+    {
+      "name": "coin_clink",
+      "prompt": "a handful of small gold coins clinking and jingling together as they drop onto a wooden table, bright metallic chime, single isolated sound effect, mono",
+      "negative_prompt": "music, melody, speech, voice, low quality, noisy, reverb",
+      "duration_s": 1.5,
+      "seed": 2050,
+      "steps": 200
+    },
+    {
+      "name": "sword_unsheathe",
+      "prompt": "a steel sword being drawn from a leather scabbard, sharp metallic ringing slide, single isolated sound effect, mono",
+      "negative_prompt": "music, melody, speech, voice, low quality, noisy",
+      "duration_s": 1.5,
+      "seed": 2060,
+      "steps": 200
+    },
+    {
+      "name": "anvil_clang",
+      "prompt": "a blacksmith hammer striking a hot iron anvil, single bright metallic clang with a long ringing decay, smithy workshop, single isolated sound effect, mono",
+      "negative_prompt": "music, melody, speech, voice, low quality, noisy",
+      "duration_s": 2.0,
+      "seed": 2070,
+      "steps": 200
+    },
+    {
+      "name": "quill_scratch",
+      "prompt": "a feather quill pen scratching across parchment writing a line of ink, soft dry scribbling, quiet medieval scriptorium, single isolated sound effect, mono",
+      "negative_prompt": "music, melody, speech, voice, low quality, noisy, reverb",
+      "duration_s": 2.0,
+      "seed": 2080,
+      "steps": 200
+    },
+    {
+      "name": "latch_click",
+      "prompt": "a small iron door latch clicking shut, a crisp mechanical metal click and snap, single isolated sound effect, mono",
+      "negative_prompt": "music, melody, speech, voice, low quality, noisy, reverb",
+      "duration_s": 1.0,
+      "seed": 2090,
+      "steps": 200
+    }
+  ]
+}

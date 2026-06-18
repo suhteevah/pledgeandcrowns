@@ -27,7 +27,14 @@ wasm-bindgen --out-dir $pkgOut --target web $wasmIn
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 if (Test-Path "game/assets") {
+    # Copy-Item -Recurse into an EXISTING directory nests the source as
+    # web/assets/assets/... instead of refreshing web/assets/ in place.
+    # That silently serves STALE assets (and strands new ones, e.g.
+    # newly-baked audio) on every rebuild after the first. Clear the
+    # destination first so each build copies fresh.
+    if (Test-Path "web/assets") { Remove-Item -Recurse -Force "web/assets" }
     Copy-Item -Recurse -Force "game/assets" "web/assets"
+    Write-Host "[ok] refreshed web/assets from game/assets" -ForegroundColor Green
 }
 
 # Minimal index.html if one doesn't exist yet. Players hit web/index.html.

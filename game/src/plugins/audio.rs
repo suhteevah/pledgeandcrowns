@@ -16,10 +16,13 @@
 //!   visible. All one-shots — no looping outside of music beds.
 
 use crate::assets::{
-    AUDIO_EDITOR_OPEN, AUDIO_EPILOGUE, AUDIO_MISSION_CLEAR, AUDIO_TITLE, AUDIO_VILLAGE,
+    AUDIO_EDITOR_OPEN, AUDIO_EPILOGUE, AUDIO_MISSION_CLEAR, AUDIO_MISSION_LOCKED, AUDIO_TITLE,
+    AUDIO_VILLAGE,
 };
 use crate::plugins::editor::EditorState;
-use crate::plugins::mission::{CompletionView, EpilogueView, MissionRegistry};
+use crate::plugins::mission::{
+    CompletionView, EpilogueView, MissionLockedAttempt, MissionRegistry,
+};
 use crate::plugins::progress::MissionProgress;
 use crate::plugins::state::GameState;
 use bevy::prelude::*;
@@ -33,6 +36,7 @@ pub struct AudioHandles {
     pub title: Handle<AudioSource>,
     pub village: Handle<AudioSource>,
     pub mission_clear: Handle<AudioSource>,
+    pub mission_locked: Handle<AudioSource>,
     pub editor_open: Handle<AudioSource>,
     pub epilogue: Handle<AudioSource>,
 }
@@ -63,6 +67,7 @@ impl Plugin for GameAudioPlugin {
                 Update,
                 (
                     sfx_on_mission_clear,
+                    sfx_on_locked_attempt,
                     sfx_on_editor_open,
                     sfx_on_epilogue_visible,
                 )
@@ -76,6 +81,7 @@ fn load_audio_handles(asset_server: Res<AssetServer>, mut handles: ResMut<AudioH
     handles.title = asset_server.load(AUDIO_TITLE);
     handles.village = asset_server.load(AUDIO_VILLAGE);
     handles.mission_clear = asset_server.load(AUDIO_MISSION_CLEAR);
+    handles.mission_locked = asset_server.load(AUDIO_MISSION_LOCKED);
     handles.editor_open = asset_server.load(AUDIO_EDITOR_OPEN);
     handles.epilogue = asset_server.load(AUDIO_EPILOGUE);
 }
@@ -122,6 +128,26 @@ fn sfx_on_mission_clear(
         audio.play(handles.mission_clear.clone());
     }
     state.last_cleared_count = now;
+}
+
+/// Fire the `mission_locked` sting when the player F-presses a locked
+/// NPC. Driven by the `MissionLockedAttempt` message emitted in
+/// `mission::handle_interact_key` — no state-edge tracking needed since
+/// the message itself is the edge. Drain the reader and play at most
+/// once per frame so a single F-press never stacks the sting.
+fn sfx_on_locked_attempt(
+    audio: Res<Audio>,
+    handles: Res<AudioHandles>,
+    mut attempts: MessageReader<MissionLockedAttempt>,
+) {
+    let mut fired = false;
+    for attempt in attempts.read() {
+        if !fired {
+            tracing::debug!("audio: mission_locked sting ({})", attempt.mission_id);
+            audio.play(handles.mission_locked.clone());
+            fired = true;
+        }
+    }
 }
 
 fn sfx_on_editor_open(

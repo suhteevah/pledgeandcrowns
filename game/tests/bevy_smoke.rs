@@ -6,7 +6,11 @@
 
 use bevy::prelude::*;
 use bevy::state::app::StatesPlugin;
-use pledge_and_crown::plugins::mission::{ActiveMission, MissionPlugin, MissionRegistry};
+use pledge_and_crown::plugins::editor::EditorState;
+use pledge_and_crown::plugins::mission::{
+    ActiveMission, MissionLockedAttempt, MissionPlugin, MissionRegistry,
+};
+use pledge_and_crown::plugins::npc::{NearbyEntry, NearbyNpc};
 use pledge_and_crown::plugins::progress::{MissionProgress, ProgressPlugin};
 use pledge_and_crown::plugins::state::{GameState, StatePlugin};
 
@@ -53,6 +57,79 @@ fn mission_plugin_publishes_registry() {
     assert!(
         active.current.is_none(),
         "ActiveMission must default to None"
+    );
+}
+
+/// Headless fixture: MissionPlugin + the resources `handle_interact_key`
+/// reads, forced into `InGame` with a single NPC standing nearby. No
+/// EditorPlugin/EguiPlugin (those need a renderer); `EditorState` is a
+/// plain `Default` resource so we mount it directly.
+fn ingame_app_with_nearby(name: &'static str, mission_id: &'static str) -> App {
+    let mut app = App::new();
+    app.add_plugins(MinimalPlugins)
+        .add_plugins(StatesPlugin)
+        .add_plugins(StatePlugin)
+        .add_plugins(ProgressPlugin)
+        .add_plugins(MissionPlugin)
+        .init_resource::<EditorState>()
+        .init_resource::<ButtonInput<KeyCode>>()
+        .insert_resource(NearbyNpc {
+            current: Some(NearbyEntry { name, mission_id }),
+        });
+    app.insert_state(GameState::InGame);
+    app
+}
+
+/// Pressing F against a locked NPC must emit exactly one
+/// `MissionLockedAttempt` (the message the audio plugin's
+/// `sfx_on_locked_attempt` system fires the locked sting on) and must
+/// NOT open the editor. `double_function` is the second mission, whose
+/// prereq `intro_let_binding` is uncleared on a fresh save → locked.
+#[test]
+fn locked_npc_f_press_emits_locked_message_and_keeps_editor_closed() {
+    let mut app = ingame_app_with_nearby("Trait Mage", "double_function");
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .press(KeyCode::KeyF);
+    app.update();
+
+    let drained: Vec<_> = app
+        .world_mut()
+        .resource_mut::<Messages<MissionLockedAttempt>>()
+        .drain()
+        .collect();
+    assert_eq!(
+        drained.len(),
+        1,
+        "exactly one locked-attempt message expected, got {}",
+        drained.len()
+    );
+    assert_eq!(drained[0].mission_id, "double_function");
+    assert!(
+        !app.world().resource::<EditorState>().open,
+        "F on a locked NPC must not open the editor"
+    );
+}
+
+/// The inverse: F against an unlocked NPC (the first mission, no prereq)
+/// must emit zero locked-attempt messages and open the editor.
+#[test]
+fn unlocked_npc_f_press_emits_no_locked_message_and_opens_editor() {
+    let mut app = ingame_app_with_nearby("Ferris", "intro_let_binding");
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .press(KeyCode::KeyF);
+    app.update();
+
+    let count = app
+        .world_mut()
+        .resource_mut::<Messages<MissionLockedAttempt>>()
+        .drain()
+        .count();
+    assert_eq!(count, 0, "unlocked NPC must not emit a locked-attempt");
+    assert!(
+        app.world().resource::<EditorState>().open,
+        "F on an unlocked NPC must open the editor"
     );
 }
 

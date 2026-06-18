@@ -46,3 +46,41 @@ for the duration of the script. Main keeps the shared default. Pre-commit
 hooks invoke ci.ps1, so any agent commit gets isolation for free. Caveat:
 agents that run raw `cargo test` outside the script don't get isolation —
 they should set the env var themselves or invoke `scripts/ci.ps1`.
+
+## 2026-06-18 — wasm_runner disabled baseline features rustc actually emits
+
+The harness didn't just miss this bug — it *asserted* it. `wasm_runner`'s
+wasmtime `Config` disabled `bulk_memory` and `reference_types` as
+"defence in depth," with a comment claiming "the student curriculum
+compiles plain Rust to wasm32-wasip1 and exercises none of these
+proposals." That premise is false: it's not the student snippet, it's the
+**std** the linker pulls in — current rustc lowers `memcpy`/`memset` to
+`memory.copy`/`memory.fill` (bulk-memory) and emits the reference-types
+table encoding. Both are WebAssembly 2.0 baseline. With them disabled,
+wasmtime's decoder mis-parses and rejects EVERY real Rust module with
+`Invalid input WebAssembly code ... zero byte expected`.
+
+It was never caught because nothing built a *real* rustc wasm and ran it
+through `wasm_runner` — the wasm-exec wiring was deferred, and the
+existing `wasm_runner` tests synthesized hand-written WAT (which used none
+of these features). Worse, `rejects_disabled_bulk_memory_feature` actively
+asserted that a `memory.copy` module must be **rejected** — encoding the
+bug as a guarantee. The first end-to-end test that compiled `fn main() {
+println!("hello"); }` and ran it surfaced it immediately.
+
+**Fix (landed 2026-06-18):** `wasm_runner::run_wasm` now enables
+`bulk_memory` + `reference_types` (baseline, required by rustc output) and
+keeps the genuinely-exotic / concurrency-bearing proposals off (SIMD,
+relaxed-SIMD, multi-memory, memory64, tail-call, threads, gc,
+function-references). The deny-list regression guard was re-pointed from
+bulk-memory (now correctly allowed) to SIMD:
+`compile-api/tests/wasm_runner.rs::accepts_baseline_bulk_memory_feature`
+proves a real `memory.copy` module runs, and `rejects_disabled_simd_feature`
+proves a `v128` module is still refused. The honest end-to-end guard is
+`compile-api/tests/wasm_builder.rs` (`#[ignore]`d, runs real
+`cargo build --target wasm32-wasip1` then executes the artifact).
+
+**Lesson:** a "defence in depth" deny-list is only safe if you actually
+exercise the real inputs against it. A synthetic-WAT test asserting a
+feature is denied is worthless if no real toolchain output ever flows the
+same path — it just freezes a wrong assumption into a green check.

@@ -1,0 +1,6 @@
+# audio-to-midi local artifacts - never commit the venv or outputs.
+.venv/
+out/
+__pycache__/
+*.pyc
+.audio-to-midi-deps-installed

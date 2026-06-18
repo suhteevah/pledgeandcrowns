@@ -5,6 +5,7 @@
 
 pub mod cargo_grader;
 pub mod grader;
+pub mod wasm_builder;
 pub mod wasm_runner;
 
 use axum::{Json, Router, http::StatusCode, response::IntoResponse, routing::get, routing::post};
@@ -72,13 +73,18 @@ async fn compile(Json(req): Json<CompileRequest>) -> impl IntoResponse {
     )
 }
 
-/// Real `cargo check` route. Slow (1-3s warm) — not yet wired into the
-/// game client. Same request/response shape as `/compile` so swapping
-/// is a one-line client change once we're confident in the path.
+/// Real build-and-run route. Slow (build ~1-3s warm + a sub-second
+/// sandboxed run) — available but not the game client's default yet
+/// (see `compile_client.rs`; the prod switch is gated on a wasip1
+/// toolchain being installed on the server). Same request/response shape
+/// as `/compile` so the client toggle is a one-line change.
 ///
-/// Tags every response with a leading `[real]` marker in `stdout` so a
-/// player or test can tell which path generated the verdict. The marker
-/// will be removed when this route becomes the default.
+/// Honest verdict: the player source is built to `wasm32-wasip1` and the
+/// resulting module is *actually executed* under the hardened sandbox in
+/// [`wasm_runner`]. `ok` means it compiled AND ran to a clean exit. The
+/// program's real stdout is returned. Tags every response with a leading
+/// `[real]` marker so a player or test can tell which path produced the
+/// verdict; the marker drops when this route becomes the default.
 async fn compile_real(Json(req): Json<CompileRequest>) -> impl IntoResponse {
     tracing::info!(
         "compile-real: encounter={} source_bytes={}",
@@ -88,30 +94,35 @@ async fn compile_real(Json(req): Json<CompileRequest>) -> impl IntoResponse {
     if let Some(rejection) = reject_invalid_source(&req.source) {
         return rejection;
     }
-    // Real verdict only — do NOT stitch in pattern-grader flavor here.
-    // The two graders answer different questions: the pattern grader
-    // says "did the player use the right construct?", cargo says "does
-    // it compile?". A solution can be syntactically correct (ok=true
-    // from cargo) but use the wrong construct (ok=false from pattern),
-    // and the previous stitched response could ship `ok=true` with a
-    // "missing required: let mut" stderr — incoherent. When wasmtime
-    // execution lands, that layer carries the per-encounter flavor;
-    // for now we ship cargo's verdict as-is, marked [real].
-    match cargo_grader::compile_check(&req.source) {
-        Ok(verdict) => (
-            StatusCode::OK,
-            Json(CompileResponse {
-                ok: verdict.ok,
-                stdout: if verdict.ok {
-                    "[real] cargo check: ok".to_string()
+    // Honest end-to-end: build to wasm, then run it in the sandbox. We do
+    // NOT stitch in pattern-grader flavor — the two answer different
+    // questions and a stitched response can be self-contradictory
+    // (ok=true from compile, "missing required: let mut" from pattern).
+    // The execution layer carries the real verdict; per-encounter
+    // expected-output checks layer on top of this in a later pass.
+    match wasm_builder::compile_and_run(&req.source) {
+        Ok(outcome) => {
+            let stdout = if outcome.ok() {
+                // Surface the program's real output, marked [real].
+                if outcome.stdout.is_empty() {
+                    "[real] compiled + ran: ok".to_string()
                 } else {
-                    "[real]".to_string()
-                },
-                stderr: verdict.stderr,
-            }),
-        ),
+                    format!("[real] {}", outcome.stdout)
+                }
+            } else {
+                "[real]".to_string()
+            };
+            (
+                StatusCode::OK,
+                Json(CompileResponse {
+                    ok: outcome.ok(),
+                    stdout,
+                    stderr: outcome.stderr,
+                }),
+            )
+        }
         Err(e) => {
-            tracing::error!("compile-real: cargo_grader setup failure: {e:#}");
+            tracing::error!("compile-real: wasm_builder setup failure: {e:#}");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(CompileResponse {

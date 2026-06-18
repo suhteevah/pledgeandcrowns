@@ -1,130 +1,179 @@
 # HANDOFF.md
 
 ## Last Updated
-2026-05-03 (session 2, third pass) — full v1 roadmap shipped end-to-end including the audio score: curriculum gating, wasm rendering fix, wasm save persistence (file + localStorage), wasm-canonical stub grader, win epilogue, title controls + progress, cargo-check parity audit, save round-trip tests, **synthwave-gen pipeline + 6 baked tracks live in repo**, multi-GPU fanout dispatcher ready for the inbound 3x P100 rig. The v1 game is functionally and aurally complete.
+2026-06-18 (session 3) — drove the full post-v1 roadmap. Closed the stated
+v1 browser blocker (wasm title art **visually verified rendering in
+Chrome**), built honest build+run grading (compile-real + wasm exec) and
+**fixed a latent `wasm_runner` bug that would have rejected every real Rust
+module**, shipped the audio-to-MIDI tool (with a real transcription),
+scaffolded the AudioLDM2 SFX tool and the Tauri 2.0 mobile wrapper, and
+teed up the 4 remaining NPC sprites with bible-faithful art briefs.
 
 ## Project Status
-🟢 v1 complete. Native: 21 missions, full curriculum gating, win epilogue, score playing. Web: builds and runs (visual confirmation of the rendering fix is the one remaining Matt-action).
+🟢 **v1 complete and browser-verified.** Native: 21 missions, full
+curriculum gating, win epilogue, full synthwave score + SFX (now including
+mission_locked). Web: builds, renders, and runs — the bindless rendering
+fix is **visually confirmed** (title art + scene render in WebGL2). Honest
+build+run grading is available behind an opt-in flag.
 
-## What Was Done This Session (2026-05-03)
+## What Was Done This Session (2026-06-18)
 
-Sixteen commits across three passes. First pass built v1 functional completeness; second pass closed non-blocking polish; third pass landed the audio score and surgical prompt-iteration tooling.
+Roadmap milestones, by disposition:
 
-### Pass 1: v1 functional roadmap
+### ✅ Wired `mission_locked.wav` into the audio plugin (was "trivial, TODO")
+- New Bevy **message** `MissionLockedAttempt` emitted in
+  `mission::handle_interact_key` on an F-press against a locked NPC;
+  consumed by `audio::sfx_on_locked_attempt` (Bevy 0.18 uses
+  `Message`/`MessageReader`/`add_message`, not the old `Event` buffered
+  API — verified against the installed source).
+- Decoupled by design: the locked-attempt detection stays in the one
+  system that already owns the F-press + nearby-NPC + progress reads,
+  rather than re-deriving it in `audio.rs`.
+- 2 new regression tests in `game/tests/bevy_smoke.rs` (locked NPC →
+  exactly one message + editor stays closed; unlocked NPC → zero messages
+  + editor opens). 7/7 smoke tests green.
 
-- `d679886` curriculum gating — `Mission.prereq` strict-linear chain, `[locked — clear X first]` UI, `next: <id> · find <name>` HUD pin, 4 invariant tests
-- `a69cf03` wasm save no-op shims (kills per-frame fs error)
-- `f0bd47b` **wasm rendering fix** — `bevy_egui` bindless disabled (`bindless_mode_array_size: None`), `AssetMetaCheck::Never` belt-and-suspenders. Diagnosed via research subagent matching the exact `TEXTURE_BINDING_ARRAY` error string. Memory note saved at `bevy-egui-wasm-bindless.md`.
-- `293aad4` win-condition epilogue panel
-- `c124fb9` title-screen "Press Space" overlay + tonally tiered progress indicator
-- `e72cd7a` wasm-canonical stub grader — passes persist on web (was structurally broken before; reqwest can't reach localhost from a browser tab, so the network path was a no-op and stub-fallback intentionally didn't mark cleared)
+### ✅ compile-real + wasmtime exec wiring (honest grading)
+- New `compile-api/src/wasm_builder.rs`: bridges player source →
+  `cargo build --target wasm32-wasip1 --release` → raw `.wasm` →
+  `wasm_runner::run_wasm`. Same security contract as `cargo_grader`
+  (server-owned bin manifest, UUID sandbox, env_clear allowlist,
+  wall-clock watchdog, Drop cleanup, `panic="abort"` so panics trap).
+- `/compile-real` route now returns an honest **compiled AND ran** verdict
+  with the program's real stdout, marked `[real]`.
+- Game client opt-in: set **`PLEDGE_REAL_COMPILE=1`** to route to
+  `/compile-real` (default stays the fast `/compile` pattern grader —
+  keeps MVP latency; the prod default-switch is gated on installing the
+  wasip1 toolchain on the server).
+- **Latent bug found + fixed:** `wasm_runner`'s `Config` disabled
+  `bulk_memory` + `reference_types` as "defence in depth," but those are
+  WebAssembly 2.0 baseline that rustc's wasip1 **std** emits — so it
+  rejected *every* real Rust module with `zero byte expected`. Never
+  caught because no test had ever built real wasm and run it; worse, a
+  test *asserted* the buggy behavior. Now enabled (exotic proposals stay
+  off); the deny-list guard re-pointed at SIMD. Logged in
+  `.claude/audit-gaps.md`.
+- Tests: `compile-api/tests/wasm_builder.rs` (9, `#[ignore]`d — real
+  build+run: hello-world captures stdout, compile-error/missing-main
+  rejected, panic→run-fail, infinite-loop→fuel/timeout, sandbox cleanup).
+  `wasm_runner.rs` tests updated (bulk-memory now accepted, SIMD denied).
+  All green. `rustup target add wasm32-wasip1` was run on this box.
 
-### Pass 2: non-blocking polish
+### ✅ Visual verification of the wasm rendering fix (was the #1 Matt-blocker)
+- Rebuilt wasm (`scripts/web-build.ps1`), served via `web-serve`, drove
+  **Chrome** to `127.0.0.1:8080` and screenshotted: the "PLEDGE & CROWN"
+  title art, crown sprite, and full pixel scene (mountains/water/bridge/
+  player/NPCs) all render in WebGL2. **The bindless fix is confirmed; v1
+  is browser-shippable.**
+- **Also fixed a `web-build.ps1` bug found doing this:** `Copy-Item
+  -Recurse` into an existing `web/assets/` *nested* the fresh assets under
+  `web/assets/assets/`, so every rebuild after the first silently served
+  STALE sprites and stranded new audio. Now clears the dest first.
 
-- `799daa8` real localStorage save persistence on wasm (web-sys Storage + base64-bincode round-trip, graceful degradation when storage unavailable)
-- `e85f3fd` cargo-check parity audit — `#[ignore]`'d slow test runs all 21 canonical solutions through real `cargo check`; all pass in 6.76s warm
-- `47a2d26` title controls panel (WASD / F / E / Esc)
-- `e5034ed` 5 native save round-trip tests (round-trip, missing-file load, filename validation, corrupt bincode, atomic overwrite)
-- `ae5cea4` HANDOFF round-2 update
+### ✅ Audio-to-MIDI tool (you asked whether SAO output can be transcribed)
+- `tools/audio-to-midi/` + `scripts/audio-to-midi.ps1`: Demucs (htdemucs
+  stem split) → Spotify Basic Pitch (per-stem transcription) → per-stem +
+  combined `.mid`. onnxruntime backend (no TensorFlow). Manifest-driven,
+  same pattern as synthwave-gen.
+- **Actually run end-to-end** (py 3.10 venv, torch cu121, GPU): produced
+  real MIDI for `village` — and it answered the load-bearing question:
+  **the village bass IS anchored on B1** (B1 dominant every run),
+  confirming the SAO prompt steering. MuseScore sheet-music step is
+  documented as a manual follow-up (not implemented).
 
-### Pass 3: audio score
+### ✅ AudioLDM2 diegetic-SFX tool (scaffold; bake is rig-gated by your note)
+- `tools/audioldm2-gen/` + `scripts/audioldm2-gen.ps1`: `cvssp/audioldm2`
+  via diffusers, 16 kHz mono, 9 SFX (door creak/open, parchment, footsteps,
+  coin, sword, anvil, quill, latch) → `game/assets/audio/sfx/`. Validated
+  by py_compile + a torch-free `--dry-run`. **No bake run** (deferred to
+  the P100 rig per your note). ⚠️ AudioLDM2 weights are **CC-BY-NC** —
+  prototype-only; clear SFX licensing before shipping.
 
-- `40e8ce9` `tools/synthwave-gen/` pipeline + `game/src/plugins/audio.rs`. Stable Audio Open 1.0 via diffusers (fp16 on CUDA), `manifest.json`-driven, fail-open (missing files don't crash, just play silent). State-driven music beds + reactive SFX edges.
-- `a4a0d1d` `tools/synthwave-gen/fanout.py` + `scripts/synthwave-fanout.ps1` — multi-GPU dispatcher. Round-robin distributes manifest tracks across N CUDA devices via subprocess fanout. ~3x speedup expected on the inbound 3x P100 rig.
-- `3b930d3` HF gated-repo error path with actionable 3-step recovery. (Then learned Matt's HF account auto-resolves these — saved as feedback memory `feedback-hf-gated-repos.md` so I just clickthrough next time.)
-- `9c9c141` first successful bake — 6 tracks, ~4:54 wall-clock on the 3070 Ti. WAVs land in `game/assets/audio/`.
-- `81cc11e` re-tune pass: village (compression + reverb + arp), mission_locked (harsher tone), editor_open (3s instead of 1.5s).
-- `92e5e82` village fix — discovered T5 silently truncates prompts at 128 tokens, killing the load-bearing "no thrumming bass" tail. Trimmed prompt to 94 units; added a preflight check in `generate.py` that prints a loud `[synthwave-gen][WARN] track 'X' prompt is N units, TAIL WILL BE DROPPED` for any over-budget prompt. Re-baked village in 50s instead of the truncated 9.6 min.
-- `e114dc8` village final — surgical prompt nudge ("on B" added to bass anchor, same seed) successfully shifted just the bass up a step without disturbing the rest. Confirmed steering pattern: keep seed + structural prompt, add narrow per-voice qualifiers, re-bake.
+### ✅ Tauri 2.0 mobile wrapper (scaffolded + compile-verified; link env-gated)
+- `mobile/src-tauri/` via `cargo tauri init`: frontendDist → `../../web`,
+  standalone `[workspace]` (detached from the game workspace), 1280×720
+  window, provisional identifier `com.pledgeandcrown.game`, npm hooks
+  removed (frontend is the prebuilt `web/`).
+- `mobile/build-desktop.bat` helper (loads the MSVC env via vswhere +
+  vcvars, builds the shell with the MSVC toolchain).
+- All Rust deps (wry/tao/tauri/webview2) **compile under both toolchains**;
+  only the final **link** is blocked on this box. Investigated thoroughly:
+  GNU `ld` overflows on webview2's export table; MSVC has `cl.exe`/
+  `link.exe` present but the **"Desktop development with C++" workload is
+  incomplete** — the desktop x64 CRT libs (`lib\x64\msvcrt.lib`/`libcmt.lib`)
+  are missing (only the `onecore` variant exists) and `vcvarsall.bat` is
+  gone, so `LIB` can't be populated. Fix = VS Installer → Modify → complete
+  that workload (a repair). Precise diagnosis + commands in
+  `mobile/README.md`. **Android:** no `ANDROID_HOME`/`adb`/SDK found on
+  this box (user or machine scope), despite a "last I checked" — needs the
+  SDK+NDK before `cargo tauri android`.
 
-## Current State
+### 🟡 NPC art — 4 placeholders teed up (generation stays Matt-gated)
+- Wrote 4 bible-faithful art-direction **specs** (design *direction*, not
+  art): `design/art/specs/{quartermaster,auditor,chronicler,alchemist}.md`,
+  each tied to its mission's Rust concept, palette-compliant (Heraldic Code
+  codes), with a documented alarm-scarlet exception for the Auditor.
+- The JSX/PNG generation stays on the locked **claude.ai/design + Matt-
+  approver** path (CLAUDE.md hard-rule #5). Code is ready to drop the
+  sprites in: add 4 constants to `assets.rs` + swap the `SPRITE_PLAYER`
+  paths in `npc.rs::NPC_ROSTER`.
 
-### Working end-to-end (native)
-- Title screen with "Press Space" prompt + progress indicator + controls panel + **title music looped** → InGame state machine, Esc-only editor close.
-- Hearthstone Village (30×20 tilemap, REF-04 atlas) with **village ambient music** looped.
-- Player walks, world bounds clamped, camera follows.
-- 21 NPCs spawned, 17 with hand-authored art, 4 still on `SPRITE_PLAYER` placeholder (Quartermaster, Auditor, Chronicler, Alchemist).
-- In-game egui editor + 4-section tutorial side panel.
-- 21 missions with strict-linear curriculum gating.
-- Live HTTP round-trip game ↔ axum compile-API on `127.0.0.1:7878`.
-- **Reactive SFX:** mission_clear sting on cleared_count growth, editor_open chime on `EditorState.open` false→true edge, epilogue fanfare on win panel show.
-- Mission completion dialogue + bincode 2 atomic save.
-- Win condition: epilogue panel auto-shows after the 21st clear.
+## Verification (this session)
+- Full local CI green: `scripts/ci.ps1` (fmt + check + clippy `-D warnings`
+  + `cargo test --workspace`). The new tests all pass; clippy clean.
+- wasm_builder/wasm_runner `#[ignore]`d slow tests run + green via
+  `cargo test -p pledge_compile_api --test wasm_builder --test wasm_runner -- --include-ignored`.
+- wasm render confirmed visually in Chrome.
 
-### Working end-to-end (wasm) — pending Matt's visual confirmation
-- Builds cleanly: `scripts/web-build.ps1`, served via `cargo run -p web-serve --release`.
-- Image-binding fix should restore sprite rendering — Matt-action to confirm.
-- Stub-canonical grader: passes mark cleared.
-- **localStorage save persistence:** progress survives tab close at key `pledge-and-crown:save:v1`.
-- bevy_kira_audio runs via WebAudio backend; the same WAVs serve.
+## Blocking Issues (all are one-time environment fixes = Matt-actions)
+1. **Tauri desktop/mobile build** — the VS 2022 C++ desktop workload on
+   this box is incomplete (compiler present, but no `lib\x64` desktop CRT
+   libs and no `vcvarsall.bat` — only the OneCore variant). Repair via VS
+   Installer → Modify → *Desktop development with C++*, then
+   `rustup override set stable-x86_64-pc-windows-msvc` in `mobile/` (or run
+   `mobile/build-desktop.bat`). For Android additionally install the
+   Android SDK+NDK (set `ANDROID_HOME`/`NDK_HOME`) + the android rust
+   targets — none were found on this box. Full diagnosis in
+   `mobile/README.md`.
+2. **NPC art generation** — drive `claude.ai/design` from the 4 new specs
+   (+ the 17 redesigns), approve, render via `render-refs`, wire in.
+3. **compile-real as the prod default** — needs `rustup target add
+   wasm32-wasip1` on the Hetzner VPS; then flip the client to
+   `PLEDGE_REAL_COMPILE` / drop the `[real]` marker. ~build+run latency
+   (a few seconds) vs ~100ms pattern grading — a v1.1 call.
 
-### Audio bake pipeline
-- 6 baked tracks in `game/assets/audio/`: title (5.2 MB), village (5.2 MB), mission_clear (705 KB), mission_locked (352 KB), editor_open (529 KB), epilogue (3.5 MB).
-- ~45-50s per track on 3070 Ti at fp16, deterministic by seed.
-- `tools/synthwave-gen/manifest.json` is the source of truth; edit prompts/seeds and re-run with `--only <name> --force`.
-- T5 token-budget preflight catches over-128-token prompts before generation.
-- Multi-GPU fanout (`scripts/synthwave-fanout.ps1`) ready for the 3x P100 rig — round-robin dispatch, one model copy per card.
-
-### Audit harness
-- ~144 fast tests + 9 `#[ignore]`d slow tests (5 cargo_grader, 3 http_real, 1 cargo-check parity).
-- 4 prereq invariant tests + 5 progress round-trip tests added this session.
-- Server↔stub byte-parity test still happy.
-
-### Stubbed / known limitations (intentional)
-- Compile-API still pattern-matches at `/compile`. Real `cargo build → wasmtime` exec wiring deferred (deploy-coupled — needs `rustup target add wasm32-wasip1` on prod, not on Matt's box either).
-- 4 NPCs use `SPRITE_PLAYER` placeholder; 17 LLM-imagined sprites need redesign through `claude.ai/design`. Matt-blocked.
-- No audio for `mission_locked` playback wiring yet — the WAV is baked and the path constant exists, but `audio.rs` doesn't have a system that fires it. Add a `sfx_on_locked_attempt` system if you want it audible. Trivial.
-
-## Blocking Issues
-
-1. **Visual verification of the wasm rendering fix.** Matt-only. Run `scripts/web-build.ps1` then `cargo run -p web-serve --release`, hit `127.0.0.1:8080/`, expect title art (REF-10) visible. If it shows: v1 is browser-shippable.
-2. **NPC art (4 placeholders + 17 redesigns).** Matt-only via `claude.ai/design` per the locked art-lead role.
-
-## What's Next (post-v1, prioritized)
-
-1. **Audio-to-MIDI / sheet music tooling.** Matt asked at end of session whether SAO outputs can be transcribed to MIDI / sheet music. Yes — recommended path: scaffold `tools/audio-to-midi/` using Demucs (stem split) → Spotify Basic Pitch (per-stem transcription) → optional MuseScore CLI for sheet rendering. Same `manifest.json`-driven pattern as synthwave-gen. ~30 min of setup; one-time ~3GB pip install. Would let us see exactly what notes SAO chose for each voice — closes the "is the bass actually on B" loop properly.
-2. **Wire `mission_locked.wav` into the audio plugin.** WAV exists; add a system that fires it on F-press against a locked NPC (mirror `sfx_on_editor_open`). Trivial.
-3. **`compile-real` + wasmtime exec wiring.** Honest grading via real `cargo check` + wasm exec. Substantial — needs `wasm32-wasip1` on prod, parallel `[[bin]]` skeleton to avoid breaking existing lib-shaped cargo_grader unit tests, 5-10s/req latency vs the current ~100ms pattern grading. Honest > pattern but not v1-blocking.
-4. **AudioLDM2 sibling tool for diegetic SFX.** Door creaks, parchment unfurl, footsteps. SAO is music-biased and does poorly on these; AudioLDM2-large (~8GB) is purpose-built. Best done after the P100 rig lands so we can run music + SFX bakes in parallel.
-5. **Mobile / Tauri 2.0 wrapper.** Separate workstream.
-6. **Acts 3+ curriculum.** New missions, NPCs, art. Matt-territory for content design.
+## What's Next (post-this-session)
+1. **Bake the AudioLDM2 SFX** once the P100 rig lands; wire `sfx/*.wav`
+   into `audio.rs` (mirror the existing SFX edge systems).
+2. **Per-encounter expected-output grading** on top of compile-real (the
+   execution layer is now in place; define expected stdout per mission).
+3. **Acts 3+ curriculum** — new missions/NPCs/art. Still **Matt-territory**
+   for content design; not expanded this session (scope discipline).
+4. Audio-to-MIDI: run `--all` + the MuseScore sheet-music step if you want
+   full scores.
 
 ## Notes for Next Session
-
-- **Read this file first.** Global Matt rule.
-- **Run native game:** terminal 1 `cargo run -p pledge_compile_api`, terminal 2 `cargo run -p pledge_and_crown`. **Music will be playing now** — title music on title screen, village ambient in-game, SFX on edges.
-- **Run wasm build + serve:** `scripts/web-build.ps1` then `cargo run -p web-serve --release`. `127.0.0.1:8080`. Title art SHOULD render after the bindless fix; needs visual confirmation.
-- **Re-bake audio:** `scripts/synthwave-gen.ps1 [--only name1,name2] [--force]`. Edit `tools/synthwave-gen/manifest.json` for prompts/seeds first. T5 preflight catches >128-unit prompts.
-- **Multi-GPU bake** (when 3x P100 rig is up): `scripts/synthwave-fanout.ps1 [--devices 0,1,2]`. Reuses the synthwave-gen venv.
-- **Render PNG refs:** `cargo run -p render-refs --release`. Pure Rust, unchanged.
-- **Cargo target dir:** `G:/cargo-target/pledgeandcrown` per `.cargo/config.toml`. Worktree isolation auto-applied via `scripts/ci.ps1`.
-- **HF gated-repo clickthroughs:** auto-accept on Matt's behalf going forward (per saved feedback memory). His account is OG enough that there is no enforcement risk.
-- **bevy_egui bindless gotcha:** if a future bevy_egui upgrade resets `bindless_mode_array_size` to default, wasm will silently lose image-backed sprites again. Override is unconditional in `editor.rs`; check on bevy_egui major bumps.
-- **T5 prompt budget:** SAO's text encoder caps at 128 units. The preflight in `generate.py` warns loudly if you exceed. If a prompt seems "not to apply" — check for the WARN line first.
-- **SAO surgical steering:** keep seed + structural prompt, add narrow per-voice qualifiers ("on B"), re-bake. Confirmed working on the village bass-shift.
-- **Pre-commit hook:** `scripts/pre-commit.sh` → `scripts/ci.ps1` (fmt + check + clippy `-D warnings` + test). ~40s warm.
-- **GitHub Actions banned.** Local CI only.
-
-## Action items for Matt (Matt-only access)
-
-1. Visually verify the wasm rendering fix (highest leverage — confirms v1 is browser-shippable).
-2. Drive `claude.ai/design` for the 4 placeholder NPCs + 17 redesigns when ready.
-3. Listen to the audio score in-game and flag any track that needs a re-tune. Iteration loop is fast (~50s/track).
-4. Decide on the audio-to-MIDI tooling — useful for verifying / sharing the music compositions, or skip for now.
+- **Read this file first.**
+- **Run native:** terminal 1 `cargo run -p pledge_compile_api`, terminal 2
+  `cargo run -p pledge_and_crown`. For honest grading: set
+  `PLEDGE_REAL_COMPILE=1` before launching the game (needs the compile-api
+  up + `wasm32-wasip1` installed locally — it is, on this box).
+- **Run wasm:** `scripts/web-build.ps1` → `cargo run -p web-serve --release`
+  → `127.0.0.1:8080`. Title art renders (confirmed).
+- **Default toolchain is GNU** (`x86_64-pc-windows-gnu`) — the game links
+  fine on it; the Tauri wrapper does not (needs MSVC + VS Build Tools).
+- **wasm_runner feature gotcha:** keep `bulk_memory` + `reference_types`
+  ENABLED — rustc's wasm std requires them. See `.claude/audit-gaps.md`.
+- New tools each have their own `.venv` (gitignored) + an ASCII-only
+  `scripts/*.ps1` launcher mirroring `synthwave-gen.ps1`.
+- **GitHub Actions banned. Local CI only.**
 
 ## Where to look next
-
 - Curriculum → `design/01-curriculum.md`
-- Art canon → `design/03-art-style-bible.md`, `design/04b-art-deliverables.md`
-- Tech → `design/05-tech-architecture.md`
+- Art canon → `design/03-art-style-bible.md`, `design/04b-art-deliverables.md`; new specs in `design/art/specs/`
 - Compile-API security → `design/05-tech-architecture.md` §2
-- Team roles → `.claude/agents/`
 - Audit gap log → `.claude/audit-gaps.md`
-- Pure-Rust render pipeline → `tools/render-refs/`
-- Web build → `scripts/web-build.ps1`, `tools/web-serve/`, `web/`
-- Curriculum gating + epilogue → `game/src/plugins/mission.rs`
-- Wasm compile path → `game/src/plugins/compile_client.rs`
-- Wasm rendering fix → `game/src/plugins/editor.rs` (EguiPlugin) + `game/src/lib.rs` (AssetPlugin)
-- **Audio bake pipeline → `tools/synthwave-gen/`, `scripts/synthwave-gen.ps1`, `scripts/synthwave-fanout.ps1`**
-- **Audio playback → `game/src/plugins/audio.rs`**
-- **Baked tracks → `game/assets/audio/*.wav`**
+- **Honest grading → `compile-api/src/wasm_builder.rs` + `/compile-real` in `lib.rs`; client opt-in in `game/src/plugins/compile_client.rs`**
+- **Locked-attempt SFX → `game/src/plugins/mission.rs` (MissionLockedAttempt) + `audio.rs`**
+- **Audio-to-MIDI → `tools/audio-to-midi/`; AudioLDM2 → `tools/audioldm2-gen/`**
+- **Tauri wrapper → `mobile/` (README has the toolchain runbook)**

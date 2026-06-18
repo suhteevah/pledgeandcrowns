@@ -1,0 +1,43 @@
+# Pledge & Crown audio-to-MIDI - pinned deps for reproducibility.
+#
+# Torch with CUDA is a separate install (Windows wheels live on a
+# different index URL). The PowerShell wrapper handles that, same as
+# synthwave-gen. Order matters: torch first (cu121 index), then
+# everything else against PyPI.
+#
+# torch + CUDA 12.1 wheel (Windows): installed by scripts/audio-to-midi.ps1
+#   pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
+#
+# Runtime-backend note: Basic Pitch ships its note-prediction model in
+# several formats. Recent basic-pitch (>=0.4) defaults to ONNX via
+# onnxruntime when the `onnx` extra is installed, which is a far
+# lighter dep than the full TensorFlow stack (no ~500 MB tf wheel, no
+# CUDA/cuDNN version dance). We therefore install `basic-pitch[onnx]`
+# and pin onnxruntime explicitly so the import path is deterministic.
+# If onnxruntime is unavailable for the interpreter, basic-pitch falls
+# back to its bundled runtime; transcribe.py logs which backend loaded.
+
+# --- stem separation ---
+# Demucs htdemucs 4-stem model. Pulls torch/torchaudio (from the cu121
+# index via the launcher) + a handful of small DSP deps.
+demucs==4.0.1
+
+# --- polyphonic transcription ---
+# Basic Pitch with the lightweight ONNX runtime backend (avoids the
+# heavy TensorFlow dependency). See the runtime note above.
+basic-pitch==0.4.0
+onnxruntime==1.18.1
+
+# --- MIDI inspection / note-range reporting ---
+# pretty_midi parses the emitted .mid files so we can count notes and
+# report pitch range per stem (the load-bearing output of this tool).
+pretty_midi==0.2.10
+
+# --- audio IO ---
+soundfile==0.12.1
+numpy==1.26.4
+
+# Basic Pitch / mir_eval still import the legacy `pkg_resources`, which
+# setuptools removed in v81. Pin below that so the import path survives
+# on a fresh venv (the launcher upgrades setuptools, so we re-pin here).
+setuptools<81
