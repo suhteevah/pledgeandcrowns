@@ -324,6 +324,89 @@ pub fn stub_verdict(encounter_id: &str, source: &str) -> Option<StubVerdict> {
                 )
             }
         }
+        // ── Act 3 (Guildhall Quarter). Flavor MUST stay byte-identical to
+        // compile-api/src/grader.rs — contract::server_and_stub_flavor_agree
+        // enforces it.
+        "impl_method" => {
+            if !source.contains("impl") {
+                StubVerdict::fail("the Guildmaster waits — missing required: `impl`")
+            } else if !source.contains("&self") {
+                StubVerdict::fail(
+                    "the Guildmaster waits — a method borrows the instance with `&self`",
+                )
+            } else if !source.contains("self.") {
+                StubVerdict::fail("the Guildmaster waits — read the instance's data with `self.`")
+            } else {
+                StubVerdict::pass(
+                    "the Guildmaster nods. \"duties bound to a name — that is a method.\"",
+                )
+            }
+        }
+        "assoc_new" => {
+            if !source.contains("fn new") {
+                StubVerdict::fail("the Recruiter shakes her head — missing required: `fn new`")
+            } else if !source.contains("Self") {
+                StubVerdict::fail("the Recruiter shakes her head — a constructor returns `Self`")
+            } else if !source.contains("::new") {
+                StubVerdict::fail("the Recruiter shakes her head — call it with the `::new` path")
+            } else {
+                StubVerdict::pass(
+                    "the Recruiter stamps the roll. \"Self::new — a member forged from a name.\"",
+                )
+            }
+        }
+        "if_let" => {
+            if !source.contains("if let") {
+                StubVerdict::fail("the Locksmith frowns — missing required: `if let`")
+            } else if !source.contains("Some(") {
+                StubVerdict::fail("the Locksmith frowns — match the present case with `Some(`")
+            } else {
+                StubVerdict::pass(
+                    "the Locksmith turns the one key that fits. \"Some — and only Some — opens.\"",
+                )
+            }
+        }
+        "while_let" => {
+            if !source.contains("while let") {
+                StubVerdict::fail("the Porter sets the crate down — missing required: `while let`")
+            } else if !source.contains(".pop(") {
+                StubVerdict::fail("the Porter sets the crate down — drain the stack with `.pop()`")
+            } else {
+                StubVerdict::pass(
+                    "the Porter empties the cart, crate by crate. \"while there is a Some, keep unloading.\"",
+                )
+            }
+        }
+        "tuple_struct" => {
+            if !source.contains("struct Meters(") {
+                StubVerdict::fail(
+                    "the Surveyor squints down the line — missing required: `struct Meters(`",
+                )
+            } else if !source.contains(".0") {
+                StubVerdict::fail(
+                    "the Surveyor squints down the line — read the wrapped value with `.0`",
+                )
+            } else {
+                StubVerdict::pass(
+                    "the Surveyor reads the rod. \"a bare number, now named Meters — a newtype.\"",
+                )
+            }
+        }
+        "enum_data_match" => {
+            if !source.contains("enum Item") {
+                StubVerdict::fail("the Armorer taps the anvil — missing required: `enum Item`")
+            } else if !source.contains("Weapon") {
+                StubVerdict::fail("the Armorer taps the anvil — give Item a `Weapon` variant")
+            } else if !source.contains("match") {
+                StubVerdict::fail("the Armorer taps the anvil — inspect the item with `match`")
+            } else if !source.contains("=>") {
+                StubVerdict::fail("the Armorer taps the anvil — each variant needs a `=>` arm")
+            } else {
+                StubVerdict::pass(
+                    "the Armorer lays out the rack. \"weapon or potion — name every kind, miss none.\"",
+                )
+            }
+        }
         _ => return None,
     };
     Some(v)

@@ -7,10 +7,11 @@
 //! This plugin only owns NPC spawning and proximity detection.
 
 use crate::assets::{
-    SPRITE_ALCHEMIST, SPRITE_AUDITOR, SPRITE_BELLRINGER, SPRITE_BORROW_CHECKER,
+    SPRITE_ALCHEMIST, SPRITE_ARMORER, SPRITE_AUDITOR, SPRITE_BELLRINGER, SPRITE_BORROW_CHECKER,
     SPRITE_CARTOGRAPHER, SPRITE_CHRONICLER, SPRITE_COOPER, SPRITE_DRILLMASTER, SPRITE_FERRIS,
-    SPRITE_FORGEWRIGHT, SPRITE_HERALD, SPRITE_HERALDIC_SAGE, SPRITE_LINGUIST, SPRITE_ORACLE,
-    SPRITE_PILGRIM, SPRITE_QUARTERMASTER, SPRITE_RECKONER, SPRITE_SMITH, SPRITE_TINKER,
+    SPRITE_FORGEWRIGHT, SPRITE_GUILDMASTER, SPRITE_HERALD, SPRITE_HERALDIC_SAGE, SPRITE_LINGUIST,
+    SPRITE_LOCKSMITH, SPRITE_ORACLE, SPRITE_PILGRIM, SPRITE_PORTER, SPRITE_QUARTERMASTER,
+    SPRITE_RECKONER, SPRITE_RECRUITER, SPRITE_SMITH, SPRITE_SURVEYOR, SPRITE_TINKER,
     SPRITE_TRAIT_MAGE, SPRITE_TWIN,
 };
 use crate::plugins::player::Player;
@@ -201,6 +202,49 @@ pub const NPC_ROSTER: &[NpcSpec] = &[
         mission_id: "enum_match",
         sprite_path: SPRITE_HERALDIC_SAGE,
         pos: (0.0, -130.0),
+        native_px: 32.0,
+    },
+    // ── Act 3: The Guildhall Quarter (batch 5).
+    NpcSpec {
+        name: "The Guildmaster",
+        mission_id: "impl_method",
+        sprite_path: SPRITE_GUILDMASTER,
+        pos: (120.0, 64.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Recruiter",
+        mission_id: "assoc_new",
+        sprite_path: SPRITE_RECRUITER,
+        pos: (-120.0, -64.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Locksmith",
+        mission_id: "if_let",
+        sprite_path: SPRITE_LOCKSMITH,
+        pos: (160.0, 96.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Porter",
+        mission_id: "while_let",
+        sprite_path: SPRITE_PORTER,
+        pos: (-160.0, -96.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Surveyor",
+        mission_id: "tuple_struct",
+        sprite_path: SPRITE_SURVEYOR,
+        pos: (60.0, -100.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Armorer",
+        mission_id: "enum_data_match",
+        sprite_path: SPRITE_ARMORER,
+        pos: (-60.0, 100.0),
         native_px: 32.0,
     },
 ];

@@ -199,6 +199,12 @@ Refs landed against the bible. Source `.jsx` lives at `design/art/refs/ref-NN-<s
 | 27 | The Auditor | 32×32 | ref-27-auditor.jsx | specs/auditor.md | `sprites/npc/auditor_idle_0.png` |
 | 28 | The Chronicler | 32×32 | ref-28-chronicler.jsx | specs/chronicler.md | `sprites/npc/chronicler_idle_0.png` |
 | 29 | The Alchemist | 32×32 | ref-29-alchemist.jsx | specs/alchemist.md | `sprites/npc/alchemist_idle_0.png` |
+| 30 | The Guildmaster | 32×32 | ref-30-guildmaster.jsx | specs/guildmaster.md | `sprites/npc/guildmaster_idle_0.png` |
+| 31 | The Recruiter | 32×32 | ref-31-recruiter.jsx | specs/recruiter.md | `sprites/npc/recruiter_idle_0.png` |
+| 32 | The Locksmith | 32×32 | ref-32-locksmith.jsx | specs/locksmith.md | `sprites/npc/locksmith_idle_0.png` |
+| 33 | The Porter | 32×32 | ref-33-porter.jsx | specs/porter.md | `sprites/npc/porter_idle_0.png` |
+| 34 | The Surveyor | 32×32 | ref-34-surveyor.jsx | specs/surveyor.md | `sprites/npc/surveyor_idle_0.png` |
+| 35 | The Armorer | 32×32 | ref-35-armorer.jsx | specs/armorer.md | `sprites/npc/armorer_idle_0.png` |
 
 **NPC batches landed:**
 - Batch 1 (2026-05-02) — REF-11..15: Smith, Cartographer, Trait Mage, Bellringer, Cooper. Specs in `design/art/specs/`. Replaces SPRITE_PLAYER placeholders for the corresponding entries in `NPC_ROSTER`.

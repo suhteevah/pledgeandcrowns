@@ -131,6 +131,65 @@ fn name(d: Direction) -> &'static str {
 }
 fn main() { let _ = name(Direction::North); }"#
         }
+        // ── Act 3: Guildhall Quarter (mirror of contract.rs).
+        "impl_method" => {
+            r#"struct Hero { level: i32 }
+impl Hero {
+    fn power(&self) -> i32 { self.level * 10 }
+}
+fn main() {
+    let h = Hero { level: 3 };
+    println!("{}", h.power());
+}"#
+        }
+        "assoc_new" => {
+            r#"struct Hero { level: i32 }
+impl Hero {
+    fn new(level: i32) -> Self { Self { level } }
+}
+fn main() {
+    let h = Hero::new(5);
+    println!("{}", h.level);
+}"#
+        }
+        "if_let" => {
+            r#"fn main() {
+    let maybe: Option<i32> = Some(7);
+    if let Some(n) = maybe {
+        println!("{n}");
+    }
+}"#
+        }
+        "while_let" => {
+            r#"fn main() {
+    let mut stack = vec![1, 2, 3];
+    while let Some(top) = stack.pop() {
+        println!("{top}");
+    }
+}"#
+        }
+        "tuple_struct" => {
+            r#"struct Meters(f64);
+fn main() {
+    let d = Meters(3.5);
+    println!("{}", d.0);
+}"#
+        }
+        "enum_data_match" => {
+            r#"enum Item {
+    Weapon { damage: i32 },
+    Potion { heal: i32 },
+}
+fn value(item: Item) -> i32 {
+    match item {
+        Item::Weapon { damage } => damage,
+        Item::Potion { heal } => heal,
+    }
+}
+fn main() {
+    let _ = value(Item::Weapon { damage: 10 });
+}"#
+        }
         _ => return None,
     })
 }

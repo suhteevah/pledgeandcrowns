@@ -311,6 +311,86 @@ pub fn grade(encounter_id: &str, source: &str) -> Verdict {
                 )
             }
         }
+        // ── Act 3 (Guildhall Quarter): methods/impl, associated fns,
+        // if let, while let, tuple structs, enum-with-data match.
+        "impl_method" => {
+            if !source.contains("impl") {
+                Verdict::fail("the Guildmaster waits — missing required: `impl`")
+            } else if !source.contains("&self") {
+                Verdict::fail("the Guildmaster waits — a method borrows the instance with `&self`")
+            } else if !source.contains("self.") {
+                Verdict::fail("the Guildmaster waits — read the instance's data with `self.`")
+            } else {
+                Verdict::pass(
+                    "the Guildmaster nods. \"duties bound to a name — that is a method.\"",
+                )
+            }
+        }
+        "assoc_new" => {
+            if !source.contains("fn new") {
+                Verdict::fail("the Recruiter shakes her head — missing required: `fn new`")
+            } else if !source.contains("Self") {
+                Verdict::fail("the Recruiter shakes her head — a constructor returns `Self`")
+            } else if !source.contains("::new") {
+                Verdict::fail("the Recruiter shakes her head — call it with the `::new` path")
+            } else {
+                Verdict::pass(
+                    "the Recruiter stamps the roll. \"Self::new — a member forged from a name.\"",
+                )
+            }
+        }
+        "if_let" => {
+            if !source.contains("if let") {
+                Verdict::fail("the Locksmith frowns — missing required: `if let`")
+            } else if !source.contains("Some(") {
+                Verdict::fail("the Locksmith frowns — match the present case with `Some(`")
+            } else {
+                Verdict::pass(
+                    "the Locksmith turns the one key that fits. \"Some — and only Some — opens.\"",
+                )
+            }
+        }
+        "while_let" => {
+            if !source.contains("while let") {
+                Verdict::fail("the Porter sets the crate down — missing required: `while let`")
+            } else if !source.contains(".pop(") {
+                Verdict::fail("the Porter sets the crate down — drain the stack with `.pop()`")
+            } else {
+                Verdict::pass(
+                    "the Porter empties the cart, crate by crate. \"while there is a Some, keep unloading.\"",
+                )
+            }
+        }
+        "tuple_struct" => {
+            if !source.contains("struct Meters(") {
+                Verdict::fail(
+                    "the Surveyor squints down the line — missing required: `struct Meters(`",
+                )
+            } else if !source.contains(".0") {
+                Verdict::fail(
+                    "the Surveyor squints down the line — read the wrapped value with `.0`",
+                )
+            } else {
+                Verdict::pass(
+                    "the Surveyor reads the rod. \"a bare number, now named Meters — a newtype.\"",
+                )
+            }
+        }
+        "enum_data_match" => {
+            if !source.contains("enum Item") {
+                Verdict::fail("the Armorer taps the anvil — missing required: `enum Item`")
+            } else if !source.contains("Weapon") {
+                Verdict::fail("the Armorer taps the anvil — give Item a `Weapon` variant")
+            } else if !source.contains("match") {
+                Verdict::fail("the Armorer taps the anvil — inspect the item with `match`")
+            } else if !source.contains("=>") {
+                Verdict::fail("the Armorer taps the anvil — each variant needs a `=>` arm")
+            } else {
+                Verdict::pass(
+                    "the Armorer lays out the rack. \"weapon or potion — name every kind, miss none.\"",
+                )
+            }
+        }
         _ => Verdict::pass(format!(
             "[freeform] received {} bytes. encounter `{encounter_id}` has no grader yet.",
             source.len()
@@ -1118,5 +1198,89 @@ fn name(d: Direction) -> &'static str {
         let v = grade("enum_match", src);
         assert!(!v.ok);
         assert!(v.stderr.contains("Direction::"));
+    }
+
+    // ── Act 3: Guildhall Quarter ──────────────────────────────────
+    #[test]
+    fn impl_method_pass_canonical() {
+        let src = "struct Hero { level: i32 } impl Hero { fn power(&self) -> i32 { self.level } } fn main() {}";
+        assert!(grade("impl_method", src).ok);
+    }
+    #[test]
+    fn impl_method_fail_no_impl() {
+        let v = grade("impl_method", "struct Hero { level: i32 } fn main() {}");
+        assert!(!v.ok);
+        assert!(v.stderr.contains("impl"));
+    }
+    #[test]
+    fn impl_method_fail_no_self_field_access() {
+        // has `impl` and `&self` but never reads `self.field`.
+        let v = grade(
+            "impl_method",
+            "struct Hero { level: i32 } impl Hero { fn power(&self) -> i32 { 0 } } fn main() {}",
+        );
+        assert!(!v.ok);
+        assert!(v.stderr.contains("self."));
+    }
+    #[test]
+    fn assoc_new_pass_canonical() {
+        let src = "struct Hero { level: i32 } impl Hero { fn new(level: i32) -> Self { Self { level } } } fn main() { let _ = Hero::new(5); }";
+        assert!(grade("assoc_new", src).ok);
+    }
+    #[test]
+    fn assoc_new_fail_no_new_fn() {
+        let v = grade("assoc_new", "struct Hero { level: i32 } fn main() {}");
+        assert!(!v.ok);
+        assert!(v.stderr.contains("fn new"));
+    }
+    #[test]
+    fn if_let_pass_canonical() {
+        let src = "fn main() { let m: Option<i32> = Some(7); if let Some(n) = m { let _ = n; } }";
+        assert!(grade("if_let", src).ok);
+    }
+    #[test]
+    fn if_let_fail_uses_full_match_instead() {
+        // A full match should NOT satisfy if_let (no `if let`).
+        let src = "fn main() { let m: Option<i32> = Some(7); match m { Some(n) => { let _ = n; } None => {} } }";
+        let v = grade("if_let", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains("if let"));
+    }
+    #[test]
+    fn while_let_pass_canonical() {
+        let src =
+            "fn main() { let mut s = vec![1, 2]; while let Some(t) = s.pop() { let _ = t; } }";
+        assert!(grade("while_let", src).ok);
+    }
+    #[test]
+    fn while_let_fail_no_pop() {
+        let src = "fn main() { let mut s = vec![1, 2]; while let Some(_t) = s.iter().next() {} }";
+        let v = grade("while_let", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains(".pop("));
+    }
+    #[test]
+    fn tuple_struct_pass_canonical() {
+        let src = "struct Meters(f64); fn main() { let d = Meters(3.5); let _ = d.0; }";
+        assert!(grade("tuple_struct", src).ok);
+    }
+    #[test]
+    fn tuple_struct_fail_named_struct() {
+        // A named-field struct is not a tuple struct.
+        let src = "struct Meters { v: f64 } fn main() { let d = Meters { v: 3.5 }; let _ = d.v; }";
+        let v = grade("tuple_struct", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains("struct Meters("));
+    }
+    #[test]
+    fn enum_data_match_pass_canonical() {
+        let src = "enum Item { Weapon { damage: i32 }, Potion { heal: i32 } } fn value(i: Item) -> i32 { match i { Item::Weapon { damage } => damage, Item::Potion { heal } => heal } } fn main() {}";
+        assert!(grade("enum_data_match", src).ok);
+    }
+    #[test]
+    fn enum_data_match_fail_no_enum() {
+        let v = grade("enum_data_match", "fn value(i: i32) -> i32 { i }");
+        assert!(!v.ok);
+        assert!(v.stderr.contains("enum Item"));
     }
 }

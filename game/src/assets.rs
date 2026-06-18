@@ -49,6 +49,16 @@ pub const SPRITE_AUDITOR: &str = "sprites/npc/auditor_idle_0.png";
 pub const SPRITE_CHRONICLER: &str = "sprites/npc/chronicler_idle_0.png";
 pub const SPRITE_ALCHEMIST: &str = "sprites/npc/alchemist_idle_0.png";
 
+// NPC batch 5 (2026-06-18) — Act 3 Guildhall Quarter: Guildmaster, Recruiter,
+// Locksmith, Porter, Surveyor, Armorer. Sources: design/art/refs/ref-30..35-*.jsx,
+// rendered via `cargo run -p render-refs`. First-pass, pending Matt's art review.
+pub const SPRITE_GUILDMASTER: &str = "sprites/npc/guildmaster_idle_0.png";
+pub const SPRITE_RECRUITER: &str = "sprites/npc/recruiter_idle_0.png";
+pub const SPRITE_LOCKSMITH: &str = "sprites/npc/locksmith_idle_0.png";
+pub const SPRITE_PORTER: &str = "sprites/npc/porter_idle_0.png";
+pub const SPRITE_SURVEYOR: &str = "sprites/npc/surveyor_idle_0.png";
+pub const SPRITE_ARMORER: &str = "sprites/npc/armorer_idle_0.png";
+
 // Audio (Stable Audio Open generated, baked via tools/synthwave-gen).
 // Generation is a Matt-action: `powershell -ExecutionPolicy Bypass
 // -File scripts/synthwave-gen.ps1`. Files may be absent during early
@@ -99,4 +109,10 @@ pub const ALL_SPRITE_PATHS: &[&str] = &[
     SPRITE_AUDITOR,
     SPRITE_CHRONICLER,
     SPRITE_ALCHEMIST,
+    SPRITE_GUILDMASTER,
+    SPRITE_RECRUITER,
+    SPRITE_LOCKSMITH,
+    SPRITE_PORTER,
+    SPRITE_SURVEYOR,
+    SPRITE_ARMORER,
 ];

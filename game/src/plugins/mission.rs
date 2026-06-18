@@ -572,6 +572,148 @@ decrement step.",
                 prereq: None,
                 starter_code: "fn main() {\n    let mut _n = 5;\n    // count down with a while loop and a -= 1 step\n    println!(\"{_n}\");\n}\n",
             },
+            // ── Act 3: The Guildhall Quarter ──────────────────────────
+            // Fills the doc's Act 3 gaps the prelude skipped: methods/impl,
+            // associated fns, if let, while let, tuple structs, enum-with-data
+            // match. See design/01-curriculum.md §Act 3 and
+            // docs/superpowers/specs/2026-06-18-act3-guildhall-missions-design.md.
+            Mission {
+                id: "impl_method",
+                npc_name: "The Guildmaster",
+                prompt: "Give the `Hero` struct a method `power(&self) -> i32` and call it.",
+                tutorial: "## Concept\n\
+A struct holds data; an `impl` block gives it behaviour. A *method* is a \
+function declared inside `impl TypeName { ... }` whose first parameter is \
+`&self` (a shared borrow of the instance), `&mut self` (exclusive), or \
+`self` (by value). Inside, `self.field` reads the instance's data. You call \
+a method with dot syntax: `instance.method()`.\n\n\
+## Syntax\n\
+```\nstruct Hero { level: i32 }\nimpl Hero {\n    fn power(&self) -> i32 { self.level * 10 }\n}\nlet h = Hero { level: 3 };\nprintln!(\"{}\", h.power());\n```\n\
+`&self` borrows the hero, so calling `power` doesn't consume it — you can \
+call it again.\n\n\
+## Task\n\
+The `Hero` struct is given. Add an `impl Hero` block with a method \
+`power(&self) -> i32`, then call it in `main` and print the result.\n\n\
+## Hint\n\
+The grader looks for `impl`, `&self`, and a `self.` field access. The \
+Guildmaster's rule: a member is defined by their duties.",
+                prereq: None,
+                starter_code: "struct Hero { level: i32 }\n\nfn main() {\n    let _h = Hero { level: 3 };\n    // give Hero a `power` method (it borrows the hero) returning its power, then call it\n}\n",
+            },
+            Mission {
+                id: "assoc_new",
+                npc_name: "The Recruiter",
+                prompt: "Add an associated function `Hero::new(level)` that returns `Self`.",
+                tutorial: "## Concept\n\
+Not every function in an `impl` block takes `self`. An *associated \
+function* belongs to the type, not an instance — the canonical one is a \
+constructor named `new`. Its return type is `Self` (an alias for the type \
+being implemented), and you call it with path syntax `TypeName::new(...)`. \
+Rust has no `constructor` keyword; this is the idiom.\n\n\
+## Syntax\n\
+```\nimpl Hero {\n    fn new(level: i32) -> Self {\n        Self { level }\n    }\n}\nlet h = Hero::new(5);\n```\n\
+`Self { level }` is shorthand for `Hero { level }` when the field and the \
+local share a name.\n\n\
+## Task\n\
+Give `Hero` an associated function `new(level: i32) -> Self`, then build a \
+hero with `Hero::new(5)` and print its level.\n\n\
+## Hint\n\
+The grader needs `fn new`, `Self`, and a `::new` call. The Recruiter forges \
+a member from nothing but a name.",
+                prereq: None,
+                starter_code: "struct Hero { level: i32 }\n\nfn main() {\n    // add a constructor associated function that builds a Hero from a level, then call it\n    let _ = Hero { level: 1 };\n}\n",
+            },
+            Mission {
+                id: "if_let",
+                npc_name: "The Locksmith",
+                prompt: "Use `if let Some(x) =` to act only when an `Option` is present.",
+                tutorial: "## Concept\n\
+A full `match` on an `Option` has two arms, but often you only care about \
+the `Some` case. `if let` is the concise form: it runs its block only when \
+the value matches the pattern, binding the inner value. It's sugar for a \
+`match` with one real arm and a `_ => {}` catch-all — you trade \
+exhaustiveness for brevity.\n\n\
+## Syntax\n\
+```\nlet maybe: Option<i32> = Some(7);\nif let Some(n) = maybe {\n    println!(\"{n}\");\n}\n```\n\
+You may add an `else` for the non-matching case, but unlike `match` you're \
+not forced to.\n\n\
+## Task\n\
+`maybe` is provided. Use `if let Some(n) = maybe` to print the inner value \
+only when it's present.\n\n\
+## Hint\n\
+The grader needs `if let` and `Some(`. The Locksmith tries one key: if it \
+fits, the door opens; if not, nothing happens.",
+                prereq: None,
+                starter_code: "fn main() {\n    let maybe: Option<i32> = Some(7);\n    // print the inner value only when the option actually holds one\n    let _ = maybe;\n}\n",
+            },
+            Mission {
+                id: "while_let",
+                npc_name: "The Porter",
+                prompt: "Drain a stack with `while let Some(x) = stack.pop()`.",
+                tutorial: "## Concept\n\
+`while let` is the looping cousin of `if let`: it runs its body as long as \
+the pattern keeps matching, then stops. The classic use is draining a \
+collection — `Vec::pop()` returns `Some(value)` until the vec is empty, \
+then `None`, which ends the loop.\n\n\
+## Syntax\n\
+```\nlet mut stack = vec![1, 2, 3];\nwhile let Some(top) = stack.pop() {\n    println!(\"{top}\");\n}\n```\n\
+Each iteration removes and binds the last element; when `pop` returns \
+`None`, the loop exits cleanly.\n\n\
+## Task\n\
+A `stack` is provided. Use `while let Some(top) = stack.pop()` to print \
+every element as you remove it.\n\n\
+## Hint\n\
+The grader needs `while let` and `.pop(`. The Porter empties the cart \
+crate by crate until there's nothing left to lift.",
+                prereq: None,
+                starter_code: "fn main() {\n    let mut stack = vec![1, 2, 3];\n    // remove and print each element until the stack is empty\n    let _ = &mut stack;\n}\n",
+            },
+            Mission {
+                id: "tuple_struct",
+                npc_name: "The Surveyor",
+                prompt: "Wrap a raw `f64` in a `Meters(f64)` tuple struct and read it back.",
+                tutorial: "## Concept\n\
+A *tuple struct* is a struct whose fields are positional rather than named: \
+`struct Meters(f64);`. The single-field form is the *newtype* pattern — it \
+wraps a raw value in a distinct type so the compiler can tell `Meters` from \
+a bare `f64` (or from `Seconds(f64)`). You build one like a function call, \
+`Meters(3.5)`, and read fields by position: `.0`, `.1`, … A field-less \
+`struct Marker;` is a *unit struct*, used as a zero-size tag.\n\n\
+## Syntax\n\
+```\nstruct Meters(f64);\nlet d = Meters(3.5);\nprintln!(\"{}\", d.0);\n```\n\
+`d.0` is the first (and here only) field.\n\n\
+## Task\n\
+Define a `Meters(f64)` tuple struct, wrap the raw value below in it, then \
+print the wrapped number via `.0`.\n\n\
+## Hint\n\
+The grader needs `struct Meters(` and a `.0` field access. The Surveyor \
+reads the rod: a bare number, now named.",
+                prereq: None,
+                starter_code: "fn main() {\n    let _raw: f64 = 3.5;\n    // wrap that raw f64 in a one-field `Meters` newtype, then read the wrapped value back out\n}\n",
+            },
+            Mission {
+                id: "enum_data_match",
+                npc_name: "The Armorer",
+                prompt: "Define an `Item` enum whose variants carry data, then `match` exhaustively.",
+                tutorial: "## Concept\n\
+Enum variants can carry data. A struct-like variant names its fields: \
+`Weapon { damage: i32 }`. To read that data you `match` and bind it in the \
+pattern: `Item::Weapon { damage } => damage`. The match must be exhaustive \
+— every variant handled — or the code won't compile. This is the Armorer's \
+discipline: name every kind of thing, miss none.\n\n\
+## Syntax\n\
+```\nenum Item {\n    Weapon { damage: i32 },\n    Potion { heal: i32 },\n}\nfn value(item: Item) -> i32 {\n    match item {\n        Item::Weapon { damage } => damage,\n        Item::Potion { heal } => heal,\n    }\n}\n```\n\
+Each arm binds the variant's field and returns it.\n\n\
+## Task\n\
+Define `enum Item` with `Weapon { damage: i32 }` and `Potion { heal: i32 }`, \
+then change `value` to take an `Item` and `match` it exhaustively, returning \
+the inner number.\n\n\
+## Hint\n\
+The grader needs `enum Item`, `Weapon`, a `match`, and a `=>` arm. Handle \
+both kinds — a non-exhaustive match won't compile.",
+                prereq: None,
+                starter_code: "fn value(item: i32) -> i32 {\n    // define an `Item` type with two kinds (a weapon carrying damage, a potion carrying heal),\n    // take an Item here instead of an i32, and handle every kind to return its number\n    item\n}\n\nfn main() {\n    let _ = value(0);\n}\n",
+            },
         ];
         // Strict-linear progression: each mission's prereq is the one
         // listed immediately before it. Shape decision logged in HANDOFF

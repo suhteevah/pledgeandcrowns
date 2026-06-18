@@ -113,6 +113,8 @@ When the player finally passes, the Checker bows: "You may cross. The Old Tongue
 
 **Estimated playtime:** 3 hours.
 
+**Code status (2026-06-18).** The Act 3 *concepts* the prelude skipped now ship as 6 missions in the mission-tutorial loop (the RPG layer — party tab, combat, the Variant Wraith boss — is still future work): `impl_method` (The Guildmaster), `assoc_new` (The Recruiter), `if_let` (The Locksmith), `while_let` (The Porter), `tuple_struct` (The Surveyor), `enum_data_match` (The Armorer). Basic struct/enum/match/derive were already covered by the prelude (Herald/Heraldic Sage/Oracle/Chronicler). Design: `docs/superpowers/specs/2026-06-18-act3-guildhall-missions-design.md`.
+
 ---
 
 # Act 4 — The Trait Mage's Tower
