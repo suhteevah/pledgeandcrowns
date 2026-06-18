@@ -12,9 +12,13 @@ if not exist "%VSWHERE%" (
   echo [error] vswhere not found at "%VSWHERE%" - is Visual Studio installed?
   exit /b 1
 )
-for /f "usebackq tokens=*" %%i in (`"%VSWHERE%" -latest -property installationPath`) do set "VSPATH=%%i"
+REM Query by the x64 C++ tools COMPONENT, not -latest: on this box the
+REM "latest" install (VS Community) has an incomplete C++ workload
+REM (OneCore libs only, no vcvarsall.bat), while the VS BuildTools install
+REM carries the complete desktop x64 CRT + a working vcvarsall.bat.
+for /f "usebackq tokens=*" %%i in (`"%VSWHERE%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSPATH=%%i"
 if not defined VSPATH (
-  echo [error] no Visual Studio installation found via vswhere
+  echo [error] no VS install with the x64 C++ tools found via vswhere
   exit /b 1
 )
 call "%VSPATH%\VC\Auxiliary\Build\vcvars64.bat" || exit /b 1

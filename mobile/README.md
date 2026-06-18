@@ -44,64 +44,44 @@ linker (`x86_64-w64-mingw32 ld`) chokes on webview2's COM bindings with
 can emit. This is a known Tauri-on-Windows constraint; Tauri officially
 targets MSVC on Windows.
 
-The fix is to build the wrapper (only) with the already-installed MSVC
-toolchain — the rest of the repo stays on GNU:
+Build the wrapper (only) with the MSVC toolchain — the rest of the repo
+stays on GNU. The one catch is *which* MSVC install: see the box note
+below. The ergonomic entry point is the helper:
 
 ```
-cargo +stable-x86_64-pc-windows-msvc build --manifest-path mobile/src-tauri/Cargo.toml
-# or, with the Tauri CLI from mobile/src-tauri:
-#   rustup override set stable-x86_64-pc-windows-msvc   (scopes MSVC to this dir)
-#   cargo tauri build
+mobile\build-desktop.bat                     REM loads the right MSVC env, builds the shell
+mobile\build-desktop.bat --release           REM optimized
 ```
 
-`rustup override set` inside `mobile/` is the ergonomic way to make
-`cargo tauri build`/`dev` here always pick MSVC without disturbing the
-GNU default the game uses. (Not committed as a `rust-toolchain.toml`
-because that would wrongly pin the host triple for the future macOS/Android
-builds too.)
+`rustup override set stable-x86_64-pc-windows-msvc` inside `mobile/` also
+works (scopes MSVC to this dir without disturbing the GNU default the game
+uses), as long as the MSVC env (`LIB`/`PATH`) is loaded first. Not pinned
+via `rust-toolchain.toml` because that would wrongly fix the host triple
+for the future macOS/Android builds too.
 
-### Verified state on kokonoe (2026-06-18) — desktop link is currently blocked
+### Verified state on kokonoe (2026-06-18) — desktop build WORKS
 
-Both toolchains were tried against this scaffold. **The Rust compiles
-cleanly under both** (every dependency — wry, tao, tauri, webview2-com —
-builds); only the final *link* fails, and for a different reason each way:
+The wrapper **builds and links to a runnable `app.exe`** (37 MB PE32+) via
+the **VS BuildTools** MSVC environment. Confirmed end-to-end:
+`Finished dev profile ... in 1m 38s`.
 
-- **GNU** (`stable-x86_64-pc-windows-gnu`, the box default):
-  `ld.exe: error: export ordinal too large: 95271` — webview2 has more
-  exports than GNU `ld` can emit. Not fixable on the GNU toolchain.
-- **MSVC** (`stable-x86_64-pc-windows-msvc`, installed via rustup):
-  `lld-link: error: could not open 'msvcrt.lib'`. VS 2022 Community **is**
-  installed and `cl.exe` / `link.exe` exist
-  (`VC\Tools\MSVC\14.43.34808\bin\Hostx64\x64`), but the C++ environment
-  is **incomplete**: the standard **desktop** x64 CRT import libraries
-  (`VC\Tools\MSVC\14.43.34808\lib\x64\msvcrt.lib` / `libcmt.lib`) are
-  absent — only the `lib\onecore\x64\` variant is present — and
-  `VC\Auxiliary\Build\vcvarsall.bat` is missing (so neither `vcvars64.bat`
-  nor `Enter-VsDevShell` can fully populate `LIB`; the DevShell sets the
-  Windows SDK paths but not the VC CRT paths). The Windows 10 SDK
-  (10.0.22621.0) lib dir IS present.
+Getting there surfaced a real toolchain trap worth recording:
 
-In short: VS is installed, but the **"Desktop development with C++"**
-workload is only partially present (OneCore CRT libs + compiler, but no
-desktop CRT import libs and no `vcvarsall.bat`).
+- **GNU** (`stable-x86_64-pc-windows-gnu`, the box default) cannot link the
+  shell: `ld.exe: error: export ordinal too large` — webview2 emits more
+  exports than GNU `ld` handles. Use MSVC for the wrapper.
+- **The box has *two* VS 2022 installs, and only one is complete.** VS
+  **Community** has an incomplete C++ workload — OneCore CRT libs only
+  (`lib\onecore\x64`), no desktop `lib\x64\msvcrt.lib`/`libcmt.lib`, and no
+  `vcvarsall.bat`. VS **BuildTools** is complete (full desktop CRT + a real
+  `vcvarsall.bat`). `vswhere -latest` returns Community (the broken one);
+  **`vswhere -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64`
+  returns BuildTools** (the working one). `build-desktop.bat` queries by
+  that component, which is why it links where a naive `-latest` does not.
 
-**Unblock (Matt-action):** open the **Visual Studio Installer → Modify →
-Desktop development with C++** and ensure "MSVC v143 - VS 2022 C++ x64/x86
-build tools" and the Windows SDK are checked (a repair/modify, since the
-compiler is already there). That restores `lib\x64\*` + `vcvarsall.bat`.
-Then:
-
-```
-cd mobile/src-tauri
-rustup override set stable-x86_64-pc-windows-msvc
-cargo tauri build          # desktop bundle (WebView2 runtime already present)
-# or, from mobile/:  build-desktop.bat   (loads MSVC env, builds the shell)
-```
-
-Until the desktop C++ workload is completed, the wrapper is **scaffolded +
-compile-verified (all deps build under both toolchains)** but cannot
-produce a linked binary on this box. This is an environment gate, not a
-code change.
+So nothing needs installing for the **desktop** build — it works today via
+`build-desktop.bat`. (If you ever see `could not open 'msvcrt.lib'`, you're
+on the Community install; point the env at BuildTools.)
 
 ## The one blocker: Android SDK/NDK (Matt-action)
 

@@ -89,24 +89,24 @@ Roadmap milestones, by disposition:
   the P100 rig per your note). ⚠️ AudioLDM2 weights are **CC-BY-NC** —
   prototype-only; clear SFX licensing before shipping.
 
-### ✅ Tauri 2.0 mobile wrapper (scaffolded + compile-verified; link env-gated)
+### ✅ Tauri 2.0 mobile wrapper — desktop build WORKS
 - `mobile/src-tauri/` via `cargo tauri init`: frontendDist → `../../web`,
   standalone `[workspace]` (detached from the game workspace), 1280×720
   window, provisional identifier `com.pledgeandcrown.game`, npm hooks
   removed (frontend is the prebuilt `web/`).
-- `mobile/build-desktop.bat` helper (loads the MSVC env via vswhere +
-  vcvars, builds the shell with the MSVC toolchain).
-- All Rust deps (wry/tao/tauri/webview2) **compile under both toolchains**;
-  only the final **link** is blocked on this box. Investigated thoroughly:
-  GNU `ld` overflows on webview2's export table; MSVC has `cl.exe`/
-  `link.exe` present but the **"Desktop development with C++" workload is
-  incomplete** — the desktop x64 CRT libs (`lib\x64\msvcrt.lib`/`libcmt.lib`)
-  are missing (only the `onecore` variant exists) and `vcvarsall.bat` is
-  gone, so `LIB` can't be populated. Fix = VS Installer → Modify → complete
-  that workload (a repair). Precise diagnosis + commands in
-  `mobile/README.md`. **Android:** no `ANDROID_HOME`/`adb`/SDK found on
-  this box (user or machine scope), despite a "last I checked" — needs the
-  SDK+NDK before `cargo tauri android`.
+- **Builds + links to a runnable `app.exe` (37 MB PE32+)** via
+  `mobile/build-desktop.bat`. The helper's key trick: the box has TWO VS
+  2022 installs and only **BuildTools** has a complete C++ workload
+  (Community is OneCore-libs-only, no `vcvarsall.bat`). `vswhere -latest`
+  picks the broken Community; `build-desktop.bat` queries
+  `-requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64`, which
+  returns BuildTools → links cleanly. GNU can't link it (webview2 export
+  overflow), so the wrapper alone uses MSVC; the game stays on GNU.
+- **Android bundle** is the remaining step and needs the Android SDK+NDK
+  (`ANDROID_HOME`/`NDK_HOME` + android rust targets + `cargo tauri
+  android`). None found on this box (checked user + machine scope), so
+  that's the one mobile-packaging gate. Desktop is done. Details in
+  `mobile/README.md`.
 
 ### 🟡 NPC art — 4 placeholders teed up (generation stays Matt-gated)
 - Wrote 4 bible-faithful art-direction **specs** (design *direction*, not
@@ -125,16 +125,15 @@ Roadmap milestones, by disposition:
   `cargo test -p pledge_compile_api --test wasm_builder --test wasm_runner -- --include-ignored`.
 - wasm render confirmed visually in Chrome.
 
-## Blocking Issues (all are one-time environment fixes = Matt-actions)
-1. **Tauri desktop/mobile build** — the VS 2022 C++ desktop workload on
-   this box is incomplete (compiler present, but no `lib\x64` desktop CRT
-   libs and no `vcvarsall.bat` — only the OneCore variant). Repair via VS
-   Installer → Modify → *Desktop development with C++*, then
-   `rustup override set stable-x86_64-pc-windows-msvc` in `mobile/` (or run
-   `mobile/build-desktop.bat`). For Android additionally install the
+## Blocking Issues (remaining = Matt-actions)
+1. **Tauri Android bundle** — desktop builds today via
+   `mobile/build-desktop.bat`. The Android bundle additionally needs the
    Android SDK+NDK (set `ANDROID_HOME`/`NDK_HOME`) + the android rust
-   targets — none were found on this box. Full diagnosis in
-   `mobile/README.md`.
+   targets, then `cargo tauri android init/build`. No SDK found on this box
+   (checked user + machine scope). Full runbook in `mobile/README.md`.
+   (Note: build the wrapper with the VS **BuildTools** MSVC env, not
+   Community — see README; `build-desktop.bat` already selects the right
+   one.)
 2. **NPC art generation** — drive `claude.ai/design` from the 4 new specs
    (+ the 17 redesigns), approve, render via `render-refs`, wire in.
 3. **compile-real as the prod default** — needs `rustup target add
