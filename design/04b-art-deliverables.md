@@ -205,14 +205,22 @@ Refs landed against the bible. Source `.jsx` lives at `design/art/refs/ref-NN-<s
 | 33 | The Porter | 32×32 | ref-33-porter.jsx | specs/porter.md | `sprites/npc/porter_idle_0.png` |
 | 34 | The Surveyor | 32×32 | ref-34-surveyor.jsx | specs/surveyor.md | `sprites/npc/surveyor_idle_0.png` |
 | 35 | The Armorer | 32×32 | ref-35-armorer.jsx | specs/armorer.md | `sprites/npc/armorer_idle_0.png` |
+| 36 | Vexis the Archmage | 32×32 | ref-36-vexis.jsx | specs/vexis.md | `sprites/npc/vexis_idle_0.png` |
+| 37 | The Wandwright | 32×32 | ref-37-wandwright.jsx | specs/wandwright.md | `sprites/npc/wandwright_idle_0.png` |
+| 38 | The Conjurer | 32×32 | ref-38-conjurer.jsx | specs/conjurer.md | `sprites/npc/conjurer_idle_0.png` |
+| 39 | The Familiar | 32×32 | ref-39-familiar.jsx | specs/familiar.md | `sprites/npc/familiar_idle_0.png` |
+| 40 | The Lanternkeeper | 32×32 | ref-40-lanternkeeper.jsx | specs/lanternkeeper.md | `sprites/npc/lanternkeeper_idle_0.png` |
+| 41 | The Loremaster | 32×32 | ref-41-loremaster.jsx | specs/loremaster.md | `sprites/npc/loremaster_idle_0.png` |
 
 **NPC batches landed:**
 - Batch 1 (2026-05-02) — REF-11..15: Smith, Cartographer, Trait Mage, Bellringer, Cooper. Specs in `design/art/specs/`. Replaces SPRITE_PLAYER placeholders for the corresponding entries in `NPC_ROSTER`.
 - Batch 2 (2026-05-02) — REF-16..20: Oracle, Herald, Twin, Tinker, Heraldic Sage (the Sage is the first Act-2 NPC shipped; the others finish Act-1 prelude P1). Specs in `design/art/specs/`. Heraldic Sage uses a foreshadowing-license cobalt sigil (~0.9% canvas, under 1% bible cap) to signpost Act 6's cool-counterweight zone — see spec for cross-ref.
 - Batch 3 (2026-05-02) — REF-21..25: Forgewright, Linguist, Pilgrim, Drillmaster, Reckoner. First half of the Act-2 cast. Specs in `design/art/specs/`. PNGs verified pixel-identical to the harness output (sample-pixel parity check against the live React canvas in Chrome). No bible-allowance exceptions used; all five sprites stay inside their assigned ramps.
 - Batch 4 (2026-06-18) — REF-26..29: Quartermaster, Auditor, Chronicler, Alchemist. Closes the last four `SPRITE_PLAYER` placeholders. Specs in `design/art/specs/`; grids authored from those specs and rendered via `cargo run -p render-refs`. The Auditor uses a documented ~0.6% Alarm-scarlet exception (the flagged `Err` seal), under the 1% cap, cross-ref the Heraldic Sage's cobalt precedent. **First-pass sprites — pending Matt's art-review pass** (the locked 3-revision approval flow); they are a deliberate upgrade from the player-clone placeholders, not a final lock.
+- Batch 5 (2026-06-18) — REF-30..35: Guildmaster, Recruiter, Locksmith, Porter, Surveyor, Armorer. The Act 3 Guildhall Quarter cast (missions `impl_method`/`assoc_new`/`if_let`/`while_let`/`tuple_struct`/`enum_data_match`). First-pass; Locksmith/Porter/Armorer flagged rougher. Pending art review.
+- Batch 6 (2026-06-18) — REF-36..41: Vexis the Archmage, Wandwright, Conjurer, Familiar, Lanternkeeper, Loremaster. The Act 4 Trait Mage's Tower cast (missions `trait_def`/`generic_fn`/`generic_struct`/`dyn_trait`/`lifetimes`/`assoc_type`). The three mages use a small magic-violet accent (orb/flame) verified under the 5% bible cap (vexis 21px, conjurer 18px, lanternkeeper 9px of 51 max); the Familiar's caged creature carries a teal+forest element-clash accent (fits `Box<dyn Trait>`). First-pass; Lanternkeeper/Loremaster flagged rougher. Pending art review.
 
-**Remaining placeholders:** none — all 21 NPCs now carry distinct art (batch 4 closed the last four). See `game/src/plugins/npc.rs` for live truth.
+**Remaining placeholders:** none — all 33 NPCs (Acts 1–4 cast) carry distinct art. See `game/src/plugins/npc.rs` for live truth.
 
 ## 10. Revision history
 

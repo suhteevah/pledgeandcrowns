@@ -137,6 +137,8 @@ When the player finally passes, the Checker bows: "You may cross. The Old Tongue
 
 **Estimated playtime:** 3.5 hours.
 
+**Code status (2026-06-18).** The Act 4 *concepts* ship as 6 missions in the mission-tutorial loop (the RPG layer — Vexis's tower, the Grimoire, the Chimera boss — is future work): `trait_def` (Vexis the Archmage), `generic_fn` (The Wandwright), `generic_struct` (The Conjurer), `dyn_trait` (The Familiar), `lifetimes` (The Lanternkeeper — the doc's Lifetime Lantern, deferred from Act 2), `assoc_type` (The Loremaster). Default methods / blanket impls / supertraits / the Iterator impl are taught in tutorials but not their own missions (hard to pattern-grade cleanly). Design: `docs/superpowers/specs/2026-06-18-act4-trait-tower-missions-design.md`.
+
 ---
 
 # Act 5 — The Tavern of Tribulations
