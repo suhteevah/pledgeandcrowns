@@ -407,6 +407,86 @@ pub fn stub_verdict(encounter_id: &str, source: &str) -> Option<StubVerdict> {
                 )
             }
         }
+        // ── Act 4 (Trait Mage's Tower). Flavor MUST stay byte-identical to
+        // compile-api/src/grader.rs.
+        "trait_def" => {
+            if !source.contains("trait ") {
+                StubVerdict::fail("Vexis waits — missing required: a `trait ` definition")
+            } else if !source.contains("impl ") {
+                StubVerdict::fail("Vexis waits — implement it with an `impl ` block")
+            } else if !source.contains(" for ") {
+                StubVerdict::fail("Vexis waits — bind the trait to a type: `impl Trait for Type`")
+            } else {
+                StubVerdict::pass(
+                    "Vexis lowers his staff. \"a capability named once, granted to a type — that is a trait.\"",
+                )
+            }
+        }
+        "generic_fn" => {
+            if !source.contains("<T") {
+                StubVerdict::fail("the Wandwright frowns — missing required: a type parameter `<T`")
+            } else if !source.contains("PartialOrd") {
+                StubVerdict::fail(
+                    "the Wandwright frowns — bound the parameter so it can be compared: `T: PartialOrd`",
+                )
+            } else {
+                StubVerdict::pass(
+                    "the Wandwright sights down the blank. \"one wand, any element — bounded by what it can compare.\"",
+                )
+            }
+        }
+        "generic_struct" => {
+            if !source.contains("struct ") {
+                StubVerdict::fail("the Conjurer waits — missing required: a `struct ` definition")
+            } else if !source.contains("<T>") {
+                StubVerdict::fail("the Conjurer waits — make it generic with a `<T>` parameter")
+            } else if !source.contains(": T") {
+                StubVerdict::fail("the Conjurer waits — give it a field of the generic type `: T`")
+            } else {
+                StubVerdict::pass(
+                    "the Conjurer cups two matching lights. \"a vessel for any type — so long as both halves agree.\"",
+                )
+            }
+        }
+        "dyn_trait" => {
+            if !source.contains("Box<dyn") {
+                StubVerdict::fail("the Familiar flickers — missing required: `Box<dyn ...>`")
+            } else if !source.contains("Box::new") {
+                StubVerdict::fail(
+                    "the Familiar flickers — box each value onto the heap with `Box::new`",
+                )
+            } else {
+                StubVerdict::pass(
+                    "the Familiar shifts through its forms. \"many shapes, one cage — dispatched at a touch.\"",
+                )
+            }
+        }
+        "lifetimes" => {
+            if !source.contains("<'a>") {
+                StubVerdict::fail(
+                    "the Lanternkeeper waits — missing required: a lifetime parameter `<'a>`",
+                )
+            } else if !source.contains("&'a") {
+                StubVerdict::fail("the Lanternkeeper waits — annotate the references with `&'a`")
+            } else {
+                StubVerdict::pass(
+                    "the Lanternkeeper keeps the flame. \"the borrow lives exactly as long as 'a — no shorter.\"",
+                )
+            }
+        }
+        "assoc_type" => {
+            if !source.contains("type Output") {
+                StubVerdict::fail("the Loremaster turns the page — missing required: `type Output`")
+            } else if !source.contains("Self::Output") {
+                StubVerdict::fail(
+                    "the Loremaster turns the page — refer to it as `Self::Output` in the method",
+                )
+            } else {
+                StubVerdict::pass(
+                    "the Loremaster turns the page. \"each producer names its own yield — the type follows the trait.\"",
+                )
+            }
+        }
         _ => return None,
     };
     Some(v)

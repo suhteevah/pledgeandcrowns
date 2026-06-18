@@ -190,6 +190,80 @@ fn main() {
     let _ = value(Item::Weapon { damage: 10 });
 }"#
         }
+        // ── Act 4: Trait Mage's Tower (mirror of contract.rs).
+        "trait_def" => {
+            r#"trait Element {
+    fn name(&self) -> &str;
+}
+struct Fire;
+impl Element for Fire {
+    fn name(&self) -> &str { "fire" }
+}
+fn main() {
+    let f = Fire;
+    println!("{}", f.name());
+}"#
+        }
+        "generic_fn" => {
+            r#"fn larger<T: PartialOrd>(a: T, b: T) -> T {
+    if a > b { a } else { b }
+}
+fn main() {
+    println!("{}", larger(3, 7));
+}"#
+        }
+        "generic_struct" => {
+            r#"struct Pair<T> {
+    a: T,
+    b: T,
+}
+fn main() {
+    let p = Pair { a: 1, b: 2 };
+    let _ = (p.a, p.b);
+}"#
+        }
+        "dyn_trait" => {
+            r#"trait Element {
+    fn name(&self) -> &str;
+}
+struct Fire;
+impl Element for Fire {
+    fn name(&self) -> &str { "fire" }
+}
+struct Water;
+impl Element for Water {
+    fn name(&self) -> &str { "water" }
+}
+fn main() {
+    let zoo: Vec<Box<dyn Element>> = vec![Box::new(Fire), Box::new(Water)];
+    for e in &zoo {
+        println!("{}", e.name());
+    }
+}"#
+        }
+        "lifetimes" => {
+            r#"fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
+    if x.len() > y.len() { x } else { y }
+}
+fn main() {
+    let _ = longest("aa", "b");
+}"#
+        }
+        "assoc_type" => {
+            r#"trait Producer {
+    type Output;
+    fn make(&self) -> Self::Output;
+}
+struct Coiner;
+impl Producer for Coiner {
+    type Output = i32;
+    fn make(&self) -> Self::Output { 7 }
+}
+fn main() {
+    let c = Coiner;
+    let _ = c.make();
+}"#
+        }
         _ => return None,
     })
 }

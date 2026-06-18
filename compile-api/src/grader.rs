@@ -391,6 +391,86 @@ pub fn grade(encounter_id: &str, source: &str) -> Verdict {
                 )
             }
         }
+        // ── Act 4 (Trait Mage's Tower): traits, generics, dyn, lifetimes,
+        // associated types.
+        "trait_def" => {
+            if !source.contains("trait ") {
+                Verdict::fail("Vexis waits — missing required: a `trait ` definition")
+            } else if !source.contains("impl ") {
+                Verdict::fail("Vexis waits — implement it with an `impl ` block")
+            } else if !source.contains(" for ") {
+                Verdict::fail("Vexis waits — bind the trait to a type: `impl Trait for Type`")
+            } else {
+                Verdict::pass(
+                    "Vexis lowers his staff. \"a capability named once, granted to a type — that is a trait.\"",
+                )
+            }
+        }
+        "generic_fn" => {
+            if !source.contains("<T") {
+                Verdict::fail("the Wandwright frowns — missing required: a type parameter `<T`")
+            } else if !source.contains("PartialOrd") {
+                Verdict::fail(
+                    "the Wandwright frowns — bound the parameter so it can be compared: `T: PartialOrd`",
+                )
+            } else {
+                Verdict::pass(
+                    "the Wandwright sights down the blank. \"one wand, any element — bounded by what it can compare.\"",
+                )
+            }
+        }
+        "generic_struct" => {
+            if !source.contains("struct ") {
+                Verdict::fail("the Conjurer waits — missing required: a `struct ` definition")
+            } else if !source.contains("<T>") {
+                Verdict::fail("the Conjurer waits — make it generic with a `<T>` parameter")
+            } else if !source.contains(": T") {
+                Verdict::fail("the Conjurer waits — give it a field of the generic type `: T`")
+            } else {
+                Verdict::pass(
+                    "the Conjurer cups two matching lights. \"a vessel for any type — so long as both halves agree.\"",
+                )
+            }
+        }
+        "dyn_trait" => {
+            if !source.contains("Box<dyn") {
+                Verdict::fail("the Familiar flickers — missing required: `Box<dyn ...>`")
+            } else if !source.contains("Box::new") {
+                Verdict::fail(
+                    "the Familiar flickers — box each value onto the heap with `Box::new`",
+                )
+            } else {
+                Verdict::pass(
+                    "the Familiar shifts through its forms. \"many shapes, one cage — dispatched at a touch.\"",
+                )
+            }
+        }
+        "lifetimes" => {
+            if !source.contains("<'a>") {
+                Verdict::fail(
+                    "the Lanternkeeper waits — missing required: a lifetime parameter `<'a>`",
+                )
+            } else if !source.contains("&'a") {
+                Verdict::fail("the Lanternkeeper waits — annotate the references with `&'a`")
+            } else {
+                Verdict::pass(
+                    "the Lanternkeeper keeps the flame. \"the borrow lives exactly as long as 'a — no shorter.\"",
+                )
+            }
+        }
+        "assoc_type" => {
+            if !source.contains("type Output") {
+                Verdict::fail("the Loremaster turns the page — missing required: `type Output`")
+            } else if !source.contains("Self::Output") {
+                Verdict::fail(
+                    "the Loremaster turns the page — refer to it as `Self::Output` in the method",
+                )
+            } else {
+                Verdict::pass(
+                    "the Loremaster turns the page. \"each producer names its own yield — the type follows the trait.\"",
+                )
+            }
+        }
         _ => Verdict::pass(format!(
             "[freeform] received {} bytes. encounter `{encounter_id}` has no grader yet.",
             source.len()
@@ -1282,5 +1362,90 @@ fn name(d: Direction) -> &'static str {
         let v = grade("enum_data_match", "fn value(i: i32) -> i32 { i }");
         assert!(!v.ok);
         assert!(v.stderr.contains("enum Item"));
+    }
+
+    // ── Act 4: Trait Mage's Tower ─────────────────────────────────
+    #[test]
+    fn trait_def_pass_canonical() {
+        let src = "trait E { fn n(&self) -> i32; } struct F; impl E for F { fn n(&self) -> i32 { 1 } } fn main() {}";
+        assert!(grade("trait_def", src).ok);
+    }
+    #[test]
+    fn trait_def_fail_no_trait() {
+        let v = grade("trait_def", "struct F; fn main() {}");
+        assert!(!v.ok);
+        assert!(v.stderr.contains("trait "));
+    }
+    #[test]
+    fn trait_def_fail_no_impl_for_type() {
+        // A bare trait without `impl ... for` doesn't pass.
+        let v = grade("trait_def", "trait E { fn n(&self); } fn main() {}");
+        assert!(!v.ok);
+    }
+    #[test]
+    fn generic_fn_pass_canonical() {
+        let src =
+            "fn larger<T: PartialOrd>(a: T, b: T) -> T { if a > b { a } else { b } } fn main() {}";
+        assert!(grade("generic_fn", src).ok);
+    }
+    #[test]
+    fn generic_fn_fail_unbounded() {
+        // Generic but no `PartialOrd` bound — we require the bound.
+        let v = grade("generic_fn", "fn id<T>(a: T) -> T { a } fn main() {}");
+        assert!(!v.ok);
+        assert!(v.stderr.contains("PartialOrd"));
+    }
+    #[test]
+    fn generic_struct_pass_canonical() {
+        let src = "struct Pair<T> { a: T, b: T } fn main() { let _ = Pair { a: 1, b: 2 }; }";
+        assert!(grade("generic_struct", src).ok);
+    }
+    #[test]
+    fn generic_struct_fail_not_generic() {
+        let v = grade(
+            "generic_struct",
+            "struct Pair { a: i32, b: i32 } fn main() {}",
+        );
+        assert!(!v.ok);
+        assert!(v.stderr.contains("<T>"));
+    }
+    #[test]
+    fn dyn_trait_pass_canonical() {
+        let src = "fn main() { let _v: Vec<Box<dyn std::fmt::Debug>> = vec![Box::new(1)]; }";
+        assert!(grade("dyn_trait", src).ok);
+    }
+    #[test]
+    fn dyn_trait_fail_no_box_dyn() {
+        let v = grade("dyn_trait", "fn main() { let _v = vec![1, 2]; }");
+        assert!(!v.ok);
+        assert!(v.stderr.contains("Box<dyn"));
+    }
+    #[test]
+    fn lifetimes_pass_canonical() {
+        let src = "fn longest<'a>(x: &'a str, y: &'a str) -> &'a str { if x.len() > y.len() { x } else { y } } fn main() {}";
+        assert!(grade("lifetimes", src).ok);
+    }
+    #[test]
+    fn lifetimes_fail_no_lifetime() {
+        let v = grade(
+            "lifetimes",
+            "fn longest(x: &str, _y: &str) -> &str { x } fn main() {}",
+        );
+        assert!(!v.ok);
+        assert!(v.stderr.contains("<'a>"));
+    }
+    #[test]
+    fn assoc_type_pass_canonical() {
+        let src = "trait P { type Output; fn make(&self) -> Self::Output; } struct C; impl P for C { type Output = i32; fn make(&self) -> Self::Output { 1 } } fn main() {}";
+        assert!(grade("assoc_type", src).ok);
+    }
+    #[test]
+    fn assoc_type_fail_no_assoc_type() {
+        let v = grade(
+            "assoc_type",
+            "trait P { fn make(&self) -> i32; } fn main() {}",
+        );
+        assert!(!v.ok);
+        assert!(v.stderr.contains("type Output"));
     }
 }

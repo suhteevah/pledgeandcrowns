@@ -714,6 +714,156 @@ both kinds — a non-exhaustive match won't compile.",
                 prereq: None,
                 starter_code: "fn value(item: i32) -> i32 {\n    // define an `Item` type with two kinds (a weapon carrying damage, a potion carrying heal),\n    // take an Item here instead of an i32, and handle every kind to return its number\n    item\n}\n\nfn main() {\n    let _ = value(0);\n}\n",
             },
+            // ── Act 4: The Trait Mage's Tower ─────────────────────────
+            // Generics + traits + dyn + lifetimes + associated types. See
+            // design/01-curriculum.md §Act 4 and
+            // docs/superpowers/specs/2026-06-18-act4-trait-tower-missions-design.md.
+            Mission {
+                id: "trait_def",
+                npc_name: "Vexis the Archmage",
+                prompt: "Define a `trait`, implement it for a type, and call the method.",
+                tutorial: "## Concept\n\
+A *trait* is a named set of behaviour a type can promise to provide — \
+Rust's version of an interface. You declare it with `trait Name { ... }`, \
+listing method signatures. A type opts in with `impl Trait for Type`, \
+supplying the bodies. Any type that implements the trait can then be used \
+wherever that behaviour is required. (Traits can also carry *default* \
+method bodies and require other traits as *supertraits* — later floors of \
+the tower.)\n\n\
+## Syntax\n\
+```\ntrait Element {\n    fn name(&self) -> &str;\n}\nstruct Fire;\nimpl Element for Fire {\n    fn name(&self) -> &str { \"fire\" }\n}\nFire.name();\n```\n\
+The signature in the trait ends with `;`; the body lives in the `impl`.\n\n\
+## Task\n\
+`struct Fire` is given. Define a `trait Element` with a `name(&self) -> \
+&str` method, implement it `for Fire`, then call `.name()` in `main`.\n\n\
+## Hint\n\
+The grader needs `trait `, `impl `, and ` for `. Vexis: a capability named \
+once, granted to a type.",
+                prereq: None,
+                starter_code: "struct Fire;\n\nfn main() {\n    let _f = Fire;\n    // define an Element capability (a name() method), grant it to Fire, then call name()\n}\n",
+            },
+            Mission {
+                id: "generic_fn",
+                npc_name: "The Wandwright",
+                prompt: "Write a generic `larger<T: PartialOrd>(a, b)` that returns the bigger.",
+                tutorial: "## Concept\n\
+A *generic* function works over many types instead of one. You declare a \
+type parameter in angle brackets — `fn f<T>(...)` — and the body must work \
+for every `T`. To do anything with a `T` (compare it, add it) you add a \
+*trait bound* saying which capabilities `T` must have: `<T: PartialOrd>` \
+means \"any `T` that can be ordered\". The compiler generates a specialised \
+copy per concrete type (*monomorphisation*) — zero runtime cost.\n\n\
+## Syntax\n\
+```\nfn larger<T: PartialOrd>(a: T, b: T) -> T {\n    if a > b { a } else { b }\n}\nlarger(3, 7);       // T = i32\nlarger(1.5, 0.5);   // T = f64\n```\n\
+Without the `PartialOrd` bound, `a > b` won't compile — the compiler \
+can't assume an arbitrary `T` is comparable.\n\n\
+## Task\n\
+Write `larger<T: PartialOrd>(a: T, b: T) -> T` returning the larger of the \
+two, then call it on two integers in `main`.\n\n\
+## Hint\n\
+The grader needs the type parameter `<T` and the bound `PartialOrd`. One \
+wand, any element — bounded by what it can compare.",
+                prereq: None,
+                starter_code: "fn main() {\n    // write a generic `larger` function returning the bigger of two comparable values,\n    // then call it on two integers\n    println!(\"{}\", 0);\n}\n",
+            },
+            Mission {
+                id: "generic_struct",
+                npc_name: "The Conjurer",
+                prompt: "Define a generic `struct Pair<T>` holding two values of one type.",
+                tutorial: "## Concept\n\
+Structs can be generic too. `struct Pair<T> { a: T, b: T }` is a container \
+that holds two values of *the same* type `T` — `Pair<i32>`, \
+`Pair<String>`, whatever the caller supplies. The type parameter goes \
+after the name in angle brackets and is then usable as a field type. The \
+standard library's `Vec<T>`, `Option<T>`, and `HashMap<K, V>` are all just \
+generic structs/enums.\n\n\
+## Syntax\n\
+```\nstruct Pair<T> {\n    a: T,\n    b: T,\n}\nlet p = Pair { a: 1, b: 2 };   // Pair<i32>, inferred\nlet _ = (p.a, p.b);\n```\n\
+The compiler infers `T` from the values you pass; you can also annotate \
+`Pair::<i32> { .. }` explicitly.\n\n\
+## Task\n\
+Define `struct Pair<T>` with two fields of type `T`, build one from two \
+integers, and read both fields.\n\n\
+## Hint\n\
+The grader needs `struct `, the parameter `<T>`, and a field typed `: T`. \
+A vessel for any type — so long as both halves agree.",
+                prereq: None,
+                starter_code: "fn main() {\n    // define a generic Pair that holds two values of one shared type,\n    // build one from two integers, then read both fields\n    let _ = (1, 2);\n}\n",
+            },
+            Mission {
+                id: "dyn_trait",
+                npc_name: "The Familiar",
+                prompt: "Collect differently-built `Element`s into one `Vec<Box<dyn Element>>`.",
+                tutorial: "## Concept\n\
+Generics give *static* dispatch — one type per call site, resolved at \
+compile time. Sometimes you need a single collection holding *different* \
+concrete types that share a trait. That's a *trait object*: `dyn Trait`, \
+usually behind a pointer like `Box<dyn Trait>`. Calls through it are \
+*dynamically* dispatched (a vtable lookup at runtime). The tradeoff: \
+flexibility (mix types in one `Vec`) for a small indirection cost.\n\n\
+## Syntax\n\
+```\nlet zoo: Vec<Box<dyn Element>> = vec![\n    Box::new(Fire),\n    Box::new(Water),\n];\nfor e in &zoo {\n    println!(\"{}\", e.name());\n}\n```\n\
+`Box::new` moves each value to the heap and erases its concrete type down \
+to `dyn Element`.\n\n\
+## Task\n\
+`Element`, `Fire`, and `Water` are provided. Build a \
+`Vec<Box<dyn Element>>` holding one of each, then print every `name()`.\n\n\
+## Hint\n\
+The grader needs `Box<dyn` and `dyn `. Many shapes, one cage — dispatched \
+at a touch.",
+                prereq: None,
+                starter_code: "trait Element {\n    fn name(&self) -> &str;\n}\nstruct Fire;\nimpl Element for Fire {\n    fn name(&self) -> &str { \"fire\" }\n}\nstruct Water;\nimpl Element for Water {\n    fn name(&self) -> &str { \"water\" }\n}\n\nfn main() {\n    // collect a Fire and a Water into one Vec of trait objects, then print each name()\n    let _ = (Fire, Water);\n}\n",
+            },
+            Mission {
+                id: "lifetimes",
+                npc_name: "The Lanternkeeper",
+                prompt: "Add the lifetime `<'a>` so `longest` can return a borrow of its inputs.",
+                tutorial: "## Concept\n\
+When a function returns a reference, the compiler must know *which* input \
+that reference borrows from — so it can guarantee the borrow doesn't \
+outlive its source. A *lifetime parameter* `'a` names that relationship. \
+`fn longest<'a>(x: &'a str, y: &'a str) -> &'a str` says: the returned \
+reference lives as long as the shorter of `x` and `y`. Lifetimes are not \
+runtime values — they're compile-time annotations the borrow checker uses \
+to reject dangling references.\n\n\
+## Syntax\n\
+```\nfn longest<'a>(x: &'a str, y: &'a str) -> &'a str {\n    if x.len() > y.len() { x } else { y }\n}\n```\n\
+Without `'a`, the compiler can't tell whether the result borrows `x` or \
+`y`, so it refuses to compile.\n\n\
+## Task\n\
+The `longest` stub won't compile. Add a lifetime `'a`, tie both `&str` \
+parameters and the return to it, and it will.\n\n\
+## Hint\n\
+The grader needs the lifetime parameter `<'a>` and an annotated reference \
+`&'a`. The borrow lives exactly as long as `'a`.",
+                prereq: None,
+                starter_code: "fn longest(x: &str, y: &str) -> &str {\n    // this won't compile yet: add a lifetime 'a tying the inputs and the return together\n    if x.len() > y.len() { x } else { y }\n}\n\nfn main() {\n    let _ = longest(\"aa\", \"b\");\n}\n",
+            },
+            Mission {
+                id: "assoc_type",
+                npc_name: "The Loremaster",
+                prompt: "Give the `Producer` trait an associated type `Output`.",
+                tutorial: "## Concept\n\
+An *associated type* lets a trait name a type that each implementor fills \
+in — `type Output;` in the trait, `type Output = i32;` in the impl. \
+Inside the trait, methods refer to it as `Self::Output`. It's how \
+`Iterator` declares `type Item`: every iterator chooses what it yields, \
+but the trait is written once over `Self::Item`. Use an associated type \
+(not a generic parameter) when there's exactly *one* sensible choice per \
+implementor.\n\n\
+## Syntax\n\
+```\ntrait Producer {\n    type Output;\n    fn make(&self) -> Self::Output;\n}\nimpl Producer for Coiner {\n    type Output = i32;\n    fn make(&self) -> Self::Output { 7 }\n}\n```\n\
+`Self::Output` resolves to `i32` for `Coiner`, to whatever each other \
+implementor declares.\n\n\
+## Task\n\
+Give `trait Producer` an associated `type Output`, have `make` return \
+`Self::Output`, then implement it for a `Coiner` whose `Output` is `i32`.\n\n\
+## Hint\n\
+The grader needs `type Output` and `Self::Output`. Each producer names \
+its own yield — the type follows the trait.",
+                prereq: None,
+                starter_code: "trait Producer {\n    fn make(&self) -> i32;\n}\n\nfn main() {\n    // change Producer so each implementor names its own output type (an associated type),\n    // then implement it for a Coiner that makes an i32\n    let _ = ();\n}\n",
+            },
         ];
         // Strict-linear progression: each mission's prereq is the one
         // listed immediately before it. Shape decision logged in HANDOFF

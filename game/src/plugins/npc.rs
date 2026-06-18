@@ -8,11 +8,12 @@
 
 use crate::assets::{
     SPRITE_ALCHEMIST, SPRITE_ARMORER, SPRITE_AUDITOR, SPRITE_BELLRINGER, SPRITE_BORROW_CHECKER,
-    SPRITE_CARTOGRAPHER, SPRITE_CHRONICLER, SPRITE_COOPER, SPRITE_DRILLMASTER, SPRITE_FERRIS,
-    SPRITE_FORGEWRIGHT, SPRITE_GUILDMASTER, SPRITE_HERALD, SPRITE_HERALDIC_SAGE, SPRITE_LINGUIST,
-    SPRITE_LOCKSMITH, SPRITE_ORACLE, SPRITE_PILGRIM, SPRITE_PORTER, SPRITE_QUARTERMASTER,
+    SPRITE_CARTOGRAPHER, SPRITE_CHRONICLER, SPRITE_CONJURER, SPRITE_COOPER, SPRITE_DRILLMASTER,
+    SPRITE_FAMILIAR, SPRITE_FERRIS, SPRITE_FORGEWRIGHT, SPRITE_GUILDMASTER, SPRITE_HERALD,
+    SPRITE_HERALDIC_SAGE, SPRITE_LANTERNKEEPER, SPRITE_LINGUIST, SPRITE_LOCKSMITH,
+    SPRITE_LOREMASTER, SPRITE_ORACLE, SPRITE_PILGRIM, SPRITE_PORTER, SPRITE_QUARTERMASTER,
     SPRITE_RECKONER, SPRITE_RECRUITER, SPRITE_SMITH, SPRITE_SURVEYOR, SPRITE_TINKER,
-    SPRITE_TRAIT_MAGE, SPRITE_TWIN,
+    SPRITE_TRAIT_MAGE, SPRITE_TWIN, SPRITE_VEXIS, SPRITE_WANDWRIGHT,
 };
 use crate::plugins::player::Player;
 use crate::plugins::state::GameState;
@@ -245,6 +246,49 @@ pub const NPC_ROSTER: &[NpcSpec] = &[
         mission_id: "enum_data_match",
         sprite_path: SPRITE_ARMORER,
         pos: (-60.0, 100.0),
+        native_px: 32.0,
+    },
+    // ── Act 4: The Trait Mage's Tower (batch 6).
+    NpcSpec {
+        name: "Vexis the Archmage",
+        mission_id: "trait_def",
+        sprite_path: SPRITE_VEXIS,
+        pos: (40.0, 50.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Wandwright",
+        mission_id: "generic_fn",
+        sprite_path: SPRITE_WANDWRIGHT,
+        pos: (-40.0, 130.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Conjurer",
+        mission_id: "generic_struct",
+        sprite_path: SPRITE_CONJURER,
+        pos: (180.0, -100.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Familiar",
+        mission_id: "dyn_trait",
+        sprite_path: SPRITE_FAMILIAR,
+        pos: (-180.0, 100.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Lanternkeeper",
+        mission_id: "lifetimes",
+        sprite_path: SPRITE_LANTERNKEEPER,
+        pos: (140.0, -110.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Loremaster",
+        mission_id: "assoc_type",
+        sprite_path: SPRITE_LOREMASTER,
+        pos: (120.0, 130.0),
         native_px: 32.0,
     },
 ];

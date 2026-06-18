@@ -59,6 +59,17 @@ pub const SPRITE_PORTER: &str = "sprites/npc/porter_idle_0.png";
 pub const SPRITE_SURVEYOR: &str = "sprites/npc/surveyor_idle_0.png";
 pub const SPRITE_ARMORER: &str = "sprites/npc/armorer_idle_0.png";
 
+// NPC batch 6 (2026-06-18) — Act 4 Trait Mage's Tower: Vexis, Wandwright,
+// Conjurer, Familiar, Lanternkeeper, Loremaster. Sources:
+// design/art/refs/ref-36..41-*.jsx, rendered via `cargo run -p render-refs`.
+// First-pass, pending Matt's art review.
+pub const SPRITE_VEXIS: &str = "sprites/npc/vexis_idle_0.png";
+pub const SPRITE_WANDWRIGHT: &str = "sprites/npc/wandwright_idle_0.png";
+pub const SPRITE_CONJURER: &str = "sprites/npc/conjurer_idle_0.png";
+pub const SPRITE_FAMILIAR: &str = "sprites/npc/familiar_idle_0.png";
+pub const SPRITE_LANTERNKEEPER: &str = "sprites/npc/lanternkeeper_idle_0.png";
+pub const SPRITE_LOREMASTER: &str = "sprites/npc/loremaster_idle_0.png";
+
 // Audio (Stable Audio Open generated, baked via tools/synthwave-gen).
 // Generation is a Matt-action: `powershell -ExecutionPolicy Bypass
 // -File scripts/synthwave-gen.ps1`. Files may be absent during early
@@ -115,4 +126,10 @@ pub const ALL_SPRITE_PATHS: &[&str] = &[
     SPRITE_PORTER,
     SPRITE_SURVEYOR,
     SPRITE_ARMORER,
+    SPRITE_VEXIS,
+    SPRITE_WANDWRIGHT,
+    SPRITE_CONJURER,
+    SPRITE_FAMILIAR,
+    SPRITE_LANTERNKEEPER,
+    SPRITE_LOREMASTER,
 ];
