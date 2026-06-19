@@ -32,7 +32,9 @@ no `beforeBuildCommand` that invokes a JS bundler. The build order is:
 | node / npm | **24.13 / 11.8 — present** (only needed for `cargo tauri icon` / optional tooling) |
 | WebView2 runtime (desktop) | **present** (Edge WebView 148/149) → desktop wrapper builds + runs |
 | Android SDK | **present at `G:\AndroidSdk`** (Matt-managed) — platform-tools, `android-36.1`, build-tools 36.1.0/37.0.0, emulator, license accepted |
-| Android **NDK** | **MISSING** — no `G:\AndroidSdk\ndk\`, no `cmdline-tools`/`sdkmanager`. **This blocks the Android bundle** (Tauri needs the NDK to cross-compile Rust). `ANDROID_HOME`/`NDK_HOME` also unset. See finishing steps below. |
+| Android **NDK** | **present — r27d `27.3.13750724`** at `G:\AndroidSdk\ndk\27.3.13750724` (installed 2026-06-19 via `install-android-ndk.ps1`); `cmdline-tools\latest` also added. `ANDROID_HOME`/`NDK_HOME` persisted (user scope). |
+| Rust android targets | **present** — `aarch64`/`armv7`/`i686`/`x86_64-linux-android` all added |
+| **Android APK build** | **WORKS** — `cargo tauri android build` produces an APK end-to-end (verified 2026-06-19). See below. |
 | iOS toolchain | N/A — iOS bundling requires macOS + Xcode; not possible on this Windows box |
 | Rust toolchain for the desktop link | **MSVC required** — see below |
 
@@ -84,57 +86,55 @@ So nothing needs installing for the **desktop** build — it works today via
 `build-desktop.bat`. (If you ever see `could not open 'msvcrt.lib'`, you're
 on the Community install; point the env at BuildTools.)
 
-## The Android bundle: base SDK at `G:\AndroidSdk`, NDK still missing
+## The Android bundle — WORKS (verified 2026-06-19)
 
-The Android bundle is the actual point of this wrapper. The base SDK is
-**present** at **`G:\AndroidSdk`** (Matt-managed; verified 2026-06-19, last
-written 2026-05-22) — do **not** auto-install a second copy. What it has:
-`platform-tools\` (adb), `platforms\android-36.1`, `build-tools\{36.1.0,37.0.0}`,
-`emulator\`, and an accepted `licenses\android-sdk-license`.
+The Android bundle is the actual point of this wrapper, and it builds
+end-to-end. `cargo tauri android build --target aarch64 --apk` produces a
+**31 MB `app-universal-release-unsigned.apk`** containing
+`lib/arm64-v8a/libapp_lib.so` (the Rust shell with the web bundle embedded by
+Tauri) + `AndroidManifest.xml`. The toolchain pieces:
 
-What it does **not** have yet — and Tauri's Android build requires both:
-- **`ndk\<version>\`** — Tauri cross-compiles Rust to the Android ABIs with
-  the NDK's clang+linker. This is the real blocker; without it
-  `cargo tauri android build` fails.
-- **`cmdline-tools\latest\`** (`sdkmanager`) — the CLI used to install the
-  NDK and accept its license.
+- **SDK** at **`G:\AndroidSdk`** (Matt-managed) — platform-tools, `android-36.1`,
+  build-tools 36.1.0/37.0.0, emulator, accepted license. Do **not** install a
+  second copy. (Ignore the stale `E:\android\Android SDK` — 2015-era android-22.)
+- **NDK** r27d `27.3.13750724` at `G:\AndroidSdk\ndk\27.3.13750724`, plus
+  `cmdline-tools\latest`, installed via `mobile/install-android-ndk.ps1`.
+- **Env** persisted (user scope): `ANDROID_HOME` / `ANDROID_SDK_ROOT` =
+  `G:\AndroidSdk`, `NDK_HOME` / `ANDROID_NDK_HOME` = the NDK path above. JDK 21
+  (`C:\Program Files\Java\jdk-21`) drives Gradle.
+- **Rust targets**: all four `*-linux-android` triples added.
 
-(Ignore the stale `E:\android\Android SDK` — it's a 2015-era android-22 SDK.)
+### Rebuilding / building it (the helper sets env for you)
 
-### Finishing it
+```
+powershell -ExecutionPolicy Bypass -File mobile/build-android.ps1 init    # one-time; generates gen/android
+powershell -ExecutionPolicy Bypass -File mobile/build-android.ps1 build --apk --target aarch64   # arm64 APK
+powershell -ExecutionPolicy Bypass -File mobile/build-android.ps1 build --apk --aab              # all ABIs + Play bundle
+powershell -ExecutionPolicy Bypass -File mobile/build-android.ps1 dev                             # install+run on a device/emulator
+```
 
-1. Install the NDK + cmdline-tools into the existing SDK (pick ONE):
-   - **Android Studio** (already installed) → Settings → *Languages &
-     Frameworks → Android SDK* → set the SDK path to `G:\AndroidSdk` →
-     *SDK Tools* tab → check **NDK (Side by Side)** + **Android SDK
-     Command-line Tools** → Apply.
-   - **CLI**: drop the Google `commandlinetools-win-*.zip` into
-     `G:\AndroidSdk\cmdline-tools\latest\`, then
-     `sdkmanager --sdk_root=G:\AndroidSdk "ndk;<version>" "platform-tools"`
-     and accept the NDK license.
-2. Set environment to the existing SDK (NOT `%LOCALAPPDATA%`):
-   - `ANDROID_HOME` = `G:\AndroidSdk`
-   - `NDK_HOME` = `G:\AndroidSdk\ndk\<version>`  (the version you installed)
-   ```
-   setx ANDROID_HOME "G:\AndroidSdk"
-   setx NDK_HOME "G:\AndroidSdk\ndk\<version>"
-   ```
-   (new shell required for `setx` to take effect)
-3. Add the Rust Android targets:
-   ```
-   rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
-   ```
-4. Initialize + build:
-   ```
-   cd mobile/src-tauri
-   cargo tauri android init
-   cargo tauri android build        # or: cargo tauri android dev   (needs a device/emulator)
-   ```
+`build-android.ps1` loads `ANDROID_HOME`/`NDK_HOME`/`JAVA_HOME` for its own
+process and runs `cargo tauri android <step>` from `src-tauri/`. To set the
+env up from scratch on a new box, run `mobile/install-android-ndk.ps1` first.
 
-Until the NDK is installed and the env is pointed at `G:\AndroidSdk`, the
-wrapper is verified on the **desktop** target only (WebView2), which proves
-the scaffold + `frontendDist -> ../../web` wiring loads the game in a
-webview end-to-end.
+### Owner-action remaining: signing
+
+`cargo tauri android build` always assembles the **release** variant, and the
+APK comes out **unsigned** — it won't install on a device as-is. Two paths,
+both yours to own (a signing keystore is a credential — not something this
+runbook creates for you):
+
+- **On-device testing:** `...build-android.ps1 dev` runs Gradle's *debug*
+  assemble, which auto-signs with the local Android debug keystore and installs
+  to a connected device/emulator. No keystore setup needed.
+- **Distribution (Play / sideload):** generate a release keystore
+  (`keytool -genkeypair ...`), wire it into
+  `gen/android/app/build.gradle.kts` (or `key.properties`), and re-run
+  `build --aab`/`--apk`. Then upload the signed `.aab` to Play.
+
+Until you sign, the build is **proven** (release-unsigned APK on disk) but not
+**installable**; the desktop wrapper (`build-desktop.bat`) remains the runnable
+demo target.
 
 ## Verifying the desktop wrapper (works today)
 
