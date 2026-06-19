@@ -31,7 +31,7 @@ no `beforeBuildCommand` that invokes a JS bundler. The build order is:
 | `cargo tauri` (tauri-cli) | **2.10.0 — present** |
 | node / npm | **24.13 / 11.8 — present** (only needed for `cargo tauri icon` / optional tooling) |
 | WebView2 runtime (desktop) | **present** (Edge WebView 148/149) → desktop wrapper builds + runs |
-| Android SDK + NDK | **ABSENT** (`ANDROID_HOME` / `NDK_HOME` unset) → **blocks the Android bundle** |
+| Android SDK + NDK | **installing at `G:\android`** (Matt-managed; was mid-update 2026-06-19). `ANDROID_HOME` / `NDK_HOME` still unset → set them to the `G:\android` paths once the update settles, then the Android bundle unblocks |
 | iOS toolchain | N/A — iOS bundling requires macOS + Xcode; not possible on this Windows box |
 | Rust toolchain for the desktop link | **MSVC required** — see below |
 
@@ -83,18 +83,23 @@ So nothing needs installing for the **desktop** build — it works today via
 `build-desktop.bat`. (If you ever see `could not open 'msvcrt.lib'`, you're
 on the Community install; point the env at BuildTools.)
 
-## The one blocker: Android SDK/NDK (Matt-action)
+## The Android bundle: SDK lives at `G:\android` (Matt-managed)
 
-The Android bundle is the actual point of this wrapper, and it's gated on a
-toolchain that isn't installed. This is a deliberate Matt-action (multi-GB
-download + Google SDK license acceptance — not something to auto-install):
+The Android bundle is the actual point of this wrapper. The SDK/NDK is
+**not absent** — Matt keeps it at **`G:\android`** (it was mid-update on
+2026-06-19, so the dir may not be fully populated until that settles). Do
+**not** auto-install a second copy; point the env at the existing one.
 
-1. Install Android Studio (or the standalone command-line tools) and, via
-   the SDK Manager, the **SDK Platform**, **Platform-Tools**, **Build-Tools**,
-   and the **NDK (Side by side)**.
-2. Set environment:
-   - `ANDROID_HOME` = `%LOCALAPPDATA%\Android\Sdk` (or your SDK path)
-   - `NDK_HOME` = `%ANDROID_HOME%\ndk\<version>`
+1. Confirm the SDK is settled (update finished): `G:\android` should hold
+   `platform-tools\`, `platforms\`, `build-tools\`, and `ndk\<version>\`.
+2. Set environment to the existing SDK (NOT `%LOCALAPPDATA%`):
+   - `ANDROID_HOME` = `G:\android`
+   - `NDK_HOME` = `G:\android\ndk\<version>`  (pick the installed version)
+   ```
+   setx ANDROID_HOME "G:\android"
+   setx NDK_HOME "G:\android\ndk\<version>"
+   ```
+   (new shell required for `setx` to take effect)
 3. Add the Rust Android targets:
    ```
    rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
@@ -106,9 +111,10 @@ download + Google SDK license acceptance — not something to auto-install):
    cargo tauri android build        # or: cargo tauri android dev   (needs a device/emulator)
    ```
 
-Until that lands, the wrapper is verified on the **desktop** target only
-(WebView2), which proves the scaffold + `frontendDist -> ../../web` wiring
-loads the game in a webview end-to-end.
+Until the env is pointed at `G:\android` and the targets are added, the
+wrapper is verified on the **desktop** target only (WebView2), which proves
+the scaffold + `frontendDist -> ../../web` wiring loads the game in a
+webview end-to-end.
 
 ## Verifying the desktop wrapper (works today)
 
