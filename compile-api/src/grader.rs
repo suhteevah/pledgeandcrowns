@@ -669,6 +669,73 @@ pub fn grade(encounter_id: &str, source: &str) -> Verdict {
                 )
             }
         }
+        // ── Act 8 (Vault of Pointers): Box, Rc, RefCell, Cell, Weak.
+        "box_basic" => {
+            if !source.contains("Box<") {
+                Verdict::fail("the Vaultwright waits — missing required: `Box<...>`")
+            } else if !source.contains("Box::new") {
+                Verdict::fail("the Vaultwright waits — put the value on the heap with `Box::new`")
+            } else {
+                Verdict::pass(
+                    "the Vaultwright seals the box. \"on the heap it holds what the stack cannot.\"",
+                )
+            }
+        }
+        "rc_basic" => {
+            if !source.contains("Rc::new") {
+                Verdict::fail("the Sharekeeper waits — missing required: `Rc::new`")
+            } else if !source.contains("Rc::clone") {
+                Verdict::fail("the Sharekeeper waits — hand out a second handle with `Rc::clone`")
+            } else {
+                Verdict::pass("the Sharekeeper tallies the claims. \"one hoard, many holders.\"")
+            }
+        }
+        "refcell" => {
+            if !source.contains("RefCell") {
+                Verdict::fail("the Warden waits — missing required: `RefCell`")
+            } else if !source.contains(".borrow_mut(") {
+                Verdict::fail("the Warden waits — mutate the inner value with `.borrow_mut(`")
+            } else {
+                Verdict::pass(
+                    "the Warden checks the ledger. \"changed within — by the runtime's leave.\"",
+                )
+            }
+        }
+        "cell" => {
+            if !source.contains("Cell::new") {
+                Verdict::fail("the Swapwarden waits — missing required: `Cell::new`")
+            } else if !source.contains(".set(") {
+                Verdict::fail("the Swapwarden waits — swap the whole value with `.set(`")
+            } else {
+                Verdict::pass("the Swapwarden trades the coin. \"the whole value, swapped clean.\"")
+            }
+        }
+        "rc_refcell" => {
+            if !source.contains("Rc::new") {
+                Verdict::fail("the Strongbox waits — share ownership with `Rc::new`")
+            } else if !source.contains("RefCell") {
+                Verdict::fail("the Strongbox waits — make it mutable inside with `RefCell`")
+            } else if !source.contains(".borrow_mut(") {
+                Verdict::fail("the Strongbox waits — open and change it via `.borrow_mut(`")
+            } else {
+                Verdict::pass(
+                    "the Strongbox turns the keys. \"many owners, and the box still opens.\"",
+                )
+            }
+        }
+        "weak_ref" => {
+            if !source.contains("Weak") {
+                Verdict::fail("the Ghostkeeper waits — missing required: a `Weak` reference")
+            } else if !source.contains("downgrade") {
+                Verdict::fail("the Ghostkeeper waits — make the weak handle with `Rc::downgrade`")
+            } else if !source.contains(".upgrade(") {
+                Verdict::fail("the Ghostkeeper waits — reclaim it (or not) with `.upgrade(`")
+            } else {
+                Verdict::pass(
+                    "the Ghostkeeper tugs the tether. \"a hold that holds nothing alive.\"",
+                )
+            }
+        }
         _ => Verdict::pass(format!(
             "[freeform] received {} bytes. encounter `{encounter_id}` has no grader yet.",
             source.len()
@@ -1893,5 +1960,90 @@ fn name(d: Direction) -> &'static str {
         let v = grade("async_fn", "async fn d(x: i32) -> i32 { x } fn main() {}");
         assert!(!v.ok);
         assert!(v.stderr.contains(".await"));
+    }
+
+    // ── Act 8: Vault of Pointers ──────────────────────────────────
+    #[test]
+    fn box_basic_pass_canonical() {
+        let src = "struct N { next: Option<Box<N>> } fn main() { let _ = N { next: Some(Box::new(N { next: None })) }; }";
+        assert!(grade("box_basic", src).ok);
+    }
+    #[test]
+    fn box_basic_fail_no_box() {
+        let v = grade("box_basic", "struct N { next: Option<i32> } fn main() {}");
+        assert!(!v.ok);
+        assert!(v.stderr.contains("Box<"));
+    }
+    #[test]
+    fn rc_basic_pass_canonical() {
+        let src = "use std::rc::Rc; fn main() { let a = Rc::new(1); let _b = Rc::clone(&a); }";
+        assert!(grade("rc_basic", src).ok);
+    }
+    #[test]
+    fn rc_basic_fail_no_clone() {
+        let v = grade(
+            "rc_basic",
+            "use std::rc::Rc; fn main() { let _a = Rc::new(1); }",
+        );
+        assert!(!v.ok);
+        assert!(v.stderr.contains("Rc::clone"));
+    }
+    #[test]
+    fn refcell_pass_canonical() {
+        let src =
+            "use std::cell::RefCell; fn main() { let c = RefCell::new(0); *c.borrow_mut() += 1; }";
+        assert!(grade("refcell", src).ok);
+    }
+    #[test]
+    fn refcell_fail_no_borrow_mut() {
+        let v = grade(
+            "refcell",
+            "use std::cell::RefCell; fn main() { let _c = RefCell::new(0); }",
+        );
+        assert!(!v.ok);
+        assert!(v.stderr.contains(".borrow_mut("));
+    }
+    #[test]
+    fn cell_pass_canonical() {
+        let src = "use std::cell::Cell; fn main() { let c = Cell::new(1); c.set(5); }";
+        assert!(grade("cell", src).ok);
+    }
+    #[test]
+    fn cell_fail_no_set() {
+        let v = grade(
+            "cell",
+            "use std::cell::Cell; fn main() { let c = Cell::new(1); let _ = c.get(); }",
+        );
+        assert!(!v.ok);
+        assert!(v.stderr.contains(".set("));
+    }
+    #[test]
+    fn rc_refcell_pass_canonical() {
+        let src = "use std::cell::RefCell; use std::rc::Rc; fn main() { let s = Rc::new(RefCell::new(0)); *s.borrow_mut() += 1; }";
+        assert!(grade("rc_refcell", src).ok);
+    }
+    #[test]
+    fn rc_refcell_fail_no_refcell() {
+        // plain Rc without RefCell is not the shared-mutable pattern.
+        let v = grade(
+            "rc_refcell",
+            "use std::rc::Rc; fn main() { let _ = Rc::new(0); }",
+        );
+        assert!(!v.ok);
+        assert!(v.stderr.contains("RefCell"));
+    }
+    #[test]
+    fn weak_ref_pass_canonical() {
+        let src = "use std::rc::{Rc, Weak}; fn main() { let s = Rc::new(1); let w: Weak<i32> = Rc::downgrade(&s); let _ = w.upgrade(); }";
+        assert!(grade("weak_ref", src).ok);
+    }
+    #[test]
+    fn weak_ref_fail_no_upgrade() {
+        let v = grade(
+            "weak_ref",
+            "use std::rc::{Rc, Weak}; fn main() { let s = Rc::new(1); let _w: Weak<i32> = Rc::downgrade(&s); }",
+        );
+        assert!(!v.ok);
+        assert!(v.stderr.contains(".upgrade("));
     }
 }

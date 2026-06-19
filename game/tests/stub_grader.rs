@@ -436,6 +436,62 @@ fn main() {
     let _future = run();
 }"#
         }
+        // ── Act 8: Vault of Pointers (mirror of contract.rs).
+        "box_basic" => {
+            r#"struct Node {
+    value: i32,
+    next: Option<Box<Node>>,
+}
+fn main() {
+    let list = Node {
+        value: 1,
+        next: Some(Box::new(Node { value: 2, next: None })),
+    };
+    let _ = list;
+}"#
+        }
+        "rc_basic" => {
+            r#"use std::rc::Rc;
+fn main() {
+    let original = Rc::new(String::from("hoard"));
+    let shared = Rc::clone(&original);
+    let _ = (original, shared);
+}"#
+        }
+        "refcell" => {
+            r#"use std::cell::RefCell;
+fn main() {
+    let guarded = RefCell::new(0);
+    *guarded.borrow_mut() += 1;
+    let _ = guarded.borrow();
+}"#
+        }
+        "cell" => {
+            r#"use std::cell::Cell;
+fn main() {
+    let slot = Cell::new(1);
+    slot.set(5);
+    let _ = slot.get();
+}"#
+        }
+        "rc_refcell" => {
+            r#"use std::cell::RefCell;
+use std::rc::Rc;
+fn main() {
+    let shared = Rc::new(RefCell::new(0));
+    let clone = Rc::clone(&shared);
+    *clone.borrow_mut() += 1;
+    let _ = shared.borrow();
+}"#
+        }
+        "weak_ref" => {
+            r#"use std::rc::{Rc, Weak};
+fn main() {
+    let strong = Rc::new(5);
+    let weak: Weak<i32> = Rc::downgrade(&strong);
+    let _ = weak.upgrade();
+}"#
+        }
         _ => return None,
     })
 }

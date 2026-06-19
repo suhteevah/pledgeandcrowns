@@ -1294,6 +1294,151 @@ almanac and waits for a tide that hasn't come in yet.",
                 prereq: None,
                 starter_code: "fn main() {\n    // define an async function that doubles a number, and another that calls it and waits on the result\n    // (it won't actually run here without a runtime like tokio - that's expected)\n    let _ = ();\n}\n",
             },
+            // ── Act 8: The Vault of Pointers ──────────────────────────
+            // Box, Rc, RefCell, Cell, Rc<RefCell>, Weak. See
+            // design/01-curriculum.md §Act 8 and
+            // docs/superpowers/specs/2026-06-19-act8-vault-pointers-missions-design.md.
+            Mission {
+                id: "box_basic",
+                npc_name: "The Vaultwright",
+                prompt: "Use `Box<T>` to put a recursive `Node`'s child on the heap.",
+                tutorial: "## Concept\n\
+A `Box<T>` is the simplest smart pointer: it owns a single value stored on \
+the *heap* instead of the stack. The headline use is *recursive types* — a \
+`struct Node { next: Node }` has infinite size and won't compile, but \
+`next: Option<Box<Node>>` is fine: the `Box` is a fixed-size pointer, so the \
+type's size is known. `Box` is also how you store a value when you only have \
+a `dyn Trait` (unsized) or want to move a big value cheaply.\n\n\
+## Syntax\n\
+```\nstruct Node {\n    value: i32,\n    next: Option<Box<Node>>,\n}\nlet list = Node {\n    value: 1,\n    next: Some(Box::new(Node { value: 2, next: None })),\n};\n```\n\
+`Box::new(x)` moves `x` to the heap; the `Box` derefs to `x` transparently.\n\n\
+## Task\n\
+A `Node` is given with a non-recursive `next`. Make `next` an \
+`Option<Box<Node>>` and build a two-node list with `Box::new`.\n\n\
+## Hint\n\
+The grader needs `Box<` and `Box::new`. The Vaultwright builds a box on the \
+heap to hold what the stack cannot.",
+                prereq: None,
+                starter_code: "struct Node {\n    value: i32,\n    next: Option<i32>,\n}\n\nfn main() {\n    // make `next` able to hold another Node on the heap behind a pointer, then build a 2-node list\n    let _ = Node { value: 1, next: None };\n}\n",
+            },
+            Mission {
+                id: "rc_basic",
+                npc_name: "The Sharekeeper",
+                prompt: "Give two owners a shared `Rc` handle with `Rc::new` + `Rc::clone`.",
+                tutorial: "## Concept\n\
+`Rc<T>` (Reference Counted) lets *several* owners share one value on the \
+heap, in a single thread. Each `Rc::clone` bumps a count and hands out \
+another handle to the *same* allocation (it does NOT deep-copy the value); \
+when the last `Rc` drops, the value is freed. Use it for shared, read-mostly \
+data with no single clear owner — a graph node referenced from many places, \
+say. (`Arc` is the thread-safe version you met on the Coast.)\n\n\
+## Syntax\n\
+```\nuse std::rc::Rc;\nlet original = Rc::new(String::from(\"hoard\"));\nlet shared = Rc::clone(&original);   // count is now 2, same allocation\nprintln!(\"{}\", Rc::strong_count(&original));   // 2\n```\n\
+`Rc::clone(&x)` is the idiomatic spelling (cheap, makes the count bump \
+explicit) — prefer it over `x.clone()`.\n\n\
+## Task\n\
+Wrap a value in `Rc::new`, then make a second handle to it with `Rc::clone`.\n\n\
+## Hint\n\
+The grader needs `Rc::new` and `Rc::clone`. The Sharekeeper hands out claims \
+to one hoard — and keeps count.",
+                prereq: None,
+                starter_code: "fn main() {\n    // give two owners a shared, reference-counted handle to the same value (single-threaded)\n    let _ = String::from(\"hoard\");\n}\n",
+            },
+            Mission {
+                id: "refcell",
+                npc_name: "The Warden",
+                prompt: "Mutate through a shared reference with `RefCell` + `.borrow_mut()`.",
+                tutorial: "## Concept\n\
+Normally Rust enforces the borrow rules at *compile* time. `RefCell<T>` \
+moves that check to *runtime*: it lets you mutate the inner value through a \
+shared `&` reference (\"interior mutability\"). `.borrow()` hands out a shared \
+read guard, `.borrow_mut()` an exclusive write guard — and if you violate \
+the one-writer-XOR-many-readers rule at runtime, it *panics* instead of \
+failing to compile. Pair it with `Rc` for shared-mutable single-threaded \
+data.\n\n\
+## Syntax\n\
+```\nuse std::cell::RefCell;\nlet guarded = RefCell::new(0);\n*guarded.borrow_mut() += 1;   // exclusive write\nlet r = guarded.borrow();     // shared read\n```\n\
+The guards release when they drop; holding a `borrow_mut` while taking \
+another borrow panics.\n\n\
+## Task\n\
+Put a value in `RefCell::new`, then mutate it through `.borrow_mut()`.\n\n\
+## Hint\n\
+The grader needs `RefCell` and `.borrow_mut(`. The Warden lets you change \
+what's in the box — but checks the ledger as you do.",
+                prereq: None,
+                starter_code: "fn main() {\n    // hold a value you can mutate through a shared reference, with the borrow rules checked at runtime\n    let _ = 0;\n}\n",
+            },
+            Mission {
+                id: "cell",
+                npc_name: "The Swapwarden",
+                prompt: "Swap a `Copy` value through a shared reference with `Cell` + `.set()`.",
+                tutorial: "## Concept\n\
+`Cell<T>` is the simpler sibling of `RefCell`, for `Copy` types. It gives \
+interior mutability with no borrow guards and no runtime checks: you can't \
+get a reference *into* a `Cell`, only `.get()` a copy out or `.set()` / \
+`.replace()` a whole new value in. Because you never hold a reference to the \
+interior, there's nothing to check — it's cheaper than `RefCell` when the \
+value is small and `Copy`.\n\n\
+## Syntax\n\
+```\nuse std::cell::Cell;\nlet slot = Cell::new(1);\nslot.set(5);             // swap the whole value\nlet now = slot.get();    // copy it out: 5\n```\n\
+No `.borrow()` — `Cell` deals in whole values, not references.\n\n\
+## Task\n\
+Put a number in `Cell::new`, `.set()` a new value, then `.get()` it back.\n\n\
+## Hint\n\
+The grader needs `Cell::new` and `.set(`. The Swapwarden trades the whole \
+coin in the slot — no borrowing, just a swap.",
+                prereq: None,
+                starter_code: "fn main() {\n    // hold a single Copy value you can swap out through a shared reference (no borrow guard)\n    let _ = 1;\n}\n",
+            },
+            Mission {
+                id: "rc_refcell",
+                npc_name: "The Strongbox",
+                prompt: "Combine `Rc<RefCell<T>>` for shared *and* mutable single-thread data.",
+                tutorial: "## Concept\n\
+`Rc` gives shared ownership but only immutable access; `RefCell` gives \
+interior mutability but a single owner. Compose them — `Rc<RefCell<T>>` — \
+and you get the workhorse pattern for single-threaded shared-mutable state: \
+clone the `Rc` to every owner, and any of them can `.borrow_mut()` the \
+shared value. It's how you build mutable graphs, shared caches, and \
+observer lists without threads. (Across threads, the analogue is \
+`Arc<Mutex<T>>`.)\n\n\
+## Syntax\n\
+```\nuse std::cell::RefCell;\nuse std::rc::Rc;\nlet shared = Rc::new(RefCell::new(0));\nlet clone = Rc::clone(&shared);   // both point at the same RefCell\n*clone.borrow_mut() += 1;          // ...and either can mutate it\n```\n\
+The `Rc` shares the allocation; the `RefCell` guards the mutation.\n\n\
+## Task\n\
+Build an `Rc::new(RefCell::new(...))`, clone the `Rc`, and mutate the value \
+through `.borrow_mut()` on the clone.\n\n\
+## Hint\n\
+The grader needs `Rc::new`, `RefCell`, and `.borrow_mut(`. The Strongbox: \
+many keys to one box, and the box can be opened and changed.",
+                prereq: None,
+                starter_code: "fn main() {\n    // make a value that several owners share AND can mutate (the single-threaded shared-mutable pattern)\n    let _ = 0;\n}\n",
+            },
+            Mission {
+                id: "weak_ref",
+                npc_name: "The Ghostkeeper",
+                prompt: "Make a non-owning `Weak` reference with `Rc::downgrade`, then `.upgrade()`.",
+                tutorial: "## Concept\n\
+Two `Rc`s pointing at each other would never reach count 0 — a *reference \
+cycle* that leaks. `Weak<T>` breaks it: it's a non-owning handle to an `Rc`'s \
+value that does NOT keep it alive. You make one with `Rc::downgrade(&rc)`. \
+Because the value might already be gone, you can't use a `Weak` directly — \
+you call `.upgrade()`, which returns `Option<Rc<T>>`: `Some` if the value's \
+still alive, `None` if it's been dropped. Use `Weak` for back-pointers \
+(child → parent) so the parent owns the child, not vice versa.\n\n\
+## Syntax\n\
+```\nuse std::rc::{Rc, Weak};\nlet strong = Rc::new(5);\nlet weak: Weak<i32> = Rc::downgrade(&strong);   // doesn't bump the strong count\nif let Some(rc) = weak.upgrade() { /* still alive */ }\n```\n\
+`downgrade` creates the weak handle; `upgrade` safely tries to reclaim a \
+strong one.\n\n\
+## Task\n\
+From an `Rc`, make a `Weak` with `Rc::downgrade`, then try to access it with \
+`.upgrade()`.\n\n\
+## Hint\n\
+The grader needs `Weak`, `downgrade`, and `.upgrade(`. The Ghostkeeper holds \
+a tether to a hoard that may already have vanished.",
+                prereq: None,
+                starter_code: "fn main() {\n    // make a non-owning handle to an Rc value (one that won't keep it alive, and might find it gone), then try to access it\n    let _ = ();\n}\n",
+            },
         ];
         // Strict-linear progression: each mission's prereq is the one
         // listed immediately before it. Shape decision logged in HANDOFF

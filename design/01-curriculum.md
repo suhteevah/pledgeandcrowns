@@ -233,6 +233,8 @@ When the player finally passes, the Checker bows: "You may cross. The Old Tongue
 
 **Estimated playtime:** 4 hours.
 
+**Code status (2026-06-19).** The Act 8 *concepts* ship as 6 missions (`Arc` was already covered by Act 7's `arc_mutex`): `box_basic` (The Vaultwright), `rc_basic` (The Sharekeeper), `refcell` (The Warden), `cell` (The Swapwarden), `rc_refcell` (The Strongbox), `weak_ref` (The Ghostkeeper). Design: `docs/superpowers/specs/2026-06-19-act8-vault-pointers-missions-design.md`.
+
 ---
 
 # Act 9 — The Forbidden Library

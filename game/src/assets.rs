@@ -102,6 +102,17 @@ pub const SPRITE_TIDEWATCH: &str = "sprites/npc/tidewatch_idle_0.png";
 pub const SPRITE_HARBORMASTER: &str = "sprites/npc/harbormaster_idle_0.png";
 pub const SPRITE_TIDEFORECASTER: &str = "sprites/npc/tideforecaster_idle_0.png";
 
+// NPC batch 10 (2026-06-19) — Act 8 Vault of Pointers: Vaultwright, Sharekeeper,
+// Warden, Swapwarden, Strongbox, Ghostkeeper. Sources:
+// design/art/refs/ref-60..65-*.jsx, rendered via `cargo run -p render-refs`.
+// First-pass, pending Matt's art review.
+pub const SPRITE_VAULTWRIGHT: &str = "sprites/npc/vaultwright_idle_0.png";
+pub const SPRITE_SHAREKEEPER: &str = "sprites/npc/sharekeeper_idle_0.png";
+pub const SPRITE_WARDEN: &str = "sprites/npc/warden_idle_0.png";
+pub const SPRITE_SWAPWARDEN: &str = "sprites/npc/swapwarden_idle_0.png";
+pub const SPRITE_STRONGBOX: &str = "sprites/npc/strongbox_idle_0.png";
+pub const SPRITE_GHOSTKEEPER: &str = "sprites/npc/ghostkeeper_idle_0.png";
+
 // Audio (Stable Audio Open generated, baked via tools/synthwave-gen).
 // Generation is a Matt-action: `powershell -ExecutionPolicy Bypass
 // -File scripts/synthwave-gen.ps1`. Files may be absent during early
@@ -182,4 +193,10 @@ pub const ALL_SPRITE_PATHS: &[&str] = &[
     SPRITE_TIDEWATCH,
     SPRITE_HARBORMASTER,
     SPRITE_TIDEFORECASTER,
+    SPRITE_VAULTWRIGHT,
+    SPRITE_SHAREKEEPER,
+    SPRITE_WARDEN,
+    SPRITE_SWAPWARDEN,
+    SPRITE_STRONGBOX,
+    SPRITE_GHOSTKEEPER,
 ];

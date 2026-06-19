@@ -229,6 +229,12 @@ Refs landed against the bible. Source `.jsx` lives at `design/art/refs/ref-NN-<s
 | 57 | The Tidewatch | 32×32 | ref-57-tidewatch.jsx | specs/tidewatch.md | `sprites/npc/tidewatch_idle_0.png` |
 | 58 | The Harbormaster | 32×32 | ref-58-harbormaster.jsx | specs/harbormaster.md | `sprites/npc/harbormaster_idle_0.png` |
 | 59 | The Tideforecaster | 32×32 | ref-59-tideforecaster.jsx | specs/tideforecaster.md | `sprites/npc/tideforecaster_idle_0.png` |
+| 60 | The Vaultwright | 32×32 | ref-60-vaultwright.jsx | specs/vaultwright.md | `sprites/npc/vaultwright_idle_0.png` |
+| 61 | The Sharekeeper | 32×32 | ref-61-sharekeeper.jsx | specs/sharekeeper.md | `sprites/npc/sharekeeper_idle_0.png` |
+| 62 | The Warden | 32×32 | ref-62-warden.jsx | specs/warden.md | `sprites/npc/warden_idle_0.png` |
+| 63 | The Swapwarden | 32×32 | ref-63-swapwarden.jsx | specs/swapwarden.md | `sprites/npc/swapwarden_idle_0.png` |
+| 64 | The Strongbox | 32×32 | ref-64-strongbox.jsx | specs/strongbox.md | `sprites/npc/strongbox_idle_0.png` |
+| 65 | The Ghostkeeper | 32×32 | ref-65-ghostkeeper.jsx | specs/ghostkeeper.md | `sprites/npc/ghostkeeper_idle_0.png` |
 
 **NPC batches landed:**
 - Batch 1 (2026-05-02) — REF-11..15: Smith, Cartographer, Trait Mage, Bellringer, Cooper. Specs in `design/art/specs/`. Replaces SPRITE_PLAYER placeholders for the corresponding entries in `NPC_ROSTER`.
@@ -240,8 +246,9 @@ Refs landed against the bible. Source `.jsx` lives at `design/art/refs/ref-NN-<s
 - Batch 7 (2026-06-18) — REF-42..47: Barkeep, Bouncer, Interpreter, Mixologist, Tabkeeper, Cellarer. The Act 5 Tavern of Tribulations cast (missions `result_match`/`custom_error`/`from_error`/`option_map`/`and_then`/`unwrap_or_else`). Tavern folk — no magic violet; gold-ramp ale/props. First-pass. Pending art review.
 - Batch 8 (2026-06-18) — REF-48..53: Keymaster, Sifter, Smelter, Tallywright, Riveter, Bondsmith. The Act 6 Iterator Forge cast (missions `hashmap_basic`/`iter_filter`/`iter_fold`/`iter_enumerate`/`iter_zip`/`closure_move`). Forge/craft folk — no magic violet; gold/bronze forge props, a molten-metal glow. First-pass. Pending art review.
 - Batch 9 (2026-06-18) — REF-54..59: Dockmaster, Lighthouse Keeper, Signaler, Tidewatch, Harbormaster, Tideforecaster. The Act 7 Concurrent Coast cast (missions `thread_spawn`/`arc_mutex`/`mpsc_channel`/`atomic`/`thread_scope`/`async_fn`). Maritime folk — teal/cobalt sea accents encouraged (the one zone where the cool ramp is on-theme), no magic violet. First-pass. Pending art review.
+- Batch 10 (2026-06-19) — REF-60..65: Vaultwright, Sharekeeper, Warden, Swapwarden, Strongbox, Ghostkeeper. The Act 8 Vault of Pointers cast (missions `box_basic`/`rc_basic`/`refcell`/`cell`/`rc_refcell`/`weak_ref`). Vault/treasury folk — gold-ramp chests/locks/keys; the Ghostkeeper (weak ref) uses a faded/cobalt translucent treatment to read as non-owning. First-pass. Pending art review.
 
-**Remaining placeholders:** none — all 51 NPCs (Acts 1–7 cast) carry distinct art. See `game/src/plugins/npc.rs` for live truth.
+**Remaining placeholders:** none — all 57 NPCs (Acts 1–8 cast) carry distinct art. See `game/src/plugins/npc.rs` for live truth.
 
 ## 10. Revision history
 

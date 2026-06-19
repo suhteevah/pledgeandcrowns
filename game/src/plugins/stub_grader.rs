@@ -707,6 +707,84 @@ pub fn stub_verdict(encounter_id: &str, source: &str) -> Option<StubVerdict> {
                 )
             }
         }
+        // ── Act 8 (Vault of Pointers). Flavor MUST stay byte-identical to
+        // compile-api/src/grader.rs.
+        "box_basic" => {
+            if !source.contains("Box<") {
+                StubVerdict::fail("the Vaultwright waits — missing required: `Box<...>`")
+            } else if !source.contains("Box::new") {
+                StubVerdict::fail(
+                    "the Vaultwright waits — put the value on the heap with `Box::new`",
+                )
+            } else {
+                StubVerdict::pass(
+                    "the Vaultwright seals the box. \"on the heap it holds what the stack cannot.\"",
+                )
+            }
+        }
+        "rc_basic" => {
+            if !source.contains("Rc::new") {
+                StubVerdict::fail("the Sharekeeper waits — missing required: `Rc::new`")
+            } else if !source.contains("Rc::clone") {
+                StubVerdict::fail(
+                    "the Sharekeeper waits — hand out a second handle with `Rc::clone`",
+                )
+            } else {
+                StubVerdict::pass(
+                    "the Sharekeeper tallies the claims. \"one hoard, many holders.\"",
+                )
+            }
+        }
+        "refcell" => {
+            if !source.contains("RefCell") {
+                StubVerdict::fail("the Warden waits — missing required: `RefCell`")
+            } else if !source.contains(".borrow_mut(") {
+                StubVerdict::fail("the Warden waits — mutate the inner value with `.borrow_mut(`")
+            } else {
+                StubVerdict::pass(
+                    "the Warden checks the ledger. \"changed within — by the runtime's leave.\"",
+                )
+            }
+        }
+        "cell" => {
+            if !source.contains("Cell::new") {
+                StubVerdict::fail("the Swapwarden waits — missing required: `Cell::new`")
+            } else if !source.contains(".set(") {
+                StubVerdict::fail("the Swapwarden waits — swap the whole value with `.set(`")
+            } else {
+                StubVerdict::pass(
+                    "the Swapwarden trades the coin. \"the whole value, swapped clean.\"",
+                )
+            }
+        }
+        "rc_refcell" => {
+            if !source.contains("Rc::new") {
+                StubVerdict::fail("the Strongbox waits — share ownership with `Rc::new`")
+            } else if !source.contains("RefCell") {
+                StubVerdict::fail("the Strongbox waits — make it mutable inside with `RefCell`")
+            } else if !source.contains(".borrow_mut(") {
+                StubVerdict::fail("the Strongbox waits — open and change it via `.borrow_mut(`")
+            } else {
+                StubVerdict::pass(
+                    "the Strongbox turns the keys. \"many owners, and the box still opens.\"",
+                )
+            }
+        }
+        "weak_ref" => {
+            if !source.contains("Weak") {
+                StubVerdict::fail("the Ghostkeeper waits — missing required: a `Weak` reference")
+            } else if !source.contains("downgrade") {
+                StubVerdict::fail(
+                    "the Ghostkeeper waits — make the weak handle with `Rc::downgrade`",
+                )
+            } else if !source.contains(".upgrade(") {
+                StubVerdict::fail("the Ghostkeeper waits — reclaim it (or not) with `.upgrade(`")
+            } else {
+                StubVerdict::pass(
+                    "the Ghostkeeper tugs the tether. \"a hold that holds nothing alive.\"",
+                )
+            }
+        }
         _ => return None,
     };
     Some(v)
