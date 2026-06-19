@@ -339,6 +339,53 @@ fn main() {
     let _ = value(None);
 }"#
         }
+        // ── Act 6: Iterator Forge.
+        "hashmap_basic" => {
+            r#"use std::collections::HashMap;
+fn main() {
+    let mut scores = HashMap::new();
+    scores.insert("ace", 1);
+    let _ = scores.get("ace");
+}"#
+        }
+        "iter_filter" => {
+            r#"fn main() {
+    let v = vec![1, 2, 3, 4];
+    let evens: Vec<&i32> = v.iter().filter(|x| **x % 2 == 0).collect();
+    let _ = evens;
+}"#
+        }
+        "iter_fold" => {
+            r#"fn main() {
+    let v = vec![1, 2, 3];
+    let total = v.iter().fold(0, |acc, x| acc + x);
+    let _ = total;
+}"#
+        }
+        "iter_enumerate" => {
+            r#"fn main() {
+    let v = vec![10, 20, 30];
+    for (i, x) in v.iter().enumerate() {
+        let _ = (i, x);
+    }
+}"#
+        }
+        "iter_zip" => {
+            r#"fn main() {
+    let a = vec![1, 2];
+    let b = vec![3, 4];
+    for (x, y) in a.iter().zip(b.iter()) {
+        let _ = (x, y);
+    }
+}"#
+        }
+        "closure_move" => {
+            r#"fn main() {
+    let name = String::from("Garin");
+    let greet = move || println!("hail, {name}");
+    greet();
+}"#
+        }
         _ => return None,
     })
 }

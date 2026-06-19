@@ -543,6 +543,62 @@ pub fn grade(encounter_id: &str, source: &str) -> Verdict {
                 )
             }
         }
+        // ── Act 6 (Iterator Forge): collections, iterator adapters,
+        // closure capture.
+        "hashmap_basic" => {
+            if !source.contains("HashMap") {
+                Verdict::fail("the Keymaster waits — missing required: `HashMap`")
+            } else if !source.contains(".insert(") {
+                Verdict::fail("the Keymaster waits — store a value with `.insert(`")
+            } else if !source.contains(".get(") {
+                Verdict::fail("the Keymaster waits — look it up with `.get(`")
+            } else {
+                Verdict::pass("the Keymaster turns the ring. \"every store under its own key.\"")
+            }
+        }
+        "iter_filter" => {
+            if !source.contains(".filter(") {
+                Verdict::fail("the Sifter shakes the screen — missing required: `.filter(`")
+            } else if !source.contains(".collect") {
+                Verdict::fail("the Sifter shakes the screen — gather the survivors with `.collect`")
+            } else {
+                Verdict::pass(
+                    "the Sifter shakes the screen. \"only what fits the mesh falls through.\"",
+                )
+            }
+        }
+        "iter_fold" => {
+            if !source.contains(".fold(") {
+                Verdict::fail("the Smelter waits — missing required: `.fold(`")
+            } else {
+                Verdict::pass("the Smelter tips the crucible. \"many ores, one ingot.\"")
+            }
+        }
+        "iter_enumerate" => {
+            if !source.contains(".enumerate(") {
+                Verdict::fail("the Tallywright waits — missing required: `.enumerate(`")
+            } else {
+                Verdict::pass(
+                    "the Tallywright stamps the row. \"each item numbered as it passes.\"",
+                )
+            }
+        }
+        "iter_zip" => {
+            if !source.contains(".zip(") {
+                Verdict::fail("the Riveter waits — missing required: `.zip(`")
+            } else {
+                Verdict::pass("the Riveter drives the rivet. \"two plates, aligned pair by pair.\"")
+            }
+        }
+        "closure_move" => {
+            if !source.contains("move |") {
+                Verdict::fail(
+                    "the Bondsmith waits — missing required: a `move` closure (`move |...|`)",
+                )
+            } else {
+                Verdict::pass("the Bondsmith seals the charge. \"owned, and carried where I go.\"")
+            }
+        }
         _ => Verdict::pass(format!(
             "[freeform] received {} bytes. encounter `{encounter_id}` has no grader yet.",
             source.len()
@@ -1597,5 +1653,91 @@ fn name(d: Direction) -> &'static str {
         );
         assert!(!v.ok);
         assert!(v.stderr.contains(".unwrap_or_else("));
+    }
+
+    // ── Act 6: Iterator Forge ─────────────────────────────────────
+    #[test]
+    fn hashmap_basic_pass_canonical() {
+        let src = "use std::collections::HashMap; fn main() { let mut m = HashMap::new(); m.insert(1, 2); let _ = m.get(&1); }";
+        assert!(grade("hashmap_basic", src).ok);
+    }
+    #[test]
+    fn hashmap_basic_fail_no_hashmap() {
+        let v = grade("hashmap_basic", "fn main() { let _ = (); }");
+        assert!(!v.ok);
+        assert!(v.stderr.contains("HashMap"));
+    }
+    #[test]
+    fn iter_filter_pass_canonical() {
+        let src = "fn main() { let v = vec![1, 2]; let _: Vec<&i32> = v.iter().filter(|x| **x > 0).collect(); }";
+        assert!(grade("iter_filter", src).ok);
+    }
+    #[test]
+    fn iter_filter_fail_no_filter() {
+        let v = grade(
+            "iter_filter",
+            "fn main() { let v = vec![1]; let _: Vec<&i32> = v.iter().collect(); }",
+        );
+        assert!(!v.ok);
+        assert!(v.stderr.contains(".filter("));
+    }
+    #[test]
+    fn iter_fold_pass_canonical() {
+        let src = "fn main() { let v = vec![1, 2]; let _ = v.iter().fold(0, |a, x| a + x); }";
+        assert!(grade("iter_fold", src).ok);
+    }
+    #[test]
+    fn iter_fold_fail_used_sum() {
+        let v = grade(
+            "iter_fold",
+            "fn main() { let v = vec![1]; let _: i32 = v.iter().sum(); }",
+        );
+        assert!(!v.ok);
+        assert!(v.stderr.contains(".fold("));
+    }
+    #[test]
+    fn iter_enumerate_pass_canonical() {
+        let src =
+            "fn main() { let v = vec![1]; for (i, x) in v.iter().enumerate() { let _ = (i, x); } }";
+        assert!(grade("iter_enumerate", src).ok);
+    }
+    #[test]
+    fn iter_enumerate_fail_no_enumerate() {
+        let v = grade(
+            "iter_enumerate",
+            "fn main() { let v = vec![1]; for x in v.iter() { let _ = x; } }",
+        );
+        assert!(!v.ok);
+        assert!(v.stderr.contains(".enumerate("));
+    }
+    #[test]
+    fn iter_zip_pass_canonical() {
+        let src = "fn main() { let a = vec![1]; let b = vec![2]; for (x, y) in a.iter().zip(b.iter()) { let _ = (x, y); } }";
+        assert!(grade("iter_zip", src).ok);
+    }
+    #[test]
+    fn iter_zip_fail_no_zip() {
+        let v = grade(
+            "iter_zip",
+            "fn main() { let a = vec![1]; let _ = a.iter(); }",
+        );
+        assert!(!v.ok);
+        assert!(v.stderr.contains(".zip("));
+    }
+    #[test]
+    fn closure_move_pass_canonical() {
+        let src =
+            "fn main() { let s = String::from(\"x\"); let f = move || { let _ = &s; }; f(); }";
+        assert!(grade("closure_move", src).ok);
+    }
+    #[test]
+    fn closure_move_fail_borrowing_closure() {
+        // a plain (non-move) closure must NOT satisfy this.
+        let v = grade(
+            "closure_move",
+            "fn main() { let f = |a: i32| a + 1; let _ = f(1); }",
+        );
+        assert!(!v.ok);
+        assert!(v.stderr.contains("move"));
     }
 }

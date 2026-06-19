@@ -217,6 +217,12 @@ Refs landed against the bible. Source `.jsx` lives at `design/art/refs/ref-NN-<s
 | 45 | The Mixologist | 32×32 | ref-45-mixologist.jsx | specs/mixologist.md | `sprites/npc/mixologist_idle_0.png` |
 | 46 | The Tabkeeper | 32×32 | ref-46-tabkeeper.jsx | specs/tabkeeper.md | `sprites/npc/tabkeeper_idle_0.png` |
 | 47 | The Cellarer | 32×32 | ref-47-cellarer.jsx | specs/cellarer.md | `sprites/npc/cellarer_idle_0.png` |
+| 48 | The Keymaster | 32×32 | ref-48-keymaster.jsx | specs/keymaster.md | `sprites/npc/keymaster_idle_0.png` |
+| 49 | The Sifter | 32×32 | ref-49-sifter.jsx | specs/sifter.md | `sprites/npc/sifter_idle_0.png` |
+| 50 | The Smelter | 32×32 | ref-50-smelter.jsx | specs/smelter.md | `sprites/npc/smelter_idle_0.png` |
+| 51 | The Tallywright | 32×32 | ref-51-tallywright.jsx | specs/tallywright.md | `sprites/npc/tallywright_idle_0.png` |
+| 52 | The Riveter | 32×32 | ref-52-riveter.jsx | specs/riveter.md | `sprites/npc/riveter_idle_0.png` |
+| 53 | The Bondsmith | 32×32 | ref-53-bondsmith.jsx | specs/bondsmith.md | `sprites/npc/bondsmith_idle_0.png` |
 
 **NPC batches landed:**
 - Batch 1 (2026-05-02) — REF-11..15: Smith, Cartographer, Trait Mage, Bellringer, Cooper. Specs in `design/art/specs/`. Replaces SPRITE_PLAYER placeholders for the corresponding entries in `NPC_ROSTER`.
@@ -226,8 +232,9 @@ Refs landed against the bible. Source `.jsx` lives at `design/art/refs/ref-NN-<s
 - Batch 5 (2026-06-18) — REF-30..35: Guildmaster, Recruiter, Locksmith, Porter, Surveyor, Armorer. The Act 3 Guildhall Quarter cast (missions `impl_method`/`assoc_new`/`if_let`/`while_let`/`tuple_struct`/`enum_data_match`). First-pass; Locksmith/Porter/Armorer flagged rougher. Pending art review.
 - Batch 6 (2026-06-18) — REF-36..41: Vexis the Archmage, Wandwright, Conjurer, Familiar, Lanternkeeper, Loremaster. The Act 4 Trait Mage's Tower cast (missions `trait_def`/`generic_fn`/`generic_struct`/`dyn_trait`/`lifetimes`/`assoc_type`). The three mages use a small magic-violet accent (orb/flame) verified under the 5% bible cap (vexis 21px, conjurer 18px, lanternkeeper 9px of 51 max); the Familiar's caged creature carries a teal+forest element-clash accent (fits `Box<dyn Trait>`). First-pass; Lanternkeeper/Loremaster flagged rougher. Pending art review.
 - Batch 7 (2026-06-18) — REF-42..47: Barkeep, Bouncer, Interpreter, Mixologist, Tabkeeper, Cellarer. The Act 5 Tavern of Tribulations cast (missions `result_match`/`custom_error`/`from_error`/`option_map`/`and_then`/`unwrap_or_else`). Tavern folk — no magic violet; gold-ramp ale/props. First-pass. Pending art review.
+- Batch 8 (2026-06-18) — REF-48..53: Keymaster, Sifter, Smelter, Tallywright, Riveter, Bondsmith. The Act 6 Iterator Forge cast (missions `hashmap_basic`/`iter_filter`/`iter_fold`/`iter_enumerate`/`iter_zip`/`closure_move`). Forge/craft folk — no magic violet; gold/bronze forge props, a molten-metal glow. First-pass. Pending art review.
 
-**Remaining placeholders:** none — all 39 NPCs (Acts 1–5 cast) carry distinct art. See `game/src/plugins/npc.rs` for live truth.
+**Remaining placeholders:** none — all 45 NPCs (Acts 1–6 cast) carry distinct art. See `game/src/plugins/npc.rs` for live truth.
 
 ## 10. Revision history
 

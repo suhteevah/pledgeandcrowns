@@ -81,6 +81,16 @@ pub const SPRITE_MIXOLOGIST: &str = "sprites/npc/mixologist_idle_0.png";
 pub const SPRITE_TABKEEPER: &str = "sprites/npc/tabkeeper_idle_0.png";
 pub const SPRITE_CELLARER: &str = "sprites/npc/cellarer_idle_0.png";
 
+// NPC batch 8 (2026-06-18) — Act 6 Iterator Forge: Keymaster, Sifter, Smelter,
+// Tallywright, Riveter, Bondsmith. Sources: design/art/refs/ref-48..53-*.jsx,
+// rendered via `cargo run -p render-refs`. First-pass, pending Matt's art review.
+pub const SPRITE_KEYMASTER: &str = "sprites/npc/keymaster_idle_0.png";
+pub const SPRITE_SIFTER: &str = "sprites/npc/sifter_idle_0.png";
+pub const SPRITE_SMELTER: &str = "sprites/npc/smelter_idle_0.png";
+pub const SPRITE_TALLYWRIGHT: &str = "sprites/npc/tallywright_idle_0.png";
+pub const SPRITE_RIVETER: &str = "sprites/npc/riveter_idle_0.png";
+pub const SPRITE_BONDSMITH: &str = "sprites/npc/bondsmith_idle_0.png";
+
 // Audio (Stable Audio Open generated, baked via tools/synthwave-gen).
 // Generation is a Matt-action: `powershell -ExecutionPolicy Bypass
 // -File scripts/synthwave-gen.ps1`. Files may be absent during early
@@ -149,4 +159,10 @@ pub const ALL_SPRITE_PATHS: &[&str] = &[
     SPRITE_MIXOLOGIST,
     SPRITE_TABKEEPER,
     SPRITE_CELLARER,
+    SPRITE_KEYMASTER,
+    SPRITE_SIFTER,
+    SPRITE_SMELTER,
+    SPRITE_TALLYWRIGHT,
+    SPRITE_RIVETER,
+    SPRITE_BONDSMITH,
 ];

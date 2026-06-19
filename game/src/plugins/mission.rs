@@ -1008,6 +1008,145 @@ a fresh cask only when the old one runs dry.",
                 prereq: None,
                 starter_code: "fn value(o: Option<i32>) -> i32 {\n    // unwrap the option, computing the fallback lazily with a closure (only if needed)\n    let _ = o;\n    0\n}\n\nfn main() {\n    let _ = value(None);\n}\n",
             },
+            // ── Act 6: The Iterator Forge ─────────────────────────────
+            // Collections (HashMap), iterator adapters, closure capture.
+            // See design/01-curriculum.md §Act 6 and
+            // docs/superpowers/specs/2026-06-18-act6-iterator-forge-missions-design.md.
+            Mission {
+                id: "hashmap_basic",
+                npc_name: "The Keymaster",
+                prompt: "Store a value under a key in a `HashMap`, then look it up.",
+                tutorial: "## Concept\n\
+A `HashMap<K, V>` stores values keyed by a lookup key — Rust's analogue of \
+a Python `dict` or JS object/Map. Unlike `Vec`, it lives in \
+`std::collections`, so you `use` it first. `.insert(k, v)` adds or \
+replaces; `.get(&k)` returns an `Option<&V>` (the key might be absent — the \
+type system makes you handle that).\n\n\
+## Syntax\n\
+```\nuse std::collections::HashMap;\nlet mut m = HashMap::new();\nm.insert(\"ace\", 1);\nlet score = m.get(\"ace\");   // Some(&1)\n```\n\
+The map's `K`/`V` types are inferred from the first `insert`. `.get` borrows \
+the key; it returns `None` for a missing one.\n\n\
+## Task\n\
+Bring `HashMap` into scope, build one, `insert` a value under a string key, \
+then `get` it back.\n\n\
+## Hint\n\
+The grader needs `HashMap`, `.insert(`, and `.get(`. The Keymaster files \
+every store under its own key.",
+                prereq: None,
+                starter_code: "fn main() {\n    // store a value under a string key in a map, then look it up by that key\n    let _ = ();\n}\n",
+            },
+            Mission {
+                id: "iter_filter",
+                npc_name: "The Sifter",
+                prompt: "Keep only the even numbers with `.filter()`, then `.collect()`.",
+                tutorial: "## Concept\n\
+`.filter(pred)` is the iterator adapter that keeps only the elements for \
+which the predicate returns `true`, dropping the rest. Like `.map`, it's \
+lazy — nothing happens until a consumer like `.collect` or a `for` loop \
+drives it. The predicate is a closure receiving a *reference* to each \
+element.\n\n\
+## Syntax\n\
+```\nlet v = vec![1, 2, 3, 4];\nlet evens: Vec<&i32> = v.iter()\n    .filter(|x| **x % 2 == 0)\n    .collect();\n```\n\
+`.iter()` yields `&i32`, and `.filter`'s closure gets a `&&i32`, so you \
+deref twice (`**x`) to compare the value.\n\n\
+## Task\n\
+Build a `Vec<i32>`, then keep only the even elements with `.filter` and \
+gather the survivors with `.collect`.\n\n\
+## Hint\n\
+The grader needs `.filter(` and `.collect`. The Sifter shakes the screen — \
+only what fits the mesh falls through.",
+                prereq: None,
+                starter_code: "fn main() {\n    let v = vec![1, 2, 3, 4];\n    // keep only the even numbers, gathering the survivors into a new collection\n    let _ = &v;\n}\n",
+            },
+            Mission {
+                id: "iter_fold",
+                npc_name: "The Smelter",
+                prompt: "Reduce a `Vec` to a single total with `.fold(0, |acc, x| …)`.",
+                tutorial: "## Concept\n\
+`.fold(init, f)` is the general reducer: it threads an *accumulator* \
+through the iterator, starting from `init` and combining each element via \
+the closure `|acc, x| ...`, returning the final accumulator. `.sum()` and \
+`.product()` are special cases of fold; reach for `fold` when the \
+combination is custom (min, max-by, building a string, …).\n\n\
+## Syntax\n\
+```\nlet v = vec![1, 2, 3];\nlet total = v.iter().fold(0, |acc, x| acc + x);  // 6\nlet joined = v.iter().fold(String::new(), |s, x| s + &x.to_string());\n```\n\
+The accumulator's type is whatever `init` is; each step returns the next \
+accumulator.\n\n\
+## Task\n\
+Build a `Vec<i32>` and reduce it to its sum with `.fold` (not `.sum()` — \
+this mission is about fold).\n\n\
+## Hint\n\
+The grader needs `.fold(`. The Smelter pours many ores into one crucible — \
+one ingot comes out.",
+                prereq: None,
+                starter_code: "fn main() {\n    let v = vec![1, 2, 3];\n    // reduce the vec to a single total by accumulating across it (don't use .sum())\n    let _ = &v;\n}\n",
+            },
+            Mission {
+                id: "iter_enumerate",
+                npc_name: "The Tallywright",
+                prompt: "Iterate with `.enumerate()` to get each item's index alongside it.",
+                tutorial: "## Concept\n\
+`.enumerate()` adapts an iterator of `T` into an iterator of `(usize, T)` — \
+each element paired with its position, starting at 0. It's the idiomatic \
+way to get an index in a `for` loop without a manual counter. Destructure \
+the tuple in the loop pattern: `for (i, x) in ...`.\n\n\
+## Syntax\n\
+```\nlet v = vec![10, 20, 30];\nfor (i, x) in v.iter().enumerate() {\n    println!(\"{i}: {x}\");   // 0: 10, 1: 20, 2: 30\n}\n```\n\
+The index is a `usize`; `x` is whatever the underlying iterator yielded \
+(here `&i32`).\n\n\
+## Task\n\
+Walk a `Vec` with `.enumerate()` and a `for (i, x)` pattern so each step \
+has both the position and the value.\n\n\
+## Hint\n\
+The grader needs `.enumerate(`. The Tallywright numbers every item as it \
+passes the bench.",
+                prereq: None,
+                starter_code: "fn main() {\n    let v = vec![10, 20, 30];\n    // walk the vec so each step gives you both the position and the value\n    let _ = &v;\n}\n",
+            },
+            Mission {
+                id: "iter_zip",
+                npc_name: "The Riveter",
+                prompt: "Pair two `Vec`s element-by-element with `.zip()`.",
+                tutorial: "## Concept\n\
+`.zip(other)` walks two iterators in lockstep, yielding pairs \
+`(a, b)` until the *shorter* one runs out. It's how you process two \
+sequences together — names with scores, keys with values, this row with \
+that row. The result is an iterator of tuples you can `for`-destructure, \
+`map` over, or `collect`.\n\n\
+## Syntax\n\
+```\nlet a = vec![1, 2];\nlet b = vec![3, 4];\nfor (x, y) in a.iter().zip(b.iter()) {\n    println!(\"{x},{y}\");   // 1,3  then  2,4\n}\n```\n\
+If the vecs differ in length, `zip` stops at the shorter — no panic.\n\n\
+## Task\n\
+Build two `Vec`s and walk them together with `.zip()`, pairing the nth of \
+one with the nth of the other.\n\n\
+## Hint\n\
+The grader needs `.zip(`. The Riveter joins two plates rivet by rivet — \
+aligned, pair by pair.",
+                prereq: None,
+                starter_code: "fn main() {\n    let a = vec![1, 2];\n    let b = vec![3, 4];\n    // walk both vecs together, pairing the nth of one with the nth of the other\n    let _ = (&a, &b);\n}\n",
+            },
+            Mission {
+                id: "closure_move",
+                npc_name: "The Bondsmith",
+                prompt: "Capture a value by value into a `move` closure, then call it.",
+                tutorial: "## Concept\n\
+A closure normally *borrows* the variables it captures. Prefix it with \
+`move` and it takes them *by value* instead — the closure owns its \
+captures. This is essential when the closure outlives the current scope \
+(returned from a function, or `spawn`ed onto a thread): the data has to \
+move with it, not be borrowed from a stack frame that's about to vanish.\n\n\
+## Syntax\n\
+```\nlet name = String::from(\"Garin\");\nlet greet = move || println!(\"hail, {name}\");\ngreet();   // `name` was moved into `greet`\n// `name` is no longer usable here — the closure owns it\n```\n\
+Without `move`, `greet` would borrow `name`; with `move`, it owns it.\n\n\
+## Task\n\
+Bind a `String`, then make a `move` closure that captures it by value and \
+prints it, and call the closure.\n\n\
+## Hint\n\
+The grader needs a `move` closure — the literal `move |`. The Bondsmith \
+seals the charge into himself; it travels where he goes.",
+                prereq: None,
+                starter_code: "fn main() {\n    let name = String::from(\"Garin\");\n    // capture `name` BY VALUE into a closure (so the closure owns it), then call it\n    let _ = &name;\n}\n",
+            },
         ];
         // Strict-linear progression: each mission's prereq is the one
         // listed immediately before it. Shape decision logged in HANDOFF

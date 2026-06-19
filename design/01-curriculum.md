@@ -185,6 +185,8 @@ When the player finally passes, the Checker bows: "You may cross. The Old Tongue
 
 **Estimated playtime:** 3.5 hours.
 
+**Code status (2026-06-18).** The Act 6 *concepts* the prelude skipped ship as 6 missions (the prelude already had `vec_iter`/`iter_map_collect`/`closure_basic`): `hashmap_basic` (The Keymaster), `iter_filter` (The Sifter), `iter_fold` (The Smelter), `iter_enumerate` (The Tallywright), `iter_zip` (The Riveter), `closure_move` (The Bondsmith). Design: `docs/superpowers/specs/2026-06-18-act6-iterator-forge-missions-design.md`.
+
 ---
 
 # Act 7 — The Concurrent Coast

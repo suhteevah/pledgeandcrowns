@@ -8,12 +8,13 @@
 
 use crate::assets::{
     SPRITE_ALCHEMIST, SPRITE_ARMORER, SPRITE_AUDITOR, SPRITE_BARKEEP, SPRITE_BELLRINGER,
-    SPRITE_BORROW_CHECKER, SPRITE_BOUNCER, SPRITE_CARTOGRAPHER, SPRITE_CELLARER, SPRITE_CHRONICLER,
-    SPRITE_CONJURER, SPRITE_COOPER, SPRITE_DRILLMASTER, SPRITE_FAMILIAR, SPRITE_FERRIS,
-    SPRITE_FORGEWRIGHT, SPRITE_GUILDMASTER, SPRITE_HERALD, SPRITE_HERALDIC_SAGE,
-    SPRITE_INTERPRETER, SPRITE_LANTERNKEEPER, SPRITE_LINGUIST, SPRITE_LOCKSMITH, SPRITE_LOREMASTER,
-    SPRITE_MIXOLOGIST, SPRITE_ORACLE, SPRITE_PILGRIM, SPRITE_PORTER, SPRITE_QUARTERMASTER,
-    SPRITE_RECKONER, SPRITE_RECRUITER, SPRITE_SMITH, SPRITE_SURVEYOR, SPRITE_TABKEEPER,
+    SPRITE_BONDSMITH, SPRITE_BORROW_CHECKER, SPRITE_BOUNCER, SPRITE_CARTOGRAPHER, SPRITE_CELLARER,
+    SPRITE_CHRONICLER, SPRITE_CONJURER, SPRITE_COOPER, SPRITE_DRILLMASTER, SPRITE_FAMILIAR,
+    SPRITE_FERRIS, SPRITE_FORGEWRIGHT, SPRITE_GUILDMASTER, SPRITE_HERALD, SPRITE_HERALDIC_SAGE,
+    SPRITE_INTERPRETER, SPRITE_KEYMASTER, SPRITE_LANTERNKEEPER, SPRITE_LINGUIST, SPRITE_LOCKSMITH,
+    SPRITE_LOREMASTER, SPRITE_MIXOLOGIST, SPRITE_ORACLE, SPRITE_PILGRIM, SPRITE_PORTER,
+    SPRITE_QUARTERMASTER, SPRITE_RECKONER, SPRITE_RECRUITER, SPRITE_RIVETER, SPRITE_SIFTER,
+    SPRITE_SMELTER, SPRITE_SMITH, SPRITE_SURVEYOR, SPRITE_TABKEEPER, SPRITE_TALLYWRIGHT,
     SPRITE_TINKER, SPRITE_TRAIT_MAGE, SPRITE_TWIN, SPRITE_VEXIS, SPRITE_WANDWRIGHT,
 };
 use crate::plugins::player::Player;
@@ -333,6 +334,49 @@ pub const NPC_ROSTER: &[NpcSpec] = &[
         mission_id: "unwrap_or_else",
         sprite_path: SPRITE_CELLARER,
         pos: (200.0, -130.0),
+        native_px: 32.0,
+    },
+    // ── Act 6: The Iterator Forge (batch 8).
+    NpcSpec {
+        name: "The Keymaster",
+        mission_id: "hashmap_basic",
+        sprite_path: SPRITE_KEYMASTER,
+        pos: (-40.0, -40.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Sifter",
+        mission_id: "iter_filter",
+        sprite_path: SPRITE_SIFTER,
+        pos: (0.0, 50.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Smelter",
+        mission_id: "iter_fold",
+        sprite_path: SPRITE_SMELTER,
+        pos: (-200.0, 64.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Tallywright",
+        mission_id: "iter_enumerate",
+        sprite_path: SPRITE_TALLYWRIGHT,
+        pos: (200.0, 40.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Riveter",
+        mission_id: "iter_zip",
+        sprite_path: SPRITE_RIVETER,
+        pos: (-220.0, 100.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Bondsmith",
+        mission_id: "closure_move",
+        sprite_path: SPRITE_BONDSMITH,
+        pos: (160.0, 130.0),
         native_px: 32.0,
     },
 ];

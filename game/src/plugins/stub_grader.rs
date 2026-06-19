@@ -569,6 +569,70 @@ pub fn stub_verdict(encounter_id: &str, source: &str) -> Option<StubVerdict> {
                 )
             }
         }
+        // ── Act 6 (Iterator Forge). Flavor MUST stay byte-identical to
+        // compile-api/src/grader.rs.
+        "hashmap_basic" => {
+            if !source.contains("HashMap") {
+                StubVerdict::fail("the Keymaster waits — missing required: `HashMap`")
+            } else if !source.contains(".insert(") {
+                StubVerdict::fail("the Keymaster waits — store a value with `.insert(`")
+            } else if !source.contains(".get(") {
+                StubVerdict::fail("the Keymaster waits — look it up with `.get(`")
+            } else {
+                StubVerdict::pass(
+                    "the Keymaster turns the ring. \"every store under its own key.\"",
+                )
+            }
+        }
+        "iter_filter" => {
+            if !source.contains(".filter(") {
+                StubVerdict::fail("the Sifter shakes the screen — missing required: `.filter(`")
+            } else if !source.contains(".collect") {
+                StubVerdict::fail(
+                    "the Sifter shakes the screen — gather the survivors with `.collect`",
+                )
+            } else {
+                StubVerdict::pass(
+                    "the Sifter shakes the screen. \"only what fits the mesh falls through.\"",
+                )
+            }
+        }
+        "iter_fold" => {
+            if !source.contains(".fold(") {
+                StubVerdict::fail("the Smelter waits — missing required: `.fold(`")
+            } else {
+                StubVerdict::pass("the Smelter tips the crucible. \"many ores, one ingot.\"")
+            }
+        }
+        "iter_enumerate" => {
+            if !source.contains(".enumerate(") {
+                StubVerdict::fail("the Tallywright waits — missing required: `.enumerate(`")
+            } else {
+                StubVerdict::pass(
+                    "the Tallywright stamps the row. \"each item numbered as it passes.\"",
+                )
+            }
+        }
+        "iter_zip" => {
+            if !source.contains(".zip(") {
+                StubVerdict::fail("the Riveter waits — missing required: `.zip(`")
+            } else {
+                StubVerdict::pass(
+                    "the Riveter drives the rivet. \"two plates, aligned pair by pair.\"",
+                )
+            }
+        }
+        "closure_move" => {
+            if !source.contains("move |") {
+                StubVerdict::fail(
+                    "the Bondsmith waits — missing required: a `move` closure (`move |...|`)",
+                )
+            } else {
+                StubVerdict::pass(
+                    "the Bondsmith seals the charge. \"owned, and carried where I go.\"",
+                )
+            }
+        }
         _ => return None,
     };
     Some(v)
