@@ -599,6 +599,76 @@ pub fn grade(encounter_id: &str, source: &str) -> Verdict {
                 Verdict::pass("the Bondsmith seals the charge. \"owned, and carried where I go.\"")
             }
         }
+        // ── Act 7 (Concurrent Coast): threads, Arc/Mutex, channels,
+        // atomics, scoped threads, async.
+        "thread_spawn" => {
+            if !source.contains("thread::spawn") {
+                Verdict::fail("the Dockmaster waits — missing required: `thread::spawn`")
+            } else if !source.contains(".join(") {
+                Verdict::fail("the Dockmaster waits — wait for the worker with `.join(`")
+            } else {
+                Verdict::pass(
+                    "the Dockmaster waves them off. \"sent to work — and met again at the gate.\"",
+                )
+            }
+        }
+        "arc_mutex" => {
+            if !source.contains("Arc") {
+                Verdict::fail("the Lighthouse Keeper waits — share ownership with `Arc`")
+            } else if !source.contains("Mutex") {
+                Verdict::fail("the Lighthouse Keeper waits — guard the value with `Mutex`")
+            } else if !source.contains(".lock(") {
+                Verdict::fail("the Lighthouse Keeper waits — take exclusive access with `.lock(`")
+            } else {
+                Verdict::pass(
+                    "the Lighthouse Keeper turns the key. \"one hand on the lamp at a time.\"",
+                )
+            }
+        }
+        "mpsc_channel" => {
+            if !source.contains("mpsc::channel") {
+                Verdict::fail("the Signaler waits — missing required: `mpsc::channel`")
+            } else if !source.contains(".send(") {
+                Verdict::fail("the Signaler waits — push a value in with `.send(`")
+            } else if !source.contains(".recv(") {
+                Verdict::fail("the Signaler waits — read it at the far end with `.recv(`")
+            } else {
+                Verdict::pass(
+                    "the Signaler flashes the lamp. \"sent down the coast, read at the next tower.\"",
+                )
+            }
+        }
+        "atomic" => {
+            if !source.contains("Atomic") {
+                Verdict::fail("the Tidewatch waits — use an `Atomic` type")
+            } else if !source.contains(".fetch_add(") {
+                Verdict::fail("the Tidewatch waits — bump it atomically with `.fetch_add(`")
+            } else {
+                Verdict::pass("the Tidewatch clicks the gauge. \"one notch up — no gatekeeper.\"")
+            }
+        }
+        "thread_scope" => {
+            if !source.contains("thread::scope") {
+                Verdict::fail("the Harbormaster waits — missing required: `thread::scope`")
+            } else if !source.contains(".spawn(") {
+                Verdict::fail("the Harbormaster waits — launch a scoped thread with `.spawn(`")
+            } else {
+                Verdict::pass(
+                    "the Harbormaster rings the bell. \"every boat in before the harbor closes.\"",
+                )
+            }
+        }
+        "async_fn" => {
+            if !source.contains("async fn") {
+                Verdict::fail("the Tideforecaster waits — missing required: `async fn`")
+            } else if !source.contains(".await") {
+                Verdict::fail("the Tideforecaster waits — drive the future with `.await`")
+            } else {
+                Verdict::pass(
+                    "the Tideforecaster lowers the glass. \"the tide will come — awaited, not forced.\"",
+                )
+            }
+        }
         _ => Verdict::pass(format!(
             "[freeform] received {} bytes. encounter `{encounter_id}` has no grader yet.",
             source.len()
@@ -1739,5 +1809,89 @@ fn name(d: Direction) -> &'static str {
         );
         assert!(!v.ok);
         assert!(v.stderr.contains("move"));
+    }
+
+    // ── Act 7: Concurrent Coast ───────────────────────────────────
+    #[test]
+    fn thread_spawn_pass_canonical() {
+        let src = "use std::thread; fn main() { let h = thread::spawn(|| 1); let _ = h.join(); }";
+        assert!(grade("thread_spawn", src).ok);
+    }
+    #[test]
+    fn thread_spawn_fail_no_join() {
+        let v = grade(
+            "thread_spawn",
+            "use std::thread; fn main() { thread::spawn(|| 1); }",
+        );
+        assert!(!v.ok);
+        assert!(v.stderr.contains(".join("));
+    }
+    #[test]
+    fn arc_mutex_pass_canonical() {
+        let src = "use std::sync::{Arc, Mutex}; fn main() { let m = Arc::new(Mutex::new(0)); *m.lock().unwrap() += 1; }";
+        assert!(grade("arc_mutex", src).ok);
+    }
+    #[test]
+    fn arc_mutex_fail_no_lock() {
+        let v = grade(
+            "arc_mutex",
+            "use std::sync::{Arc, Mutex}; fn main() { let _ = Arc::new(Mutex::new(0)); }",
+        );
+        assert!(!v.ok);
+        assert!(v.stderr.contains(".lock("));
+    }
+    #[test]
+    fn mpsc_channel_pass_canonical() {
+        let src = "use std::sync::mpsc; fn main() { let (tx, rx) = mpsc::channel(); tx.send(1).unwrap(); let _ = rx.recv(); }";
+        assert!(grade("mpsc_channel", src).ok);
+    }
+    #[test]
+    fn mpsc_channel_fail_no_recv() {
+        let v = grade(
+            "mpsc_channel",
+            "use std::sync::mpsc; fn main() { let (tx, _rx) = mpsc::channel::<i32>(); tx.send(1).unwrap(); }",
+        );
+        assert!(!v.ok);
+        assert!(v.stderr.contains(".recv("));
+    }
+    #[test]
+    fn atomic_pass_canonical() {
+        let src = "use std::sync::atomic::{AtomicUsize, Ordering}; fn main() { let c = AtomicUsize::new(0); c.fetch_add(1, Ordering::SeqCst); }";
+        assert!(grade("atomic", src).ok);
+    }
+    #[test]
+    fn atomic_fail_no_fetch_add() {
+        let v = grade(
+            "atomic",
+            "use std::sync::atomic::AtomicUsize; fn main() { let _ = AtomicUsize::new(0); }",
+        );
+        assert!(!v.ok);
+        assert!(v.stderr.contains(".fetch_add("));
+    }
+    #[test]
+    fn thread_scope_pass_canonical() {
+        let src = "use std::thread; fn main() { let d = vec![1]; thread::scope(|s| { s.spawn(|| { let _ = &d; }); }); }";
+        assert!(grade("thread_scope", src).ok);
+    }
+    #[test]
+    fn thread_scope_fail_no_scope() {
+        // plain thread::spawn is not thread::scope.
+        let v = grade(
+            "thread_scope",
+            "use std::thread; fn main() { let h = thread::spawn(|| 1); let _ = h.join(); }",
+        );
+        assert!(!v.ok);
+        assert!(v.stderr.contains("thread::scope"));
+    }
+    #[test]
+    fn async_fn_pass_canonical() {
+        let src = "async fn d(x: i32) -> i32 { x } async fn run() -> i32 { d(1).await } fn main() { let _ = run(); }";
+        assert!(grade("async_fn", src).ok);
+    }
+    #[test]
+    fn async_fn_fail_no_await() {
+        let v = grade("async_fn", "async fn d(x: i32) -> i32 { x } fn main() {}");
+        assert!(!v.ok);
+        assert!(v.stderr.contains(".await"));
     }
 }

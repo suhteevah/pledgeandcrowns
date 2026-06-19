@@ -223,6 +223,12 @@ Refs landed against the bible. Source `.jsx` lives at `design/art/refs/ref-NN-<s
 | 51 | The Tallywright | 32×32 | ref-51-tallywright.jsx | specs/tallywright.md | `sprites/npc/tallywright_idle_0.png` |
 | 52 | The Riveter | 32×32 | ref-52-riveter.jsx | specs/riveter.md | `sprites/npc/riveter_idle_0.png` |
 | 53 | The Bondsmith | 32×32 | ref-53-bondsmith.jsx | specs/bondsmith.md | `sprites/npc/bondsmith_idle_0.png` |
+| 54 | The Dockmaster | 32×32 | ref-54-dockmaster.jsx | specs/dockmaster.md | `sprites/npc/dockmaster_idle_0.png` |
+| 55 | The Lighthouse Keeper | 32×32 | ref-55-lighthousekeeper.jsx | specs/lighthousekeeper.md | `sprites/npc/lighthousekeeper_idle_0.png` |
+| 56 | The Signaler | 32×32 | ref-56-signaler.jsx | specs/signaler.md | `sprites/npc/signaler_idle_0.png` |
+| 57 | The Tidewatch | 32×32 | ref-57-tidewatch.jsx | specs/tidewatch.md | `sprites/npc/tidewatch_idle_0.png` |
+| 58 | The Harbormaster | 32×32 | ref-58-harbormaster.jsx | specs/harbormaster.md | `sprites/npc/harbormaster_idle_0.png` |
+| 59 | The Tideforecaster | 32×32 | ref-59-tideforecaster.jsx | specs/tideforecaster.md | `sprites/npc/tideforecaster_idle_0.png` |
 
 **NPC batches landed:**
 - Batch 1 (2026-05-02) — REF-11..15: Smith, Cartographer, Trait Mage, Bellringer, Cooper. Specs in `design/art/specs/`. Replaces SPRITE_PLAYER placeholders for the corresponding entries in `NPC_ROSTER`.
@@ -233,8 +239,9 @@ Refs landed against the bible. Source `.jsx` lives at `design/art/refs/ref-NN-<s
 - Batch 6 (2026-06-18) — REF-36..41: Vexis the Archmage, Wandwright, Conjurer, Familiar, Lanternkeeper, Loremaster. The Act 4 Trait Mage's Tower cast (missions `trait_def`/`generic_fn`/`generic_struct`/`dyn_trait`/`lifetimes`/`assoc_type`). The three mages use a small magic-violet accent (orb/flame) verified under the 5% bible cap (vexis 21px, conjurer 18px, lanternkeeper 9px of 51 max); the Familiar's caged creature carries a teal+forest element-clash accent (fits `Box<dyn Trait>`). First-pass; Lanternkeeper/Loremaster flagged rougher. Pending art review.
 - Batch 7 (2026-06-18) — REF-42..47: Barkeep, Bouncer, Interpreter, Mixologist, Tabkeeper, Cellarer. The Act 5 Tavern of Tribulations cast (missions `result_match`/`custom_error`/`from_error`/`option_map`/`and_then`/`unwrap_or_else`). Tavern folk — no magic violet; gold-ramp ale/props. First-pass. Pending art review.
 - Batch 8 (2026-06-18) — REF-48..53: Keymaster, Sifter, Smelter, Tallywright, Riveter, Bondsmith. The Act 6 Iterator Forge cast (missions `hashmap_basic`/`iter_filter`/`iter_fold`/`iter_enumerate`/`iter_zip`/`closure_move`). Forge/craft folk — no magic violet; gold/bronze forge props, a molten-metal glow. First-pass. Pending art review.
+- Batch 9 (2026-06-18) — REF-54..59: Dockmaster, Lighthouse Keeper, Signaler, Tidewatch, Harbormaster, Tideforecaster. The Act 7 Concurrent Coast cast (missions `thread_spawn`/`arc_mutex`/`mpsc_channel`/`atomic`/`thread_scope`/`async_fn`). Maritime folk — teal/cobalt sea accents encouraged (the one zone where the cool ramp is on-theme), no magic violet. First-pass. Pending art review.
 
-**Remaining placeholders:** none — all 45 NPCs (Acts 1–6 cast) carry distinct art. See `game/src/plugins/npc.rs` for live truth.
+**Remaining placeholders:** none — all 51 NPCs (Acts 1–7 cast) carry distinct art. See `game/src/plugins/npc.rs` for live truth.
 
 ## 10. Revision history
 

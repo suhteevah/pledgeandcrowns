@@ -209,6 +209,8 @@ When the player finally passes, the Checker bows: "You may cross. The Old Tongue
 
 **Estimated playtime:** 4 hours. This is one of the meatiest acts.
 
+**Code status (2026-06-18).** The Act 7 *concepts* ship as 6 missions: `thread_spawn` (The Dockmaster), `arc_mutex` (The Lighthouse Keeper), `mpsc_channel` (The Signaler), `atomic` (The Tidewatch), `thread_scope` (The Harbormaster), `async_fn` (The Tideforecaster). The std-concurrency five compile + grade fully on the host sandbox; **`async_fn` is compile-only** — `async fn`/`.await` type-check and are token-graded, but actually running them needs a runtime (`tokio`) the dependency-free sandbox can't load (the tutorial says so). Design: `docs/superpowers/specs/2026-06-18-act7-concurrent-coast-missions-design.md`.
+
 ---
 
 # Act 8 — The Vault of Pointers

@@ -91,6 +91,17 @@ pub const SPRITE_TALLYWRIGHT: &str = "sprites/npc/tallywright_idle_0.png";
 pub const SPRITE_RIVETER: &str = "sprites/npc/riveter_idle_0.png";
 pub const SPRITE_BONDSMITH: &str = "sprites/npc/bondsmith_idle_0.png";
 
+// NPC batch 9 (2026-06-18) — Act 7 Concurrent Coast: Dockmaster, Lighthouse
+// Keeper, Signaler, Tidewatch, Harbormaster, Tideforecaster. Sources:
+// design/art/refs/ref-54..59-*.jsx, rendered via `cargo run -p render-refs`.
+// First-pass, pending Matt's art review.
+pub const SPRITE_DOCKMASTER: &str = "sprites/npc/dockmaster_idle_0.png";
+pub const SPRITE_LIGHTHOUSEKEEPER: &str = "sprites/npc/lighthousekeeper_idle_0.png";
+pub const SPRITE_SIGNALER: &str = "sprites/npc/signaler_idle_0.png";
+pub const SPRITE_TIDEWATCH: &str = "sprites/npc/tidewatch_idle_0.png";
+pub const SPRITE_HARBORMASTER: &str = "sprites/npc/harbormaster_idle_0.png";
+pub const SPRITE_TIDEFORECASTER: &str = "sprites/npc/tideforecaster_idle_0.png";
+
 // Audio (Stable Audio Open generated, baked via tools/synthwave-gen).
 // Generation is a Matt-action: `powershell -ExecutionPolicy Bypass
 // -File scripts/synthwave-gen.ps1`. Files may be absent during early
@@ -165,4 +176,10 @@ pub const ALL_SPRITE_PATHS: &[&str] = &[
     SPRITE_TALLYWRIGHT,
     SPRITE_RIVETER,
     SPRITE_BONDSMITH,
+    SPRITE_DOCKMASTER,
+    SPRITE_LIGHTHOUSEKEEPER,
+    SPRITE_SIGNALER,
+    SPRITE_TIDEWATCH,
+    SPRITE_HARBORMASTER,
+    SPRITE_TIDEFORECASTER,
 ];

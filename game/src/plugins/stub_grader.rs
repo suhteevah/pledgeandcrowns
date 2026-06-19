@@ -633,6 +633,80 @@ pub fn stub_verdict(encounter_id: &str, source: &str) -> Option<StubVerdict> {
                 )
             }
         }
+        // ── Act 7 (Concurrent Coast). Flavor MUST stay byte-identical to
+        // compile-api/src/grader.rs.
+        "thread_spawn" => {
+            if !source.contains("thread::spawn") {
+                StubVerdict::fail("the Dockmaster waits — missing required: `thread::spawn`")
+            } else if !source.contains(".join(") {
+                StubVerdict::fail("the Dockmaster waits — wait for the worker with `.join(`")
+            } else {
+                StubVerdict::pass(
+                    "the Dockmaster waves them off. \"sent to work — and met again at the gate.\"",
+                )
+            }
+        }
+        "arc_mutex" => {
+            if !source.contains("Arc") {
+                StubVerdict::fail("the Lighthouse Keeper waits — share ownership with `Arc`")
+            } else if !source.contains("Mutex") {
+                StubVerdict::fail("the Lighthouse Keeper waits — guard the value with `Mutex`")
+            } else if !source.contains(".lock(") {
+                StubVerdict::fail(
+                    "the Lighthouse Keeper waits — take exclusive access with `.lock(`",
+                )
+            } else {
+                StubVerdict::pass(
+                    "the Lighthouse Keeper turns the key. \"one hand on the lamp at a time.\"",
+                )
+            }
+        }
+        "mpsc_channel" => {
+            if !source.contains("mpsc::channel") {
+                StubVerdict::fail("the Signaler waits — missing required: `mpsc::channel`")
+            } else if !source.contains(".send(") {
+                StubVerdict::fail("the Signaler waits — push a value in with `.send(`")
+            } else if !source.contains(".recv(") {
+                StubVerdict::fail("the Signaler waits — read it at the far end with `.recv(`")
+            } else {
+                StubVerdict::pass(
+                    "the Signaler flashes the lamp. \"sent down the coast, read at the next tower.\"",
+                )
+            }
+        }
+        "atomic" => {
+            if !source.contains("Atomic") {
+                StubVerdict::fail("the Tidewatch waits — use an `Atomic` type")
+            } else if !source.contains(".fetch_add(") {
+                StubVerdict::fail("the Tidewatch waits — bump it atomically with `.fetch_add(`")
+            } else {
+                StubVerdict::pass(
+                    "the Tidewatch clicks the gauge. \"one notch up — no gatekeeper.\"",
+                )
+            }
+        }
+        "thread_scope" => {
+            if !source.contains("thread::scope") {
+                StubVerdict::fail("the Harbormaster waits — missing required: `thread::scope`")
+            } else if !source.contains(".spawn(") {
+                StubVerdict::fail("the Harbormaster waits — launch a scoped thread with `.spawn(`")
+            } else {
+                StubVerdict::pass(
+                    "the Harbormaster rings the bell. \"every boat in before the harbor closes.\"",
+                )
+            }
+        }
+        "async_fn" => {
+            if !source.contains("async fn") {
+                StubVerdict::fail("the Tideforecaster waits — missing required: `async fn`")
+            } else if !source.contains(".await") {
+                StubVerdict::fail("the Tideforecaster waits — drive the future with `.await`")
+            } else {
+                StubVerdict::pass(
+                    "the Tideforecaster lowers the glass. \"the tide will come — awaited, not forced.\"",
+                )
+            }
+        }
         _ => return None,
     };
     Some(v)

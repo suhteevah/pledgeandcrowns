@@ -9,13 +9,15 @@
 use crate::assets::{
     SPRITE_ALCHEMIST, SPRITE_ARMORER, SPRITE_AUDITOR, SPRITE_BARKEEP, SPRITE_BELLRINGER,
     SPRITE_BONDSMITH, SPRITE_BORROW_CHECKER, SPRITE_BOUNCER, SPRITE_CARTOGRAPHER, SPRITE_CELLARER,
-    SPRITE_CHRONICLER, SPRITE_CONJURER, SPRITE_COOPER, SPRITE_DRILLMASTER, SPRITE_FAMILIAR,
-    SPRITE_FERRIS, SPRITE_FORGEWRIGHT, SPRITE_GUILDMASTER, SPRITE_HERALD, SPRITE_HERALDIC_SAGE,
-    SPRITE_INTERPRETER, SPRITE_KEYMASTER, SPRITE_LANTERNKEEPER, SPRITE_LINGUIST, SPRITE_LOCKSMITH,
+    SPRITE_CHRONICLER, SPRITE_CONJURER, SPRITE_COOPER, SPRITE_DOCKMASTER, SPRITE_DRILLMASTER,
+    SPRITE_FAMILIAR, SPRITE_FERRIS, SPRITE_FORGEWRIGHT, SPRITE_GUILDMASTER, SPRITE_HARBORMASTER,
+    SPRITE_HERALD, SPRITE_HERALDIC_SAGE, SPRITE_INTERPRETER, SPRITE_KEYMASTER,
+    SPRITE_LANTERNKEEPER, SPRITE_LIGHTHOUSEKEEPER, SPRITE_LINGUIST, SPRITE_LOCKSMITH,
     SPRITE_LOREMASTER, SPRITE_MIXOLOGIST, SPRITE_ORACLE, SPRITE_PILGRIM, SPRITE_PORTER,
     SPRITE_QUARTERMASTER, SPRITE_RECKONER, SPRITE_RECRUITER, SPRITE_RIVETER, SPRITE_SIFTER,
-    SPRITE_SMELTER, SPRITE_SMITH, SPRITE_SURVEYOR, SPRITE_TABKEEPER, SPRITE_TALLYWRIGHT,
-    SPRITE_TINKER, SPRITE_TRAIT_MAGE, SPRITE_TWIN, SPRITE_VEXIS, SPRITE_WANDWRIGHT,
+    SPRITE_SIGNALER, SPRITE_SMELTER, SPRITE_SMITH, SPRITE_SURVEYOR, SPRITE_TABKEEPER,
+    SPRITE_TALLYWRIGHT, SPRITE_TIDEFORECASTER, SPRITE_TIDEWATCH, SPRITE_TINKER, SPRITE_TRAIT_MAGE,
+    SPRITE_TWIN, SPRITE_VEXIS, SPRITE_WANDWRIGHT,
 };
 use crate::plugins::player::Player;
 use crate::plugins::state::GameState;
@@ -377,6 +379,49 @@ pub const NPC_ROSTER: &[NpcSpec] = &[
         mission_id: "closure_move",
         sprite_path: SPRITE_BONDSMITH,
         pos: (160.0, 130.0),
+        native_px: 32.0,
+    },
+    // ── Act 7: The Concurrent Coast (batch 9).
+    NpcSpec {
+        name: "The Dockmaster",
+        mission_id: "thread_spawn",
+        sprite_path: SPRITE_DOCKMASTER,
+        pos: (-140.0, -130.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Lighthouse Keeper",
+        mission_id: "arc_mutex",
+        sprite_path: SPRITE_LIGHTHOUSEKEEPER,
+        pos: (40.0, -130.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Signaler",
+        mission_id: "mpsc_channel",
+        sprite_path: SPRITE_SIGNALER,
+        pos: (220.0, 64.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Tidewatch",
+        mission_id: "atomic",
+        sprite_path: SPRITE_TIDEWATCH,
+        pos: (-220.0, 32.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Harbormaster",
+        mission_id: "thread_scope",
+        sprite_path: SPRITE_HARBORMASTER,
+        pos: (220.0, -32.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Tideforecaster",
+        mission_id: "async_fn",
+        sprite_path: SPRITE_TIDEFORECASTER,
+        pos: (-140.0, 130.0),
         native_px: 32.0,
     },
 ];

@@ -1147,6 +1147,153 @@ seals the charge into himself; it travels where he goes.",
                 prereq: None,
                 starter_code: "fn main() {\n    let name = String::from(\"Garin\");\n    // capture `name` BY VALUE into a closure (so the closure owns it), then call it\n    let _ = &name;\n}\n",
             },
+            // ── Act 7: The Concurrent Coast ───────────────────────────
+            // Threads, Arc<Mutex>, channels, atomics, scoped threads, async.
+            // See design/01-curriculum.md §Act 7 and
+            // docs/superpowers/specs/2026-06-18-act7-concurrent-coast-missions-design.md.
+            Mission {
+                id: "thread_spawn",
+                npc_name: "The Dockmaster",
+                prompt: "Run work on another thread with `thread::spawn`, then `.join()` it.",
+                tutorial: "## Concept\n\
+`std::thread::spawn(closure)` runs the closure on a *new* OS thread, \
+immediately returning a `JoinHandle`. The new thread runs concurrently with \
+the one that spawned it. Calling `.join()` on the handle blocks until that \
+thread finishes and hands back its return value (wrapped in a `Result`, \
+since a thread can panic). This is the foundation of parallelism in Rust.\n\n\
+## Syntax\n\
+```\nuse std::thread;\nlet handle = thread::spawn(|| {\n    21 * 2   // runs on the new thread\n});\nlet answer = handle.join().unwrap();   // waits, then gets 42\n```\n\
+The spawned closure must be `'static` and `Send` — it can't borrow \
+short-lived locals (use `move`, or `thread::scope`).\n\n\
+## Task\n\
+Spawn a thread that computes a small value, then `.join()` the handle to \
+wait for it.\n\n\
+## Hint\n\
+The grader needs `thread::spawn` and `.join(`. The Dockmaster sends a \
+worker off, then waits at the gate for them to return.",
+                prereq: None,
+                starter_code: "fn main() {\n    // run a small computation on another thread, then wait for it to finish\n    let _ = ();\n}\n",
+            },
+            Mission {
+                id: "arc_mutex",
+                npc_name: "The Lighthouse Keeper",
+                prompt: "Share mutable state behind an `Arc<Mutex<T>>` and `.lock()` it.",
+                tutorial: "## Concept\n\
+To *share* data across threads you need two things: shared ownership and \
+safe mutation. `Arc<T>` (Atomically Reference-Counted) gives many threads \
+joint ownership of the same value. `Mutex<T>` guards the value so only one \
+thread holds it at a time. Together, `Arc<Mutex<T>>` is the canonical \
+shared-mutable-state pattern: clone the `Arc` to each thread, `.lock()` to \
+get exclusive access.\n\n\
+## Syntax\n\
+```\nuse std::sync::{Arc, Mutex};\nlet shared = Arc::new(Mutex::new(0));\n{\n    let mut guard = shared.lock().unwrap();\n    *guard += 1;          // exclusive access while the guard lives\n}   // lock released here\n```\n\
+`.lock()` returns a `Result` (it errors if another thread panicked holding \
+the lock); the guard derefs to the inner value.\n\n\
+## Task\n\
+Wrap a number in `Arc::new(Mutex::new(...))`, `.lock()` it, and mutate the \
+value through the guard.\n\n\
+## Hint\n\
+The grader needs `Arc`, `Mutex`, and `.lock(`. The Keeper holds the one key \
+to the lamp — only one hand on it at a time.",
+                prereq: None,
+                starter_code: "fn main() {\n    // wrap a number so it can be shared across threads and mutated one-at-a-time behind a guard\n    let _ = 0;\n}\n",
+            },
+            Mission {
+                id: "mpsc_channel",
+                npc_name: "The Signaler",
+                prompt: "Send a value down an `mpsc::channel` and receive it.",
+                tutorial: "## Concept\n\
+A channel is a one-way pipe between threads: the *sender* pushes values in, \
+the *receiver* pulls them out. `std::sync::mpsc::channel()` returns a \
+`(Sender, Receiver)` pair (mpsc = multi-producer, single-consumer — you can \
+clone the sender). `tx.send(v)` queues a value; `rx.recv()` blocks until \
+one arrives. Channels let threads communicate by *passing messages* instead \
+of sharing memory — often simpler to reason about than locks.\n\n\
+## Syntax\n\
+```\nuse std::sync::mpsc;\nlet (tx, rx) = mpsc::channel();\ntx.send(7).unwrap();\nlet got = rx.recv().unwrap();   // 7\n```\n\
+Both `send` and `recv` return `Result` — `send` errors if the receiver is \
+gone, `recv` if all senders are.\n\n\
+## Task\n\
+Open a channel, `send` a value through the sender, and `recv` it from the \
+receiver.\n\n\
+## Hint\n\
+The grader needs `mpsc::channel`, `.send(`, and `.recv(`. The Signaler \
+flashes the message down the coast; the next tower reads it.",
+                prereq: None,
+                starter_code: "fn main() {\n    // open a channel, push a value in at one end, and pull it out at the other\n    let _ = ();\n}\n",
+            },
+            Mission {
+                id: "atomic",
+                npc_name: "The Tidewatch",
+                prompt: "Increment a shared `AtomicUsize` with `.fetch_add()` — no lock.",
+                tutorial: "## Concept\n\
+For simple shared counters, a `Mutex` is overkill. The `std::sync::atomic` \
+types (`AtomicUsize`, `AtomicBool`, …) support *lock-free* updates: the \
+hardware guarantees the operation happens as one indivisible step, so many \
+threads can hit it at once without tearing. `.fetch_add(n, ordering)` adds \
+`n` and returns the previous value, atomically. The `Ordering` argument \
+controls how this operation synchronizes with others; `SeqCst` is the \
+simplest, strongest choice.\n\n\
+## Syntax\n\
+```\nuse std::sync::atomic::{AtomicUsize, Ordering};\nlet counter = AtomicUsize::new(0);\ncounter.fetch_add(1, Ordering::SeqCst);\nlet now = counter.load(Ordering::SeqCst);   // 1\n```\n\
+No `.lock()`, no guard — the atomic *is* the synchronization.\n\n\
+## Task\n\
+Make an `AtomicUsize`, then bump it by one with `.fetch_add(1, \
+Ordering::SeqCst)`.\n\n\
+## Hint\n\
+The grader needs `Atomic` and `.fetch_add(`. The Tidewatch's gauge clicks \
+up one notch — no gatekeeper needed.",
+                prereq: None,
+                starter_code: "fn main() {\n    // make a shared counter that can be incremented without a lock, then bump it by one\n    let _ = 0;\n}\n",
+            },
+            Mission {
+                id: "thread_scope",
+                npc_name: "The Harbormaster",
+                prompt: "Use `thread::scope` to run threads that borrow a local.",
+                tutorial: "## Concept\n\
+`thread::spawn` requires `'static` closures — they can't borrow locals, \
+because the thread might outlive them. `thread::scope` solves this: it \
+guarantees every thread spawned inside it finishes before the scope \
+returns, so those threads *can* safely borrow stack data. You spawn with \
+`s.spawn(...)` on the scope handle; the scope joins them all automatically \
+at the closing brace.\n\n\
+## Syntax\n\
+```\nuse std::thread;\nlet data = vec![1, 2, 3];\nthread::scope(|s| {\n    s.spawn(|| {\n        println!(\"{:?}\", &data);   // borrows `data` — allowed!\n    });\n});   // all scoped threads joined here\n```\n\
+Because the scope blocks until its threads end, the borrow is sound — no \
+`Arc`, no `'static` needed.\n\n\
+## Task\n\
+Inside `thread::scope`, `s.spawn` a thread that borrows a local `Vec`.\n\n\
+## Hint\n\
+The grader needs `thread::scope` and `.spawn(`. The Harbormaster won't \
+close the harbor until every boat is back in.",
+                prereq: None,
+                starter_code: "fn main() {\n    let data = vec![1, 2, 3];\n    // run threads that borrow `data` and are guaranteed to finish before this function returns\n    let _ = &data;\n}\n",
+            },
+            Mission {
+                id: "async_fn",
+                npc_name: "The Tideforecaster",
+                prompt: "Write an `async fn` and `.await` another async call.",
+                tutorial: "## Concept\n\
+An `async fn` doesn't run its body when called — it returns a *future*, a \
+value representing work that can be paused and resumed. You drive a future \
+to completion by `.await`-ing it inside another async context; `.await` \
+yields control while the work is pending, letting other tasks run. This is \
+how Rust does cooperative, non-blocking concurrency.\n\n\
+**Note:** a future does nothing until an *executor* polls it — normally \
+provided by a runtime crate like `tokio` (`#[tokio::main]`). This grading \
+sandbox is dependency-free, so the code here *compiles* and is graded, but \
+the futures are never actually run. The concept is the lesson.\n\n\
+## Syntax\n\
+```\nasync fn double(x: i32) -> i32 { x * 2 }\nasync fn run() -> i32 {\n    double(21).await   // await another async fn\n}\n// with tokio: #[tokio::main] async fn main() { run().await; }\n```\n\
+## Task\n\
+Define an `async fn` that doubles a number, and another `async fn` that \
+calls it with `.await`.\n\n\
+## Hint\n\
+The grader needs `async fn` and `.await`. The Tideforecaster reads the \
+almanac and waits for a tide that hasn't come in yet.",
+                prereq: None,
+                starter_code: "fn main() {\n    // define an async function that doubles a number, and another that calls it and waits on the result\n    // (it won't actually run here without a runtime like tokio - that's expected)\n    let _ = ();\n}\n",
+            },
         ];
         // Strict-linear progression: each mission's prereq is the one
         // listed immediately before it. Shape decision logged in HANDOFF

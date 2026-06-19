@@ -386,6 +386,63 @@ fn main() {
     greet();
 }"#
         }
+        // ── Act 7: Concurrent Coast.
+        "thread_spawn" => {
+            r#"use std::thread;
+fn main() {
+    let handle = thread::spawn(|| 21 * 2);
+    let _ = handle.join();
+}"#
+        }
+        "arc_mutex" => {
+            r#"use std::sync::{Arc, Mutex};
+fn main() {
+    let shared = Arc::new(Mutex::new(0));
+    {
+        let mut guard = shared.lock().unwrap();
+        *guard += 1;
+    }
+    let _ = shared;
+}"#
+        }
+        "mpsc_channel" => {
+            r#"use std::sync::mpsc;
+fn main() {
+    let (tx, rx) = mpsc::channel();
+    tx.send(7).unwrap();
+    let _ = rx.recv();
+}"#
+        }
+        "atomic" => {
+            r#"use std::sync::atomic::{AtomicUsize, Ordering};
+fn main() {
+    let counter = AtomicUsize::new(0);
+    counter.fetch_add(1, Ordering::SeqCst);
+    let _ = counter;
+}"#
+        }
+        "thread_scope" => {
+            r#"use std::thread;
+fn main() {
+    let data = vec![1, 2, 3];
+    thread::scope(|s| {
+        s.spawn(|| {
+            let _ = &data;
+        });
+    });
+}"#
+        }
+        "async_fn" => {
+            r#"async fn double(x: i32) -> i32 {
+    x * 2
+}
+async fn run() -> i32 {
+    double(21).await
+}
+fn main() {
+    let _future = run();
+}"#
+        }
         _ => return None,
     })
 }
