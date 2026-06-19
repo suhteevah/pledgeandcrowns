@@ -31,7 +31,8 @@ no `beforeBuildCommand` that invokes a JS bundler. The build order is:
 | `cargo tauri` (tauri-cli) | **2.10.0 — present** |
 | node / npm | **24.13 / 11.8 — present** (only needed for `cargo tauri icon` / optional tooling) |
 | WebView2 runtime (desktop) | **present** (Edge WebView 148/149) → desktop wrapper builds + runs |
-| Android SDK + NDK | **installing at `G:\android`** (Matt-managed; was mid-update 2026-06-19). `ANDROID_HOME` / `NDK_HOME` still unset → set them to the `G:\android` paths once the update settles, then the Android bundle unblocks |
+| Android SDK | **present at `G:\AndroidSdk`** (Matt-managed) — platform-tools, `android-36.1`, build-tools 36.1.0/37.0.0, emulator, license accepted |
+| Android **NDK** | **MISSING** — no `G:\AndroidSdk\ndk\`, no `cmdline-tools`/`sdkmanager`. **This blocks the Android bundle** (Tauri needs the NDK to cross-compile Rust). `ANDROID_HOME`/`NDK_HOME` also unset. See finishing steps below. |
 | iOS toolchain | N/A — iOS bundling requires macOS + Xcode; not possible on this Windows box |
 | Rust toolchain for the desktop link | **MSVC required** — see below |
 
@@ -83,21 +84,40 @@ So nothing needs installing for the **desktop** build — it works today via
 `build-desktop.bat`. (If you ever see `could not open 'msvcrt.lib'`, you're
 on the Community install; point the env at BuildTools.)
 
-## The Android bundle: SDK lives at `G:\android` (Matt-managed)
+## The Android bundle: base SDK at `G:\AndroidSdk`, NDK still missing
 
-The Android bundle is the actual point of this wrapper. The SDK/NDK is
-**not absent** — Matt keeps it at **`G:\android`** (it was mid-update on
-2026-06-19, so the dir may not be fully populated until that settles). Do
-**not** auto-install a second copy; point the env at the existing one.
+The Android bundle is the actual point of this wrapper. The base SDK is
+**present** at **`G:\AndroidSdk`** (Matt-managed; verified 2026-06-19, last
+written 2026-05-22) — do **not** auto-install a second copy. What it has:
+`platform-tools\` (adb), `platforms\android-36.1`, `build-tools\{36.1.0,37.0.0}`,
+`emulator\`, and an accepted `licenses\android-sdk-license`.
 
-1. Confirm the SDK is settled (update finished): `G:\android` should hold
-   `platform-tools\`, `platforms\`, `build-tools\`, and `ndk\<version>\`.
+What it does **not** have yet — and Tauri's Android build requires both:
+- **`ndk\<version>\`** — Tauri cross-compiles Rust to the Android ABIs with
+  the NDK's clang+linker. This is the real blocker; without it
+  `cargo tauri android build` fails.
+- **`cmdline-tools\latest\`** (`sdkmanager`) — the CLI used to install the
+  NDK and accept its license.
+
+(Ignore the stale `E:\android\Android SDK` — it's a 2015-era android-22 SDK.)
+
+### Finishing it
+
+1. Install the NDK + cmdline-tools into the existing SDK (pick ONE):
+   - **Android Studio** (already installed) → Settings → *Languages &
+     Frameworks → Android SDK* → set the SDK path to `G:\AndroidSdk` →
+     *SDK Tools* tab → check **NDK (Side by Side)** + **Android SDK
+     Command-line Tools** → Apply.
+   - **CLI**: drop the Google `commandlinetools-win-*.zip` into
+     `G:\AndroidSdk\cmdline-tools\latest\`, then
+     `sdkmanager --sdk_root=G:\AndroidSdk "ndk;<version>" "platform-tools"`
+     and accept the NDK license.
 2. Set environment to the existing SDK (NOT `%LOCALAPPDATA%`):
-   - `ANDROID_HOME` = `G:\android`
-   - `NDK_HOME` = `G:\android\ndk\<version>`  (pick the installed version)
+   - `ANDROID_HOME` = `G:\AndroidSdk`
+   - `NDK_HOME` = `G:\AndroidSdk\ndk\<version>`  (the version you installed)
    ```
-   setx ANDROID_HOME "G:\android"
-   setx NDK_HOME "G:\android\ndk\<version>"
+   setx ANDROID_HOME "G:\AndroidSdk"
+   setx NDK_HOME "G:\AndroidSdk\ndk\<version>"
    ```
    (new shell required for `setx` to take effect)
 3. Add the Rust Android targets:
@@ -111,7 +131,7 @@ The Android bundle is the actual point of this wrapper. The SDK/NDK is
    cargo tauri android build        # or: cargo tauri android dev   (needs a device/emulator)
    ```
 
-Until the env is pointed at `G:\android` and the targets are added, the
+Until the NDK is installed and the env is pointed at `G:\AndroidSdk`, the
 wrapper is verified on the **desktop** target only (WebView2), which proves
 the scaffold + `frontendDist -> ../../web` wiring loads the game in a
 webview end-to-end.

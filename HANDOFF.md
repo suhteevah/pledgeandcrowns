@@ -21,7 +21,7 @@ byte-parity; every canonical solution compiles under real `cargo check`.
 - **wasm render verified** — rebuilt web, served, drove Chrome → title art renders in WebGL2 (the bindless fix is confirmed; v1 is browser-shippable). Also fixed a `web-build.ps1` asset-nesting bug.
 - **audio-to-MIDI tool** (`tools/audio-to-midi/`) — ran a real GPU transcription; confirmed the village bass sits on B1.
 - **AudioLDM2 SFX tool** (`tools/audioldm2-gen/`) — scaffolded; bake is rig-gated (CC-BY-NC weights, prototype-only).
-- **Tauri 2.0 wrapper** (`mobile/`) — **desktop builds + links** (`app.exe`) once you select the VS **BuildTools** install over Community (the Community C++ workload is incomplete; `mobile/build-desktop.bat` queries by the VC.Tools component). Android SDK lives at **`G:\android`** (Matt-managed; was mid-update 2026-06-19) — point `ANDROID_HOME`/`NDK_HOME` there, don't reinstall.
+- **Tauri 2.0 wrapper** (`mobile/`) — **desktop builds + links** (`app.exe`) once you select the VS **BuildTools** install over Community (the Community C++ workload is incomplete; `mobile/build-desktop.bat` queries by the VC.Tools component). Base Android SDK is at **`G:\AndroidSdk`** (Matt-managed) — but the **NDK is not installed** (no `ndk\`, no `cmdline-tools`), which is what Tauri actually needs. Don't reinstall the SDK; just add the NDK + cmdline-tools to it.
 - **NPC art** — replaced the last 4 `SPRITE_PLAYER` placeholders (batch 4).
 
 ### Curriculum: Acts 3–7 mission batches (commits `e13a408`, `8754f9c`, `92200e8`, `818aac4`, `764b956`, `380b711`)
@@ -57,7 +57,7 @@ Per-act design specs live in `docs/superpowers/specs/2026-06-18-act{3..7}-*.md` 
 
 ## Blocking Issues (all owner-actions, none block the code)
 1. **Art review** — 36 first-pass NPC sprites (batches 4–10) await your 3-revision approval. Each is one `cargo run -p render-refs --bin render-refs --release` from a revision (edit the `ref-NN-*.jsx` grid). Rougher ones flagged in `design/04b-art-deliverables.md` batch notes.
-2. **Tauri Android bundle** — SDK/NDK is at **`G:\android`** (Matt-managed; was updating 2026-06-19). Once settled: `setx ANDROID_HOME "G:\android"`, `setx NDK_HOME "G:\android\ndk\<version>"`, `rustup target add` the 4 android triples, then `cargo tauri android init/build`. Desktop builds today via `mobile/build-desktop.bat`. See `mobile/README.md`.
+2. **Tauri Android bundle** — base SDK is at **`G:\AndroidSdk`** (platform-tools, android-36.1, build-tools, emulator, license accepted) but the **NDK + cmdline-tools are missing**, which is the actual blocker (Tauri needs the NDK to cross-compile Rust). Add NDK + cmdline-tools to `G:\AndroidSdk` (Android Studio SDK Manager → SDK Tools, or bootstrap `sdkmanager` and `sdkmanager "ndk;<ver>"`), then `setx ANDROID_HOME "G:\AndroidSdk"`, `setx NDK_HOME "G:\AndroidSdk\ndk\<ver>"`, `rustup target add` the 4 android triples, then `cargo tauri android init/build`. Desktop builds today via `mobile/build-desktop.bat`. See `mobile/README.md`.
 3. **compile-real as prod default** — `rustup target add wasm32-wasip1` on the VPS, then flip the client.
 
 ## What's Next (prioritized)
