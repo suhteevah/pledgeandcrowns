@@ -161,6 +161,8 @@ When the player finally passes, the Checker bows: "You may cross. The Old Tongue
 
 **Estimated playtime:** 3 hours.
 
+**Code status (2026-06-18).** The Act 5 *concepts* the prelude skipped ship as 6 missions (the prelude already had `match_option`/`option_unwrap_or`/`result_question_mark`): `result_match` (The Barkeep), `custom_error` (The Bouncer), `from_error` (The Interpreter), `option_map` (The Mixologist), `and_then` (The Tabkeeper), `unwrap_or_else` (The Cellarer). Custom errors are taught as a hand-written `enum` (the grading sandbox is dependency-free); `thiserror` is mentioned in the tutorial as the production shortcut. Design: `docs/superpowers/specs/2026-06-18-act5-tavern-missions-design.md`.
+
 ---
 
 # Act 6 — The Iterator Forge

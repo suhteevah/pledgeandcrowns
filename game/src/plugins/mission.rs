@@ -864,6 +864,150 @@ its own yield — the type follows the trait.",
                 prereq: None,
                 starter_code: "trait Producer {\n    fn make(&self) -> i32;\n}\n\nfn main() {\n    // change Producer so each implementor names its own output type (an associated type),\n    // then implement it for a Coiner that makes an i32\n    let _ = ();\n}\n",
             },
+            // ── Act 5: The Tavern of Tribulations ─────────────────────
+            // Error handling: Result/Option methods, custom errors, From
+            // conversion. See design/01-curriculum.md §Act 5 and
+            // docs/superpowers/specs/2026-06-18-act5-tavern-missions-design.md.
+            Mission {
+                id: "result_match",
+                npc_name: "The Barkeep",
+                prompt: "Handle a `Result` with `match` — the value on `Ok`, a fallback on `Err`.",
+                tutorial: "## Concept\n\
+`Result<T, E>` is `Ok(T)` on success or `Err(E)` on failure — Rust's \
+recoverable-error type. The most explicit way to handle one is `match`, \
+which forces you to cover *both* arms: the compiler won't let you forget \
+the error case. You did this for `Option` (Some/None) earlier; `Result` is \
+the same shape with `Ok`/`Err` and an error payload you can inspect.\n\n\
+## Syntax\n\
+```\nmatch result {\n    Ok(v) => v,\n    Err(e) => {\n        eprintln!(\"{e}\");\n        -1\n    }\n}\n```\n\
+Both arms must produce the same type. Bind the inner value with `Ok(v)` / \
+`Err(e)`.\n\n\
+## Task\n\
+`describe` takes a `Result<i32, String>`. `match` on it: return the value \
+on `Ok`, and `-1` on `Err`.\n\n\
+## Hint\n\
+The grader needs `match `, `Ok(`, and `Err(`. The Barkeep serves what's \
+poured — or mops up what's spilled.",
+                prereq: None,
+                starter_code: "fn describe(r: Result<i32, String>) -> i32 {\n    // handle both outcomes: the value on success, -1 on failure\n    let _ = r;\n    0\n}\n\nfn main() {\n    let _ = describe(Ok(5));\n}\n",
+            },
+            Mission {
+                id: "custom_error",
+                npc_name: "The Bouncer",
+                prompt: "Define a custom error `enum` and return it inside a `Result`.",
+                tutorial: "## Concept\n\
+Real programs define their *own* error types so each failure has a name. \
+The simplest is an `enum` with one variant per failure mode; a fallible \
+function then returns `Result<T, YourError>` and produces `Err(Your\
+Error::Variant)` when things go wrong. (In production you'd usually derive \
+the boilerplate with the `thiserror` crate — but understanding the bare \
+`enum` version first is the point. The grading sandbox is dependency-free, \
+so we write it by hand.)\n\n\
+## Syntax\n\
+```\nenum BrewError { TooHot, TooCold }\nfn check(t: i32) -> Result<i32, BrewError> {\n    if t > 100 { Err(BrewError::TooHot) }\n    else { Ok(t) }\n}\n```\n\
+The error type can carry data too (`enum E { Bad(String) }`), just like any \
+enum.\n\n\
+## Task\n\
+Define an error `enum` with at least two failure kinds, then change `check` \
+to return `Result<i32, YourError>` and return an `Err` when `temp` is out \
+of range.\n\n\
+## Hint\n\
+The grader needs `enum `, `Result<`, and an `Err(`. The Bouncer has a name \
+for every kind of trouble.",
+                prereq: None,
+                starter_code: "fn check(temp: i32) -> i32 {\n    // define an error type with named failure kinds, change this to return a Result,\n    // and produce a failure when temp is out of range\n    temp\n}\n\nfn main() {\n    let _ = check(50);\n}\n",
+            },
+            Mission {
+                id: "from_error",
+                npc_name: "The Interpreter",
+                prompt: "Implement `From<ParseFail> for AppError` so `?` can auto-convert.",
+                tutorial: "## Concept\n\
+The `?` operator's quiet superpower: when a fallible call returns a \
+*different* error type than your function, `?` converts it automatically — \
+if there's a `From` impl. Implementing `From<LowError> for HighError` lets \
+`?` lift a low-level error into your application's error type with no \
+boilerplate at the call site. It's how one function can propagate parse \
+errors, IO errors, and your own errors through a single `Result<_, AppError>`.\n\n\
+## Syntax\n\
+```\nimpl From<ParseFail> for AppError {\n    fn from(e: ParseFail) -> Self {\n        AppError::Parse\n    }\n}\n// now `some_call()?` converts ParseFail -> AppError for free\n```\n\
+`From` gives you `Into` for free, so `ParseFail.into()` also yields an \
+`AppError`.\n\n\
+## Task\n\
+`ParseFail` and `AppError` are given. Implement `From<ParseFail>` for \
+`AppError`, mapping the failure to a variant.\n\n\
+## Hint\n\
+The grader needs `impl From<`, ` for `, and `fn from`. The Interpreter \
+turns one tongue's complaint into another's.",
+                prereq: None,
+                starter_code: "struct ParseFail;\nenum AppError {\n    Parse,\n}\n\nfn main() {\n    // make AppError convertible from ParseFail: implement the standard conversion\n    // trait so that `ParseFail.into()` yields an AppError\n    let _ = ParseFail;\n}\n",
+            },
+            Mission {
+                id: "option_map",
+                npc_name: "The Mixologist",
+                prompt: "Use `.map()` to transform the inside of an `Option` without unwrapping.",
+                tutorial: "## Concept\n\
+`Option::map` applies a function to the inner value *if there is one*, and \
+passes `None` straight through. It lets you transform a `Some(x)` into a \
+`Some(f(x))` without a `match` and without unwrapping — the absence case is \
+handled for you. This is the combinator style: keep the value wrapped, \
+describe the transformation, and let the type carry the maybe-ness.\n\n\
+## Syntax\n\
+```\nlet n: Option<i32> = Some(3);\nlet plus: Option<i32> = n.map(|x| x + 1);  // Some(4)\nNone::<i32>.map(|x| x + 1);                 // still None\n```\n\
+`Result` has the same `.map` (transforms `Ok`, leaves `Err`).\n\n\
+## Task\n\
+`add_one` takes an `Option<i32>`. Use `.map` to return the value plus one, \
+still wrapped — don't unwrap, don't `match`.\n\n\
+## Hint\n\
+The grader needs `Option<` and `.map(`. The Mixologist changes what's in \
+the glass — only if the glass holds something.",
+                prereq: None,
+                starter_code: "fn add_one(o: Option<i32>) -> Option<i32> {\n    // if there's a value, return it plus one — still wrapped — without unwrapping\n    o\n}\n\nfn main() {\n    let _ = add_one(Some(3));\n}\n",
+            },
+            Mission {
+                id: "and_then",
+                npc_name: "The Tabkeeper",
+                prompt: "Chain fallible steps with `.and_then()` — the first `None` short-circuits.",
+                tutorial: "## Concept\n\
+When each step itself returns an `Option` (or `Result`), `.map` would give \
+you a nested `Option<Option<_>>`. `.and_then` flattens it: it runs the next \
+fallible step only if the previous one produced a value, and threads the \
+failure straight through. Chaining `.and_then` is how you express \"do this, \
+then this, then this — stop at the first failure\" without a pyramid of \
+`match`es.\n\n\
+## Syntax\n\
+```\nfn half(n: i32) -> Option<i32> {\n    if n % 2 == 0 { Some(n / 2) } else { None }\n}\nSome(8).and_then(half).and_then(half);  // Some(2)\nSome(8).and_then(half).and_then(half).and_then(half);  // None (3 is odd)\n```\n\
+`Result::and_then` works the same way over `Ok`/`Err`.\n\n\
+## Task\n\
+`half` is given. Chain it on `Some(8)` with `.and_then` (at least once) so \
+an odd intermediate short-circuits to `None`.\n\n\
+## Hint\n\
+The grader needs `Option` and `.and_then(`. The Tabkeeper runs the tab — \
+one unpaid round and the whole chain is cut.",
+                prereq: None,
+                starter_code: "fn half(n: i32) -> Option<i32> {\n    if n % 2 == 0 { Some(n / 2) } else { None }\n}\n\nfn main() {\n    // chain `half` on Some(8) so the first failure short-circuits to None\n    let _ = half(8);\n}\n",
+            },
+            Mission {
+                id: "unwrap_or_else",
+                npc_name: "The Cellarer",
+                prompt: "Provide a lazily-computed default with `.unwrap_or_else(|| …)`.",
+                tutorial: "## Concept\n\
+`.unwrap_or(d)` returns the inner value or a default `d` — but `d` is \
+computed *eagerly*, even when it isn't needed. `.unwrap_or_else(|| ...)` \
+takes a *closure* and only runs it on the `None`/`Err` path, so an expensive \
+fallback costs nothing in the common case. Reach for `_else` whenever the \
+default is more than a cheap constant.\n\n\
+## Syntax\n\
+```\nlet n: Option<i32> = None;\nn.unwrap_or(0);              // 0, but 0 was built regardless\nn.unwrap_or_else(|| expensive());  // expensive() runs only because n is None\n```\n\
+`Result::unwrap_or_else` receives the error value: `r.unwrap_or_else(|e| ...)`.\n\n\
+## Task\n\
+`value` takes an `Option<i32>`. Return the inner value, or compute a \
+fallback lazily with `.unwrap_or_else(|| ...)`.\n\n\
+## Hint\n\
+The grader needs `.unwrap_or_else(` and a closure `||`. The Cellarer broaches \
+a fresh cask only when the old one runs dry.",
+                prereq: None,
+                starter_code: "fn value(o: Option<i32>) -> i32 {\n    // unwrap the option, computing the fallback lazily with a closure (only if needed)\n    let _ = o;\n    0\n}\n\nfn main() {\n    let _ = value(None);\n}\n",
+            },
         ];
         // Strict-linear progression: each mission's prereq is the one
         // listed immediately before it. Shape decision logged in HANDOFF

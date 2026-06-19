@@ -487,6 +487,88 @@ pub fn stub_verdict(encounter_id: &str, source: &str) -> Option<StubVerdict> {
                 )
             }
         }
+        // ── Act 5 (Tavern of Tribulations). Flavor MUST stay byte-identical
+        // to compile-api/src/grader.rs.
+        "result_match" => {
+            if !source.contains("match ") {
+                StubVerdict::fail("the Barkeep waits — missing required: `match `")
+            } else if !source.contains("Ok(") {
+                StubVerdict::fail("the Barkeep waits — handle the success arm `Ok(`")
+            } else if !source.contains("Err(") {
+                StubVerdict::fail("the Barkeep waits — handle the failure arm `Err(`")
+            } else {
+                StubVerdict::pass(
+                    "the Barkeep nods. \"poured or spilled — you accounted for both.\"",
+                )
+            }
+        }
+        "custom_error" => {
+            if !source.contains("enum ") {
+                StubVerdict::fail(
+                    "the Bouncer crosses his arms — missing required: an error `enum `",
+                )
+            } else if !source.contains("Result<") {
+                StubVerdict::fail(
+                    "the Bouncer crosses his arms — return a `Result<...>` from check",
+                )
+            } else if !source.contains("Err(") {
+                StubVerdict::fail(
+                    "the Bouncer crosses his arms — produce a failure with `Err(...)`",
+                )
+            } else {
+                StubVerdict::pass(
+                    "the Bouncer grunts. \"every kind of trouble, named and on the list.\"",
+                )
+            }
+        }
+        "from_error" => {
+            if !source.contains("impl From<") {
+                StubVerdict::fail("the Interpreter pauses — missing required: `impl From<...>`")
+            } else if !source.contains(" for ") {
+                StubVerdict::fail("the Interpreter pauses — implement it `for` your error type")
+            } else if !source.contains("fn from") {
+                StubVerdict::fail("the Interpreter pauses — the conversion is a `fn from` method")
+            } else {
+                StubVerdict::pass(
+                    "the Interpreter inclines her head. \"one tongue's failure, spoken in another.\"",
+                )
+            }
+        }
+        "option_map" => {
+            if !source.contains("Option<") {
+                StubVerdict::fail("the Mixologist waits — keep it an `Option<...>`")
+            } else if !source.contains(".map(") {
+                StubVerdict::fail("the Mixologist waits — transform the inside with `.map(`")
+            } else {
+                StubVerdict::pass(
+                    "the Mixologist swirls the glass. \"changed within — if there was anything to change.\"",
+                )
+            }
+        }
+        "and_then" => {
+            if !source.contains("Option") {
+                StubVerdict::fail("the Tabkeeper waits — the steps should yield an `Option`")
+            } else if !source.contains(".and_then(") {
+                StubVerdict::fail(
+                    "the Tabkeeper waits — chain the fallible steps with `.and_then(`",
+                )
+            } else {
+                StubVerdict::pass(
+                    "the Tabkeeper closes the ledger. \"one failed round and the tab is cut.\"",
+                )
+            }
+        }
+        "unwrap_or_else" => {
+            if !source.contains(".unwrap_or_else(") {
+                StubVerdict::fail("the Cellarer waits — missing required: `.unwrap_or_else(`")
+            } else if !source.contains("||") {
+                StubVerdict::fail("the Cellarer waits — the lazy default is a closure `|| ...`")
+            } else {
+                StubVerdict::pass(
+                    "the Cellarer taps the cask. \"a fresh draught — drawn only when the old runs dry.\"",
+                )
+            }
+        }
         _ => return None,
     };
     Some(v)

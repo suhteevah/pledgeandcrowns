@@ -471,6 +471,78 @@ pub fn grade(encounter_id: &str, source: &str) -> Verdict {
                 )
             }
         }
+        // ── Act 5 (Tavern of Tribulations): Result/Option methods, custom
+        // errors, From conversion.
+        "result_match" => {
+            if !source.contains("match ") {
+                Verdict::fail("the Barkeep waits — missing required: `match `")
+            } else if !source.contains("Ok(") {
+                Verdict::fail("the Barkeep waits — handle the success arm `Ok(`")
+            } else if !source.contains("Err(") {
+                Verdict::fail("the Barkeep waits — handle the failure arm `Err(`")
+            } else {
+                Verdict::pass("the Barkeep nods. \"poured or spilled — you accounted for both.\"")
+            }
+        }
+        "custom_error" => {
+            if !source.contains("enum ") {
+                Verdict::fail("the Bouncer crosses his arms — missing required: an error `enum `")
+            } else if !source.contains("Result<") {
+                Verdict::fail("the Bouncer crosses his arms — return a `Result<...>` from check")
+            } else if !source.contains("Err(") {
+                Verdict::fail("the Bouncer crosses his arms — produce a failure with `Err(...)`")
+            } else {
+                Verdict::pass(
+                    "the Bouncer grunts. \"every kind of trouble, named and on the list.\"",
+                )
+            }
+        }
+        "from_error" => {
+            if !source.contains("impl From<") {
+                Verdict::fail("the Interpreter pauses — missing required: `impl From<...>`")
+            } else if !source.contains(" for ") {
+                Verdict::fail("the Interpreter pauses — implement it `for` your error type")
+            } else if !source.contains("fn from") {
+                Verdict::fail("the Interpreter pauses — the conversion is a `fn from` method")
+            } else {
+                Verdict::pass(
+                    "the Interpreter inclines her head. \"one tongue's failure, spoken in another.\"",
+                )
+            }
+        }
+        "option_map" => {
+            if !source.contains("Option<") {
+                Verdict::fail("the Mixologist waits — keep it an `Option<...>`")
+            } else if !source.contains(".map(") {
+                Verdict::fail("the Mixologist waits — transform the inside with `.map(`")
+            } else {
+                Verdict::pass(
+                    "the Mixologist swirls the glass. \"changed within — if there was anything to change.\"",
+                )
+            }
+        }
+        "and_then" => {
+            if !source.contains("Option") {
+                Verdict::fail("the Tabkeeper waits — the steps should yield an `Option`")
+            } else if !source.contains(".and_then(") {
+                Verdict::fail("the Tabkeeper waits — chain the fallible steps with `.and_then(`")
+            } else {
+                Verdict::pass(
+                    "the Tabkeeper closes the ledger. \"one failed round and the tab is cut.\"",
+                )
+            }
+        }
+        "unwrap_or_else" => {
+            if !source.contains(".unwrap_or_else(") {
+                Verdict::fail("the Cellarer waits — missing required: `.unwrap_or_else(`")
+            } else if !source.contains("||") {
+                Verdict::fail("the Cellarer waits — the lazy default is a closure `|| ...`")
+            } else {
+                Verdict::pass(
+                    "the Cellarer taps the cask. \"a fresh draught — drawn only when the old runs dry.\"",
+                )
+            }
+        }
         _ => Verdict::pass(format!(
             "[freeform] received {} bytes. encounter `{encounter_id}` has no grader yet.",
             source.len()
@@ -1447,5 +1519,83 @@ fn name(d: Direction) -> &'static str {
         );
         assert!(!v.ok);
         assert!(v.stderr.contains("type Output"));
+    }
+
+    // ── Act 5: Tavern of Tribulations ─────────────────────────────
+    #[test]
+    fn result_match_pass_canonical() {
+        let src = "fn d(r: Result<i32, String>) -> i32 { match r { Ok(v) => v, Err(_e) => -1 } } fn main() {}";
+        assert!(grade("result_match", src).ok);
+    }
+    #[test]
+    fn result_match_fail_no_err_arm() {
+        let src =
+            "fn d(r: Result<i32, String>) -> i32 { match r { Ok(v) => v, _ => -1 } } fn main() {}";
+        let v = grade("result_match", src);
+        assert!(!v.ok);
+        assert!(v.stderr.contains("Err("));
+    }
+    #[test]
+    fn custom_error_pass_canonical() {
+        let src = "enum E { Bad } fn check(t: i32) -> Result<i32, E> { if t < 0 { Err(E::Bad) } else { Ok(t) } } fn main() {}";
+        assert!(grade("custom_error", src).ok);
+    }
+    #[test]
+    fn custom_error_fail_no_enum() {
+        let v = grade("custom_error", "fn check(t: i32) -> i32 { t }");
+        assert!(!v.ok);
+        assert!(v.stderr.contains("enum "));
+    }
+    #[test]
+    fn from_error_pass_canonical() {
+        let src = "struct A; enum E { X } impl From<A> for E { fn from(_a: A) -> Self { E::X } } fn main() {}";
+        assert!(grade("from_error", src).ok);
+    }
+    #[test]
+    fn from_error_fail_no_impl() {
+        let v = grade("from_error", "struct A; enum E { X } fn main() {}");
+        assert!(!v.ok);
+        assert!(v.stderr.contains("impl From<"));
+    }
+    #[test]
+    fn option_map_pass_canonical() {
+        let src = "fn f(o: Option<i32>) -> Option<i32> { o.map(|x| x + 1) } fn main() {}";
+        assert!(grade("option_map", src).ok);
+    }
+    #[test]
+    fn option_map_fail_no_map() {
+        let v = grade(
+            "option_map",
+            "fn f(o: Option<i32>) -> Option<i32> { o } fn main() {}",
+        );
+        assert!(!v.ok);
+        assert!(v.stderr.contains(".map("));
+    }
+    #[test]
+    fn and_then_pass_canonical() {
+        let src =
+            "fn h(n: i32) -> Option<i32> { Some(n) } fn main() { let _ = Some(8).and_then(h); }";
+        assert!(grade("and_then", src).ok);
+    }
+    #[test]
+    fn and_then_fail_no_and_then() {
+        let v = grade("and_then", "fn main() { let _: Option<i32> = Some(8); }");
+        assert!(!v.ok);
+        assert!(v.stderr.contains(".and_then("));
+    }
+    #[test]
+    fn unwrap_or_else_pass_canonical() {
+        let src = "fn f(o: Option<i32>) -> i32 { o.unwrap_or_else(|| 0) } fn main() {}";
+        assert!(grade("unwrap_or_else", src).ok);
+    }
+    #[test]
+    fn unwrap_or_else_fail_eager_unwrap_or() {
+        // plain `.unwrap_or(` (the earlier mission) must NOT satisfy this one.
+        let v = grade(
+            "unwrap_or_else",
+            "fn f(o: Option<i32>) -> i32 { o.unwrap_or(0) } fn main() {}",
+        );
+        assert!(!v.ok);
+        assert!(v.stderr.contains(".unwrap_or_else("));
     }
 }

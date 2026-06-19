@@ -70,6 +70,17 @@ pub const SPRITE_FAMILIAR: &str = "sprites/npc/familiar_idle_0.png";
 pub const SPRITE_LANTERNKEEPER: &str = "sprites/npc/lanternkeeper_idle_0.png";
 pub const SPRITE_LOREMASTER: &str = "sprites/npc/loremaster_idle_0.png";
 
+// NPC batch 7 (2026-06-18) — Act 5 Tavern of Tribulations: Barkeep, Bouncer,
+// Interpreter, Mixologist, Tabkeeper, Cellarer. Sources:
+// design/art/refs/ref-42..47-*.jsx, rendered via `cargo run -p render-refs`.
+// First-pass, pending Matt's art review.
+pub const SPRITE_BARKEEP: &str = "sprites/npc/barkeep_idle_0.png";
+pub const SPRITE_BOUNCER: &str = "sprites/npc/bouncer_idle_0.png";
+pub const SPRITE_INTERPRETER: &str = "sprites/npc/interpreter_idle_0.png";
+pub const SPRITE_MIXOLOGIST: &str = "sprites/npc/mixologist_idle_0.png";
+pub const SPRITE_TABKEEPER: &str = "sprites/npc/tabkeeper_idle_0.png";
+pub const SPRITE_CELLARER: &str = "sprites/npc/cellarer_idle_0.png";
+
 // Audio (Stable Audio Open generated, baked via tools/synthwave-gen).
 // Generation is a Matt-action: `powershell -ExecutionPolicy Bypass
 // -File scripts/synthwave-gen.ps1`. Files may be absent during early
@@ -132,4 +143,10 @@ pub const ALL_SPRITE_PATHS: &[&str] = &[
     SPRITE_FAMILIAR,
     SPRITE_LANTERNKEEPER,
     SPRITE_LOREMASTER,
+    SPRITE_BARKEEP,
+    SPRITE_BOUNCER,
+    SPRITE_INTERPRETER,
+    SPRITE_MIXOLOGIST,
+    SPRITE_TABKEEPER,
+    SPRITE_CELLARER,
 ];

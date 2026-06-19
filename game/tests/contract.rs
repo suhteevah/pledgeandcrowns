@@ -271,6 +271,74 @@ fn main() {
     let _ = c.make();
 }"#
         }
+        // ── Act 5: Tavern of Tribulations.
+        "result_match" => {
+            r#"fn describe(r: Result<i32, String>) -> i32 {
+    match r {
+        Ok(v) => v,
+        Err(_e) => -1,
+    }
+}
+fn main() {
+    let _ = describe(Ok(5));
+}"#
+        }
+        "custom_error" => {
+            r#"enum BrewError {
+    TooHot,
+    TooCold,
+}
+fn check(temp: i32) -> Result<i32, BrewError> {
+    if temp > 100 {
+        Err(BrewError::TooHot)
+    } else if temp < 0 {
+        Err(BrewError::TooCold)
+    } else {
+        Ok(temp)
+    }
+}
+fn main() {
+    let _ = check(50);
+}"#
+        }
+        "from_error" => {
+            r#"struct ParseFail;
+enum AppError {
+    Parse,
+}
+impl From<ParseFail> for AppError {
+    fn from(_e: ParseFail) -> Self {
+        AppError::Parse
+    }
+}
+fn main() {
+    let _e: AppError = ParseFail.into();
+}"#
+        }
+        "option_map" => {
+            r#"fn add_one(o: Option<i32>) -> Option<i32> {
+    o.map(|x| x + 1)
+}
+fn main() {
+    let _ = add_one(Some(3));
+}"#
+        }
+        "and_then" => {
+            r#"fn half(n: i32) -> Option<i32> {
+    if n % 2 == 0 { Some(n / 2) } else { None }
+}
+fn main() {
+    let _ = Some(8).and_then(half).and_then(half);
+}"#
+        }
+        "unwrap_or_else" => {
+            r#"fn value(o: Option<i32>) -> i32 {
+    o.unwrap_or_else(|| 0)
+}
+fn main() {
+    let _ = value(None);
+}"#
+        }
         _ => return None,
     })
 }

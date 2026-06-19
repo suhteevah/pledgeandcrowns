@@ -7,13 +7,14 @@
 //! This plugin only owns NPC spawning and proximity detection.
 
 use crate::assets::{
-    SPRITE_ALCHEMIST, SPRITE_ARMORER, SPRITE_AUDITOR, SPRITE_BELLRINGER, SPRITE_BORROW_CHECKER,
-    SPRITE_CARTOGRAPHER, SPRITE_CHRONICLER, SPRITE_CONJURER, SPRITE_COOPER, SPRITE_DRILLMASTER,
-    SPRITE_FAMILIAR, SPRITE_FERRIS, SPRITE_FORGEWRIGHT, SPRITE_GUILDMASTER, SPRITE_HERALD,
-    SPRITE_HERALDIC_SAGE, SPRITE_LANTERNKEEPER, SPRITE_LINGUIST, SPRITE_LOCKSMITH,
-    SPRITE_LOREMASTER, SPRITE_ORACLE, SPRITE_PILGRIM, SPRITE_PORTER, SPRITE_QUARTERMASTER,
-    SPRITE_RECKONER, SPRITE_RECRUITER, SPRITE_SMITH, SPRITE_SURVEYOR, SPRITE_TINKER,
-    SPRITE_TRAIT_MAGE, SPRITE_TWIN, SPRITE_VEXIS, SPRITE_WANDWRIGHT,
+    SPRITE_ALCHEMIST, SPRITE_ARMORER, SPRITE_AUDITOR, SPRITE_BARKEEP, SPRITE_BELLRINGER,
+    SPRITE_BORROW_CHECKER, SPRITE_BOUNCER, SPRITE_CARTOGRAPHER, SPRITE_CELLARER, SPRITE_CHRONICLER,
+    SPRITE_CONJURER, SPRITE_COOPER, SPRITE_DRILLMASTER, SPRITE_FAMILIAR, SPRITE_FERRIS,
+    SPRITE_FORGEWRIGHT, SPRITE_GUILDMASTER, SPRITE_HERALD, SPRITE_HERALDIC_SAGE,
+    SPRITE_INTERPRETER, SPRITE_LANTERNKEEPER, SPRITE_LINGUIST, SPRITE_LOCKSMITH, SPRITE_LOREMASTER,
+    SPRITE_MIXOLOGIST, SPRITE_ORACLE, SPRITE_PILGRIM, SPRITE_PORTER, SPRITE_QUARTERMASTER,
+    SPRITE_RECKONER, SPRITE_RECRUITER, SPRITE_SMITH, SPRITE_SURVEYOR, SPRITE_TABKEEPER,
+    SPRITE_TINKER, SPRITE_TRAIT_MAGE, SPRITE_TWIN, SPRITE_VEXIS, SPRITE_WANDWRIGHT,
 };
 use crate::plugins::player::Player;
 use crate::plugins::state::GameState;
@@ -289,6 +290,49 @@ pub const NPC_ROSTER: &[NpcSpec] = &[
         mission_id: "assoc_type",
         sprite_path: SPRITE_LOREMASTER,
         pos: (120.0, 130.0),
+        native_px: 32.0,
+    },
+    // ── Act 5: The Tavern of Tribulations (batch 7).
+    NpcSpec {
+        name: "The Barkeep",
+        mission_id: "result_match",
+        sprite_path: SPRITE_BARKEEP,
+        pos: (-220.0, -64.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Bouncer",
+        mission_id: "custom_error",
+        sprite_path: SPRITE_BOUNCER,
+        pos: (220.0, 0.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Interpreter",
+        mission_id: "from_error",
+        sprite_path: SPRITE_INTERPRETER,
+        pos: (-100.0, -130.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Mixologist",
+        mission_id: "option_map",
+        sprite_path: SPRITE_MIXOLOGIST,
+        pos: (100.0, 30.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Tabkeeper",
+        mission_id: "and_then",
+        sprite_path: SPRITE_TABKEEPER,
+        pos: (-100.0, 30.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Cellarer",
+        mission_id: "unwrap_or_else",
+        sprite_path: SPRITE_CELLARER,
+        pos: (200.0, -130.0),
         native_px: 32.0,
     },
 ];
