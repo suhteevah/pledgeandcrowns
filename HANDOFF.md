@@ -1,186 +1,95 @@
 # HANDOFF.md
 
 ## Last Updated
-2026-06-18 (session 3) — drove the full post-v1 roadmap. Closed the stated
-v1 browser blocker (wasm title art **visually verified rendering in
-Chrome**), built honest build+run grading (compile-real + wasm exec) and
-**fixed a latent `wasm_runner` bug that would have rejected every real Rust
-module**, shipped the audio-to-MIDI tool (with a real transcription),
-scaffolded the AudioLDM2 SFX tool and the Tauri 2.0 mobile wrapper, and
-teed up the 4 remaining NPC sprites with bible-faithful art briefs.
+2026-06-19 — Big session: closed the entire post-v1 roadmap, then built out
+the curriculum from the flat 21-mission prelude to **Acts 1–7 (51 missions,
+51 NPCs, all with distinct art)**. Everything is committed + pushed to
+`main` (`suhteevah/pledgeandcrowns`).
 
 ## Project Status
-🟢 **v1 complete and browser-verified.** Native: 21 missions, full
-curriculum gating, win epilogue, full synthwave score + SFX (now including
-mission_locked). Web: builds, renders, and runs — the bindless rendering
-fix is **visually confirmed** (title art + scene render in WebGL2). Honest
-build+run grading is available behind an opt-in flag.
+🟢 **v1 complete, browser-verified, and curriculum-expanded to Acts 1–7.**
+Native + web both build and run. 51 missions cover the entire core Rust
+language (variables → ownership → traits/generics → errors →
+collections/iterators → concurrency). All graders + the offline stub are in
+byte-parity; every canonical solution compiles under real `cargo check`.
 
-## What Was Done This Session (2026-06-18)
+## What Was Done This Session
 
-Roadmap milestones, by disposition:
+### Post-v1 roadmap — all 7 milestones (commits `61a2152`, `20f33ab`, `113c05b`)
+- **mission_locked.wav wired** — Bevy 0.18 `Message` (`MissionLockedAttempt`) from `mission.rs` → `audio::sfx_on_locked_attempt`.
+- **compile-real + wasm exec** — new `compile-api/src/wasm_builder.rs` bridges player source → `cargo build --target wasm32-wasip1` → `wasm_runner::run_wasm`. `/compile-real` returns an honest "compiled AND ran" verdict. Client opt-in via env `PLEDGE_REAL_COMPILE=1`. **Found + fixed a latent `wasm_runner` bug** (it disabled `bulk_memory`/`reference_types`, which rustc's wasip1 std requires — every real Rust module failed; a test even *asserted* the bug). Logged in `.claude/audit-gaps.md`.
+- **wasm render verified** — rebuilt web, served, drove Chrome → title art renders in WebGL2 (the bindless fix is confirmed; v1 is browser-shippable). Also fixed a `web-build.ps1` asset-nesting bug.
+- **audio-to-MIDI tool** (`tools/audio-to-midi/`) — ran a real GPU transcription; confirmed the village bass sits on B1.
+- **AudioLDM2 SFX tool** (`tools/audioldm2-gen/`) — scaffolded; bake is rig-gated (CC-BY-NC weights, prototype-only).
+- **Tauri 2.0 wrapper** (`mobile/`) — **desktop builds + links** (`app.exe`) once you select the VS **BuildTools** install over Community (the Community C++ workload is incomplete; `mobile/build-desktop.bat` queries by the VC.Tools component). Android bundle needs the SDK.
+- **NPC art** — replaced the last 4 `SPRITE_PLAYER` placeholders (batch 4).
 
-### ✅ Wired `mission_locked.wav` into the audio plugin (was "trivial, TODO")
-- New Bevy **message** `MissionLockedAttempt` emitted in
-  `mission::handle_interact_key` on an F-press against a locked NPC;
-  consumed by `audio::sfx_on_locked_attempt` (Bevy 0.18 uses
-  `Message`/`MessageReader`/`add_message`, not the old `Event` buffered
-  API — verified against the installed source).
-- Decoupled by design: the locked-attempt detection stays in the one
-  system that already owns the F-press + nearby-NPC + progress reads,
-  rather than re-deriving it in `audio.rs`.
-- 2 new regression tests in `game/tests/bevy_smoke.rs` (locked NPC →
-  exactly one message + editor stays closed; unlocked NPC → zero messages
-  + editor opens). 7/7 smoke tests green.
+### Curriculum: Acts 3–7 mission batches (commits `e13a408`, `8754f9c`, `92200e8`, `818aac4`, `764b956`, `380b711`)
+Each act = 6 gap-filling missions (the prelude already covered some concepts), wired end-to-end with the same recipe + a 6-NPC art batch:
+- **Act 3 Guildhall Quarter** — `impl_method`, `assoc_new`, `if_let`, `while_let`, `tuple_struct`, `enum_data_match`.
+- **Act 4 Trait Mage's Tower** — `trait_def`, `generic_fn`, `generic_struct`, `dyn_trait`, `lifetimes`, `assoc_type`.
+- **Act 5 Tavern of Tribulations** — `result_match`, `custom_error`, `from_error`, `option_map`, `and_then`, `unwrap_or_else`.
+- **Act 6 Iterator Forge** — `hashmap_basic`, `iter_filter`, `iter_fold`, `iter_enumerate`, `iter_zip`, `closure_move`.
+- **Act 7 Concurrent Coast** — `thread_spawn`, `arc_mutex`, `mpsc_channel`, `atomic`, `thread_scope`, `async_fn` (compile-only).
 
-### ✅ compile-real + wasmtime exec wiring (honest grading)
-- New `compile-api/src/wasm_builder.rs`: bridges player source →
-  `cargo build --target wasm32-wasip1 --release` → raw `.wasm` →
-  `wasm_runner::run_wasm`. Same security contract as `cargo_grader`
-  (server-owned bin manifest, UUID sandbox, env_clear allowlist,
-  wall-clock watchdog, Drop cleanup, `panic="abort"` so panics trap).
-- `/compile-real` route now returns an honest **compiled AND ran** verdict
-  with the program's real stdout, marked `[real]`.
-- Game client opt-in: set **`PLEDGE_REAL_COMPILE=1`** to route to
-  `/compile-real` (default stays the fast `/compile` pattern grader —
-  keeps MVP latency; the prod default-switch is gated on installing the
-  wasip1 toolchain on the server).
-- **Latent bug found + fixed:** `wasm_runner`'s `Config` disabled
-  `bulk_memory` + `reference_types` as "defence in depth," but those are
-  WebAssembly 2.0 baseline that rustc's wasip1 **std** emits — so it
-  rejected *every* real Rust module with `zero byte expected`. Never
-  caught because no test had ever built real wasm and run it; worse, a
-  test *asserted* the buggy behavior. Now enabled (exotic proposals stay
-  off); the deny-list guard re-pointed at SIMD. Logged in
-  `.claude/audit-gaps.md`.
-- Tests: `compile-api/tests/wasm_builder.rs` (9, `#[ignore]`d — real
-  build+run: hello-world captures stdout, compile-error/missing-main
-  rejected, panic→run-fail, infinite-loop→fuel/timeout, sandbox cleanup).
-  `wasm_runner.rs` tests updated (bulk-memory now accepted, SIMD denied).
-  All green. `rustup target add wasm32-wasip1` was run on this box.
+Per-act design specs live in `docs/superpowers/specs/2026-06-18-act{3..7}-*.md`.
 
-### ✅ Visual verification of the wasm rendering fix (was the #1 Matt-blocker)
-- Rebuilt wasm (`scripts/web-build.ps1`), served via `web-serve`, drove
-  **Chrome** to `127.0.0.1:8080` and screenshotted: the "PLEDGE & CROWN"
-  title art, crown sprite, and full pixel scene (mountains/water/bridge/
-  player/NPCs) all render in WebGL2. **The bindless fix is confirmed; v1
-  is browser-shippable.**
-- **Also fixed a `web-build.ps1` bug found doing this:** `Copy-Item
-  -Recurse` into an existing `web/assets/` *nested* the fresh assets under
-  `web/assets/assets/`, so every rebuild after the first silently served
-  STALE sprites and stranded new audio. Now clears the dest first.
+## Current State
 
-### ✅ Audio-to-MIDI tool (you asked whether SAO output can be transcribed)
-- `tools/audio-to-midi/` + `scripts/audio-to-midi.ps1`: Demucs (htdemucs
-  stem split) → Spotify Basic Pitch (per-stem transcription) → per-stem +
-  combined `.mid`. onnxruntime backend (no TensorFlow). Manifest-driven,
-  same pattern as synthwave-gen.
-- **Actually run end-to-end** (py 3.10 venv, torch cu121, GPU): produced
-  real MIDI for `village` — and it answered the load-bearing question:
-  **the village bass IS anchored on B1** (B1 dominant every run),
-  confirming the SAO prompt steering. MuseScore sheet-music step is
-  documented as a manual follow-up (not implemented).
+### Working
+- **51 missions**, strict-linear chain, full curriculum gating. Each: 4-section tutorial + neutral starter + pattern grader (`compile-api/src/grader.rs`) **mirrored byte-for-byte** in the wasm stub (`game/src/plugins/stub_grader.rs`).
+- **51 NPCs**, every one with distinct first-pass art (sprite batches 1–9). Rendered via the pure-Rust `render-refs` pipeline from `design/art/refs/ref-NN-*.jsx`.
+- Native game + wasm web build both run; audio score + SFX; win epilogue.
+- Honest build-and-run grading available behind `PLEDGE_REAL_COMPILE` (server needs `wasm32-wasip1` for prod).
 
-### ✅ AudioLDM2 diegetic-SFX tool (scaffold; bake is rig-gated by your note)
-- `tools/audioldm2-gen/` + `scripts/audioldm2-gen.ps1`: `cvssp/audioldm2`
-  via diffusers, 16 kHz mono, 9 SFX (door creak/open, parchment, footsteps,
-  coin, sword, anvil, quill, latch) → `game/assets/audio/sfx/`. Validated
-  by py_compile + a torch-free `--dry-run`. **No bake run** (deferred to
-  the P100 rig per your note). ⚠️ AudioLDM2 weights are **CC-BY-NC** —
-  prototype-only; clear SFX licensing before shipping.
+### Test posture (all green)
+- `scripts/ci.ps1` (fmt + check + clippy `-D warnings` + `cargo test --workspace`) is the pre-commit gate; every commit this session passed it.
+- Contract suite (`game/tests/contract.rs`): per mission — canonical passes grader, starter doesn't trivially win, server↔stub flavor byte-parity, no freeform fallthrough, **+ slow `#[ignore]` cargo-check parity** (all 51 canonicals are valid Rust).
+- Registry suite (`registry.rs`): linear prereq, unique ids/names, sprite-in-registry, tutorial substance.
+- ~98 grader unit tests + the wasm_builder/wasm_runner slow suites.
 
-### ✅ Tauri 2.0 mobile wrapper — desktop build WORKS
-- `mobile/src-tauri/` via `cargo tauri init`: frontendDist → `../../web`,
-  standalone `[workspace]` (detached from the game workspace), 1280×720
-  window, provisional identifier `com.pledgeandcrown.game`, npm hooks
-  removed (frontend is the prebuilt `web/`).
-- **Builds + links to a runnable `app.exe` (37 MB PE32+)** via
-  `mobile/build-desktop.bat`. The helper's key trick: the box has TWO VS
-  2022 installs and only **BuildTools** has a complete C++ workload
-  (Community is OneCore-libs-only, no `vcvarsall.bat`). `vswhere -latest`
-  picks the broken Community; `build-desktop.bat` queries
-  `-requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64`, which
-  returns BuildTools → links cleanly. GNU can't link it (webview2 export
-  overflow), so the wrapper alone uses MSVC; the game stays on GNU.
-- **Android bundle** is the remaining step and needs the Android SDK+NDK
-  (`ANDROID_HOME`/`NDK_HOME` + android rust targets + `cargo tauri
-  android`). None found on this box (checked user + machine scope), so
-  that's the one mobile-packaging gate. Desktop is done. Details in
-  `mobile/README.md`.
+### Stubbed / limited (intentional)
+- `async_fn` mission is **compile-only** — `async fn`/`.await` type-check + token-grade, but the dep-free sandbox has no runtime (tokio) to actually run them.
+- The doc's RPG layer (party tab, combat, per-act bosses, multi-zone world) is **not built** — the code is the mission-tutorial loop. All Act NPCs live in Hearthstone Village.
+- `compile-real` is opt-in, not the prod default (needs `wasm32-wasip1` on the Hetzner VPS).
+- The ~30 first-pass sprites (batches 4–9) are **mine**, not artist-final — pending your locked art review.
 
-### ✅ NPC art — last 4 placeholders replaced with real sprites
-- Wrote 4 bible-faithful **specs** (`design/art/specs/{quartermaster,
-  auditor,chronicler,alchemist}.md`), then authored the **JSX grids**
-  (`design/art/refs/ref-26..29-*.jsx`) from them and rendered to PNG via
-  the canonical pure-Rust pipeline (`cargo run -p render-refs`), wired into
-  `assets.rs` (`SPRITE_QUARTERMASTER/AUDITOR/CHRONICLER/ALCHEMIST` +
-  `ALL_SPRITE_PATHS`) and `npc.rs::NPC_ROSTER`. **All 21 NPCs now carry
-  distinct art** — no `SPRITE_PLAYER` placeholders left.
-- Palette-compliant (Heraldic Code), each prop tied to its mission (gold
-  sacks = slice window, ledger+`!`Err-seal, clockwork tome = derive,
-  teal vials = iter/map/collect). The Auditor uses a documented ~0.6%
-  Alarm-scarlet exception (under the 1% cap).
-- **These are first-pass sprites** authored by me, a clear upgrade from the
-  player-clones — NOT a substitute for Matt's locked art-review (the
-  3-revision approval flow). Re-render after any edit with
-  `cargo run -p render-refs --bin render-refs --release`. Note: a web
-  rebuild (`scripts/web-build.ps1`) will pick them up for wasm too.
+## Blocking Issues (all owner-actions, none block the code)
+1. **Art review** — 30 first-pass NPC sprites (batches 4–9) await your 3-revision approval. Each is one `cargo run -p render-refs --bin render-refs --release` from a revision (edit the `ref-NN-*.jsx` grid). Rougher ones flagged in `design/04b-art-deliverables.md` batch notes.
+2. **Tauri Android bundle** — needs Android SDK+NDK (none found on the box). Desktop builds today via `mobile/build-desktop.bat`. See `mobile/README.md`.
+3. **compile-real as prod default** — `rustup target add wasm32-wasip1` on the VPS, then flip the client.
 
-## Verification (this session)
-- Full local CI green: `scripts/ci.ps1` (fmt + check + clippy `-D warnings`
-  + `cargo test --workspace`). The new tests all pass; clippy clean.
-- wasm_builder/wasm_runner `#[ignore]`d slow tests run + green via
-  `cargo test -p pledge_compile_api --test wasm_builder --test wasm_runner -- --include-ignored`.
-- wasm render confirmed visually in Chrome.
-
-## Blocking Issues (remaining = Matt-actions)
-1. **Tauri Android bundle** — desktop builds today via
-   `mobile/build-desktop.bat`. The Android bundle additionally needs the
-   Android SDK+NDK (set `ANDROID_HOME`/`NDK_HOME`) + the android rust
-   targets, then `cargo tauri android init/build`. No SDK found on this box
-   (checked user + machine scope). Full runbook in `mobile/README.md`.
-   (Note: build the wrapper with the VS **BuildTools** MSVC env, not
-   Community — see README; `build-desktop.bat` already selects the right
-   one.)
-2. **NPC art generation** — drive `claude.ai/design` from the 4 new specs
-   (+ the 17 redesigns), approve, render via `render-refs`, wire in.
-3. **compile-real as the prod default** — needs `rustup target add
-   wasm32-wasip1` on the Hetzner VPS; then flip the client to
-   `PLEDGE_REAL_COMPILE` / drop the `[real]` marker. ~build+run latency
-   (a few seconds) vs ~100ms pattern grading — a v1.1 call.
-
-## What's Next (post-this-session)
-1. **Bake the AudioLDM2 SFX** once the P100 rig lands; wire `sfx/*.wav`
-   into `audio.rs` (mirror the existing SFX edge systems).
-2. **Per-encounter expected-output grading** on top of compile-real (the
-   execution layer is now in place; define expected stdout per mission).
-3. **Acts 3+ curriculum** — new missions/NPCs/art. Still **Matt-territory**
-   for content design; not expanded this session (scope discipline).
-4. Audio-to-MIDI: run `--all` + the MuseScore sheet-music step if you want
-   full scores.
+## What's Next (prioritized)
+1. **Act 8 — Vault of Pointers** (`Box`/`Rc`/`Weak`/`RefCell`/`Cell`): all clean to pattern-grade — the strongest next batch. Follow the exact recipe below.
+2. **Act 9 — Forbidden Library** (`unsafe`, FFI `extern "C"`, `macro_rules!`, `Drop`/`Send`/`Sync`): gradeable by token/compile, but `unsafe`/FFI are harder to make *meaningful* in a sandbox. **Note:** `unsafe` in a graded canonical is fine (it compiles under cargo check), but watch the hard-rule about no `unsafe` in *shipped game code* — that's about the game crate, not player canonicals.
+3. **Act 10 — Throne** (perf, `no_std`, ecosystem): mostly conceptual; weakest fit for the mission loop — consider capstone/non-mission treatment.
+4. Owner-gated: art review, AudioLDM2 bake (P100 rig), Tauri Android, compile-real prod default.
 
 ## Notes for Next Session
-- **Read this file first.**
-- **Run native:** terminal 1 `cargo run -p pledge_compile_api`, terminal 2
-  `cargo run -p pledge_and_crown`. For honest grading: set
-  `PLEDGE_REAL_COMPILE=1` before launching the game (needs the compile-api
-  up + `wasm32-wasip1` installed locally — it is, on this box).
-- **Run wasm:** `scripts/web-build.ps1` → `cargo run -p web-serve --release`
-  → `127.0.0.1:8080`. Title art renders (confirmed).
-- **Default toolchain is GNU** (`x86_64-pc-windows-gnu`) — the game links
-  fine on it; the Tauri wrapper does not (needs MSVC + VS Build Tools).
-- **wasm_runner feature gotcha:** keep `bulk_memory` + `reference_types`
-  ENABLED — rustc's wasm std requires them. See `.claude/audit-gaps.md`.
-- New tools each have their own `.venv` (gitignored) + an ASCII-only
-  `scripts/*.ps1` launcher mirroring `synthwave-gen.ps1`.
-- **GitHub Actions banned. Local CI only.**
 
-## Where to look next
-- Curriculum → `design/01-curriculum.md`
-- Art canon → `design/03-art-style-bible.md`, `design/04b-art-deliverables.md`; new specs in `design/art/specs/`
-- Compile-API security → `design/05-tech-architecture.md` §2
-- Audit gap log → `.claude/audit-gaps.md`
-- **Honest grading → `compile-api/src/wasm_builder.rs` + `/compile-real` in `lib.rs`; client opt-in in `game/src/plugins/compile_client.rs`**
-- **Locked-attempt SFX → `game/src/plugins/mission.rs` (MissionLockedAttempt) + `audio.rs`**
-- **Audio-to-MIDI → `tools/audio-to-midi/`; AudioLDM2 → `tools/audioldm2-gen/`**
-- **Tauri wrapper → `mobile/` (README has the toolchain runbook)**
+**The mission-batch recipe (proven 5×). To add a batch of N missions:**
+1. `game/src/plugins/mission.rs` — N `Mission` entries appended before the registry's `];` (prereq auto-links linearly). 4-section tutorial; **neutral starter that does NOT pass its own grader** (the contract test enforces this — keep grader tokens out of the starter, including comments).
+2. `compile-api/src/grader.rs` — N `grade()` arms (before the `_ =>` freeform fallthrough) + per-mission unit tests at the end of the test module.
+3. `game/src/plugins/stub_grader.rs` — N arms **with byte-identical pass/fail strings** (the `server_and_stub_flavor_agree_byte_for_byte` test compares the *pass* string for each canonical; keep them identical anyway).
+4. `game/tests/contract.rs` AND `game/tests/stub_grader.rs` — add the canonical solution to BOTH `canonical_solution()` fns (they're duplicated per test-crate). Canonical must pass its grader AND compile under host `cargo check`.
+5. `game/src/assets.rs` — N `SPRITE_*` consts + add to `ALL_SPRITE_PATHS`.
+6. `game/src/plugins/npc.rs` — N `NpcSpec` (unique name, pos >28px from every existing NPC) + import the consts.
+7. Art: dispatch a subagent to author `ref-NN-*.jsx` grids (32×32, exactly 32 ASCII chars/row, palette codes only) → `render-refs` → copy PNGs to `game/assets/sprites/npc/`. Then `04b-art-deliverables.md` + `01-curriculum.md` code-status notes.
+8. `cargo fmt --all`, then `git commit` (pre-commit hook runs full CI). Verify slow suite: `cargo test -p pledge_and_crown --test contract -- --ignored`.
+
+**Gotchas burned in this session:**
+- **rustfmt wraps long string lines** — write grader/test strings, then `cargo fmt --all` before committing or the pre-commit fmt step blocks. (String *values* are unchanged by wrapping, so byte-parity holds.)
+- **`render-refs` silently SKIPS** a grid with a bad char or a row ≠ 32 chars (debug log, not an error). Run with `RUST_LOG=render_refs=debug` and confirm "rendered ref-NN". After editing an existing jsx, `touch tools/render-refs/build.rs` (it bakes refs at build time). Watch for **Cyrillic lookalike chars** (О/Т) — ASCII only.
+- **Tauri on this box:** build with the VS **BuildTools** MSVC env, NOT Community (incomplete C++ workload). `vswhere -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64` picks the right one; `mobile/build-desktop.bat` does this.
+- **wasm_runner** must keep `bulk_memory` + `reference_types` ENABLED (rustc's wasm std needs them). See `.claude/audit-gaps.md`.
+- **Sandbox is dependency-free** — no external crates (`thiserror`, `tokio`, etc.) in player canonicals. Teach the std-only version; mention the crate in the tutorial.
+- **Cargo serializes** on the shared `G:/cargo-target` lock — don't run two cargo builds at once. Non-cargo subagent work (art via render-refs is cargo, though) can overlap with editing.
+- **GitHub Actions banned. Local CI only.** Pre-commit hook = `scripts/ci.ps1`.
+
+## Where to look
+- Curriculum → `design/01-curriculum.md` (Act code-status notes added through Act 7)
+- Per-act design specs → `docs/superpowers/specs/2026-06-18-act{3..7}-*.md`
+- Art canon → `design/03-art-style-bible.md`, `design/04b-art-deliverables.md` (REF manifest through 59), `design/art/palette.js`
+- Audit gaps → `.claude/audit-gaps.md`
+- Honest grading → `compile-api/src/wasm_builder.rs` + `/compile-real`
+- Tauri wrapper → `mobile/README.md`
