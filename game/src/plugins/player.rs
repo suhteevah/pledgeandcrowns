@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 //! Player entity, sprite, and 4-directional movement.
 //!
-//! Native sprite resolution is 32x32 (REF-01); displayed at scale 2x.
+//! Native sprite resolution is 32x32 (REF-01); displayed at scale 1x, i.e.
+//! 2 tiles tall, in proportion to the 16px village tiles (was 2x = 4 tiles,
+//! which dwarfed the world).
 //! Movement is WASD or arrow keys. Speed is constant for MVP — no
 //! animation states yet. Bounded by `world::WORLD_HALF_*` so the
 //! player can't walk off the painted background.
@@ -14,10 +16,12 @@ use bevy::prelude::*;
 /// Camera lerp factor per second; 1.0 = snap, 0.0 = never moves.
 const CAMERA_FOLLOW_SPEED: f32 = 6.0;
 
-const PLAYER_SCALE: f32 = 2.0;
+const PLAYER_SCALE: f32 = 1.0;
 const PLAYER_NATIVE: f32 = 32.0;
 const PLAYER_DISPLAY: f32 = PLAYER_NATIVE * PLAYER_SCALE;
-const PLAYER_SPEED_PX_PER_SEC: f32 = 180.0;
+// Scaled up with the village: the 180x140 map is huge, so a brisk walk keeps
+// crossing between far-flung quarters from being a slog.
+const PLAYER_SPEED_PX_PER_SEC: f32 = 420.0;
 
 #[derive(Component)]
 pub struct Player;
@@ -53,10 +57,13 @@ fn camera_follow_player(
     let alpha = (CAMERA_FOLLOW_SPEED * time.delta_secs()).clamp(0.0, 1.0);
     let next = current.lerp(target, alpha);
 
-    // Camera shows 320x180 world units (FixedVertical 180 in a 16:9
-    // window). Clamp the camera centre so the void beyond the tilemap
-    // never enters the viewport. Half-extents of viewport: 160x90.
-    let view_half = Vec2::new(160.0, 90.0);
+    // Clamp the camera centre so the void beyond the tilemap never enters the
+    // viewport. Half-extents derive from the camera's FixedVertical view, so
+    // this stays correct if the zoom (`plugins::VIEW_HEIGHT`) changes.
+    let view_half = Vec2::new(
+        crate::plugins::VIEW_HEIGHT * crate::plugins::VIEW_ASPECT * 0.5,
+        crate::plugins::VIEW_HEIGHT * 0.5,
+    );
     let max = Vec2::new(WORLD_HALF_W - view_half.x, WORLD_HALF_H - view_half.y);
     let min = -max;
     cam.translation.x = next.x.clamp(min.x.min(0.0), max.x.max(0.0));

@@ -1,19 +1,56 @@
 # HANDOFF.md
 
 ## Last Updated
-2026-06-19 — Big session: closed the entire post-v1 roadmap, then built out
-the curriculum from the flat 21-mission prelude to **Acts 1–7 (51 missions,
-51 NPCs, all with distinct art)**. Everything is committed + pushed to
-`main` (`suhteevah/pledgeandcrowns`).
+2026-06-20 — **World overhaul + art-through-claude.ai/design.** Rebuilt the
+village from procedural noise into a designed, districted town (Matt walked it
+and approved), and stood up the claude.ai/design → JSX → render-refs → game
+sprite-conversion pipeline (3 of 9 rough-9 NPCs converted so far). Prior session
+(2026-06-19, below): closed the post-v1 roadmap + curriculum to Acts 1–8 (57
+missions) + Android build. **57-mission/Act 1–8 work and Android are committed
++ pushed; this session's world+art work is committed this handoff.**
 
 ## Project Status
-🟢 **v1 complete, browser-verified, and curriculum-expanded to Acts 1–7.**
-Native + web both build and run. 51 missions cover the entire core Rust
-language (variables → ownership → traits/generics → errors →
-collections/iterators → concurrency). All graders + the offline stub are in
-byte-parity; every canonical solution compiles under real `cargo check`.
+🟡 **v1 + Acts 1–8 shipped; world is now a designed village; art conversion
+3/9 in progress.** Native + web build/run. The flat noise-map is replaced by a
+180×140 hub-and-quarters town (Matt-approved). 3 of the 9 rough-9 NPC sprites
+are now real claude.ai/design-designed grids in-game; 6 remain (method proven).
 
-## What Was Done This Session
+## What Was Done — 2026-06-20 (this session)
+
+### World overhaul (game/src/plugins/{world,npc,player,mod,editor}.rs)
+Matt flagged the world felt "small / non-sensical / cramped." Root causes found
++ fixed: a 3-way scale mismatch (tiles 1×, NPCs 1.5×, player 2× = a 4-tile
+giant on 16px tiles) and a hash-noise tilemap with scattered NPC coords.
+- **Designed village** (`world.rs`): a `DISTRICTS` table — Hearthstone Square
+  hub + 8 themed quarters — with an orthogonal dirt **street grid** (axis-aligned
+  segments; diagonal spokes looked jagged), cobble plazas + signature props, a
+  treeline border. NPCs placed by `district_slot(roster_index)` into quarters
+  (no more scatter). **Map 30×20 → 180×140** (~25k tiles, spawns clean).
+- **Per-tile `tile_tint`**: weathered grayscale wobble on stone/dirt + green-TONE
+  variation on grass (sunlit/shade/meadow) via `TileColor` — killed the flat
+  "stamp" look. More flowers/tufts.
+- **Scale harmonized**: `PLAYER_SCALE`/`NPC_SCALE` → 1.0 (2-tile characters).
+  Camera zoomed out `VIEW_HEIGHT` 180 → **280** (mod.rs), follow-clamp now
+  **derived** from VIEW_HEIGHT/aspect (player.rs) so it can't desync. Faster walk.
+- **Parchment code page** (editor.rs): `CODE_PAGE_BG` — the editor rendered
+  Abyssal (`#062123`) plain identifiers like `main` invisibly on egui's dark
+  TextEdit; now a warm aged-parchment page so the dark syntax reads (bible REF-06).
+
+### Art via claude.ai/design — rough-9 redesign + conversion pipeline
+- Drove **claude.ai/design** (Matt's Max account, via claude-in-chrome) in the
+  existing `pledgeandcrown` project's "NPC Sprites" artboard. Generated the 9
+  "rough-9" NPCs (Quartermaster + 8 concept NPCs), then a **varied-build revision**
+  so each reads as a distinct person (Matt-approved the look).
+- Built **`design/art/design-mode-prompts.md`** (55 paste-ready Style-Suffix +
+  per-NPC prompts) and **`scripts/art-review-sheet.ps1`** (contact-sheet montage).
+- **Conversion pipeline established**: have Claude Design rasterize each sprite
+  from its `npc-roster.jsx` into a 32×32 palette-char grid (text, extracted via
+  `get_page_text`) → write `design/art/refs/ref-NN-*.jsx` → `cargo run -p
+  render-refs --release --bin render-refs` → copy `design/art/refs/png/REFNN.png`
+  to `game/assets/sprites/npc/<slug>_idle_0.png`. **Done for 3/9**: REF26
+  quartermaster, REF27 auditor, REF28 chronicler (rendered, wired, validated 32×32).
+
+## What Was Done — 2026-06-19 (prior session)
 
 ### Post-v1 roadmap — all 7 milestones (commits `61a2152`, `20f33ab`, `113c05b`)
 - **mission_locked.wav wired** — Bevy 0.18 `Message` (`MissionLockedAttempt`) from `mission.rs` → `audio::sfx_on_locked_attempt`.
@@ -51,9 +88,9 @@ Per-act design specs live in `docs/superpowers/specs/2026-06-18-act{3..7}-*.md` 
 
 ### Stubbed / limited (intentional)
 - `async_fn` mission is **compile-only** — `async fn`/`.await` type-check + token-grade, but the dep-free sandbox has no runtime (tokio) to actually run them.
-- The doc's RPG layer (party tab, combat, per-act bosses, multi-zone world) is **not built** — the code is the mission-tutorial loop. All Act NPCs live in Hearthstone Village.
+- The doc's RPG layer (party tab, combat, per-act bosses) is **not built** — the code is the mission-tutorial loop. The world is now a **single designed village** with themed *districts* (no separate zones/maps yet; all 57 NPCs live across Hearthstone Village's quarters). True buildings + cobble-pattern variants need new **tile art** (no wall/roof tiles in the 16-tile REF-04 atlas) — a follow-up via the design pipeline.
 - `compile-real` is opt-in, not the prod default (needs `wasm32-wasip1` on the Hetzner VPS).
-- The ~36 first-pass sprites (batches 4–10) are **mine**, not artist-final — pending your locked art review.
+- **Art**: 3 of the 9 rough-9 NPCs (quartermaster, auditor, chronicler) are now real claude.ai/design designs in-game; the other 6 + the ~30 earlier batches are still first-pass. The converted sprites use Claude Design's "parametric body" (geometric/a-bit-flat) — faithful to the approved design but not artist-final detail.
 
 ## Blocking Issues (all owner-actions, none block the code)
 1. **Art review** — 36 first-pass NPC sprites (batches 4–10) await your 3-revision approval. Each is one `cargo run -p render-refs --bin render-refs --release` from a revision (edit the `ref-NN-*.jsx` grid). Rougher ones flagged in `design/04b-art-deliverables.md` batch notes.
@@ -61,11 +98,27 @@ Per-act design specs live in `docs/superpowers/specs/2026-06-18-act{3..7}-*.md` 
 3. **compile-real as prod default** — `rustup target add wasm32-wasip1` on the VPS, then flip the client.
 
 ## What's Next (prioritized)
-1. **Act 9 — Forbidden Library** (`unsafe`, FFI `extern "C"`, `macro_rules!`, `Drop`/`Send`/`Sync`): gradeable by token/compile, but `unsafe`/FFI are harder to make *meaningful* in a sandbox. **Note:** `unsafe` in a graded canonical is fine (it compiles under cargo check), but watch the hard-rule about no `unsafe` in *shipped game code* — that's about the game crate, not player canonicals.
-2. **Act 10 — Throne** (perf, `no_std`, ecosystem): mostly conceptual; weakest fit for the mission loop — consider capstone/non-mission treatment.
-3. Owner-gated: art review, AudioLDM2 bake (P100 rig), **Android signing** (build works; sign the APK/AAB with your keystore to ship — see blocker #2), compile-real prod default.
+1. **Finish the art conversion — 6 sprites left** (awaiting Matt's fidelity nod on the first 3; he saw the 3-up `scratch/sprite-compare.png`). Same method (see Notes): REF29 alchemist, REF32 locksmith, REF33 porter, REF35 armorer, REF40 lanternkeeper, REF41 loremaster. The approved designs are live in Matt's claude.ai/design `pledgeandcrown` project → "NPC Sprites" artboard.
+2. **World polish (optional)**: true building tiles + cobble-pattern variants need a **tile-art pass** through claude.ai/design (the REF-04 atlas has no walls/roofs). Tuning knobs are all named consts (see Notes). If the world feels too sparse/dense, nudge `DISTRICTS`/`NPC_GRID_SPACING`/`VIEW_HEIGHT`.
+3. **Act 9 — Forbidden Library** (`unsafe`, FFI, `macro_rules!`, `Drop`/`Send`/`Sync`): gradeable by token/compile; watch the no-`unsafe`-in-shipped-game-code hard rule (that's the game crate, not player canonicals).
+4. **Act 10 — Throne** (perf, `no_std`, ecosystem): mostly conceptual; weakest fit — consider capstone treatment.
+5. **Learn-Rust thread** — Matt wants to actually learn Rust from this project. Offered: teach-the-diff on engine changes, pair (he drives, I coach), and dogfood the 57-mission campaign. Not yet started; good low-stakes starts are the world tuning consts or the next art-conversion edit.
+6. Owner-gated: art review, AudioLDM2 bake (P100 rig), **Android signing** (build works; sign with your keystore — blocker #2), compile-real prod default.
 
 ## Notes for Next Session
+
+**Art-conversion method (proven on 3/9 — finish the other 6 this way):**
+1. In Matt's Chrome, the claude.ai/design `pledgeandcrown` project's **"NPC Sprites"** artboard holds the approved sprites (built on `palette.js` via a coordinate pixel API in `npc-roster.jsx`). Direct iframe pixel-read is **blocked** (cross-origin sandbox) — so prompt Claude Design (its chat) to *rasterize each sprite from npc-roster.jsx into a 32×32 grid of single-char palette codes* (delimit `=== REFNN slug ===` + 32 single-quoted 32-char rows; `.` = transparent; "don't redesign, dump the exact grid").
+2. `get_page_text` on the tab → parse the `=== REFNN ===` blocks.
+3. Write each into `design/art/refs/ref-NN-<slug>.jsx` (replace the `const REFNN_GRID = [...]` array; keep the wrapper).
+4. `cargo run -p render-refs --release --bin render-refs` (note **`--bin render-refs`** — the crate has 2 bins). It validates widths (skips malformed grids with a debug reason) and writes `design/art/refs/png/REFNN.png`.
+5. Copy `REFNN.png` → `game/assets/sprites/npc/<slug>_idle_0.png`. Wiring (assets.rs/npc.rs) already points there — no code change.
+6. `scripts/sprite-compare.ps1 <slug> <slug> ...` builds an upscaled montage for review.
+Remaining: REF29 alchemist, REF32 locksmith, REF33 porter, REF35 armorer, REF40 lanternkeeper, REF41 loremaster.
+
+**World tuning — all named consts:** `world.rs` `DISTRICTS` (centers/`plaza_half`/`count`/`prop`), `NPC_GRID_SPACING`, `MAP_W/MAP_H`, `tile_tint` (grass/stone tint tables), `ROADS` (orthogonal segments); `mod.rs` `VIEW_HEIGHT` (camera zoom) + `VIEW_ASPECT`; `player.rs` `PLAYER_SCALE`/`PLAYER_SPEED_PX_PER_SEC`; `editor.rs` `CODE_PAGE_BG`. NPC positions come from `district_slot(roster_index)` — the legacy `NpcSpec.pos` field is now unused (kept to avoid touching 57 literals).
+
+**Rebuild gotcha (Windows exe-lock):** the running game holds `pledge_and_crown.exe`; `cargo run`/`build` then fails to link with `Access is denied`. **Before each rebuild:** `Get-Process pledge_and_crown -EA SilentlyContinue | Stop-Process -Force`. Use a background `until grep -qE "Running \`|error" <runlog>` loop to detect launch-or-error (one notification). The game spawns the village on entering InGame (hit start from the title), not at launch.
 
 **The mission-batch recipe (proven 5×). To add a batch of N missions:**
 1. `game/src/plugins/mission.rs` — N `Mission` entries appended before the registry's `];` (prereq auto-links linearly). 4-section tutorial; **neutral starter that does NOT pass its own grader** (the contract test enforces this — keep grader tokens out of the starter, including comments).

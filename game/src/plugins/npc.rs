@@ -24,7 +24,11 @@ use crate::plugins::player::Player;
 use crate::plugins::state::GameState;
 use bevy::prelude::*;
 
-const NPC_SCALE: f32 = 1.5;
+// Characters render at 1x native (a 32px sprite = 2 tiles tall) so they sit in
+// proportion to the 16px village tiles instead of dwarfing them. Was 1.5x,
+// which put NPCs at 3 tiles over 1-tile scenery — half of why the world read
+// "toy-sized." The player matches this (see player::PLAYER_SCALE).
+const NPC_SCALE: f32 = 1.0;
 const INTERACT_RADIUS_PX: f32 = 28.0;
 
 #[derive(Component)]
@@ -479,18 +483,26 @@ pub struct NpcSpec {
 }
 
 fn spawn_npcs(mut commands: Commands, asset_server: Res<AssetServer>) {
-    for spec in NPC_ROSTER {
+    // Positions come from the designed district layout (world::district_slot),
+    // keyed by roster index — NOT the legacy `spec.pos` scatter, which is now
+    // superseded. Roster order maps to quarters: early NPCs fill Hearthstone
+    // Square, later acts spread to the ring.
+    for (i, spec) in NPC_ROSTER.iter().enumerate() {
         spawn_npc(
             &mut commands,
             &asset_server,
             spec.name,
             spec.mission_id,
             spec.sprite_path,
-            Vec2::new(spec.pos.0, spec.pos.1),
+            crate::plugins::world::district_slot(i),
             spec.native_px,
         );
     }
-    tracing::info!("spawned {} NPCs", NPC_ROSTER.len());
+    tracing::info!(
+        "spawned {} NPCs across {} districts",
+        NPC_ROSTER.len(),
+        crate::plugins::world::DISTRICTS.len()
+    );
 }
 
 fn spawn_npc(

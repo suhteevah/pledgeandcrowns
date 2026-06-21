@@ -125,6 +125,12 @@ fn draw_editor(
                 });
 
             egui::CentralPanel::default().show_inside(ui, |ui| {
+                // Parchment code page (bible REF-06). The syntax palette — esp.
+                // Abyssal (#062123) for plain identifiers like `main` — was
+                // chosen for a cream page, so it's unreadable on egui's default
+                // near-black TextEdit fill. Paint the code area cream and the
+                // dark tokens read as designed.
+                ui.visuals_mut().extreme_bg_color = CODE_PAGE_BG;
                 let style = ui.style().clone();
                 let ctx_clone = ui.ctx().clone();
                 let mut layouter =
@@ -208,6 +214,9 @@ const STRING_COLOR: egui::Color32 = egui::Color32::from_rgb(0x48, 0x7E, 0x40); /
 const COMMENT_COLOR: egui::Color32 = egui::Color32::from_rgb(0x7A, 0x70, 0x64); // Stone grey
 const NUMBER_COLOR: egui::Color32 = egui::Color32::from_rgb(0xD2, 0xA5, 0x3F); // Old gold
 const PLAIN_COLOR: egui::Color32 = egui::Color32::from_rgb(0x06, 0x21, 0x23); // Abyssal
+// Code-page background: a warm aged parchment (warmer than Parchment cream
+// #FCEFC8, which read too close to white). Tweak this one value to taste.
+const CODE_PAGE_BG: egui::Color32 = egui::Color32::from_rgb(0xEE, 0xDF, 0xA8);
 
 const KEYWORDS: &[&str] = &[
     "as", "async", "await", "break", "const", "continue", "crate", "dyn", "else", "enum", "extern",

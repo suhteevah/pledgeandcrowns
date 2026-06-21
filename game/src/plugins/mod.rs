@@ -41,11 +41,20 @@ impl Plugin for CorePlugin {
     }
 }
 
+/// Camera vertical view in world units. Zoomed out from the original 180 so the
+/// designed village reads as a town at a glance instead of through a keyhole.
+pub const VIEW_HEIGHT: f32 = 280.0;
+/// Primary-window aspect ratio (see `lib.rs` WindowPlugin resolution 1280x720).
+/// Combined with [`VIEW_HEIGHT`] to clamp the follow-camera in `player`.
+pub const VIEW_ASPECT: f32 = 1280.0 / 720.0;
+
 fn setup_camera(mut commands: Commands) {
-    tracing::info!("spawning 2d camera (fixed vertical projection, 180 world units tall)");
+    tracing::info!(
+        "spawning 2d camera (fixed vertical projection, {VIEW_HEIGHT} world units tall)"
+    );
     let mut proj = OrthographicProjection::default_2d();
     proj.scaling_mode = ScalingMode::FixedVertical {
-        viewport_height: 180.0,
+        viewport_height: VIEW_HEIGHT,
     };
     commands.spawn((Camera2d, Projection::Orthographic(proj)));
 }
