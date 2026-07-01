@@ -13,6 +13,8 @@ pub mod mission;
 pub mod npc;
 pub mod player;
 pub mod progress;
+pub mod quest_marker;
+pub mod screenshot;
 pub mod state;
 pub mod stub_grader;
 pub mod title;
@@ -33,6 +35,8 @@ impl Plugin for CorePlugin {
             world::WorldPlugin,
             player::PlayerPlugin,
             npc::NpcPlugin,
+            quest_marker::QuestMarkerPlugin,
+            screenshot::ShotPlugin,
             editor::EditorPlugin,
             mission::MissionPlugin,
             compile_client::CompileClientPlugin,

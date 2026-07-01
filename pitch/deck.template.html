@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pledge &amp; Crown — Pitch</title>
+<style>
+  @page { size: 1280px 720px; margin: 0; }
+
+  :root{
+    --inkblood:#1B0810; --crypt:#3E1220; --oxblood:#6B1F35; --wineflesh:#982D52;
+    --dustyrose:#C56883; --pinkquartz:#EBC2CC;
+    --bogumber:#2D1F0A; --bronze:#5E4116; --brass:#9C7026; --oldgold:#D2A53F;
+    --brassleaf:#F0D27D; --parchment:#FCEFC8;
+    --abyssal:#062123; --deepteal:#154548; --teal:#2A8482; --brightteal:#5BB8AF; --mistteal:#A4DED4;
+    --pine:#27502E; --forest:#487E40; --meadow:#82B450; --hayfield:#C9DC97;
+    --coal:#161313; --basalt:#3E3833; --stone:#7A7064; --agedpaper:#BFB2A0;
+    --arcane:#3A1559; --mageglow:#9D6FE0;
+    --cobaltdeep:#0E2E54; --cobalt:#377AB8; --alarm:#E63946;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; background:var(--inkblood); }
+  body{
+    font-family:"Segoe UI", system-ui, -apple-system, sans-serif;
+    color:var(--parchment);
+    -webkit-print-color-adjust:exact; print-color-adjust:exact;
+  }
+  .pixel{ image-rendering:pixelated; image-rendering:crisp-edges; }
+
+  .slide{
+    position:relative; width:1280px; height:720px; overflow:hidden;
+    padding:60px 78px; page-break-after:always; break-after:page;
+    background:
+      radial-gradient(120% 90% at 18% 0%, rgba(107,31,53,.55), rgba(0,0,0,0) 60%),
+      linear-gradient(135deg, #200a13 0%, var(--crypt) 48%, var(--inkblood) 100%);
+    display:flex; flex-direction:column;
+  }
+  .slide:last-child{ page-break-after:auto; break-after:auto; }
+
+  /* heraldic inner frame */
+  .slide::after{
+    content:""; position:absolute; inset:22px; pointer-events:none;
+    border:2px solid rgba(210,165,63,.32);
+    box-shadow:inset 0 0 0 1px rgba(240,210,125,.12);
+  }
+  .corner{ position:absolute; width:18px; height:18px; border:2px solid var(--oldgold); z-index:3; }
+  .corner.tl{ top:14px; left:14px; border-right:none; border-bottom:none;}
+  .corner.tr{ top:14px; right:14px; border-left:none; border-bottom:none;}
+  .corner.bl{ bottom:14px; left:14px; border-right:none; border-top:none;}
+  .corner.br{ bottom:14px; right:14px; border-left:none; border-top:none;}
+
+  .foot{
+    position:absolute; bottom:30px; left:78px; right:78px; z-index:3;
+    display:flex; justify-content:space-between; align-items:center;
+    font-size:13px; letter-spacing:.18em; text-transform:uppercase;
+    color:rgba(201,220,151,.55);
+  }
+  .foot .pg{ color:var(--oldgold); }
+
+  .kicker{
+    font-size:15px; letter-spacing:.42em; text-transform:uppercase;
+    color:var(--brightteal); margin:0 0 14px; font-weight:600;
+  }
+  h1.title{
+    font-family:Georgia,"Times New Roman",serif; font-weight:700;
+    font-size:62px; line-height:1.02; margin:0 0 8px; color:var(--brassleaf);
+    letter-spacing:.01em; text-shadow:0 3px 0 rgba(0,0,0,.35);
+  }
+  h2{
+    font-family:Georgia,"Times New Roman",serif; font-weight:700;
+    font-size:46px; line-height:1.05; margin:0 0 22px; color:var(--brassleaf);
+    letter-spacing:.01em;
+  }
+  h2 .em{ color:var(--dustyrose); }
+  .lead{ font-size:24px; line-height:1.5; color:var(--parchment); max-width:1020px; }
+  .muted{ color:var(--agedpaper); }
+  .gold{ color:var(--oldgold); }
+  .teal{ color:var(--brightteal); }
+  .rose{ color:var(--dustyrose); }
+  z .rule{ height:3px; background:linear-gradient(90deg,var(--oldgold),rgba(210,165,63,0)); width:240px; margin:0 0 26px; }
+  .rule{ height:3px; background:linear-gradient(90deg,var(--oldgold),rgba(210,165,63,0)); width:240px; margin:0 0 26px; border-radius:2px;}
+
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:30px; }
+  .grid3{ display:grid; grid-template-columns:repeat(3,1fr); gap:22px; }
+
+  .card{
+    background:linear-gradient(180deg, rgba(252,239,200,.06), rgba(252,239,200,.02));
+    border:1px solid rgba(210,165,63,.30);
+    border-radius:10px; padding:24px 26px;
+  }
+  .card h3{ margin:0 0 10px; font-size:21px; color:var(--brassleaf);
+    font-family:Georgia,serif; letter-spacing:.02em;}
+  .card p{ margin:0; font-size:17px; line-height:1.5; color:var(--parchment); }
+  .card .big{ font-size:34px; font-weight:700; color:var(--oldgold); font-family:Georgia,serif; }
+
+  ul.clean{ margin:0; padding:0; list-style:none; }
+  ul.clean li{ position:relative; padding:9px 0 9px 30px; font-size:19px; line-height:1.4; border-bottom:1px solid rgba(210,165,63,.12);}
+  ul.clean li:last-child{ border-bottom:none; }
+  ul.clean li::before{ content:"\2756"; position:absolute; left:0; top:9px; color:var(--oldgold); font-size:15px; }
+
+  .chips{ display:flex; flex-wrap:wrap; gap:11px; }
+  .chip{
+    font-size:15px; padding:8px 15px; border-radius:999px;
+    background:rgba(42,132,130,.16); border:1px solid rgba(91,184,175,.45);
+    color:var(--mistteal); letter-spacing:.02em; white-space:nowrap;
+  }
+  .chip.g{ background:rgba(210,165,63,.14); border-color:rgba(240,210,125,.5); color:var(--brassleaf); }
+  .chip.r{ background:rgba(152,45,82,.20); border-color:rgba(197,104,131,.5); color:var(--pinkquartz); }
+
+  .quotebox{
+    position:relative; background:
+      linear-gradient(180deg,#f6e8c4,#ecdbb0);
+    color:#2b1a10; border-radius:12px; padding:46px 56px 44px;
+    border:2px solid var(--oldgold);
+    box-shadow:0 18px 40px rgba(0,0,0,.4);
+    font-size:27px; line-height:1.55; max-width:1040px; margin:6px auto 0;
+    font-family:Georgia,"Times New Roman",serif;
+  }
+  .quotebox .qm{ position:absolute; top:-6px; left:18px; font-size:120px; color:rgba(107,31,53,.25); font-family:Georgia,serif; }
+  .quotebox b{ color:var(--oxblood); }
+
+  /* core-loop editor mock */
+  .editor{
+    border:2px solid var(--basalt); border-radius:9px; overflow:hidden;
+    background:var(--abyssal); box-shadow:0 14px 34px rgba(0,0,0,.45); width:100%;
+  }
+  .editor .bar{ display:flex; gap:0; background:#0c2b2c; border-bottom:2px solid var(--basalt); }
+  .editor .tab{ padding:9px 20px; font-size:14px; letter-spacing:.16em; color:var(--mistteal); border-right:1px solid rgba(255,255,255,.06);}
+  .editor .tab.esc{ margin-left:auto; color:var(--agedpaper); }
+  .editor .body{ display:grid; grid-template-columns:1.15fr .85fr; }
+  .editor .code{ padding:18px 20px; font-family:"Cascadia Code",Consolas,monospace; font-size:15px; line-height:1.55; background:#f2e6c8; color:#3a2a14; }
+  .editor .code .kw{ color:#9a1f4a; } .editor .code .ty{ color:#1d6f6c; } .editor .code .fn{ color:#7a5a16; } .editor .code .cm{ color:#8a8473; font-style:italic; }
+  .editor .side{ padding:16px 18px; background:#0b2526; border-left:2px solid var(--basalt); }
+  .editor .side .lbl{ font-size:12px; letter-spacing:.22em; color:var(--oldgold); text-transform:uppercase; margin:0 0 6px; }
+  .editor .side p{ margin:0 0 14px; font-size:14px; line-height:1.45; color:var(--mistteal); }
+  .editor .side .err{ color:var(--alarm); font-family:Consolas,monospace; font-size:13px; line-height:1.4;}
+
+  .steps{ display:flex; gap:0; align-items:stretch; margin-top:22px; }
+  .step{ flex:1; padding:14px 16px; position:relative; }
+  .step:not(:last-child)::after{ content:"\203A"; position:absolute; right:-6px; top:50%; transform:translateY(-50%); color:var(--oldgold); font-size:26px; }
+  .step .n{ font-family:Georgia,serif; font-size:26px; color:var(--oldgold); font-weight:700;}
+  .step .t{ font-size:14px; line-height:1.35; color:var(--parchment); margin-top:4px; }
+
+  /* cast grid */
+  .cast{ display:grid; grid-template-columns:repeat(12,1fr); gap:10px 8px; margin-top:6px; }
+  .cast figure{ margin:0; text-align:center; }
+  .cast img{ width:60px; height:60px; }
+  .cast figcaption{ font-size:9.5px; line-height:1.1; color:var(--agedpaper); margin-top:3px; letter-spacing:.01em; }
+
+  .feature{ display:flex; align-items:center; gap:18px; }
+  .feature img{ width:120px; height:120px; }
+  .feature .cap{ font-size:16px; line-height:1.45; }
+  .feature .cap b{ color:var(--brassleaf); display:block; font-size:19px; font-family:Georgia,serif; margin-bottom:3px;}
+
+  /* act ladder */
+  .acts{ display:grid; grid-template-columns:repeat(2,1fr); gap:11px 34px; margin-top:4px; }
+  .act{ display:flex; gap:14px; align-items:baseline; padding:7px 0; border-bottom:1px solid rgba(210,165,63,.14); }
+  .act .num{ font-family:Georgia,serif; font-size:22px; color:var(--oldgold); width:54px; flex:none; font-weight:700;}
+  .act .nm{ width:215px; flex:none; color:var(--brassleaf); font-size:16px; font-weight:600;}
+  .act .cc{ font-size:13.5px; color:var(--agedpaper); line-height:1.3; }
+
+  .hero-img{ display:block; margin:0 auto; }
+
+  .splitwrap{ display:grid; grid-template-columns:1.25fr .75fr; gap:34px; align-items:center; }
+  .pill{ display:inline-block; font-size:13px; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--inkblood); background:var(--oldgold); padding:5px 12px; border-radius:5px; font-weight:700; }
+
+  .funnel{ display:flex; gap:0; margin-top:6px; }
+  .fstage{ flex:1; padding:18px 16px; border-right:1px solid rgba(210,165,63,.2); }
+  .fstage:last-child{ border-right:none; }
+  .fstage .ph{ font-size:12px; letter-spacing:.18em; color:var(--brightteal); text-transform:uppercase; }
+  .fstage .pr{ font-family:Georgia,serif; font-size:30px; color:var(--oldgold); margin:6px 0 4px; }
+  .fstage .ds{ font-size:13.5px; color:var(--agedpaper); line-height:1.35; }
+</style>
+</head>
+<body>
+
+<!-- ============ 1 · COVER ============ -->
+<section class="slide" style="justify-content:center; align-items:center; text-align:center;">
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <img class="pixel hero-img" src="@@title@@" style="width:940px; margin-bottom:10px;">
+  <div style="font-size:21px; letter-spacing:.5em; text-transform:uppercase; color:var(--brightteal); margin-top:18px;">A pixel-art RPG that teaches you Rust</div>
+  <p class="lead muted" style="max-width:860px; margin-top:22px; font-size:21px;">
+    The only way to act on the world is to write real, compilable Rust.
+    Combat is code. Crafting is code. The Borrow Checker is a boss.
+  </p>
+  <div class="foot"><span>Pledge &amp; Crown &middot; Investor / Publisher Pitch</span><span class="pg">Matt Gates &middot; Chico, CA &middot; 2026</span></div>
+</section>
+
+<!-- ============ 2 · THE PITCH ============ -->
+<section class="slide" style="justify-content:center;">
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <p class="kicker" style="text-align:center;">The idea in one breath</p>
+  <div class="quotebox">
+    <span class="qm">&ldquo;</span>
+    <b>Pledge &amp; Crown</b> is a pixel-art RPG where the only way to act on the world is to write
+    real, compilable Rust. The 10-act campaign covers a complete, university-level Rust curriculum
+    &mdash; variables to async to <i>unsafe</i> to FFI. The Borrow Checker is an NPC who guards a
+    bridge and rejects your code with the <b>exact errors <code>rustc</code> would produce</b>.
+    By the time a player finishes the campaign, they are a junior-to-mid Rust developer.
+  </div>
+  <div class="foot"><span>The vision</span><span class="pg">02</span></div>
+</section>
+
+<!-- ============ 3 · THE PROBLEM ============ -->
+<section class="slide">
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <p class="kicker">The problem</p>
+  <h2>Rust has the steepest learning cliff<br>of any mainstream language.</h2>
+  <div class="grid2" style="margin-top:6px;">
+    <div class="card">
+      <h3>Books &amp; tutorials</h3>
+      <p>The official Book, <i>Programming Rust</i>, Rustlings. High quality &mdash;
+      <span class="rose">low engagement.</span> Most readers abandon mid-ownership chapter.</p>
+    </div>
+    <div class="card">
+      <h3>Programming games</h3>
+      <p>CodeCombat, Mimo, Zachtronics. High engagement &mdash;
+      <span class="rose">but none teach Rust.</span> They do JS/Python/Lua or fictional assembly.</p>
+    </div>
+  </div>
+  <p class="lead" style="margin-top:36px; font-size:30px; color:var(--brassleaf); font-family:Georgia,serif;">
+    There is no third option.&nbsp; <span class="teal">We are the third option.</span>
+  </p>
+  <div class="foot"><span>Why this exists</span><span class="pg">03</span></div>
+</section>
+
+<!-- ============ 4 · THE SOLUTION ============ -->
+<section class="slide">
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <p class="kicker">The solution</p>
+  <h2>You don&rsquo;t read about Rust. <span class="em">You wield it.</span></h2>
+  <div class="splitwrap">
+    <div>
+      <p class="lead" style="margin-bottom:24px;">Every meaningful action in the world is a function you write.
+      The engine compiles it in a sandbox, runs it, and the world responds.</p>
+      <div class="chips">
+        <span class="chip g">Combat is code</span>
+        <span class="chip g">Crafting is code</span>
+        <span class="chip g">Town-building is code</span>
+        <span class="chip g">Dialogue puzzles are code</span>
+      </div>
+      <p class="lead" style="margin-top:26px; font-size:20px;" class="muted">
+        Clean, <code>clippy</code>-idiomatic code hits harder. <code>.unwrap()</code> in the wrong place
+        gets you hurt. The game has <span class="rose">opinions</span> &mdash; the same ones a senior reviewer would.</p>
+    </div>
+    <div class="feature" style="flex-direction:column; text-align:center;">
+      <img class="pixel" src="@@borrow@@" style="width:150px;height:150px;">
+      <div class="cap"><b>The Borrow Checker</b>
+        A robed figure of glowing reference symbols who guards a bridge.
+        He speaks in real <code>rustc</code> errors. You cannot brute-force past him.</div>
+    </div>
+  </div>
+  <div class="foot"><span>The core conceit</span><span class="pg">04</span></div>
+</section>
+
+<!-- ============ 5 · HOW IT PLAYS ============ -->
+<section class="slide">
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <p class="kicker">How it plays &mdash; the core loop</p>
+  <h2 style="font-size:38px; margin-bottom:16px;">The Cast Editor</h2>
+  <div class="editor">
+    <div class="bar"><span class="tab">CAST</span><span class="tab">TEST</span><span class="tab">COMMIT</span><span class="tab esc">ESC</span></div>
+    <div class="body">
+      <div class="code"><span class="cm">// Defeat the goblin (HP 12).</span><br>
+        <span class="kw">fn</span> <span class="fn">cast</span>() -&gt; <span class="ty">Spell</span> {<br>
+        &nbsp;&nbsp;<span class="ty">Spell</span> {<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;damage: <span class="kw">4</span> * <span class="kw">4</span>, <span class="cm">// 16 &gt; 12</span><br>
+        &nbsp;&nbsp;}<br>
+        }</div>
+      <div class="side">
+        <p class="lbl">Goal</p>
+        <p>Return a <code>Spell</code> whose damage exceeds the goblin&rsquo;s HP.</p>
+        <p class="lbl">Compiler output</p>
+        <p class="err">error[E0382]: borrow of moved value: `spell`<br>&nbsp;&nbsp;--&gt; cast.rs:6:18</p>
+        <p style="font-size:12px;color:var(--agedpaper);margin-top:8px;">The errors you see are the <b style="color:var(--mistteal)">real rustc errors</b> &mdash; never paraphrased. Reading them is a skill we teach.</p>
+      </div>
+    </div>
+  </div>
+  <div class="steps">
+    <div class="step"><div class="n">1</div><div class="t">Hit a problem in the world</div></div>
+    <div class="step"><div class="n">2</div><div class="t">Editor opens &mdash; write Rust</div></div>
+    <div class="step"><div class="n">3</div><div class="t">Server compiles to WASM</div></div>
+    <div class="step"><div class="n">4</div><div class="t">Sandbox runs your code</div></div>
+    <div class="step"><div class="n">5</div><div class="t">The world reacts</div></div>
+  </div>
+  <div class="foot"><span>Mechanics</span><span class="pg">05</span></div>
+</section>
+
+<!-- ============ 6 · THE WORLD ============ -->
+<section class="slide">
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <p class="kicker">The world &mdash; live, in-engine</p>
+  <h2 style="margin-bottom:14px;">Hearthstone Village &amp; beyond</h2>
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+    <figure style="margin:0;">
+      <img class="pixel" src="@@world_marker@@" style="width:100%; border:2px solid rgba(210,165,63,.4); border-radius:8px; box-shadow:0 12px 26px rgba(0,0,0,.45);">
+      <figcaption style="font-size:14px; color:var(--agedpaper); margin-top:8px; line-height:1.4;">Hearthstone Square &mdash; the <span style="color:#FFDE2A; font-weight:700;">golden&nbsp;!</span> marks your next quest-giver (here, Ferris).</figcaption>
+    </figure>
+    <figure style="margin:0;">
+      <img class="pixel" src="@@world_south@@" style="width:100%; border:2px solid rgba(210,165,63,.4); border-radius:8px; box-shadow:0 12px 26px rgba(0,0,0,.45);">
+      <figcaption style="font-size:14px; color:var(--agedpaper); margin-top:8px; line-height:1.4;">The south road &mdash; a hand-designed street grid through grass quarters, flowers &amp; props.</figcaption>
+    </figure>
+  </div>
+  <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:26px; margin-top:24px;">
+    <div><b class="gold" style="font-family:Georgia,serif;">A designed town</b><br><span class="muted" style="font-size:15px;">Hub square + eight themed quarters &mdash; not procedural noise.</span></div>
+    <div><b class="gold" style="font-family:Georgia,serif;">Ten acts, ten zones</b><br><span class="muted" style="font-size:15px;">the Bridge, the Mage&rsquo;s Tower, the Forge, the Vault&hellip;</span></div>
+    <div><b class="gold" style="font-family:Georgia,serif;">Locked palette &amp; score</b><br><span class="muted" style="font-size:15px;">32-color &ldquo;Heraldic Code&rdquo; + original synthwave.</span></div>
+  </div>
+  <div class="foot"><span>Actual gameplay &mdash; release build</span><span class="pg">06</span></div>
+</section>
+
+<!-- ============ 7 · THE CAST ============ -->
+<section class="slide">
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <p class="kicker">The cast</p>
+  <h2 style="margin-bottom:8px;">Every concept has a face. <span class="em" style="font-size:30px;">57 NPCs, all original art.</span></h2>
+  <p class="muted" style="font-size:15px; margin:0 0 14px;">Ferris guides you. The Borrow Checker tests you. The Trait Mage, the Quartermaster, the Tavern crew &mdash; each teaches a slice of Rust. <span style="color:var(--agedpaper)">(Actual in-game sprites, below.)</span></p>
+  <div class="cast">
+@@CAST_GRID@@
+  </div>
+  <div class="foot"><span>Real shipped assets</span><span class="pg">07</span></div>
+</section>
+
+<!-- ============ 8 · CURRICULUM ============ -->
+<section class="slide">
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <p class="kicker">The curriculum &mdash; the contract</p>
+  <h2 style="margin-bottom:6px;">A full Rust education, in ten acts.</h2>
+  <p class="muted" style="font-size:15px;margin:0 0 14px;">25&ndash;35 hours &middot; every concept in the Rust Book through Chapter 20 &middot; reachable through normal play.</p>
+  <div class="acts">
+    <div class="act"><span class="num">I</span><span class="nm">Hearthstone Village</span><span class="cc">variables, types, control flow, loops</span></div>
+    <div class="act"><span class="num">II</span><span class="nm">The Borrow Checker&rsquo;s Bridge</span><span class="cc">ownership, borrowing, lifetimes, slices</span></div>
+    <div class="act"><span class="num">III</span><span class="nm">Guildhall Quarter</span><span class="cc">structs, enums, pattern matching, <code>impl</code></span></div>
+    <div class="act"><span class="num">IV</span><span class="nm">Trait Mage&rsquo;s Tower</span><span class="cc">traits, generics, <code>dyn</code>, associated types</span></div>
+    <div class="act"><span class="num">V</span><span class="nm">Tavern of Tribulations</span><span class="cc"><code>Result</code>, <code>Option</code>, <code>?</code>, custom errors</span></div>
+    <div class="act"><span class="num">VI</span><span class="nm">Iterator Forge</span><span class="cc">collections, iterators, closures</span></div>
+    <div class="act"><span class="num">VII</span><span class="nm">Concurrent Coast</span><span class="cc">threads, <code>Arc&lt;Mutex&gt;</code>, channels, async</span></div>
+    <div class="act"><span class="num">VIII</span><span class="nm">Vault of Pointers</span><span class="cc"><code>Box</code>, <code>Rc</code>, <code>RefCell</code>, <code>Weak</code></span></div>
+    <div class="act"><span class="num">IX</span><span class="nm">Forbidden Library</span><span class="cc"><code>unsafe</code>, FFI, macros, <code>Drop/Send/Sync</code></span></div>
+    <div class="act"><span class="num">X</span><span class="nm">Throne of the Compiler</span><span class="cc">performance, <code>no_std</code>, the ecosystem</span></div>
+  </div>
+  <p class="lead" style="margin-top:18px; font-size:21px; color:var(--brassleaf); font-family:Georgia,serif;">
+    The player leaves as a Rust developer. <span class="muted" style="font-size:16px;font-family:'Segoe UI',sans-serif;">That&rsquo;s the north star.</span></p>
+  <div class="foot"><span>Curriculum-faithful by mandate</span><span class="pg">08</span></div>
+</section>
+
+<!-- ============ 9 · BUILT IN RUST ============ -->
+<section class="slide">
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <p class="kicker">Technology</p>
+  <h2>It eats its own dog food.</h2>
+  <p class="lead" style="margin-bottom:24px;">A Rust-teaching game, built entirely in Rust &mdash; the codebase <i>is</i> a teaching artifact.</p>
+  <div class="grid3">
+    <div class="card"><h3>Engine</h3><p>Bevy ECS, native + WebGL2. <code>bevy_egui</code> + <code>egui_code_editor</code> drive the in-game IDE with real Rust syntax highlighting.</p></div>
+    <div class="card"><h3>Player code</h3><p>Source &rarr; server-side <code>cargo</code> compile &rarr; WASM. Runs in a fuel-limited sandbox &mdash; <b class="rose">never the host process</b>. The server owns the manifest.</p></div>
+    <div class="card"><h3>Everywhere</h3><p>One Rust codebase ships to desktop (native), browser (wasm), and mobile (Tauri 2.0, Android bundle builds today).</p></div>
+  </div>
+  <div class="chips" style="margin-top:26px;">
+    <span class="chip">Bevy</span><span class="chip">bevy_egui</span><span class="chip">egui_code_editor</span>
+    <span class="chip">Axum compile API</span><span class="chip">WASM sandbox</span><span class="chip">wasm-bindgen</span>
+    <span class="chip">Tauri 2.0</span><span class="chip g">No <code>unsafe</code> in shipped game code</span>
+  </div>
+  <div class="foot"><span>Rust-first, by mandate</span><span class="pg">09</span></div>
+</section>
+
+<!-- ============ 10 · STATUS ============ -->
+<section class="slide">
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <p class="kicker">Status &mdash; what&rsquo;s real today</p>
+  <h2>This is not a concept deck. It runs.</h2>
+  <div class="grid2" style="margin-top:4px;">
+    <div>
+      <ul class="clean">
+        <li><b class="gold">57 missions</b> across Acts 1&ndash;8, fully playable, strict-linear curriculum gating</li>
+        <li><b class="gold">57 NPCs</b>, every one with original sprite art</li>
+        <li>Builds &amp; runs <b>native + in-browser (WebGL2)</b></li>
+        <li>Original synthwave score + sound effects</li>
+        <li>Android app bundle builds end-to-end (Tauri)</li>
+      </ul>
+    </div>
+    <div>
+      <div class="card" style="margin-bottom:16px;">
+        <h3 style="color:var(--brightteal)">In progress</h3>
+        <p>Final art-fidelity pass &middot; Steam page &middot; honest &ldquo;compiled-and-ran&rdquo; grading flipped to prod default.</p>
+      </div>
+      <div class="card">
+        <h3 style="color:var(--brightteal)">Next on the roadmap</h3>
+        <p>Acts 9&ndash;10 &middot; the post-game <span class="rose">Temple</span> (a HolyC roguelike, kept as a surprise reveal) &middot; B2B &ldquo;team progress&rdquo; dashboard.</p>
+      </div>
+    </div>
+  </div>
+  <p class="muted" style="margin-top:22px;font-size:16px;">Built solo, in &lt;2 months, on a self-hosted toolchain &mdash; tested behind a full local CI gate (fmt + clippy <code>-D warnings</code> + ~100 grader tests + byte-parity contract suite).</p>
+  <div class="foot"><span>Honest status &mdash; no overclaiming</span><span class="pg">10</span></div>
+</section>
+
+<!-- ============ 11 · MARKET / WHY NOW ============ -->
+<section class="slide">
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <p class="kicker">Market &mdash; why now</p>
+  <h2>Rust crossed the inflection point.</h2>
+  <div class="grid2">
+    <div>
+      <ul class="clean">
+        <li>In the <b>Linux</b> and <b>Windows</b> kernels; powering AWS Firecracker, Cloudflare, Discord.</li>
+        <li>The Rust Survey&rsquo;s <b class="rose">#1 barrier, every year: the learning curve.</b></li>
+        <li>Indie edutainment distribution (itch.io, Steam) is healthier than ever for niches.</li>
+        <li>Gen-AI art + LLM tutoring make a solo studio economically viable.</li>
+      </ul>
+    </div>
+    <div>
+      <div class="card" style="margin-bottom:14px;"><span class="pill">Primary</span><p style="margin-top:10px;">Pro devs &amp; CS students, 22&ndash;40, who tried Rust once and bounced. Spending power; will pay $25&ndash;$40 to finally get it.</p></div>
+      <div class="card" style="margin-bottom:14px;"><span class="pill">Secondary</span><p style="margin-top:10px;">University CS courses &mdash; departmental licensing.</p></div>
+      <div class="card"><span class="pill">Tertiary &mdash; the growth engine</span><p style="margin-top:10px;">Engineering teams onboarding Rust. B2B at <b class="gold">$50/seat</b>, where adoption is fastest.</p></div>
+    </div>
+  </div>
+  <div class="foot"><span>Small but devout &mdash; and growing</span><span class="pg">11</span></div>
+</section>
+
+<!-- ============ 12 · BUSINESS MODEL ============ -->
+<section class="slide">
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <p class="kicker">Business model</p>
+  <h2 style="margin-bottom:14px;">Free demo &rarr; paid game &rarr; B2B.</h2>
+  <div class="card" style="padding:0; overflow:hidden;">
+    <div class="funnel">
+      <div class="fstage"><div class="ph">Phase 0 &middot; Demo</div><div class="pr">Free</div><div class="ds">Acts 1&ndash;2 on itch.io. Top-of-funnel, email capture, validation.</div></div>
+      <div class="fstage"><div class="ph">Phase 1 &middot; Early access</div><div class="pr">$14.99</div><div class="ds">Acts 1&ndash;4, itch.io. First dollars; Steam wishlist warms.</div></div>
+      <div class="fstage"><div class="ph">Phase 2 &middot; Steam</div><div class="pr">$24.99</div><div class="ds">Acts 1&ndash;7 + soundtrack DLC. Mainstream discoverability.</div></div>
+      <div class="fstage"><div class="ph">Phase 3 &middot; Full + B2B</div><div class="pr">$39.99</div><div class="ds">All 10 acts + Temple. Deluxe ed. + team licensing $50/seat.</div></div>
+    </div>
+  </div>
+  <div class="grid2" style="margin-top:22px; align-items:center;">
+    <div class="card">
+      <p class="big">~$110K</p>
+      <p class="muted" style="font-size:15px;">projected Year-1 net if phases land near target (conservative $40K; stretch $250K with a major creator feature). <i>Projection, not a guarantee.</i></p>
+    </div>
+    <div>
+      <p style="font-size:14px;letter-spacing:.16em;text-transform:uppercase;color:var(--brightteal);margin:0 0 10px;">What we will never do</p>
+      <div class="chips">
+        <span class="chip r">No microtransactions</span><span class="chip r">No NFTs</span>
+        <span class="chip r">No energy timers</span><span class="chip r">No paywalled hints</span>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Beat the books on engagement, not price</span><span class="pg">12</span></div>
+</section>
+
+<!-- ============ 13 · THE ASK ============ -->
+<section class="slide" style="justify-content:center; align-items:center; text-align:center;">
+  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+  <img class="pixel" src="@@title@@" style="width:520px; margin-bottom:8px;">
+  <h2 style="font-size:38px; margin:18px 0 10px;">A finished, playable Rust RPG &mdash;<br>looking for the right partner to ship it.</h2>
+  <div class="chips" style="justify-content:center; margin:12px 0 26px;">
+    <span class="chip g">Publishing / distribution</span>
+    <span class="chip g">Funding the Acts 9&ndash;10 + Temple push</span>
+    <span class="chip g">B2B / education pilots</span>
+    <span class="chip g">Playtesters &amp; feedback</span>
+  </div>
+  <p class="lead" style="font-size:20px;">
+    <span class="gold">Matt Gates</span> &middot; Chico, CA &middot; github.com/suhteevah
+  </p>
+  <div class="foot"><span>Pledge &amp; Crown</span><span class="pg">Thank you</span></div>
+</section>
+
+</body>
+</html>

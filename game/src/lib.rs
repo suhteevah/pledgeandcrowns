@@ -14,6 +14,10 @@ pub mod plugins;
 
 /// Build and run the game. Blocks until the window closes.
 pub fn run() -> anyhow::Result<()> {
+    // Screenshot mode (PNC_SHOTS) opens the window UNFOCUSED so an automated
+    // capture run can never steal keyboard focus from whatever the user is
+    // doing. Normal play focuses as usual.
+    let shot_mode = std::env::var("PNC_SHOTS").is_ok();
     App::new()
         .add_plugins(
             DefaultPlugins
@@ -21,6 +25,7 @@ pub fn run() -> anyhow::Result<()> {
                     primary_window: Some(Window {
                         title: "Pledge & Crown".into(),
                         resolution: (1280u32, 720u32).into(),
+                        focused: !shot_mode,
                         ..default()
                     }),
                     ..default()

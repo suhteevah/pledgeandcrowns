@@ -1,0 +1,10 @@
+# Generated deck HTML (regenerate with build-deck.ps1 — ~1.3MB of embedded base64)
+deck.html
+
+# Per-slide QA slices (regenerate with qa-shots.ps1)
+qa/
+
+# Capture output: keep only the final shots used by the deck; the numbered
+# intermediate frames from capture iterations are throwaway.
+world-shots/*
+!world-shots/shot-*.png
