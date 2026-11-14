@@ -739,39 +739,415 @@ fn stub_grader_matches_snapshot() {
     }
 }
 
-/// The two crates cannot share code (MIT vs AGPL), so the rule tables are
-/// duplicated. Keep them textually identical so a one-sided edit can't
-/// hide behind inputs the snapshot happens not to cover.
+/// The two crates cannot share code (MIT vs AGPL), so the matching engine
+/// and the rule table are duplicated. Keep both textually identical so a
+/// one-sided edit can't hide behind inputs the snapshot happens not to
+/// cover.
 #[test]
 fn server_and_stub_rule_tables_are_textually_identical() {
-    fn table_body(path: &str) -> String {
+    fn region(path: &str, name: &str) -> String {
         let text = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("read {path}: {e}"));
         let text = text.replace("\r\n", "\n");
+        let begin = format!("// BEGIN {name}");
+        let end_marker = format!("// END {name}");
         let start = text
-            .find("// BEGIN MISSION TABLE")
-            .unwrap_or_else(|| panic!("{path}: no BEGIN MISSION TABLE marker"));
+            .find(&begin)
+            .unwrap_or_else(|| panic!("{path}: no `{begin}` marker"));
         let body_start = start + text[start..].find('\n').expect("marker line ends") + 1;
         let end = text
-            .find("// END MISSION TABLE")
-            .unwrap_or_else(|| panic!("{path}: no END MISSION TABLE marker"));
+            .find(&end_marker)
+            .unwrap_or_else(|| panic!("{path}: no `{end_marker}` marker"));
+        assert!(body_start < end, "{path}: `{name}` markers out of order");
         text[body_start..end].to_string()
     }
-    let stub = table_body(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/src/plugins/stub_grader.rs"
-    ));
-    let server = table_body(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../compile-api/src/grader.rs"
-    ));
-    for (n, (a, b)) in stub.lines().zip(server.lines()).enumerate() {
-        assert_eq!(a, b, "rule tables diverge at table line {}", n + 1);
+    let stub_path = concat!(env!("CARGO_MANIFEST_DIR"), "/src/plugins/stub_grader.rs");
+    let server_path = concat!(env!("CARGO_MANIFEST_DIR"), "/../compile-api/src/grader.rs");
+    for name in ["MISSION TABLE", "GRADER ENGINE"] {
+        let stub = region(stub_path, name);
+        let server = region(server_path, name);
+        for (n, (a, b)) in stub.lines().zip(server.lines()).enumerate() {
+            assert_eq!(a, b, "`{name}` regions diverge at region line {}", n + 1);
+        }
+        assert_eq!(
+            stub.lines().count(),
+            server.lines().count(),
+            "`{name}` regions differ in length"
+        );
     }
+}
+
+// ── Evidence corpus ─────────────────────────────────────────────────
+//
+// The pattern grader is the only grader in the browser build, so "it
+// passes the canonical solution" is not enough. For every mission this
+// corpus checks, against BOTH graders (which must agree):
+//
+//   (a) the player-facing solution (editor/solutions/data.rs) passes;
+//   (b) the canonical fixture above passes;
+//   (c) the player solution hidden in a block comment, in line comments
+//       and in a raw string, next to an empty `fn main`, FAILS;
+//   (d) correct programs the old substring grader rejected (the audit's
+//       examples, plus differently-written solutions for every mission
+//       whose checks were tightened) pass;
+//   (e) wrong programs the old grader accepted, and that a token check
+//       can catch, fail;
+//   (f) the unmodified starter code fails.
+//
+// Run with `--nocapture` to see the counts.
+
+use pledge_and_crown::plugins::editor::solutions::canonical_solution as player_solution;
+
+/// Grade with both graders, insist they agree, return the verdict.
+fn graded_ok(id: &str, src: &str) -> bool {
+    let server = grade(id, src);
+    let stub = stub_verdict(id, src).unwrap_or_else(|| panic!("no stub rule for `{id}`"));
     assert_eq!(
-        stub.lines().count(),
-        server.lines().count(),
-        "rule tables differ in length"
+        server.ok, stub.ok,
+        "graders disagree on `{id}`:\n{src}\nserver={server:?}\nstub={stub:?}"
     );
+    server.ok
+}
+
+/// Correct programs, each a complete program that builds with
+/// `rustc --edition 2021`. `(mission, why it is here, source)`.
+const CORRECT: &[(&str, &str, &str)] = &[
+    // ── audit "correct but rejected" (G1, G3-G7, G10, G11) ──
+    (
+        "double_function",
+        "G1 2 * n",
+        "fn double(n: i32) -> i32 {\n    2 * n\n}\nfn main() {\n    println!(\"{}\", double(21));\n}\n",
+    ),
+    (
+        "double_function",
+        "G1 n + n",
+        "fn double(n: i32) -> i32 {\n    n + n\n}\nfn main() {\n    println!(\"{}\", double(21));\n}\n",
+    ),
+    (
+        "borrow_mut",
+        "G3 param named n",
+        "fn bump(n: &mut i32) {\n    *n += 1;\n}\nfn main() {\n    let mut v = 0;\n    bump(&mut v);\n    println!(\"{v}\");\n}\n",
+    ),
+    (
+        "closure_basic",
+        "G3 |x, y|",
+        "fn main() {\n    let add = |x, y| x + y;\n    println!(\"{}\", add(2, 3));\n}\n",
+    ),
+    (
+        "iter_map_collect",
+        "G3 |n|",
+        "fn main() {\n    let v = vec![1, 2, 3];\n    let d: Vec<i32> = v.iter().map(|n| n * 2).collect();\n    println!(\"{d:?}\");\n}\n",
+    ),
+    (
+        "string_vs_str",
+        "G4 to_string",
+        "fn greet(name: &str) {\n    println!(\"hi {name}\");\n}\nfn main() {\n    let s = \"you\".to_string();\n    greet(&s);\n    greet(\"anon\");\n}\n",
+    ),
+    (
+        "result_question_mark",
+        "G5 Ok(expr?)",
+        "fn parse_int(s: &str) -> Result<i32, String> {\n    Ok(s.parse::<i32>().map_err(|e| e.to_string())?)\n}\nfn main() {\n    println!(\"{:?}\", parse_int(\"42\"));\n}\n",
+    ),
+    (
+        "derive_debug",
+        "G6 derive(Debug, Clone) + {:#?}",
+        "#[derive(Debug, Clone)]\nstruct Item {\n    name: String,\n}\nfn main() {\n    let item = Item { name: String::from(\"ring\") };\n    println!(\"{item:#?}\");\n    println!(\"{}\", item.name);\n}\n",
+    ),
+    (
+        "derive_debug",
+        "G6 derive(Clone, Debug) + {:?}",
+        "#[derive(Clone, Debug)]\nstruct Item {\n    name: String,\n}\nfn main() {\n    let item = Item { name: String::from(\"ring\") };\n    println!(\"{:?}\", item);\n    println!(\"{}\", item.name);\n}\n",
+    ),
+    (
+        "assoc_new",
+        "G7 -> Hero",
+        "struct Hero {\n    level: i32,\n}\nimpl Hero {\n    fn new(level: i32) -> Hero {\n        Hero { level }\n    }\n}\nfn main() {\n    let h = Hero::new(5);\n    println!(\"{}\", h.level);\n}\n",
+    ),
+    (
+        "generic_struct",
+        "G10 tuple Pair<T>(T, T)",
+        "struct Pair<T>(T, T);\nfn main() {\n    let p = Pair(1, 2);\n    println!(\"{} {}\", p.0, p.1);\n}\n",
+    ),
+    (
+        "generic_struct",
+        "G10 Pair<U>",
+        "struct Pair<U> {\n    a: U,\n    b: U,\n}\nfn main() {\n    let p = Pair { a: 1, b: 2 };\n    println!(\"{} {}\", p.a, p.b);\n}\n",
+    ),
+    (
+        "lifetimes",
+        "G10 lifetime 's",
+        "fn longest<'s>(x: &'s str, y: &'s str) -> &'s str {\n    if x.len() > y.len() { x } else { y }\n}\nfn main() {\n    println!(\"{}\", longest(\"aa\", \"b\"));\n}\n",
+    ),
+    (
+        "iter_zip",
+        "G11 std::iter::zip",
+        "fn main() {\n    let a = vec![1, 2];\n    let b = vec![3, 4];\n    for (x, y) in std::iter::zip(&a, &b) {\n        println!(\"{x},{y}\");\n    }\n}\n",
+    ),
+    (
+        "closure_move",
+        "audit move|| without space",
+        "fn main() {\n    let name = String::from(\"Garin\");\n    let greet = move||println!(\"hail, {name}\");\n    greet();\n}\n",
+    ),
+    // ── differently-written solutions for every tightened mission ──
+    (
+        "if_else_sign",
+        "tightened: returns",
+        "fn sign(n: i32) -> &'static str {\n    if n < 0 {\n        return \"neg\";\n    } else if n == 0 {\n        return \"zero\";\n    } else {\n        return \"pos\";\n    }\n}\nfn main() {\n    println!(\"{}\", sign(-3));\n}\n",
+    ),
+    (
+        "if_else_sign",
+        "tightened: > 0 branch, let-bound",
+        "fn sign(n: i32) -> &'static str {\n    let label = if n < 0 { \"neg\" } else if n > 0 { \"pos\" } else { \"zero\" };\n    label\n}\nfn main() {\n    println!(\"{}\", sign(4));\n}\n",
+    ),
+    (
+        "if_else_sign",
+        "tightened: zero first, no spaces",
+        "fn sign(n: i32) -> &'static str {\n    if n==0 {\"zero\"} else if n<0 {\"neg\"} else {\"pos\"}\n}\nfn main() {\n    println!(\"{}\", sign(0));\n}\n",
+    ),
+    (
+        "loop_break",
+        "tightened: double before test",
+        "fn main() {\n    let mut n = 1;\n    let r = loop {\n        n *= 2;\n        if n >= 100 {\n            break n;\n        }\n    };\n    println!(\"{r}\");\n}\n",
+    ),
+    (
+        "loop_break",
+        "tightened: x = x * 2",
+        "fn main() {\n    let mut value = 1;\n    let first = loop {\n        if value >= 100 {\n            break value;\n        }\n        value = value * 2;\n    };\n    println!(\"{first}\");\n}\n",
+    ),
+    (
+        "loop_break",
+        "tightened: x = 2 * x",
+        "fn main() {\n    let mut value = 1;\n    let first = loop {\n        if value >= 100 {\n            break value;\n        }\n        value = 2 * value;\n    };\n    println!(\"{first}\");\n}\n",
+    ),
+    (
+        "match_option",
+        "tightened: None arm first",
+        "fn unwrap_or_zero(x: Option<i32>) -> i32 {\n    match x {\n        None => 0,\n        Some(v) => v,\n    }\n}\nfn main() {\n    println!(\"{}\", unwrap_or_zero(Some(7)));\n}\n",
+    ),
+    (
+        "match_option",
+        "tightened: block arms",
+        "fn unwrap_or_zero(x: Option<i32>) -> i32 {\n    match x {\n        Some(value) => {\n            value\n        }\n        None => {\n            0\n        }\n    }\n}\nfn main() {\n    println!(\"{}\", unwrap_or_zero(None));\n}\n",
+    ),
+    (
+        "match_option",
+        "tightened: return arms",
+        "fn unwrap_or_zero(maybe: Option<i32>) -> i32 {\n    match maybe {\n        Some(n) => return n,\n        None => return 0,\n    }\n}\nfn main() {\n    println!(\"{}\", unwrap_or_zero(Some(1)));\n}\n",
+    ),
+    (
+        "tuple_struct",
+        "tightened: .0 on a temporary",
+        "struct Meters(f64);\nfn main() {\n    let raw: f64 = 3.5;\n    println!(\"{}\", Meters(raw).0);\n}\n",
+    ),
+    (
+        "tuple_struct",
+        "tightened: float literal and a real .0",
+        "struct Meters(f64);\nfn main() {\n    let d = Meters(3.0);\n    let inner = d.0;\n    println!(\"{inner}\");\n}\n",
+    ),
+    (
+        "trait_def",
+        "tightened: trait defined after impl",
+        "struct Fire;\nimpl Element for Fire {\n    fn name(&self) -> &str {\n        \"fire\"\n    }\n}\ntrait Element {\n    fn name(&self) -> &str;\n}\nfn main() {\n    println!(\"{}\", Fire.name());\n}\n",
+    ),
+    (
+        "trait_def",
+        "tightened: default method, empty impl",
+        "trait Element {\n    fn name(&self) -> &str {\n        \"element\"\n    }\n}\nstruct Fire;\nimpl Element for Fire {}\nfn main() {\n    let f = Fire;\n    println!(\"{}\", f.name());\n}\n",
+    ),
+    (
+        "trait_def",
+        "tightened: String-returning trait",
+        "trait Element {\n    fn name(&self) -> String;\n}\nstruct Fire;\nimpl Element for Fire {\n    fn name(&self) -> String {\n        String::from(\"fire\")\n    }\n}\nfn main() {\n    println!(\"{}\", Fire.name());\n}\n",
+    ),
+    (
+        "iter_fold",
+        "tightened: |sum, &n|",
+        "fn main() {\n    let v = vec![1, 2, 3];\n    let total = v.iter().fold(0, |sum, &n| sum + n);\n    println!(\"{total}\");\n}\n",
+    ),
+    (
+        "iter_fold",
+        "tightened: typed params, block body",
+        "fn main() {\n    let v = vec![1, 2, 3];\n    let total: i32 = v.into_iter().fold(0, |acc: i32, x: i32| {\n        let next = acc + x;\n        next\n    });\n    println!(\"{total}\");\n}\n",
+    ),
+    (
+        "iter_fold",
+        "tightened: x + acc",
+        "fn main() {\n    let v = vec![1, 2, 3];\n    let total = v.iter().fold(0, |acc, x| x + acc);\n    println!(\"{total}\");\n}\n",
+    ),
+    (
+        "closure_basic",
+        "tightened: typed params, b + a",
+        "fn main() {\n    let add = |a: i32, b: i32| -> i32 { b + a };\n    println!(\"{}\", add(2, 3));\n}\n",
+    ),
+    (
+        "borrow_mut",
+        "tightened: *counter = *counter + 1",
+        "fn bump(counter: &mut i32) {\n    *counter = *counter + 1;\n}\nfn main() {\n    let mut c = 0;\n    bump(&mut c);\n    println!(\"{c}\");\n}\n",
+    ),
+    (
+        "generic_struct",
+        "tightened: bound on T",
+        "struct Pair<T: Copy> {\n    first: T,\n    second: T,\n}\nfn main() {\n    let p = Pair { first: 1, second: 2 };\n    println!(\"{} {}\", p.first, p.second);\n}\n",
+    ),
+    (
+        "lifetimes",
+        "tightened: lifetime 'long",
+        "fn longest<'long>(a: &'long str, b: &'long str) -> &'long str {\n    if a.len() >= b.len() { a } else { b }\n}\nfn main() {\n    println!(\"{}\", longest(\"x\", \"yy\"));\n}\n",
+    ),
+    (
+        "generic_fn",
+        "tightened: type parameter U",
+        "fn larger<U: PartialOrd>(a: U, b: U) -> U {\n    if a > b { a } else { b }\n}\nfn main() {\n    println!(\"{}\", larger(3, 7));\n}\n",
+    ),
+    (
+        "atomic",
+        "token match: AtomicU32",
+        "use std::sync::atomic::{AtomicU32, Ordering};\nfn main() {\n    let c = AtomicU32::new(0);\n    c.fetch_add(1, Ordering::SeqCst);\n    println!(\"{}\", c.load(Ordering::SeqCst));\n}\n",
+    ),
+];
+
+/// Wrong programs the old substring grader ACCEPTED and a token-level
+/// check now catches. `(mission, audit id, source)`.
+const WRONG: &[(&str, &str, &str)] = &[
+    (
+        "if_else_sign",
+        "G2 neg/pos labels swapped",
+        "fn sign(n: i32) -> &'static str {\n    if n < 0 { \"pos\" } else if n == 0 { \"zero\" } else { \"neg\" }\n}\nfn main() {}\n",
+    ),
+    (
+        "if_else_sign",
+        "G2 zero/pos labels swapped",
+        "fn sign(n: i32) -> &'static str {\n    if n < 0 { \"neg\" } else if n == 0 { \"pos\" } else { \"zero\" }\n}\nfn main() {}\n",
+    ),
+    (
+        "match_option",
+        "G2 0 in both arms",
+        "fn unwrap_or_zero(x: Option<i32>) -> i32 {\n    match x {\n        Some(_) => 0,\n        None => 0,\n    }\n}\nfn main() {}\n",
+    ),
+    (
+        "loop_break",
+        "G2 break with no value",
+        "fn main() {\n    let mut n = 1;\n    loop {\n        if n >= 100 {\n            break;\n        }\n        n *= 2;\n    }\n}\n",
+    ),
+    (
+        "tuple_struct",
+        "G8 3.0 literal, field never read",
+        "struct Meters(f64);\nfn main() {\n    let _d = Meters(3.0);\n}\n",
+    ),
+    (
+        "trait_def",
+        "G9 inherent impl + unused trait + for loop",
+        "trait Element {\n    fn name(&self) -> &str;\n}\nstruct Fire;\nimpl Fire {\n    fn name(&self) -> &str {\n        \"fire\"\n    }\n}\nfn main() {\n    for _ in 0..1 {\n        println!(\"{}\", Fire.name());\n    }\n}\n",
+    ),
+    (
+        "trait_def",
+        "G9 std trait implemented, own trait unused",
+        "trait Element {}\nstruct Fire;\nimpl Clone for Fire {\n    fn clone(&self) -> Self {\n        Fire\n    }\n}\nfn main() {}\n",
+    ),
+    (
+        "iter_fold",
+        "fold ignoring its elements",
+        "fn main() {\n    let v = vec![1, 2, 3];\n    let total = v.iter().fold(0, |acc, _| acc);\n    println!(\"{total}\");\n}\n",
+    ),
+];
+
+#[test]
+fn grader_corpus() {
+    let reg = MissionRegistry::default();
+    let n = reg.missions.len();
+    let (mut a, mut b, mut c, mut f) = (0, 0, 0, 0);
+    let mut failures = Vec::new();
+    for m in &reg.missions {
+        let player = player_solution(m.id).unwrap_or_else(|| panic!("no solution for `{}`", m.id));
+        if graded_ok(m.id, player) {
+            a += 1;
+        } else {
+            failures.push(format!("(a) player solution rejected: {}", m.id));
+        }
+        let fixture = canonical_solution(m.id).expect("checked elsewhere");
+        if graded_ok(m.id, fixture) {
+            b += 1;
+        } else {
+            failures.push(format!("(b) contract fixture rejected: {}", m.id));
+        }
+        assert!(
+            !player.contains("*/") && !player.contains("\"##"),
+            "wrapper would break"
+        );
+        let block = format!("fn main() {{}}\n/*\n{player}\n*/\n");
+        let lines: String = player.lines().map(|l| format!("// {l}\n")).collect();
+        let lines = format!("fn main() {{}}\n{lines}");
+        let string = format!("fn main() {{\n    let _s = r##\"{player}\"##;\n}}\n");
+        let hidden: Vec<bool> = [&block, &lines, &string]
+            .iter()
+            .map(|src| graded_ok(m.id, src))
+            .collect();
+        if hidden.iter().all(|ok| !ok) {
+            c += 1;
+        } else {
+            failures.push(format!(
+                "(c) hidden solution passed (block, lines, string) = {hidden:?}: {}",
+                m.id
+            ));
+        }
+        if !graded_ok(m.id, m.starter_code) {
+            f += 1;
+        } else {
+            failures.push(format!("(f) starter passes: {}", m.id));
+        }
+    }
+    let mut d = 0;
+    for (id, why, src) in CORRECT {
+        if graded_ok(id, src) {
+            d += 1;
+        } else {
+            failures.push(format!("(d) correct program rejected: {id} [{why}]"));
+        }
+    }
+    let mut e = 0;
+    for (id, why, src) in WRONG {
+        if !graded_ok(id, src) {
+            e += 1;
+        } else {
+            failures.push(format!("(e) wrong program accepted: {id} [{why}]"));
+        }
+    }
+    println!(
+        "grader corpus: (a) {a}/{n} player solutions pass; (b) {b}/{n} fixtures pass; \
+         (c) {c}/{n} hidden solutions fail; (d) {d}/{} correct programs pass; \
+         (e) {e}/{} wrong programs fail; (f) {f}/{n} starters fail",
+        CORRECT.len(),
+        WRONG.len()
+    );
+    assert!(failures.is_empty(), "{failures:#?}");
+}
+
+/// Slow audit: every `CORRECT` corpus program really is valid Rust.
+/// Run with `cargo test -p pledge_and_crown --test contract -- --ignored`.
+#[test]
+#[ignore = "slow: runs rustc once per corpus program"]
+fn corpus_correct_programs_compile() {
+    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("grader-corpus-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("create scratch dir");
+    let mut failures = Vec::new();
+    for (n, (id, why, src)) in CORRECT.iter().enumerate() {
+        let path = dir.join(format!("c{n}.rs"));
+        std::fs::write(&path, src).expect("write corpus source");
+        let out = std::process::Command::new("rustc")
+            .args(["--edition", "2021", "--crate-type", "bin", "-o"])
+            .arg(dir.join(format!("c{n}.out")))
+            .arg(&path)
+            .output()
+            .expect("spawn rustc");
+        if !out.status.success() {
+            failures.push(format!(
+                "{id} [{why}]: {}",
+                String::from_utf8_lossy(&out.stderr)
+            ));
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(failures.is_empty(), "{failures:#?}");
 }
 
 #[test]

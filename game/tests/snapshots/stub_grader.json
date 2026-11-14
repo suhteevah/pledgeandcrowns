@@ -240,6 +240,36 @@
     }
   },
   {
+    "case": "near_miss_11",
+    "id": "if_else_sign",
+    "input": "fn sign(n: i32) -> &'static str {\n    if n < 0  \"neg\" } else if n == 0 { \"zero\" } else { \"pos\" }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Cartographer frowns — the `< 0` branch should give `\"neg\"`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_17",
+    "id": "if_else_sign",
+    "input": "fn sign(n: i32) -> &'static str {\n    if n < 0 { \"neg\" } else if n  0 { \"zero\" } else { \"pos\" }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Cartographer frowns — zero should give `\"zero\"`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_21",
+    "id": "if_else_sign",
+    "input": "fn sign(n: i32) -> &'static str {\n    if n < 0 { \"neg\" } else if n == 0 { \"zero\"  else { \"pos\" }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Cartographer frowns — a positive number should give `\"pos\"`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "canonical",
     "id": "loop_break",
     "input": "fn main() {\n    let mut n = 1;\n    let _ = loop {\n        if n >= 100 { break n; }\n        n *= 2;\n    };\n}",
@@ -255,7 +285,7 @@
     "input": "fn main() {\n    let mut _n = 1;\n    // loop until _n >= 100, doubling each step, then break the value\n    println!(\"{_n}\");\n}\n",
     "verdict": {
       "ok": false,
-      "stderr": "[stub] the Bellringer waits — the value should double each iteration: `*= 2`",
+      "stderr": "[stub] the Bellringer waits — missing required: `loop`",
       "stdout": ""
     }
   },
@@ -290,6 +320,16 @@
     }
   },
   {
+    "case": "near_miss_19",
+    "id": "loop_break",
+    "input": "fn main() {\n    let mut n = 1;\n    let _ = loop {\n        if n >= 100 { break  }\n        n *= 2;\n    };\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Bellringer waits — hand the value out of the loop with `break n`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "near_miss_22",
     "id": "loop_break",
     "input": "fn main() {\n    let mut n = 1;\n    let _ = loop {\n        if n >= 100 { break n; }\n        n  2;\n    };\n}",
@@ -315,7 +355,7 @@
     "input": "fn unwrap_or_zero(_x: Option<i32>) -> i32 {\n    // pattern-match and return the inner value or 0\n    -1\n}\n\nfn main() {\n    println!(\"{}\", unwrap_or_zero(Some(7)));\n}\n",
     "verdict": {
       "ok": false,
-      "stderr": "[stub] the Oracle's eyes are closed — missing required: `None`",
+      "stderr": "[stub] the Oracle's eyes are closed — missing required: `match`",
       "stdout": ""
     }
   },
@@ -350,12 +390,32 @@
     }
   },
   {
+    "case": "near_miss_10",
+    "id": "match_option",
+    "input": "fn unwrap_or_zero(x: Option<i32>) -> i32 {\n    match x {\n        Some(n)  n,\n        None => 0,\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Oracle's eyes are closed — the `Some(n)` arm should give back the `n` it binds",
+      "stdout": ""
+    }
+  },
+  {
     "case": "near_miss_12",
     "id": "match_option",
     "input": "fn unwrap_or_zero(x: Option<i32>) -> i32 {\n    match x {\n        Some(n) => n,\n         => 0,\n    }\n}",
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Oracle's eyes are closed — missing required: `None`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_13",
+    "id": "match_option",
+    "input": "fn unwrap_or_zero(x: Option<i32>) -> i32 {\n    match x {\n        Some(n) => n,\n        None  0,\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Oracle's eyes are closed — the `None` arm should give `0`",
       "stdout": ""
     }
   },
@@ -620,9 +680,9 @@
     }
   },
   {
-    "case": "near_miss_13",
+    "case": "near_miss_4",
     "id": "string_vs_str",
-    "input": "fn greet(name: &str) { println!(\"hi {name}\"); }\nfn main() { let s =  greet(&s); greet(\"anon\"); }",
+    "input": "fn greet(name: &str) {  {name}\"); }\nfn main() { let s = String::from(\"you\"); greet(&s); greet(\"anon\"); }",
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Linguist tilts her head — call `greet` once with a `String::from(...)` value",
@@ -695,7 +755,7 @@
     "input": "fn main() {\n    // walk the range 0..10 with a for loop, printing each step\n    println!(\"todo\");\n}\n",
     "verdict": {
       "ok": false,
-      "stderr": "[stub] the Drillmaster barks — `for` needs a binding `in` an iterable",
+      "stderr": "[stub] the Drillmaster barks — missing required: `for `",
       "stdout": ""
     }
   },
@@ -790,9 +850,9 @@
     }
   },
   {
-    "case": "near_miss_9",
+    "case": "near_miss_7",
     "id": "closure_basic",
-    "input": "fn main() {\n    let add = |a, b| a  b;\n    println!(\"{}\", add(2, 3));\n}",
+    "input": "fn main() {\n    let add = |a,  a + b;\n    println!(\"{}\", add(2, 3));\n}",
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Reckoner's quill hovers — the body should compute `a + b`",
@@ -1045,7 +1105,7 @@
     "input": "// define enum Direction with several variants\n\nfn main() {\n    // match on a Direction value and produce something\n}\n",
     "verdict": {
       "ok": false,
-      "stderr": "[stub] the Heraldic Sage frowns — name a variant with the `Direction::` path",
+      "stderr": "[stub] the Heraldic Sage frowns — missing required: `enum Direction`",
       "stdout": ""
     }
   },
@@ -1095,7 +1155,7 @@
     "input": "fn main() {\n    let mut _n = 5;\n    // count down with a while loop and a -= 1 step\n    println!(\"{_n}\");\n}\n",
     "verdict": {
       "ok": false,
-      "stderr": "[stub] the Tinker frowns — the predicate should test `> 0`",
+      "stderr": "[stub] the Tinker frowns — missing required: `while `",
       "stdout": ""
     }
   },
@@ -1480,22 +1540,22 @@
     }
   },
   {
+    "case": "near_miss_1",
+    "id": "trait_def",
+    "input": "trait  {\n    fn name(&self) -> &str;\n}\nstruct Fire;\nimpl Element for Fire {\n    fn name(&self) -> &str { \"fire\" }\n}\nfn main() {\n    let f = Fire;\n    println!(\"{}\", f.name());\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] Vexis waits — bind the trait to a type: `impl Trait for Type`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "near_miss_10",
     "id": "trait_def",
     "input": "trait Element {\n    fn name(&self) -> &str;\n}\nstruct Fire;\n Element for Fire {\n    fn name(&self) -> &str { \"fire\" }\n}\nfn main() {\n    let f = Fire;\n    println!(\"{}\", f.name());\n}",
     "verdict": {
       "ok": false,
       "stderr": "[stub] Vexis waits — implement it with an `impl ` block",
-      "stdout": ""
-    }
-  },
-  {
-    "case": "near_miss_12",
-    "id": "trait_def",
-    "input": "trait Element {\n    fn name(&self) -> &str;\n}\nstruct Fire;\nimpl Element  Fire {\n    fn name(&self) -> &str { \"fire\" }\n}\nfn main() {\n    let f = Fire;\n    println!(\"{}\", f.name());\n}",
-    "verdict": {
-      "ok": false,
-      "stderr": "[stub] Vexis waits — bind the trait to a type: `impl Trait for Type`",
       "stdout": ""
     }
   },
@@ -1596,6 +1656,16 @@
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Conjurer waits — make it generic with a `<T>` parameter",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_2",
+    "id": "generic_struct",
+    "input": "struct Pair<T> \n    a: T,\n    b: T,\n}\nfn main() {\n    let p = Pair { a: 1, b: 2 };\n    let _ = (p.a, p.b);\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Conjurer waits — give it a field of the generic type `: T`",
       "stdout": ""
     }
   },
@@ -2136,6 +2206,16 @@
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Smelter waits — missing required: `.fold(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_13",
+    "id": "iter_fold",
+    "input": "fn main() {\n    let v = vec![1, 2, 3];\n    let total = v.iter().fold(0,  x| acc + x);\n    let _ = total;\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Smelter waits — the closure must use each element: `|acc, x| acc + x`",
       "stdout": ""
     }
   },

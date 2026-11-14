@@ -599,3 +599,294 @@ fn rule_table_is_well_formed_and_matches_the_registry() {
         .collect();
     assert_eq!(ids, registry, "rule table and MissionRegistry disagree");
 }
+
+// ── Lexer ───────────────────────────────────────────────────────────
+//
+// The grader matches tokens of CODE only, so the lexer must never mistake
+// a comment or a literal for code (or the reverse). The server copy of the
+// engine is test-enforced textually identical (`contract.rs`), so this
+// suite covers both graders.
+
+use pledge_and_crown::plugins::stub_grader::{Token, TokenKind, code_contains, lex};
+
+fn kinds_texts(src: &str) -> Vec<(TokenKind, String)> {
+    lex(src).into_iter().map(|t| (t.kind, t.text)).collect()
+}
+
+fn texts(src: &str) -> Vec<String> {
+    lex(src).into_iter().map(|t| t.text).collect()
+}
+
+fn tok(kind: TokenKind, text: &str) -> (TokenKind, String) {
+    (kind, text.to_string())
+}
+
+use TokenKind::{Ident, Lifetime, Literal, Punct, Str};
+
+#[test]
+fn lex_line_and_doc_comments_vanish() {
+    assert_eq!(texts("a // b c\nd"), ["a", "d"]);
+    assert_eq!(texts("/// doc\n//! inner\nx"), ["x"]);
+    assert_eq!(texts("x // no newline at end"), ["x"]);
+}
+
+#[test]
+fn lex_block_comments_nest() {
+    assert_eq!(texts("a /* b /* c */ d */ e"), ["a", "e"]);
+    assert_eq!(texts("/*/ still comment */ x"), ["x"]);
+    assert_eq!(texts("/** doc */ x /**/ y"), ["x", "y"]);
+}
+
+#[test]
+fn lex_unterminated_block_comment_runs_to_end() {
+    assert_eq!(texts("a /* b /* c */ d"), ["a"]);
+    assert_eq!(texts("/*"), Vec::<String>::new());
+}
+
+#[test]
+fn lex_comment_markers_inside_strings_are_string() {
+    assert_eq!(
+        kinds_texts("\"a // b\" x"),
+        [tok(Str, "a // b"), tok(Ident, "x")]
+    );
+    assert_eq!(
+        kinds_texts("\"/*\" x \"*/\""),
+        [tok(Str, "/*"), tok(Ident, "x"), tok(Str, "*/")]
+    );
+}
+
+#[test]
+fn lex_escaped_quote_stays_inside_string() {
+    assert_eq!(
+        kinds_texts(r#""a\"b" x"#),
+        [tok(Str, r#"a\"b"#), tok(Ident, "x")]
+    );
+    assert_eq!(
+        kinds_texts(r#""a\\" x"#),
+        [tok(Str, r"a\\"), tok(Ident, "x")]
+    );
+}
+
+#[test]
+fn lex_double_quote_inside_char_literal() {
+    assert_eq!(
+        kinds_texts(r#"let q = '"'; x "y""#),
+        [
+            tok(Ident, "let"),
+            tok(Ident, "q"),
+            tok(Punct, "="),
+            tok(Literal, "'\"'"),
+            tok(Punct, ";"),
+            tok(Ident, "x"),
+            tok(Str, "y"),
+        ]
+    );
+}
+
+#[test]
+fn lex_char_literal_escapes() {
+    for lit in [r"'\''", r"'\\'", r"'\n'", r"'\u{1F600}'", r"'\x41'", "'é'"] {
+        let src = format!("{lit} x");
+        assert_eq!(
+            kinds_texts(&src),
+            [tok(Literal, lit), tok(Ident, "x")],
+            "{lit}"
+        );
+    }
+}
+
+#[test]
+fn lex_lifetimes_are_not_char_literals() {
+    assert_eq!(
+        kinds_texts("fn f<'a>(x: &'a str) -> &'static str"),
+        [
+            tok(Ident, "fn"),
+            tok(Ident, "f"),
+            tok(Punct, "<"),
+            tok(Lifetime, "'a"),
+            tok(Punct, ">"),
+            tok(Punct, "("),
+            tok(Ident, "x"),
+            tok(Punct, ":"),
+            tok(Punct, "&"),
+            tok(Lifetime, "'a"),
+            tok(Ident, "str"),
+            tok(Punct, ")"),
+            tok(Punct, "->"),
+            tok(Punct, "&"),
+            tok(Lifetime, "'static"),
+            tok(Ident, "str"),
+        ]
+    );
+    assert_eq!(
+        kinds_texts("'outer: loop { break 'outer; }")[0],
+        tok(Lifetime, "'outer")
+    );
+    // One letter between quotes is a char, not a lifetime.
+    assert_eq!(
+        kinds_texts("'a' 'b"),
+        [tok(Literal, "'a'"), tok(Lifetime, "'b")]
+    );
+    assert_eq!(kinds_texts("'_")[0], tok(Lifetime, "'_"));
+}
+
+#[test]
+fn lex_raw_strings_with_any_number_of_hashes() {
+    assert_eq!(
+        kinds_texts(r#"r"a\" x"#),
+        [tok(Str, r"a\"), tok(Ident, "x")],
+        "raw strings have no escapes"
+    );
+    assert_eq!(
+        kinds_texts(r###"r#"he said "hi""# x"###),
+        [tok(Str, r#"he said "hi""#), tok(Ident, "x")]
+    );
+    assert_eq!(
+        kinds_texts(r###"r##"a "# b"## x"###),
+        [tok(Str, r##"a "# b"##), tok(Ident, "x")]
+    );
+    assert_eq!(
+        kinds_texts(r###"r#"// not a comment /* nor this"# x"###),
+        [tok(Str, "// not a comment /* nor this"), tok(Ident, "x")]
+    );
+}
+
+#[test]
+fn lex_byte_and_c_strings_and_byte_chars() {
+    assert_eq!(
+        kinds_texts(r###"b"x" br#"y"# c"z" cr"w" b'q' b'\n'"###),
+        [
+            tok(Str, "x"),
+            tok(Str, "y"),
+            tok(Str, "z"),
+            tok(Str, "w"),
+            tok(Literal, "b'q'"),
+            tok(Literal, r"b'\n'"),
+        ]
+    );
+    // Identifiers that merely start with b / c / r are identifiers.
+    assert_eq!(
+        texts("break crate return r b c"),
+        ["break", "crate", "return", "r", "b", "c"]
+    );
+}
+
+#[test]
+fn lex_raw_identifiers() {
+    assert_eq!(
+        kinds_texts("r#type x"),
+        [tok(Ident, "type"), tok(Ident, "x")]
+    );
+}
+
+#[test]
+fn lex_unterminated_constructs_run_to_end_without_panicking() {
+    assert_eq!(kinds_texts("x \"abc"), [tok(Ident, "x"), tok(Str, "abc")]);
+    assert_eq!(kinds_texts("x \"ab\\"), [tok(Ident, "x"), tok(Str, "ab\\")]);
+    assert_eq!(
+        kinds_texts("x r#\"abc\""),
+        [tok(Ident, "x"), tok(Str, "abc\"")]
+    );
+    assert_eq!(kinds_texts("x '\\"), [tok(Ident, "x"), tok(Literal, "'\\")]);
+    assert_eq!(kinds_texts("x '"), [tok(Ident, "x"), tok(Punct, "'")]);
+    assert_eq!(kinds_texts("b'"), [tok(Punct, "'")]);
+}
+
+#[test]
+fn lex_every_prefix_of_a_tricky_program_without_panicking() {
+    let tricky = r####"fn f<'a>(s: &'a str) -> char { /* /* */ */ let _ = r##"x"#"##; let _ = b"\"";
+    let c = '\''; let d = '"'; let e = 'é'; // tail "
+    let _ = br#"y"#; let _ = c"z"; let _ = r#type; 'l: loop { break 'l; } 3.0_f64 + d.0 as f64; c }"####;
+    let chars: Vec<char> = tricky.chars().collect();
+    for n in 0..=chars.len() {
+        let prefix: String = chars[..n].iter().collect();
+        let _ = lex(&prefix);
+    }
+    // And the whole thing lexes the comment and literals away.
+    let code = texts(tricky);
+    assert!(code.iter().all(|t| !t.contains("/*")));
+    assert!(code.contains(&"'l".to_string()));
+}
+
+#[test]
+fn lex_numbers_ranges_and_tuple_fields() {
+    assert_eq!(kinds_texts("3.0"), [tok(Literal, "3.0")]);
+    assert_eq!(texts("d.0"), ["d", ".", "0"]);
+    assert_eq!(texts("t.0.1"), ["t", ".", "0", ".", "1"]);
+    assert_eq!(texts("0..10"), ["0", "..", "10"]);
+    assert_eq!(texts("0..=9"), ["0", "..=", "9"]);
+    assert_eq!(texts("1_000u32 0x2A"), ["1_000u32", "0x2A"]);
+}
+
+#[test]
+fn lex_operators() {
+    assert_eq!(texts("x += 1"), texts("x+=1"));
+    assert_eq!(texts("a::b->c=>d"), ["a", "::", "b", "->", "c", "=>", "d"]);
+    // `&&` and `||` stay split so `&value` / `|x|` patterns see through them.
+    assert_eq!(texts("&&x || y"), ["&", "&", "x", "|", "|", "y"]);
+    assert_eq!(
+        texts("Vec<Box<dyn E>>"),
+        ["Vec", "<", "Box", "<", "dyn", "E", ">", ">"]
+    );
+}
+
+#[test]
+fn lex_token_type_is_constructible() {
+    // Token is public so callers (and these tests) can inspect lexer output.
+    let t = Token {
+        kind: Ident,
+        text: "x".into(),
+    };
+    assert_eq!(lex("x"), [t]);
+}
+
+// ── Matcher ─────────────────────────────────────────────────────────
+
+#[test]
+fn match_is_whitespace_insensitive() {
+    for src in ["n *= 2", "n*=2", "n *=\n    2"] {
+        assert!(code_contains(src, "*= 2"), "{src}");
+    }
+    assert!(!code_contains("n * = 2", "*= 2"), "`* =` is not `*=`");
+}
+
+#[test]
+fn match_ignores_comments_and_strings() {
+    assert!(!code_contains("// let answer = 42", "let answer"));
+    assert!(!code_contains("/* let answer */", "let answer"));
+    assert!(!code_contains("\"let answer\"", "let answer"));
+    assert!(code_contains("let s = \"neg\";", "\"neg\""));
+    assert!(!code_contains("let s = \"negative\";", "\"neg\""));
+}
+
+#[test]
+fn match_identifiers_whole_not_prefix() {
+    assert!(!code_contains("RefCell::new(0)", "Cell::new"));
+    assert!(code_contains("Cell::new(0)", "Cell::new"));
+    assert!(!code_contains("let answers = 1;", "let answer"));
+}
+
+#[test]
+fn match_wildcards_and_captures() {
+    assert!(code_contains("Some(v) => v", "Some($X) => $X"));
+    assert!(!code_contains("Some(v) => 0", "Some($X) => $X"));
+    assert!(code_contains("impl Element for Fire", "impl $_ for"));
+    assert!(!code_contains("impl Fire {", "impl $_ for"));
+    assert!(code_contains("<'s> (x: &'s str)", "<$'a $.. &$'a"));
+    assert!(!code_contains("<'s> (x: &'t str)", "<$'a $.. &$'a"));
+    assert!(code_contains("<'s>", "<$'_>"));
+}
+
+#[test]
+fn match_gaps_stay_inside_their_bracket_group() {
+    assert!(code_contains(
+        "#[derive(Clone, Debug)]",
+        "#[derive( $.. Debug"
+    ));
+    assert!(!code_contains(
+        "#[derive(Clone)] struct S; impl Debug for S {}",
+        "#[derive( $.. Debug"
+    ));
+    assert!(code_contains("f(a, (b), c)", "f( $.. c"));
+    assert!(!code_contains("f(a) c", "f( $.. c"));
+}
