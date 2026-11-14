@@ -12,8 +12,11 @@
 //!      stub for that mission's id (catches "registered a mission but
 //!      forgot to add a grader case").
 
+mod common;
+
+use common::PLAYER_EDITION;
 use pledge_and_crown::plugins::mission::MissionRegistry;
-use pledge_and_crown::plugins::stub_grader::stub_verdict;
+use pledge_and_crown::plugins::stub_grader::{MAIN_HINT, has_entry_point, lex, stub_verdict};
 use pledge_compile_api::cargo_grader;
 use pledge_compile_api::grader::grade;
 
@@ -34,6 +37,9 @@ fn canonical_solution(encounter_id: &str) -> Option<&'static str> {
         "if_else_sign" => {
             r#"fn sign(n: i32) -> &'static str {
     if n < 0 { "neg" } else if n == 0 { "zero" } else { "pos" }
+}
+fn main() {
+    println!("{}", sign(-3));
 }"#
         }
         "loop_break" => {
@@ -51,6 +57,9 @@ fn canonical_solution(encounter_id: &str) -> Option<&'static str> {
         Some(n) => n,
         None => 0,
     }
+}
+fn main() {
+    println!("{}", unwrap_or_zero(Some(7)));
 }"#
         }
         "struct_basic" => {
@@ -808,8 +817,8 @@ fn graded_ok(id: &str, src: &str) -> bool {
     server.ok
 }
 
-/// Correct programs, each a complete program that builds with
-/// `rustc --edition 2021`. `(mission, why it is here, source)`.
+/// Correct programs, each a complete program that builds with `rustc` at
+/// the server's edition (`PLAYER_EDITION`). `(mission, why it is here, source)`.
 const CORRECT: &[(&str, &str, &str)] = &[
     // ── audit "correct but rejected" (G1, G3-G7, G10, G11) ──
     (
@@ -974,6 +983,26 @@ const CORRECT: &[(&str, &str, &str)] = &[
         "fn main() {\n    let v = vec![1, 2, 3];\n    let total = v.iter().fold(0, |acc, x| x + acc);\n    println!(\"{total}\");\n}\n",
     ),
     (
+        "iter_fold",
+        "named fn defined before the fold",
+        "fn add(acc: i32, x: &i32) -> i32 {\n    acc + x\n}\nfn main() {\n    let v = vec![1, 2, 3];\n    println!(\"{}\", v.iter().fold(0, add));\n}\n",
+    ),
+    (
+        "iter_fold",
+        "named fn defined after the fold",
+        "fn main() {\n    let v = vec![1, 2, 3];\n    let total = v.into_iter().fold(0, add);\n    println!(\"{total}\");\n}\nfn add(acc: i32, x: i32) -> i32 {\n    acc + x\n}\n",
+    ),
+    (
+        "iter_fold",
+        "closure bound to a name first",
+        "fn main() {\n    let v = vec![1, 2, 3];\n    let add = |acc: i32, x: &i32| acc + x;\n    println!(\"{}\", v.iter().fold(0, add));\n}\n",
+    ),
+    (
+        "intro_let_binding",
+        "entry point: pub fn main",
+        "pub fn main() {\n    let answer = 42;\n    println!(\"{answer}\");\n}\n",
+    ),
+    (
         "closure_basic",
         "tightened: typed params, b + a",
         "fn main() {\n    let add = |a: i32, b: i32| -> i32 { b + a };\n    println!(\"{}\", add(2, 3));\n}\n",
@@ -1048,6 +1077,31 @@ const WRONG: &[(&str, &str, &str)] = &[
         "fold ignoring its elements",
         "fn main() {\n    let v = vec![1, 2, 3];\n    let total = v.iter().fold(0, |acc, _| acc);\n    println!(\"{total}\");\n}\n",
     ),
+    (
+        "iter_fold",
+        "named fn ignoring its element",
+        "fn keep(acc: i32, _x: &i32) -> i32 {\n    acc\n}\nfn main() {\n    let v = vec![1, 2, 3];\n    println!(\"{}\", v.iter().fold(0, keep));\n}\n",
+    ),
+    (
+        "if_else_sign",
+        "G0b no fn main (rustc E0601)",
+        "fn sign(n: i32) -> &'static str {\n    if n < 0 { \"neg\" } else if n == 0 { \"zero\" } else { \"pos\" }\n}\n",
+    ),
+    (
+        "match_option",
+        "G0b main only inside a module",
+        "mod game {\n    pub fn main() {}\n}\nfn unwrap_or_zero(x: Option<i32>) -> i32 {\n    match x {\n        Some(n) => n,\n        None => 0,\n    }\n}\n",
+    ),
+    (
+        "impl_method",
+        "G0b main only as a method",
+        "struct Hero { level: i32 }\nimpl Hero {\n    fn power(&self) -> i32 { self.level * 10 }\n    fn main() {}\n}\n",
+    ),
+    (
+        "intro_let_binding",
+        "G0b async fn main (rustc E0752)",
+        "async fn main() {\n    let answer = 42;\n}\n",
+    ),
 ];
 
 #[test]
@@ -1055,6 +1109,7 @@ fn grader_corpus() {
     let reg = MissionRegistry::default();
     let n = reg.missions.len();
     let (mut a, mut b, mut c, mut f) = (0, 0, 0, 0);
+    let mut starters_with_main = 0;
     let mut failures = Vec::new();
     for m in &reg.missions {
         let player = player_solution(m.id).unwrap_or_else(|| panic!("no solution for `{}`", m.id));
@@ -1094,6 +1149,18 @@ fn grader_corpus() {
         } else {
             failures.push(format!("(f) starter passes: {}", m.id));
         }
+        // A starter's first message must teach its concept, never the
+        // shared `fn main` rule (which is checked last).
+        let starter_msg = grade(m.id, m.starter_code).stderr;
+        if starter_msg.contains(MAIN_HINT) {
+            failures.push(format!(
+                "(f) starter's first failure is the fn main hint, not its concept: {}",
+                m.id
+            ));
+        }
+        if has_entry_point(&lex(m.starter_code)) {
+            starters_with_main += 1;
+        }
     }
     let mut d = 0;
     for (id, why, src) in CORRECT {
@@ -1114,14 +1181,16 @@ fn grader_corpus() {
     println!(
         "grader corpus: (a) {a}/{n} player solutions pass; (b) {b}/{n} fixtures pass; \
          (c) {c}/{n} hidden solutions fail; (d) {d}/{} correct programs pass; \
-         (e) {e}/{} wrong programs fail; (f) {f}/{n} starters fail",
+         (e) {e}/{} wrong programs fail; (f) {f}/{n} starters fail \
+         ({starters_with_main} of them have `fn main`, all fail on a concept hint)",
         CORRECT.len(),
         WRONG.len()
     );
     assert!(failures.is_empty(), "{failures:#?}");
 }
 
-/// Slow audit: every `CORRECT` corpus program really is valid Rust.
+/// Slow audit: every `CORRECT` corpus program really is valid Rust at the
+/// server's edition.
 /// Run with `cargo test -p pledge_and_crown --test contract -- --ignored`.
 #[test]
 #[ignore = "slow: runs rustc once per corpus program"]
@@ -1130,11 +1199,19 @@ fn corpus_correct_programs_compile() {
         .join(format!("grader-corpus-{}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("create scratch dir");
     let mut failures = Vec::new();
-    for (n, (id, why, src)) in CORRECT.iter().enumerate() {
+    // The canonical fixtures too, as binaries: a fixture with no `fn main`
+    // (audit G0b) fails here with E0601.
+    let reg = MissionRegistry::default();
+    let fixtures = reg.missions.iter().map(|m| {
+        let src = canonical_solution(m.id).expect("checked elsewhere");
+        (m.id, "canonical fixture", src)
+    });
+    let programs: Vec<(&str, &str, &str)> = CORRECT.iter().copied().chain(fixtures).collect();
+    for (n, (id, why, src)) in programs.iter().enumerate() {
         let path = dir.join(format!("c{n}.rs"));
         std::fs::write(&path, src).expect("write corpus source");
         let out = std::process::Command::new("rustc")
-            .args(["--edition", "2021", "--crate-type", "bin", "-o"])
+            .args(["--edition", PLAYER_EDITION, "--crate-type", "bin", "-o"])
             .arg(dir.join(format!("c{n}.out")))
             .arg(&path)
             .output()
@@ -1147,6 +1224,11 @@ fn corpus_correct_programs_compile() {
         }
     }
     let _ = std::fs::remove_dir_all(&dir);
+    println!(
+        "corpus compile ({PLAYER_EDITION}): {} of {} programs built",
+        programs.len() - failures.len(),
+        programs.len()
+    );
     assert!(failures.is_empty(), "{failures:#?}");
 }
 

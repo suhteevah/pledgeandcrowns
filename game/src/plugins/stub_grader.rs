@@ -193,8 +193,55 @@ impl MissionRule {
                 return Err(format!("{} — {}", self.npc, c.hint));
             }
         }
+        // One shared rule for every mission, checked last so a missing
+        // concept is always reported first: the program needs an entry point.
+        if !has_entry_point(&code) {
+            tracing::debug!(id = self.id, "grader: no top-level `fn main`");
+            return Err(format!("{} — {}", self.npc, MAIN_HINT));
+        }
         Ok(self.pass)
     }
+}
+
+/// Fail hint when every mission check passes but there is no `fn main`.
+pub const MAIN_HINT: &str = "every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`";
+
+/// True when the code has a top-level `fn main(` item, optionally `pub`,
+/// `pub(..)` or `const`. A `main` nested in a `mod`, `impl`, trait or fn
+/// body is not the entry point, and rustc rejects an `async`, `unsafe` or
+/// `extern` main, so none of those count. (A `main` re-exported with `use`
+/// from a module is valid Rust but is not recognised.)
+pub fn has_entry_point(code: &[Token]) -> bool {
+    let mut depth = 0usize;
+    for (i, t) in code.iter().enumerate() {
+        if t.kind == TokenKind::Punct {
+            match t.text.as_str() {
+                "(" | "[" | "{" => depth += 1,
+                ")" | "]" | "}" => depth = depth.saturating_sub(1),
+                _ => {}
+            }
+            continue;
+        }
+        let ident = |k: usize, text: &str| {
+            code.get(k)
+                .is_some_and(|t| t.kind == TokenKind::Ident && t.text == text)
+        };
+        let is_main = depth == 0
+            && ident(i, "fn")
+            && ident(i + 1, "main")
+            && code
+                .get(i + 2)
+                .is_some_and(|t| t.kind == TokenKind::Punct && t.text == "(");
+        let bad_qualifier = i.checked_sub(1).and_then(|p| code.get(p)).is_some_and(|p| {
+            p.kind == TokenKind::Str
+                || (p.kind == TokenKind::Ident
+                    && matches!(p.text.as_str(), "async" | "unsafe" | "extern"))
+        });
+        if is_main && !bad_qualifier {
+            return true;
+        }
+    }
+    false
 }
 
 /// Look up the rule for an encounter id.
@@ -1000,7 +1047,7 @@ pub static MISSION_RULES: &[MissionRule] = &[
         npc: "the Smelter waits",
         checks: &[
             check(&[".fold("], "missing required: `.fold(`"),
-            check(&[".fold( $.. |$_ $.., $X $..| $.. $X", ".fold( $.. |$_ $.., &$X $..| $.. $X"], "the closure must use each element: `|acc, x| acc + x`"),
+            check(&[".fold( $.. |$_ $.., $X $..| $.. $X", ".fold( $.. |$_ $.., &$X $..| $.. $X", "let $F = |$_ $.., $X $..| $.. $X $.. .fold( $.. , $F )", "fn $F ( $_ $.., $X : $.. ) -> $_ { $.. $X $.. } $.. .fold( $.. , $F )", ".fold( $.. , $F ) $.. } $.. fn $F ( $_ $.., $X : $.. ) -> $_ { $.. $X $.. }"], "the closure must use each element: `|acc, x| acc + x`"),
         ],
         pass: "the Smelter tips the crucible. \"many ores, one ingot.\"",
     },

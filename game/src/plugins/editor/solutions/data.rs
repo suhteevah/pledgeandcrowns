@@ -5,7 +5,8 @@
 //! gate, so they are teaching artifacts, not test fixtures:
 //!
 //! - every entry is a complete program with `fn main` that builds with
-//!   plain `rustc --edition 2021` on stable, no dependencies, no warnings;
+//!   plain `rustc` on stable at the server's edition (2024, see
+//!   `game/tests/common/mod.rs`), no dependencies, no warnings;
 //! - every entry starts from its mission's starter-code shape and does
 //!   what the mission's Task section asks;
 //! - comments explain the one concept the mission teaches.

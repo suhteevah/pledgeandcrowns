@@ -13,7 +13,7 @@ Player-facing solutions live in
 | Check | Command | Result |
 |---|---|---|
 | Coverage, stub grader, server pattern grader, `fn main` present, differs from starter | `cargo test -p pledge_and_crown --test solutions` | 57/57 |
-| Native build, warnings denied | `cargo test -p pledge_and_crown --test solutions -- --ignored every_solution_compiles_natively_without_warnings` (runs `rustc --edition 2021 --crate-type bin -D warnings` on each solution) 57/57 |
+| Native build, warnings denied | `cargo test -p pledge_and_crown --test solutions -- --ignored every_solution_compiles_natively_without_warnings` (runs `rustc --edition 2024 --crate-type bin -D warnings` on each solution; the edition is `PLAYER_EDITION`, see **Edition**) 57/57 |
 | `wasm32-wasip1` build as a binary | `... -- --ignored every_solution_builds_for_wasm32_wasip1` (same `rustc` call plus `--target wasm32-wasip1`) 57/57 |
 | Build and run in the real server sandbox | `... -- --ignored solutions_build_and_run_in_the_real_server_sandbox` (`pledge_compile_api::wasm_builder::compile_and_run`: a cargo build for `wasm32-wasip1`, then the wasmtime sandbox) 55/57 built and ran cleanly; 57/57 built. `thread_spawn` and `thread_scope` trap at runtime (expected, asserted) |
 | Alternative-solution probes | a throwaway test, not committed, that runs `stub_verdict` and `grader::grade` on the snippets quoted in **Grader findings** | quoted below |
@@ -24,8 +24,11 @@ Player-facing solutions live in
 Legend: Y = yes, verified by the commands above. "wasip1" means the program
 builds as a `wasm32-wasip1` binary. "runs" means it also ran to a clean exit
 in the server sandbox. Grader notes (G*, wrong arms, `break;`, `fold`)
-describe the substring graders at 83f5daf; all of them except G0b and H1
-are resolved, see **Grader findings** for the status of each.
+describe the substring graders at 83f5daf; all of them, including G0b
+and H1, are resolved (what remains open is semantics a pattern grader
+cannot see), see **Grader findings** for the status of each. "native"
+builds use edition 2024, the edition the server builds player code with
+(see **Edition**).
 
 | id | concept | solution | native | stub grader | wasip1 | notes |
 |---|---|---|---|---|---|---|
@@ -123,9 +126,21 @@ run against **both**, with the same result from each.
   them with `error[E0601]: main function not found`. They would fail
   `/compile-real`. `cargo_grader::compile_check` builds an rlib, so it does
   not catch this either.
-  **Open** (not in this pass's scope). A `fn main` check is expressible in
-  the table; adding it changes every mission's first failure message and
-  needs the two fixtures fixed, so it is left for a separate change.
+  **Resolved.** One shared rule in the grader engine (not 57 table
+  entries), `has_entry_point`, runs after a mission's own checks: the
+  code must contain a top-level `fn main(` item (`pub`, `pub(..)` and
+  `const` allowed). A `main` inside a `mod`, `impl`, trait or another fn
+  does not count, nor does `async` / `unsafe` / `extern "C"` main or
+  `fn main<T>` (rustc rejects all four: E0752, E0580, E0580, E0131), nor
+  one in a comment or string. Failing it gives
+  "`{npc}` — every Rust program starts at `fn main()`: add one at the top
+  level, outside any `impl` or `mod`". It is checked last so a missing
+  concept is always reported first, and no starter's first message is the
+  `fn main` hint (`grader_corpus` asserts it). Known limit: a `main`
+  re-exported with `use m::main;` is valid Rust but is rejected. Both
+  fixtures now have a `fn main`, and `corpus_correct_programs_compile`
+  also builds all 57 fixtures as binaries, which is what would have
+  caught G0b.
 - **G1 `double_function`:** `fn double(n: i32) -> i32 { 2 * n }` and
   `n + n` are both correct and both REJECTED. The needle is `* 2` / `*2`.
   **Resolved:** the check accepts `* 2`, `2 *` or `$X + $X`.
@@ -202,14 +217,23 @@ run against **both**, with the same result from each.
   used in its body (`.fold( $.. |$_ $.., $X $..| $.. $X`, `&x` allowed).
   **Open, not closable:** `|acc, x| x` (keeps the last element) or
   `|acc, x| acc * x` still pass; only an output check tells a sum from
-  another reduction. A fold given a named function (`fold(0, add)`) is now
-  rejected; the mission's task and hint both ask for a closure.
-- **H1 `dyn_trait` hint drift (RESOLVED: the hint now names `Box<dyn` and `Box::new`):** the hint says "The grader needs `Box<dyn`
-  and `dyn `". The grader actually checks `Box<dyn` and `Box::new`.
-  **Open:** the drifted text is the mission tutorial's Hint section in
-  `mission.rs`, not the grader table, whose `dyn_trait` hints (`Box<dyn
-  ...>`, `Box::new`) already name the checked tokens. Fix belongs to the
-  `mission.rs` owner.
+  another reduction.
+  **Named functions accepted (follow-up).** The tightened check had
+  rejected `fold(0, add)`, which is valid, idiomatic Rust. It now also
+  accepts a named fold function when the grader can see it use its
+  element parameter: a local `fn add(acc: i32, x: i32) -> i32 { .. x .. }`
+  defined before the fold, or after it when the fold call is not nested
+  inside another bracket group, and a closure bound to a name first
+  (`let add = |acc, x| acc + x; .fold(0, add)`). A named fn that ignores
+  its element (`fn keep(acc: i32, _x: &i32) -> i32 { acc }`) still fails.
+  **Limits:** a path function (`fold(0, i32::wrapping_add)`), a fn with a
+  destructured `&x` parameter or a non-identifier return type, and a fn
+  defined after a fold nested in e.g. `println!(..)` are rejected.
+- **H1 `dyn_trait` hint drift.** The tutorial's Hint section in
+  `mission.rs` said "The grader needs `Box<dyn` and `dyn `"; the grader
+  checks `Box<dyn` and `Box::new`.
+  **Resolved:** the hint in `mission.rs` now names `Box<dyn` and
+  `Box::new`, matching the grader table.
 - **Token matching side effects** (new behaviour, all intended):
   identifiers match whole, so `RefCell::new` no longer satisfies `cell`'s
   `Cell::new`, and `atomic` lists the std `Atomic*` types instead of
@@ -224,35 +248,66 @@ run against **both**, with the same result from each.
 | (a) player solutions (`editor/solutions/data.rs`) pass | 57/57 |
 | (b) `contract.rs` canonical fixtures pass | 57/57 |
 | (c) player solution hidden in a block comment, in line comments AND in a raw string, next to an empty `fn main`: all three fail | 57/57 |
-| (d) correct programs pass: 15 audit "correct but rejected" examples + 23 differently-written solutions for the tightened missions | 38/38 |
-| (e) wrong programs the old grader accepted now fail (G2 x4, G8, G9 x2, `iter_fold`) | 8/8 |
-| (f) unmodified starter code fails | 57/57 |
+| (d) correct programs pass: 15 audit "correct but rejected" examples + 23 differently-written solutions for the tightened missions + 3 named-fn / named-closure folds + 1 `pub fn main` | 42/42 |
+| (e) wrong programs fail: those the old grader accepted (G2 x4, G8, G9 x2, `iter_fold` x2) + G0b x4 (no `main`, `main` only in a `mod`, only as a method, `async fn main`) | 13/13 |
+| (f) unmodified starter code fails, and never with the `fn main` hint first | 57/57 |
 
-Every (d) program builds with `rustc --edition 2021`
-(`corpus_correct_programs_compile`, `--ignored`). Lexer: 16 lexer tests and
-5 matcher tests in `game/tests/stub_grader.rs`, 5 engine smoke tests in
-the server's `grader.rs`.
+Every (d) program and every canonical fixture builds as a binary with
+`rustc --edition 2024` (`corpus_correct_programs_compile`, `--ignored`).
+Lexer: 16 lexer tests and 5 matcher tests in `game/tests/stub_grader.rs`,
+plus 3 entry-point tests; engine smoke tests in the server's `grader.rs`.
 
 ### Snapshot diff
 
-All 285 inputs from the previous snapshots were replayed through the new
-graders before regenerating. Results were identical for stub and server:
-**0 verdict changes** (0 fail->pass, 0 pass->fail), 280 byte-identical,
-and 5 failure messages changed. All 5 are starter code (`loop_break`,
-`match_option`, `for_in_range`, `enum_match`, `while_loop`) whose
-`// ...` comments used to satisfy the early checks (`loop`, `match`,
-`for`, `enum Direction`, `while`). They now fail at the first check
-instead. The regenerated snapshots hold 293 cases. Near-misses are chosen
-one per distinct failure message, so the new checks added 11 near-miss
-cases, and 3 old ones dropped out because an earlier token removal now
-produces the same message.
+**`fn main` pass (G0b, 2026-11-14).** Before regenerating, all 293
+inputs of the previous snapshots were replayed through the new graders
+(stub and server, identical results): **2 verdict changes, both
+pass->fail, 0 fail->pass, 0 message-only changes, 291 byte-identical.**
+The 2 are the `if_else_sign` and `match_option` canonical fixtures,
+which had no `fn main`; both now fail with the `fn main` hint, so every
+change is explained by the new rule. (The `iter_fold` named-fn change
+was applied afterwards and moved no snapshot verdict.) The regenerated
+snapshots hold 349 cases: the 282 inputs that still exist are all
+unchanged; the 11 old cases of the two fixed fixtures were replaced by 12
+cases of the new fixture text (one of them its `fn main` near-miss); and
+the other 55 missions gained one near-miss each (removing the `main()`
+token now yields the new message). 282 + 12 + 55 = 349.
+
+Previous pass (comment-aware lexer): 285 replayed, 0 verdict changes, 5
+starter messages changed because their `// ...` comments no longer
+satisfied early checks.
+
+## Edition
+
+The server builds player code as **Rust 2024** (the frozen manifests in
+`compile-api/src/wasm_builder.rs` and `cargo_grader.rs`). The audit
+suites used to call `rustc --edition 2021`, so a program could pass the
+tests and fail on the server. They now all use
+`game/tests/common/mod.rs::PLAYER_EDITION`; the server exports no
+constant, so `solutions.rs::player_edition_matches_the_server_manifests`
+greps both manifests and fails if either disagrees.
+
+Re-run under 2024: 57/57 solutions build natively with `-D warnings`
+and for `wasm32-wasip1`; all 42 corpus programs and 57 canonical
+fixtures build; every starter compiles except `lifetimes` (still exactly
+E0106). A throwaway differential check also built all 57 tutorial code
+blocks under both editions (as written, wrapped as items and wrapped in
+`fn main`): every block's errors and warnings were identical in 2021 and
+2024. **No 2021-vs-2024 difference was found anywhere in Acts 1-8**, so no
+solution, fixture or tutorial text changed for the edition. The risk is
+in future content: 2024 requires `unsafe extern "C" { .. }` blocks and
+`#[unsafe(no_mangle)]` / `#[unsafe(export_name)]`, rejects references to
+`static mut` (deny-by-default `static_mut_refs`), reserves `gen`, and
+changes `impl Trait` capture and `if let` / tail-expression temporary
+scopes. Act 9 (FFI) text and solutions must be written for 2024.
 
 ## Tutorial text (hard rule 3)
 
 Each item was checked by compiling the snippet.
 
 **Status: T1-T8 are all RESOLVED in `mission.rs`** (second pass, rustc
-1.99.0, edition 2021). That pass compiled or ran 104 snippets covering
+1.99.0, edition 2021; the code blocks were re-checked under 2024 with
+identical results, see **Edition**). That pass compiled or ran 104 snippets covering
 every tutorial code block and every claimed output, error or rule; only
 the T4 snippet disagreed with its text. Every starter compiles except
 `lifetimes`, which fails with exactly `E0106` as intended; the ignored
