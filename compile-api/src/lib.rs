@@ -8,8 +8,9 @@
 //! - `GET /health` — open, and never rate limited.
 //! - `POST /compile` — pattern grader; cheap, runs on the async path.
 //! - `POST /compile-real` — real `cargo build` (in the build sandbox, see
-//!   [`build_sandbox`]) + sandboxed wasm run. Source is first checked
-//!   against the compile-time file-read deny-list ([`source_policy`]).
+//!   [`build_sandbox`]) + sandboxed wasm run, graded against the mission's
+//!   expectation ([`expectations`]). Source is first checked against the
+//!   compile-time file-read deny-list ([`source_policy`]).
 //!   Blocking work runs on `spawn_blocking` behind a build semaphore
 //!   (`PNC_MAX_CONCURRENT_BUILDS`) with a bounded wait queue
 //!   (`PNC_MAX_QUEUED_BUILDS`); overflow gets 503 + `Retry-After`.
@@ -25,6 +26,7 @@ pub mod build_root;
 pub mod build_sandbox;
 pub mod cargo_grader;
 pub mod config;
+pub mod expectations;
 pub mod grader;
 pub mod metrics;
 pub mod middleware;
@@ -52,6 +54,7 @@ use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::trace::TraceLayer;
 
 pub use config::{Config, ConfigError};
+use expectations::{GradeState, GradedRun};
 use metrics::{Metrics, RejectReason};
 use rate_limit::{OnFull, RateLimiter};
 use wasm_builder::{BuildSettings, RealOutcome, RunLimits};
@@ -98,11 +101,46 @@ pub struct CompileRequest {
     pub encounter_id: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+/// Body of a graded `/compile` or `/compile-real` response.
+///
+/// `ok`, `stdout`, `stderr` are the original contract and keep their
+/// meaning for the existing client. Everything after them is additive and
+/// optional: `/compile` never sets them (its JSON is unchanged), and
+/// `/compile-real` always sets `grade`, `behaviour_checked` and `note`.
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct CompileResponse {
     pub ok: bool,
     pub stdout: String,
     pub stderr: String,
+    /// How the submission was graded (`/compile-real` only).
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub grade: Option<GradeState>,
+    /// True only when the program's behaviour was compared with an
+    /// expectation. `ok: true` with `behaviour_checked: false` means
+    /// "compiled (and maybe ran), but nothing checked what it does".
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub behaviour_checked: Option<bool>,
+    /// What the check wanted, on a failed check. Player-facing.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub expected: Option<String>,
+    /// What the program did instead (truncated). Player-facing.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub actual: Option<String>,
+    /// One line on how the submission was graded.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub note: Option<String>,
+}
+
+impl CompileResponse {
+    /// The original three-field response.
+    pub fn basic(ok: bool, stdout: impl Into<String>, stderr: impl Into<String>) -> Self {
+        Self {
+            ok,
+            stdout: stdout.into(),
+            stderr: stderr.into(),
+            ..Self::default()
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -212,10 +250,16 @@ impl IntoResponse for Rejection {
     }
 }
 
-/// Blocking build-and-run function. Production uses
-/// [`wasm_builder::compile_and_run_with`]; tests inject a stub so the
-/// concurrency/queue path can be exercised without a toolchain.
+/// Blocking build-and-run function with no mission context. Kept as the
+/// test-injection hook (`with_real_grader`) so the concurrency/queue path
+/// can be exercised without a toolchain; its verdict is used as-is and the
+/// response reports `behaviour_checked: false`.
 pub type RealGrader = Arc<dyn Fn(&str, &RunLimits) -> anyhow::Result<RealOutcome> + Send + Sync>;
+
+/// Blocking grading function: `(encounter_id, source, limits)`. Production
+/// uses [`expectations::grade_in`].
+pub type MissionGrader =
+    Arc<dyn Fn(&str, &str, &RunLimits) -> anyhow::Result<GradedRun> + Send + Sync>;
 
 struct Inner {
     config: Config,
@@ -224,7 +268,7 @@ struct Inner {
     real_limiter: RateLimiter,
     builds: Arc<Semaphore>,
     queued: AtomicUsize,
-    real_grader: RealGrader,
+    real_grader: MissionGrader,
 }
 
 /// Shared server state. Cheap to clone.
@@ -233,17 +277,34 @@ pub struct AppState(Arc<Inner>);
 
 impl AppState {
     /// Production state: real `cargo build` (in the configured build
-    /// sandbox, under the configured build root) + wasmtime grader.
+    /// sandbox, under the configured build root) + wasmtime run, graded
+    /// against the mission's expectation.
     pub fn new(config: Config) -> Self {
         let settings = BuildSettings::from_config(&config);
-        let grader: RealGrader = Arc::new(move |source: &str, limits: &RunLimits| {
-            wasm_builder::compile_and_run_in(source, limits, &settings)
-        });
-        Self::with_real_grader(config, grader)
+        let grader: MissionGrader =
+            Arc::new(move |encounter: &str, source: &str, limits: &RunLimits| {
+                expectations::grade_in(encounter, source, limits, &settings)
+            });
+        Self::with_mission_grader(config, grader)
     }
 
-    /// State with a custom blocking grader for `/compile-real`.
+    /// State with a custom blocking build-and-run function for
+    /// `/compile-real` (test hook). No mission expectation is applied to
+    /// its outcome; responses say `behaviour_checked: false`.
     pub fn with_real_grader(config: Config, real_grader: RealGrader) -> Self {
+        let grader: MissionGrader =
+            Arc::new(move |_encounter: &str, source: &str, limits: &RunLimits| {
+                let outcome = real_grader(source, limits)?;
+                Ok(GradedRun::unchecked(
+                    outcome,
+                    "injected grader: no output check applied",
+                ))
+            });
+        Self::with_mission_grader(config, grader)
+    }
+
+    /// State with a custom blocking mission grader for `/compile-real`.
+    pub fn with_mission_grader(config: Config, real_grader: MissionGrader) -> Self {
         // Global limiter fails open under table pressure; the expensive
         // route evicts least-recently-seen buckets instead (it is also
         // bounded by the build semaphore + queue). See `rate_limit`.
@@ -446,11 +507,7 @@ async fn compile(
     tracing::debug!(encounter = %req.encounter_id, ok = v.ok, "compile: graded");
     (
         StatusCode::OK,
-        Json(CompileResponse {
-            ok: v.ok,
-            stdout: v.stdout,
-            stderr: v.stderr,
-        }),
+        Json(CompileResponse::basic(v.ok, v.stdout, v.stderr)),
     )
         .into_response()
 }
@@ -528,12 +585,16 @@ async fn acquire_build_slot(state: &AppState) -> Result<OwnedSemaphorePermit, Re
 /// toolchain being installed on the server). Same request/response shape
 /// as `/compile` so the client toggle is a one-line change.
 ///
-/// Honest verdict: the player source is built to `wasm32-wasip1` and the
+/// Honest verdict: the player source is built to `wasm32-wasip1`, the
 /// resulting module is *actually executed* under the hardened sandbox in
-/// [`wasm_runner`]. `ok` means it compiled AND ran to a clean exit. The
-/// program's real stdout is returned. Tags every response with a leading
-/// `[real]` marker so a player or test can tell which path produced the
-/// verdict; the marker drops when this route becomes the default.
+/// [`wasm_runner`], and its behaviour is checked against the mission's
+/// expectation ([`expectations`]). The response's `grade` says which kind
+/// of verdict it is; `behaviour_checked` is false whenever nothing checked
+/// what the program does (unknown mission, player-chosen output, or a
+/// compile-only mission). The program's real stdout is returned (checker
+/// lines removed). Tags every response with a leading `[real]` marker so a
+/// player or test can tell which path produced the verdict; the marker
+/// drops when this route becomes the default.
 ///
 /// The build never runs on the async runtime: it moves to
 /// `spawn_blocking` holding a semaphore permit, and the permit is held by
@@ -583,30 +644,25 @@ async fn compile_real(
     let limits = state.run_limits();
     let task_state = state.clone();
     let source = req.source;
+    let encounter = req.encounter_id.clone();
     let joined = tokio::task::spawn_blocking(move || {
         let _permit = permit;
         let _in_flight = InFlight::enter(task_state);
-        grader(&source, &limits)
+        grader(&encounter, &source, &limits)
     })
     .await;
 
-    // Honest end-to-end: build to wasm, then run it in the sandbox. We do
-    // NOT stitch in pattern-grader flavor — the two answer different
-    // questions and a stitched response can be self-contradictory
-    // (ok=true from compile, "missing required: let mut" from pattern).
-    // The execution layer carries the real verdict; per-encounter
-    // expected-output checks layer on top of this in a later pass.
-    let outcome = match joined {
-        Ok(Ok(outcome)) => outcome,
+    // Honest end-to-end: build to wasm, run it in the sandbox, then check
+    // its behaviour against the mission. We do NOT stitch in pattern-grader
+    // flavor — the two answer different questions and a stitched response
+    // can be self-contradictory.
+    let graded = match joined {
+        Ok(Ok(graded)) => graded,
         Ok(Err(e)) => {
             tracing::error!("compile-real: wasm_builder setup failure: {e:#}");
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(CompileResponse {
-                    ok: false,
-                    stdout: "[real]".to_string(),
-                    stderr: format!("{e:#}"),
-                }),
+                Json(CompileResponse::basic(false, "[real]", format!("{e:#}"))),
             )
                 .into_response();
         }
@@ -616,6 +672,7 @@ async fn compile_real(
         }
     };
 
+    let outcome = &graded.outcome;
     state.metrics().observe_build(outcome.build_time);
     if let Some(run) = outcome.run_time {
         state.metrics().observe_run(run);
@@ -624,31 +681,52 @@ async fn compile_real(
         encounter = %req.encounter_id,
         compiled = outcome.compiled,
         ran_ok = outcome.ran_ok,
+        grade = ?graded.state,
+        behaviour_checked = graded.state.behaviour_checked(),
         build_ms = outcome.build_time.as_millis() as u64,
         run_ms = outcome.run_time.map(|d| d.as_millis() as u64),
         "compile-real: verdict"
     );
+    (StatusCode::OK, Json(real_response(graded))).into_response()
+}
 
-    let ok = outcome.ok();
+/// Build the `/compile-real` body from a grading result. `stdout` keeps
+/// the `[real]` marker; a passing response adds one line saying whether
+/// behaviour was checked, so the existing client (which shows only
+/// `stdout`/`stderr`) never presents an unchecked run as a checked one.
+pub fn real_response(graded: GradedRun) -> CompileResponse {
+    let ok = graded.ok();
+    let state = graded.state;
+    let out = graded.outcome;
     let stdout = if ok {
-        // Surface the program's real output, marked [real].
-        if outcome.stdout.is_empty() {
-            "[real] compiled + ran: ok".to_string()
+        let body = if out.stdout.is_empty() {
+            match state {
+                GradeState::CompiledNotChecked => "compiled".to_string(),
+                _ => "compiled + ran: ok".to_string(),
+            }
         } else {
-            format!("[real] {}", outcome.stdout)
-        }
+            out.stdout.trim_end_matches(['\n', '\r']).to_string()
+        };
+        let verdict_line = match state {
+            GradeState::Passed => "-- checked: does what the mission asks".to_string(),
+            _ => format!("-- not checked: {}", graded.note),
+        };
+        format!("[real] {body}\n{verdict_line}")
+    } else if matches!(state, GradeState::WrongOutput) && !out.stdout.is_empty() {
+        format!("[real] {}", out.stdout)
     } else {
         "[real]".to_string()
     };
-    (
-        StatusCode::OK,
-        Json(CompileResponse {
-            ok,
-            stdout,
-            stderr: outcome.stderr,
-        }),
-    )
-        .into_response()
+    CompileResponse {
+        ok,
+        stdout,
+        stderr: out.stderr,
+        grade: Some(state),
+        behaviour_checked: Some(state.behaviour_checked()),
+        expected: graded.expected,
+        actual: graded.actual,
+        note: Some(graded.note),
+    }
 }
 
 /// Shared rejection logic for the two compile routes. Returns `Some`
@@ -659,26 +737,22 @@ fn reject_invalid_source(source: &str) -> Option<(StatusCode, Json<CompileRespon
         tracing::warn!("rejected: empty source");
         return Some((
             StatusCode::BAD_REQUEST,
-            Json(CompileResponse {
-                ok: false,
-                stdout: String::new(),
-                stderr: "empty source".to_string(),
-            }),
+            Json(CompileResponse::basic(false, "", "empty source")),
         ));
     }
     if source.len() > MAX_SOURCE_BYTES {
         tracing::warn!(source_bytes = source.len(), "rejected: source over cap");
         return Some((
             StatusCode::PAYLOAD_TOO_LARGE,
-            Json(CompileResponse {
-                ok: false,
-                stdout: String::new(),
-                stderr: format!(
+            Json(CompileResponse::basic(
+                false,
+                "",
+                format!(
                     "source exceeds limit of {} bytes (got {})",
                     MAX_SOURCE_BYTES,
                     source.len()
                 ),
-            }),
+            )),
         ));
     }
     None

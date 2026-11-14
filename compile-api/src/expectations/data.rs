@@ -1,0 +1,613 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//! Per-mission checks for `/compile-real`, one entry per registry mission.
+//!
+//! Recorded results (`expected` lines, and the values in stdout matchers)
+//! were produced by running each mission's canonical solution through the
+//! real build + sandbox path (`compile-api/tests/expectations_proof.rs`,
+//! `print_canonical_transcripts`), not written by hand. The same suite
+//! proves, for every entry with a behaviour check, that the canonical
+//! solution passes, the mission's starter code fails, and at least one
+//! wrong-but-compiling variant fails.
+//!
+//! Only the DATA lives here. The canonical solutions are MIT game code and
+//! are read only by that dev-only test, never at runtime.
+//!
+//! Classification (see `expectations.rs` for the mechanisms):
+//! A = `Stdout` (pinned output of the player's own `main`),
+//! A-unpinned = `RunOnly` (the mission lets the player choose the values),
+//! B = `Harness` (the mission asks for an item; the checker calls it),
+//! C = `CompileOnly` (cannot be run meaningfully on wasm32-wasip1).
+
+use super::Check::{CompileOnly, Harness as H, RunOnly, Stdout};
+use super::Matcher::*;
+use super::{Harness, MissionCheck};
+
+const fn m(id: &'static str, check: super::Check) -> MissionCheck {
+    MissionCheck { id, check }
+}
+
+const PLAYER_CHOOSES: &str =
+    "this mission lets you choose the values, so there is no fixed output to compare";
+
+const NO_THREADS: &str = "wasm32-wasip1 has no threads (std::thread::spawn panics there), \
+     so this program is compiled and statically checked but never run";
+
+pub(super) const CHECKS: &[MissionCheck] = &[
+    // ── Prelude ──────────────────────────────────────────────────────
+    m(
+        "intro_let_binding",
+        Stdout {
+            matchers: &[HasLine("42")],
+        },
+    ),
+    m(
+        "double_function",
+        H(Harness {
+            contract: "`fn double(n: i32) -> i32`",
+            run_main: true,
+            body: "    let _sig: fn(i32) -> i32 = super::double;
+    emit(\"double(21)\", super::double(21));
+    emit(\"double(-4)\", super::double(-4));
+    emit(\"double(0)\", super::double(0));",
+            expected: &["double(21) = 42", "double(-4) = -8", "double(0) = 0"],
+            main_matchers: &[HasLine("42")],
+        }),
+    ),
+    m(
+        "borrow_preview",
+        Stdout {
+            matchers: &[HasLine("sample")],
+        },
+    ),
+    m(
+        "mut_binding",
+        Stdout {
+            matchers: &[HasLine("1")],
+        },
+    ),
+    m(
+        "if_else_sign",
+        H(Harness {
+            contract: "`fn sign(n: i32) -> &'static str`",
+            run_main: false,
+            body: "    let _sig: fn(i32) -> &'static str = super::sign;
+    emit(\"sign(-3)\", super::sign(-3));
+    emit(\"sign(-1)\", super::sign(-1));
+    emit(\"sign(0)\", super::sign(0));
+    emit(\"sign(1)\", super::sign(1));
+    emit(\"sign(7)\", super::sign(7));",
+            expected: &[
+                "sign(-3) = \"neg\"",
+                "sign(-1) = \"neg\"",
+                "sign(0) = \"zero\"",
+                "sign(1) = \"pos\"",
+                "sign(7) = \"pos\"",
+            ],
+            main_matchers: &[],
+        }),
+    ),
+    m(
+        "loop_break",
+        Stdout {
+            matchers: &[HasLine("128")],
+        },
+    ),
+    m(
+        "match_option",
+        H(Harness {
+            contract: "`fn unwrap_or_zero(x: Option<i32>) -> i32`",
+            run_main: false,
+            body: "    let _sig: fn(Option<i32>) -> i32 = super::unwrap_or_zero;
+    emit(\"unwrap_or_zero(Some(7))\", super::unwrap_or_zero(Some(7)));
+    emit(\"unwrap_or_zero(None)\", super::unwrap_or_zero(None));
+    emit(\"unwrap_or_zero(Some(-2))\", super::unwrap_or_zero(Some(-2)));",
+            expected: &[
+                "unwrap_or_zero(Some(7)) = 7",
+                "unwrap_or_zero(None) = 0",
+                "unwrap_or_zero(Some(-2)) = -2",
+            ],
+            main_matchers: &[],
+        }),
+    ),
+    m(
+        "struct_basic",
+        H(Harness {
+            contract: "`struct Knight { name: String, hp: i32 }` and a `fn main`",
+            run_main: true,
+            body: "    let k = super::Knight { name: ::std::string::String::from(\"Pnc\"), hp: 9 };
+    let name: &::std::string::String = &k.name;
+    let hp: i32 = k.hp;
+    emit(\"Knight.name\", name);
+    emit(\"Knight.hp\", hp);",
+            expected: &["Knight.name = \"Pnc\"", "Knight.hp = 9"],
+            main_matchers: &[],
+        }),
+    ),
+    m(
+        "vec_iter",
+        RunOnly {
+            reason: PLAYER_CHOOSES,
+        },
+    ),
+    m(
+        "tuple_destructure",
+        Stdout {
+            matchers: &[LineContainsAll(&["3", "4"])],
+        },
+    ),
+    m(
+        "borrow_mut",
+        H(Harness {
+            contract: "`fn bump(x: &mut i32)` and a `fn main`",
+            run_main: true,
+            body: "    let _sig: fn(&mut i32) = super::bump;
+    let mut a = 5;
+    super::bump(&mut a);
+    emit(\"bump changed 5\", a != 5);
+    let mut b = 0;
+    super::bump(&mut b);
+    emit(\"bump changed 0\", b != 0);",
+            expected: &["bump changed 5 = true", "bump changed 0 = true"],
+            main_matchers: &[],
+        }),
+    ),
+    m(
+        "string_vs_str",
+        H(Harness {
+            contract: "`fn greet(name: &str)` and a `fn main`",
+            run_main: true,
+            body: "    let _sig: fn(&str) = super::greet;
+    let owned = ::std::string::String::from(\"Pnc\");
+    super::greet(&owned);
+    super::greet(\"pnc\");
+    emit(\"greet takes a &String and a literal\", true);",
+            expected: &["greet takes a &String and a literal = true"],
+            main_matchers: &[],
+        }),
+    ),
+    m(
+        "option_unwrap_or",
+        H(Harness {
+            contract: "`fn safe(x: Option<i32>) -> i32`",
+            run_main: false,
+            body: "    let _sig: fn(Option<i32>) -> i32 = super::safe;
+    emit(\"safe(Some(5))\", super::safe(Some(5)));
+    emit(\"safe(None)\", super::safe(None));
+    emit(\"safe(Some(-3))\", super::safe(Some(-3)));",
+            expected: &["safe(Some(5)) = 5", "safe(None) = 0", "safe(Some(-3)) = -3"],
+            main_matchers: &[],
+        }),
+    ),
+    m(
+        "for_in_range",
+        Stdout {
+            matchers: &[Exact("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")],
+        },
+    ),
+    m(
+        "closure_basic",
+        RunOnly {
+            reason: PLAYER_CHOOSES,
+        },
+    ),
+    m(
+        "slice_basic",
+        H(Harness {
+            contract: "`fn sum_slice(xs: &[i32]) -> i32`",
+            run_main: false,
+            body: "    let _sig: fn(&[i32]) -> i32 = super::sum_slice;
+    emit(\"sum_slice(&[1, 2, 3])\", super::sum_slice(&[1, 2, 3]));
+    let empty: [i32; 0] = [];
+    emit(\"sum_slice(&[])\", super::sum_slice(&empty));
+    let v = ::std::vec![4, 5, 6];
+    emit(\"sum_slice(&vec![4, 5, 6])\", super::sum_slice(&v));
+    emit(\"sum_slice(&[-2, 2])\", super::sum_slice(&[-2, 2]));",
+            expected: &[
+                "sum_slice(&[1, 2, 3]) = 6",
+                "sum_slice(&[]) = 0",
+                "sum_slice(&vec![4, 5, 6]) = 15",
+                "sum_slice(&[-2, 2]) = 0",
+            ],
+            main_matchers: &[],
+        }),
+    ),
+    m(
+        "result_question_mark",
+        H(Harness {
+            contract: "`fn parse_int(s: &str) -> Result<i32, String>`",
+            run_main: false,
+            body: "    let _sig: fn(&str) -> Result<i32, ::std::string::String> = super::parse_int;
+    emit(\"parse_int(\\\"42\\\")\", super::parse_int(\"42\"));
+    emit(\"parse_int(\\\"-7\\\")\", super::parse_int(\"-7\"));
+    emit(\"parse_int(\\\"forty-two\\\") is Err\", super::parse_int(\"forty-two\").is_err());",
+            expected: &[
+                "parse_int(\"42\") = Ok(42)",
+                "parse_int(\"-7\") = Ok(-7)",
+                "parse_int(\"forty-two\") is Err = true",
+            ],
+            main_matchers: &[],
+        }),
+    ),
+    m(
+        "derive_debug",
+        H(Harness {
+            contract: "`struct Item` implementing `Debug`, and a `fn main` that prints one with `{:?}`",
+            run_main: true,
+            body: "    fn needs_debug<T: ::core::fmt::Debug>() {}
+    needs_debug::<super::Item>();
+    emit(\"Item implements Debug\", true);",
+            expected: &["Item implements Debug = true"],
+            main_matchers: &[LineContains("Item {")],
+        }),
+    ),
+    m(
+        "iter_map_collect",
+        Stdout {
+            matchers: &[LineContains("[2, 4, 6]")],
+        },
+    ),
+    m(
+        "enum_match",
+        RunOnly {
+            reason: PLAYER_CHOOSES,
+        },
+    ),
+    m(
+        "while_loop",
+        Stdout {
+            matchers: &[LastLine("0")],
+        },
+    ),
+    // ── Act 3: The Guildhall Quarter ─────────────────────────────────
+    m(
+        "impl_method",
+        H(Harness {
+            contract: "`impl Hero { fn power(&self) -> i32 }` and a `fn main`",
+            run_main: true,
+            body: "    let h = super::Hero { level: 3 };
+    let first: i32 = h.power();
+    let second: i32 = h.power();
+    emit(\"power() borrows, so it can be called twice\", first == second);",
+            expected: &["power() borrows, so it can be called twice = true"],
+            main_matchers: &[],
+        }),
+    ),
+    m(
+        "assoc_new",
+        H(Harness {
+            contract: "`impl Hero { fn new(level: i32) -> Self }`",
+            run_main: false,
+            body: "    let h: super::Hero = super::Hero::new(5);
+    emit(\"Hero::new(5).level\", h.level);
+    emit(\"Hero::new(-2).level\", super::Hero::new(-2).level);",
+            expected: &["Hero::new(5).level = 5", "Hero::new(-2).level = -2"],
+            main_matchers: &[],
+        }),
+    ),
+    m(
+        "if_let",
+        Stdout {
+            matchers: &[HasLine("7")],
+        },
+    ),
+    m(
+        "while_let",
+        Stdout {
+            matchers: &[InOrder(&["3", "2", "1"])],
+        },
+    ),
+    m(
+        "tuple_struct",
+        Stdout {
+            matchers: &[HasLine("3.5")],
+        },
+    ),
+    m(
+        "enum_data_match",
+        H(Harness {
+            contract: "`enum Item { Weapon { damage: i32 }, Potion { heal: i32 } }` and \
+                       `fn value(item: Item) -> i32`",
+            run_main: false,
+            body: "    let _sig: fn(super::Item) -> i32 = super::value;
+    emit(\"value(Weapon { damage: 10 })\", super::value(super::Item::Weapon { damage: 10 }));
+    emit(\"value(Potion { heal: 5 })\", super::value(super::Item::Potion { heal: 5 }));
+    emit(\"value(Weapon { damage: -1 })\", super::value(super::Item::Weapon { damage: -1 }));",
+            expected: &[
+                "value(Weapon { damage: 10 }) = 10",
+                "value(Potion { heal: 5 }) = 5",
+                "value(Weapon { damage: -1 }) = -1",
+            ],
+            main_matchers: &[],
+        }),
+    ),
+    // ── Act 4: The Trait Mage's Tower ────────────────────────────────
+    m(
+        "trait_def",
+        H(Harness {
+            contract: "`trait Element { fn name(&self) -> &str; }` implemented for the unit \
+                       struct `Fire`, and a `fn main`",
+            run_main: true,
+            body: "    fn name_of<T: super::Element>(t: &T) -> &str { t.name() }
+    let _n: &str = name_of(&super::Fire);
+    emit(\"Fire implements Element\", true);",
+            expected: &["Fire implements Element = true"],
+            main_matchers: &[],
+        }),
+    ),
+    m(
+        "generic_fn",
+        H(Harness {
+            contract: "`fn larger<T: PartialOrd>(a: T, b: T) -> T`",
+            run_main: false,
+            body: "    emit(\"larger(3, 7)\", super::larger(3, 7));
+    emit(\"larger(7, 3)\", super::larger(7, 3));
+    emit(\"larger(1.5, 0.5)\", super::larger(1.5, 0.5));
+    emit(\"larger('a', 'b')\", super::larger('a', 'b'));",
+            expected: &[
+                "larger(3, 7) = 7",
+                "larger(7, 3) = 7",
+                "larger(1.5, 0.5) = 1.5",
+                "larger('a', 'b') = 'b'",
+            ],
+            main_matchers: &[],
+        }),
+    ),
+    m(
+        "generic_struct",
+        H(Harness {
+            contract: "`struct Pair<T> { a: T, b: T }`",
+            run_main: false,
+            body: "    let p = super::Pair { a: 1, b: 2 };
+    emit(\"Pair { a: 1, b: 2 }.a\", p.a);
+    emit(\"Pair { a: 1, b: 2 }.b\", p.b);
+    let q = super::Pair { a: \"x\", b: \"y\" };
+    emit(\"Pair { a: \\\"x\\\", b: \\\"y\\\" }.b\", q.b);",
+            expected: &[
+                "Pair { a: 1, b: 2 }.a = 1",
+                "Pair { a: 1, b: 2 }.b = 2",
+                "Pair { a: \"x\", b: \"y\" }.b = \"y\"",
+            ],
+            main_matchers: &[],
+        }),
+    ),
+    m(
+        "dyn_trait",
+        Stdout {
+            matchers: &[HasLine("fire"), HasLine("water")],
+        },
+    ),
+    m(
+        "lifetimes",
+        H(Harness {
+            contract: "`fn longest<'a>(x: &'a str, y: &'a str) -> &'a str`",
+            run_main: false,
+            body: "    let _sig: for<'a> fn(&'a str, &'a str) -> &'a str = super::longest;
+    emit(\"longest(\\\"aa\\\", \\\"b\\\")\", super::longest(\"aa\", \"b\"));
+    emit(\"longest(\\\"a\\\", \\\"bbb\\\")\", super::longest(\"a\", \"bbb\"));",
+            expected: &[
+                "longest(\"aa\", \"b\") = \"aa\"",
+                "longest(\"a\", \"bbb\") = \"bbb\"",
+            ],
+            main_matchers: &[],
+        }),
+    ),
+    m(
+        "assoc_type",
+        H(Harness {
+            contract: "`trait Producer { type Output; fn make(&self) -> Self::Output; }` \
+                       implemented for the unit struct `Coiner` with `Output = i32`",
+            run_main: false,
+            body: "    fn make_i32<P: super::Producer<Output = i32>>(p: &P) -> i32 { p.make() }
+    let _v: i32 = make_i32(&super::Coiner);
+    emit(\"Coiner is a Producer<Output = i32>\", true);",
+            expected: &["Coiner is a Producer<Output = i32> = true"],
+            main_matchers: &[],
+        }),
+    ),
+    // ── Act 5: The Tavern of Tribulations ────────────────────────────
+    m(
+        "result_match",
+        H(Harness {
+            contract: "`fn describe(r: Result<i32, String>) -> i32`",
+            run_main: false,
+            body: "    let _sig: fn(Result<i32, ::std::string::String>) -> i32 = super::describe;
+    emit(\"describe(Ok(5))\", super::describe(Ok(5)));
+    emit(\"describe(Ok(-3))\", super::describe(Ok(-3)));
+    emit(\"describe(Err(..))\", super::describe(Err(::std::string::String::from(\"x\"))));",
+            expected: &[
+                "describe(Ok(5)) = 5",
+                "describe(Ok(-3)) = -3",
+                "describe(Err(..)) = -1",
+            ],
+            main_matchers: &[],
+        }),
+    ),
+    m(
+        "custom_error",
+        H(Harness {
+            contract: "`fn check(temp: i32) -> Result<i32, YourError>`",
+            run_main: false,
+            body: "    let r: Result<i32, _> = super::check(50);
+    let low = super::check(-1000).is_err();
+    let high = super::check(1000).is_err();
+    emit(\"check rejects an out-of-range temp\", low || high);",
+            expected: &["check rejects an out-of-range temp = true"],
+            main_matchers: &[],
+        }),
+    ),
+    m(
+        "from_error",
+        H(Harness {
+            contract: "`impl From<ParseFail> for AppError` mapping to `AppError::Parse`",
+            run_main: false,
+            body: "    let e: super::AppError = super::ParseFail.into();
+    emit(\"ParseFail.into() is AppError::Parse\", ::core::matches!(e, super::AppError::Parse));",
+            expected: &["ParseFail.into() is AppError::Parse = true"],
+            main_matchers: &[],
+        }),
+    ),
+    m(
+        "option_map",
+        H(Harness {
+            contract: "`fn add_one(o: Option<i32>) -> Option<i32>`",
+            run_main: false,
+            body: "    let _sig: fn(Option<i32>) -> Option<i32> = super::add_one;
+    emit(\"add_one(Some(3))\", super::add_one(Some(3)));
+    emit(\"add_one(None)\", super::add_one(None));
+    emit(\"add_one(Some(-1))\", super::add_one(Some(-1)));",
+            expected: &[
+                "add_one(Some(3)) = Some(4)",
+                "add_one(None) = None",
+                "add_one(Some(-1)) = Some(0)",
+            ],
+            main_matchers: &[],
+        }),
+    ),
+    m(
+        "and_then",
+        RunOnly {
+            reason: PLAYER_CHOOSES,
+        },
+    ),
+    m(
+        "unwrap_or_else",
+        H(Harness {
+            contract: "`fn value(o: Option<i32>) -> i32`",
+            run_main: false,
+            body: "    let _sig: fn(Option<i32>) -> i32 = super::value;
+    emit(\"value(Some(3))\", super::value(Some(3)));
+    emit(\"value(Some(-8))\", super::value(Some(-8)));",
+            expected: &["value(Some(3)) = 3", "value(Some(-8)) = -8"],
+            main_matchers: &[],
+        }),
+    ),
+    // ── Act 6: The Iterator Forge ────────────────────────────────────
+    m(
+        "hashmap_basic",
+        RunOnly {
+            reason: PLAYER_CHOOSES,
+        },
+    ),
+    m(
+        "iter_filter",
+        Stdout {
+            matchers: &[LineContains("[2, 4]")],
+        },
+    ),
+    m(
+        "iter_fold",
+        Stdout {
+            matchers: &[HasLine("6")],
+        },
+    ),
+    m(
+        "iter_enumerate",
+        Stdout {
+            matchers: &[
+                LineContainsAll(&["0", "10"]),
+                LineContainsAll(&["1", "20"]),
+                LineContainsAll(&["2", "30"]),
+            ],
+        },
+    ),
+    m(
+        "iter_zip",
+        Stdout {
+            matchers: &[LineContainsAll(&["1", "3"]), LineContainsAll(&["2", "4"])],
+        },
+    ),
+    m(
+        "closure_move",
+        Stdout {
+            matchers: &[LineContains("Garin")],
+        },
+    ),
+    // ── Act 7: The Concurrent Coast ──────────────────────────────────
+    m(
+        "thread_spawn",
+        CompileOnly {
+            reason: NO_THREADS,
+            required: &[&["spawn("], &[".join("]],
+        },
+    ),
+    m(
+        "arc_mutex",
+        RunOnly {
+            reason: PLAYER_CHOOSES,
+        },
+    ),
+    m(
+        "mpsc_channel",
+        RunOnly {
+            reason: PLAYER_CHOOSES,
+        },
+    ),
+    m(
+        "atomic",
+        RunOnly {
+            reason: PLAYER_CHOOSES,
+        },
+    ),
+    m(
+        "thread_scope",
+        CompileOnly {
+            reason: NO_THREADS,
+            required: &[&["scope("], &[".spawn("]],
+        },
+    ),
+    m(
+        "async_fn",
+        CompileOnly {
+            reason: "the mission does not name the async functions and no executor \
+                     polls them, so there is no behaviour to observe",
+            required: &[&["async fn"], &[".await"]],
+        },
+    ),
+    // ── Act 8: The Vault of Pointers ─────────────────────────────────
+    m(
+        "box_basic",
+        H(Harness {
+            contract: "`struct Node { value: i32, next: Option<Box<Node>> }` and a `fn main`",
+            run_main: true,
+            body: "    let list = super::Node {
+        value: 1,
+        next: Some(::std::boxed::Box::new(super::Node { value: 2, next: None })),
+    };
+    let first: i32 = list.value;
+    emit(\"list.value\", first);
+    emit(\"list.next.value\", list.next.as_ref().map(|n| n.value));",
+            expected: &["list.value = 1", "list.next.value = Some(2)"],
+            main_matchers: &[],
+        }),
+    ),
+    m(
+        "rc_basic",
+        RunOnly {
+            reason: PLAYER_CHOOSES,
+        },
+    ),
+    m(
+        "refcell",
+        RunOnly {
+            reason: PLAYER_CHOOSES,
+        },
+    ),
+    m(
+        "cell",
+        RunOnly {
+            reason: PLAYER_CHOOSES,
+        },
+    ),
+    m(
+        "rc_refcell",
+        RunOnly {
+            reason: PLAYER_CHOOSES,
+        },
+    ),
+    m(
+        "weak_ref",
+        RunOnly {
+            reason: PLAYER_CHOOSES,
+        },
+    ),
+];
