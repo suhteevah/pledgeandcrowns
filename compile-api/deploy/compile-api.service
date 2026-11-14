@@ -1,0 +1,96 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Pledge & Crown compile API - systemd unit.
+# Install: see compile-api/deploy/README.md. Do not edit in place on the
+# server; change it here and re-copy.
+#
+# Topology this unit assumes (and enforces with IPAddressDeny):
+#   internet --TLS--> reverse proxy (Caddy, same host) --> 127.0.0.1:7878
+# The service itself can talk to localhost only. cargo builds run with
+# --offline and need no network, so outbound traffic is denied for the
+# server AND every cargo/rustc child (they share this unit's cgroup).
+
+[Unit]
+Description=Pledge & Crown compile API (player Rust -> wasm32-wasip1 -> wasmtime)
+Documentation=file:///opt/pnc-compile/README.md
+After=network.target
+
+[Service]
+Type=simple
+User=pnc-compile
+Group=pnc-compile
+EnvironmentFile=/etc/pnc-compile/env
+# Toolchain: rustup installed root-owned under /opt/rust (read-only to the
+# service). CARGO_HOME is the writable state dir because cargo takes a
+# package-cache lock there even for dependency-free --offline builds.
+Environment=PATH=/opt/rust/cargo/bin:/usr/local/bin:/usr/bin:/bin
+Environment=RUSTUP_HOME=/opt/rust/rustup
+Environment=CARGO_HOME=/var/lib/pnc-compile/cargo
+Environment=HOME=/var/lib/pnc-compile
+ExecStart=/usr/local/bin/pledge_compile_api
+Restart=on-failure
+RestartSec=2s
+
+# ---- Writable paths --------------------------------------------------------
+# Per-build sandboxes live in std::env::temp_dir() = /tmp, which is a
+# private, per-service tmpfs here. That plus the state dir are the ONLY
+# writable locations; everything else is read-only (ProtectSystem=strict).
+PrivateTmp=yes
+StateDirectory=pnc-compile
+StateDirectoryMode=0700
+UMask=0077
+
+# ---- Filesystem / kernel isolation ------------------------------------------
+ProtectSystem=strict
+ProtectHome=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+# Optional, verify on the box first: nothing is exec'd from /tmp or the
+# state dir for a dependency-free bin crate (no build.rs, no proc-macros),
+# so these can be made noexec.
+# NoExecPaths=/tmp /var/lib/pnc-compile
+
+# ---- Privilege ----------------------------------------------------------------
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+RemoveIPC=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @mount @debug @reboot @swap @obsolete @cpu-emulation @clock @module @raw-io
+SystemCallErrorNumber=EPERM
+# NOT set on purpose: MemoryDenyWriteExecute=yes. wasmtime JIT-compiles
+# each module and must flip pages from writable to executable; MDWE makes
+# every /compile-real run fail.
+
+# ---- Network ----------------------------------------------------------------
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# Deny all IP traffic except loopback (the reverse proxy). This blocks
+# outbound connections from player-influenced build steps entirely.
+# If you ever bind publicly without a proxy, IPAddressAllow must then
+# admit client addresses and this no longer blocks egress - keep the proxy.
+IPAddressDeny=any
+IPAddressAllow=localhost
+
+# ---- Resources ----------------------------------------------------------------
+# Default PNC_MAX_CONCURRENT_BUILDS=2; design/05 budgets 512 MB per
+# compile job. 2 x 512M + server + wasm runs (16 MiB each) fits in 1.5G.
+MemoryMax=1536M
+MemorySwapMax=0
+TasksMax=256
+LimitNOFILE=4096
+LimitCORE=0
+CPUQuota=200%
+
+[Install]
+WantedBy=multi-user.target

@@ -4,7 +4,7 @@
 //! contract per mission. Catches regressions the unit tests can't:
 //! JSON shape, status codes, content-type negotiation.
 
-use pledge_compile_api::{CompileResponse, HealthResponse, make_router};
+use pledge_compile_api::{CompileResponse, HealthResponse, make_router, serve};
 use std::net::SocketAddr;
 
 async fn spawn_server() -> SocketAddr {
@@ -12,7 +12,7 @@ async fn spawn_server() -> SocketAddr {
     let addr = listener.local_addr().unwrap();
     let app = make_router();
     tokio::spawn(async move {
-        axum::serve(listener, app).await.unwrap();
+        serve(listener, app).await.unwrap();
     });
     // Tiny delay so the server is ready when the first request lands.
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;

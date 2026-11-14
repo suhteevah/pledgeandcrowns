@@ -14,7 +14,9 @@
 //! cargo test -p pledge_compile_api --test wasm_builder -- --ignored
 //! ```
 
-use pledge_compile_api::wasm_builder::{build_wasm, build_wasm_with_sandbox_path, compile_and_run};
+use pledge_compile_api::wasm_builder::{
+    RunLimits, build_wasm, build_wasm_with_sandbox_path, compile_and_run, compile_and_run_with,
+};
 
 #[test]
 fn build_wasm_rejects_empty_source() {
@@ -103,6 +105,39 @@ fn compile_and_run_flags_missing_main() {
     let outcome = compile_and_run("pub fn add(a: i32, b: i32) -> i32 { a + b }").unwrap();
     assert!(!outcome.compiled, "a binary needs a main");
     assert!(!outcome.ok());
+}
+
+#[test]
+#[ignore = "slow: shells out to cargo build + runs wasm"]
+fn default_memory_cap_is_16_mib_and_enforced_on_real_modules() {
+    assert_eq!(RunLimits::default().max_memory_bytes, 16 * 1024 * 1024);
+    // 8 MiB fits under the 16 MiB default cap...
+    let fits = compile_and_run(
+        "fn main() { let v = vec![7u8; 8 << 20]; println!(\"{}\", v[v.len() - 1]); }",
+    )
+    .unwrap();
+    assert!(fits.ok(), "8 MiB alloc should run: {}", fits.stderr);
+    // ...32 MiB does not: memory.grow fails, the allocator aborts -> trap.
+    let too_big = compile_and_run(
+        "fn main() { let v = vec![7u8; 32 << 20]; println!(\"{}\", v[v.len() - 1]); }",
+    )
+    .unwrap();
+    assert!(too_big.compiled);
+    assert!(!too_big.ran_ok, "32 MiB alloc must fail under a 16 MiB cap");
+    // And the same program passes when the cap is raised explicitly.
+    let raised = compile_and_run_with(
+        "fn main() { let v = vec![7u8; 32 << 20]; println!(\"{}\", v[v.len() - 1]); }",
+        &RunLimits {
+            max_memory_bytes: 64 * 1024 * 1024,
+            ..RunLimits::default()
+        },
+    )
+    .unwrap();
+    assert!(
+        raised.ok(),
+        "64 MiB cap should admit 32 MiB: {}",
+        raised.stderr
+    );
 }
 
 #[test]

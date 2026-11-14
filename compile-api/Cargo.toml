@@ -29,6 +29,12 @@ thiserror.workspace = true
 serde.workspace = true
 uuid = { version = "1", features = ["v4"] }
 
+# Constant-time bearer-token comparison. Already in the workspace lock
+# tree (pulled in transitively by rustls), so this adds zero new crates;
+# hand-rolling a constant-time compare risks the optimiser short-
+# circuiting it, which is exactly the bug `subtle` exists to prevent.
+subtle = "2.6"
+
 # WASM execution sandbox. Pinned to wasmtime/wasmtime-wasi 44.0 (released
 # in lockstep). The `p1` feature on wasmtime-wasi exposes the WASIp1 /
 # preview1 surface used by `_start`-style WASI modules emitted by

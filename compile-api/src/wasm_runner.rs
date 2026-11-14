@@ -17,7 +17,7 @@
 //!   no env, no host args. Random/clocks come from defaults; we do not
 //!   add `inherit_env` or `inherit_args`.
 //! - Wall-clock timeout via [`Engine::increment_epoch`] from a watchdog
-//!   thread.
+//!   thread that is cancelled as soon as the run returns.
 //! - Fuel exhaustion via [`wasmtime::Config::consume_fuel`] +
 //!   [`wasmtime::Store::set_fuel`].
 //! - Linear-memory cap via [`wasmtime::StoreLimitsBuilder::memory_size`].
@@ -29,8 +29,7 @@
 //!   `Ok(RunVerdict { ok: false, .. })` with a recognisable stderr
 //!   message ("fuel exhausted" or "timeout").
 
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
@@ -189,16 +188,20 @@ pub fn run_wasm(
     wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |s: &mut StoreState| &mut s.wasi)?;
 
     // ---- Watchdog -------------------------------------------------------
-    // Park a thread that bumps the engine epoch after timeout_ms.
-    // Use a "done" flag so we don't fire after a fast-finishing run
-    // (cosmetic — the tick is harmless once the store is dropped).
-    let done = Arc::new(AtomicBool::new(false));
-    let watchdog_done = done.clone();
+    // A thread blocks on `recv_timeout(timeout_ms)`. If the run finishes
+    // first we drop `cancel_tx`, the receive returns `Disconnected`
+    // immediately and the thread exits without ticking — so a 2 ms run
+    // joins in ~2 ms instead of parking a thread for the full timeout
+    // (the old `thread::sleep` watchdog, flagged in the 2026-05-02
+    // rust-lead review). On `Timeout` it bumps the engine epoch once,
+    // which trips the store's 1-epoch deadline. The engine is per-run,
+    // so the tick can never interrupt another submission.
+    let (cancel_tx, cancel_rx) = mpsc::channel::<()>();
     let watchdog_engine = engine.clone();
     let watchdog = thread::spawn(move || {
-        // Sleep in a single shot; epoch interruption is one-tick.
-        thread::sleep(Duration::from_millis(timeout_ms));
-        if !watchdog_done.load(Ordering::SeqCst) {
+        if let Err(mpsc::RecvTimeoutError::Timeout) =
+            cancel_rx.recv_timeout(Duration::from_millis(timeout_ms))
+        {
             watchdog_engine.increment_epoch();
         }
     });
@@ -211,9 +214,11 @@ pub fn run_wasm(
         Ok(())
     })();
 
-    // Tell the watchdog it doesn't need to fire (best-effort) and join.
-    done.store(true, Ordering::SeqCst);
-    let _ = watchdog.join();
+    // Cancel the watchdog (disconnects its receiver) and join.
+    drop(cancel_tx);
+    if watchdog.join().is_err() {
+        tracing::warn!("wasm_runner: watchdog thread panicked");
+    }
 
     // ---- Drain pipes ----------------------------------------------------
     // Per docs: contents() returns the bytes accumulated so far, and

@@ -76,12 +76,37 @@ const CARGO_BUILD_TIMEOUT: Duration = Duration::from_secs(30);
 // infinite loop traps in well under a second of CPU.
 
 /// Wall-clock cap on a single wasm run.
-const RUN_TIMEOUT_MS: u64 = 5_000;
+pub const RUN_TIMEOUT_MS: u64 = 5_000;
 /// Fuel budget (~instruction count). 2e9 traps a tight infinite loop in
 /// a fraction of a second while leaving ample room for real solutions.
-const RUN_FUEL: u64 = 2_000_000_000;
-/// Linear-memory cap for the run. 128 MiB.
-const RUN_MAX_MEMORY_BYTES: u64 = 128 * 1024 * 1024;
+pub const RUN_FUEL: u64 = 2_000_000_000;
+/// Default linear-memory cap for the run: 16 MiB, the design/05 §2
+/// value. A `wasm32-wasip1` Rust binary declares ~1.1 MiB of initial
+/// memory (1 MiB shadow stack + data), so curriculum programs fit with a
+/// wide margin. Configurable via `PNC_RUN_MEMORY_MIB`.
+pub const DEFAULT_RUN_MAX_MEMORY_BYTES: u64 = 16 * 1024 * 1024;
+/// Ceiling on the configurable memory cap: the previous hard-coded
+/// 128 MiB. Configuration may tighten the limit, never loosen it past
+/// what shipped before.
+pub const MAX_RUN_MAX_MEMORY_BYTES: u64 = 128 * 1024 * 1024;
+
+/// Execution budget handed to [`wasm_runner::run_wasm`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RunLimits {
+    pub timeout_ms: u64,
+    pub fuel: u64,
+    pub max_memory_bytes: u64,
+}
+
+impl Default for RunLimits {
+    fn default() -> Self {
+        Self {
+            timeout_ms: RUN_TIMEOUT_MS,
+            fuel: RUN_FUEL,
+            max_memory_bytes: DEFAULT_RUN_MAX_MEMORY_BYTES,
+        }
+    }
+}
 
 /// Verdict from a single `build_wasm` invocation.
 #[derive(Debug, Clone)]
@@ -109,6 +134,10 @@ pub struct RealOutcome {
     /// Compiler diagnostics (build failure) or trap/exit text + captured
     /// program stderr (run failure).
     pub stderr: String,
+    /// Wall time spent in `cargo build` (setup included).
+    pub build_time: Duration,
+    /// Wall time of the sandboxed run; `None` when the build failed.
+    pub run_time: Option<Duration>,
 }
 
 impl RealOutcome {
@@ -177,31 +206,54 @@ pub fn build_wasm_with_sandbox_path(source: &str) -> Result<(BuildVerdict, PathB
 }
 
 /// Build player source to wasm and, if it compiled, run it under the
-/// hardened sandbox. The honest end-to-end grader path.
+/// hardened sandbox with the default [`RunLimits`]. The honest end-to-end
+/// grader path.
 ///
 /// Returns `Err` only for build-setup failures; a non-compiling or
 /// trapping submission is a successful call with the relevant booleans
 /// set false.
 pub fn compile_and_run(source: &str) -> Result<RealOutcome> {
+    compile_and_run_with(source, &RunLimits::default())
+}
+
+/// [`compile_and_run`] with an explicit execution budget. Blocking: it
+/// spawns `cargo` and runs wasmtime synchronously, so async callers must
+/// put it on a blocking thread (the HTTP route uses `spawn_blocking`).
+pub fn compile_and_run_with(source: &str, limits: &RunLimits) -> Result<RealOutcome> {
+    let build_started = Instant::now();
     let build = build_wasm(source)?;
+    let build_time = build_started.elapsed();
     let Some(bytes) = build.wasm else {
-        tracing::debug!("wasm_builder: build failed, skipping run");
+        tracing::debug!("wasm_builder: build failed after {build_time:?}, skipping run");
         return Ok(RealOutcome {
             compiled: false,
             ran_ok: false,
             stdout: String::new(),
             stderr: build.stderr,
+            build_time,
+            run_time: None,
         });
     };
 
-    let RunVerdict { ok, stdout, stderr } =
-        wasm_runner::run_wasm(&bytes, RUN_TIMEOUT_MS, RUN_FUEL, RUN_MAX_MEMORY_BYTES)?;
-    tracing::debug!("wasm_builder: run complete ok={ok}");
+    let run_started = Instant::now();
+    let RunVerdict { ok, stdout, stderr } = wasm_runner::run_wasm(
+        &bytes,
+        limits.timeout_ms,
+        limits.fuel,
+        limits.max_memory_bytes,
+    )?;
+    let run_time = run_started.elapsed();
+    tracing::debug!(
+        "wasm_builder: run complete ok={ok} build={build_time:?} run={run_time:?} mem_cap={}",
+        limits.max_memory_bytes
+    );
     Ok(RealOutcome {
         compiled: true,
         ran_ok: ok,
         stdout,
         stderr,
+        build_time,
+        run_time: Some(run_time),
     })
 }
 
@@ -318,8 +370,10 @@ fn run_cargo_build(sandbox: &Path) -> Result<BuildVerdict> {
 
     // Bounded capture on dedicated threads; signal on EOF so the watchdog
     // wakes immediately on a fast build rather than busy-polling.
-    let stdout = child.stdout.take().expect("stdout was piped");
-    let stderr = child.stderr.take().expect("stderr was piped");
+    let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
+        let _ = child.kill();
+        return Err(anyhow!("wasm_builder: cargo stdio was not piped"));
+    };
     let (tx, rx) = mpsc::channel::<()>();
     let tx_stdout = tx.clone();
     let tx_stderr = tx.clone();

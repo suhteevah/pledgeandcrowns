@@ -234,8 +234,10 @@ fn run_cargo_check(manifest_path: &Path) -> Result<CargoVerdict> {
     // corresponding stream has closed. The watchdog uses these signals
     // to wake immediately on a fast-finishing child rather than busy-
     // polling `try_wait`.
-    let stdout = child.stdout.take().expect("stdout was piped");
-    let stderr = child.stderr.take().expect("stderr was piped");
+    let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
+        let _ = child.kill();
+        return Err(anyhow!("cargo_grader: cargo stdio was not piped"));
+    };
     let (tx, rx) = mpsc::channel::<()>();
     let tx_stdout = tx.clone();
     let tx_stderr = tx.clone();

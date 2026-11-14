@@ -1,17 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! End-to-end HTTP integration test for the `/compile-real` route.
 //!
-//! These tests are SLOW — every case shells out to `cargo check` via the
-//! real `cargo_grader` path (~1-3s warm). They are gated with `#[ignore]`
-//! so the default `cargo test --workspace` (pre-commit hook) skips them.
+//! These tests are SLOW — every case shells out to a real
+//! `cargo build --target wasm32-wasip1` via `wasm_builder` and runs the
+//! result in the wasmtime sandbox (~1-3s warm). They are gated with
+//! `#[ignore]` so the default `cargo test --workspace` (pre-commit hook)
+//! skips them. Requires `rustup target add wasm32-wasip1`.
 //!
 //! Run them manually:
 //!
 //! ```text
-//! cargo test --workspace -- --ignored
+//! cargo test -p pledge_compile_api --test http_real -- --ignored
 //! ```
 
-use pledge_compile_api::{CompileResponse, make_router};
+use pledge_compile_api::{CompileResponse, make_router, serve};
 use std::net::SocketAddr;
 
 async fn spawn_server() -> SocketAddr {
@@ -19,7 +21,7 @@ async fn spawn_server() -> SocketAddr {
     let addr = listener.local_addr().unwrap();
     let app = make_router();
     tokio::spawn(async move {
-        axum::serve(listener, app).await.unwrap();
+        serve(listener, app).await.unwrap();
     });
     // Tiny delay so the server is ready when the first request lands.
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
@@ -56,17 +58,26 @@ async fn compile_real_passes_canonical_intro() {
         "expected [real] marker, got stdout={:?}",
         body.stdout
     );
-    // /compile-real returns cargo's verdict only — no per-encounter
-    // pattern-grader flavor stitched in. Mixing the two answered
-    // different questions ("did the code compile?" vs "did you use
-    // the right construct?") and could ship contradictory verdicts
-    // (ok=true with a "missing required: ..." stderr). Per-encounter
-    // flavor returns when the wasmtime execution layer wires in.
-    assert!(
-        body.stdout.contains("cargo check: ok") || body.stdout == "[real]",
-        "expected cargo verdict marker, got stdout={:?}",
-        body.stdout
+    // /compile-real returns the build+run verdict only — no
+    // per-encounter pattern-grader flavor stitched in. The canonical
+    // intro prints nothing, so the route reports the clean-run marker.
+    // (This assertion predated the wasm execution layer and expected a
+    // "cargo check: ok" marker that the route no longer emits.)
+    assert_eq!(
+        body.stdout, "[real] compiled + ran: ok",
+        "expected clean-run marker"
     );
+}
+
+#[tokio::test]
+#[ignore = "slow: shells out to cargo build + runs wasm"]
+async fn compile_real_returns_program_stdout() {
+    let addr = spawn_server().await;
+    let src = r#"fn main() { let v: Vec<i32> = (1..=4).collect(); println!("sum={}", v.iter().sum::<i32>()); }"#;
+    let (status, body) = post_compile_real(addr, "vec_iter", src).await;
+    assert_eq!(status.as_u16(), 200);
+    assert!(body.ok, "expected ok=true, got {body:?}");
+    assert!(body.stdout.contains("sum=10"), "{body:?}");
 }
 
 #[tokio::test]
