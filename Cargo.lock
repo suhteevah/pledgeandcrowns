@@ -4782,13 +4782,16 @@ dependencies = [
  "bevy_kira_audio",
  "bincode",
  "crossbeam-channel",
+ "js-sys",
  "pledge_compile_api",
  "reqwest",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+ "tokio",
  "tracing",
  "tracing-subscriber",
+ "wasm-bindgen",
  "web-sys",
 ]
 

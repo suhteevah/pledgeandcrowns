@@ -81,6 +81,24 @@
   <div id="error"></div>
   <noscript><div style="color:#C56883">JavaScript is required to play Pledge &amp; Crown.</div></noscript>
 </div>
+<script>
+  // Compile-API config hook (read once by the game at startup, see
+  // game/src/plugins/compile_client/config.rs). Leave it undefined for
+  // offline demo mode: code is checked by the built-in offline grader and
+  // its passes are saved. Define it to grade on a real compile server:
+  //
+  //   window.PLEDGE_CONFIG = {
+  //     apiUrl: "https://api.example.com", // http(s) base URL, no trailing path needed
+  //     apiToken: "...",                   // optional bearer token
+  //     realCompile: true,                 // optional: /compile-real instead of /compile
+  //     timeoutSecs: 30,                   // optional: 1..300
+  //   };
+  //
+  // The server's PNC_CORS_ORIGINS must list this page's origin. A token
+  // placed here is visible to every player, so it is only an abuse
+  // speed-bump, never a secret. URL query parameters are never read for
+  // any of these settings.
+</script>
 <script type="module">
   // Self-contained loader: no fonts, no CDNs, no analytics.
   const WASM_URL = "./pkg/pledge_and_crown_bg.wasm";
