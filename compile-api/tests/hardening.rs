@@ -110,17 +110,8 @@ async fn auth_missing_token_is_401() {
 async fn auth_wrong_token_is_401() {
     let addr = spawn_cfg(config_with(&[(vars::AUTH_TOKENS, TOKEN)])).await;
     let wrong = "test-token-0123456789abcdef0123456780";
-    for path in ["/compile", "/compile-real", "/metrics"] {
-        let resp = if path == "/metrics" {
-            reqwest::Client::new()
-                .get(format!("http://{addr}{path}"))
-                .bearer_auth(wrong)
-                .send()
-                .await
-                .unwrap()
-        } else {
-            post(addr, path, Some(wrong), &[]).await
-        };
+    for path in ["/compile", "/compile-real"] {
+        let resp = post(addr, path, Some(wrong), &[]).await;
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED, "path {path}");
     }
 }
@@ -175,7 +166,51 @@ fn public_bind_without_token_is_refused() {
 fn loopback_bind_without_token_and_public_bind_with_token_are_allowed() {
     assert!(try_config(&[(vars::BIND, "127.0.0.1:9000")]).is_ok());
     assert!(try_config(&[(vars::BIND, "[::1]:9000")]).is_ok());
-    assert!(try_config(&[(vars::BIND, "0.0.0.0:7878"), (vars::AUTH_TOKENS, TOKEN)]).is_ok());
+    // A public bind with a token additionally needs a build sandbox. On
+    // Linux that means bwrap (no override exists); elsewhere (dev only)
+    // the unsandboxed build must be explicitly acknowledged.
+    let public = [(vars::BIND, "0.0.0.0:7878"), (vars::AUTH_TOKENS, TOKEN)];
+    assert!(matches!(
+        try_config(&public),
+        Err(ConfigError::UnsandboxedExposure { .. })
+    ));
+    let bwrap = [
+        (vars::BIND, "0.0.0.0:7878"),
+        (vars::AUTH_TOKENS, TOKEN),
+        (vars::BUILD_SANDBOX, "bwrap"),
+        (
+            vars::TOOLCHAIN_DIR,
+            "/opt/rust/rustup/toolchains/stable-x86_64-unknown-linux-gnu",
+        ),
+    ];
+    let acknowledged = [
+        (vars::BIND, "0.0.0.0:7878"),
+        (vars::AUTH_TOKENS, TOKEN),
+        (vars::ALLOW_UNSANDBOXED_BUILDS, "true"),
+    ];
+    if cfg!(target_os = "linux") {
+        assert!(try_config(&bwrap).is_ok());
+        assert!(try_config(&acknowledged).is_err());
+    } else {
+        assert!(matches!(
+            try_config(&bwrap),
+            Err(ConfigError::SandboxUnsupported)
+        ));
+        assert!(try_config(&acknowledged).is_ok());
+    }
+}
+
+#[test]
+fn trust_proxy_with_public_bind_is_refused_without_override() {
+    let base = [
+        (vars::BIND, "0.0.0.0:7878"),
+        (vars::AUTH_TOKENS, TOKEN),
+        (vars::TRUST_PROXY, "true"),
+    ];
+    assert!(matches!(
+        try_config(&base),
+        Err(ConfigError::TrustProxyPublicBind { .. })
+    ));
 }
 
 // ---- rate limiting ----------------------------------------------------------
@@ -250,6 +285,8 @@ async fn x_forwarded_for_rightmost_entry_keys_the_limit_with_trust_proxy() {
     let addr = spawn_cfg(config_with(&[
         (vars::RATE_LIMIT_PER_MIN, "1"),
         (vars::TRUST_PROXY, "true"),
+        // Linux refuses TRUST_PROXY + unsandboxed builds without this.
+        (vars::ALLOW_UNSANDBOXED_BUILDS, "true"),
     ]))
     .await;
     let a = post(
@@ -433,9 +470,9 @@ async fn oversized_body_rejected_before_buffering() {
 #[tokio::test]
 async fn chunked_oversized_body_is_capped_while_streaming() {
     // No Content-Length: the pre-buffer header check cannot fire, so the
-    // streaming DefaultBodyLimit has to stop it. Raw HTTP/1.1 over TCP so
-    // the request is genuinely chunked.
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    // streaming cap in `limit_body` has to stop it. Raw HTTP/1.1 over TCP
+    // so the request is genuinely chunked.
+    use tokio::io::AsyncReadExt;
     let addr = spawn_cfg(config_with(&[])).await;
     let payload = format!(
         "{{\"source\":\"{}\",\"encounter_id\":\"x\"}}",
@@ -453,47 +490,21 @@ async fn chunked_oversized_body_is_capped_while_streaming() {
         String::new(),
     ]
     .join(CRLF);
-    let (mut rd, mut wr) = stream.into_split();
-    // Read concurrently with the upload. The server answers 413 and closes
-    // while we are still sending; if we only read afterwards, our late
-    // writes draw a TCP reset and Windows discards the unread response,
-    // which made this test flaky under load.
-    let answered = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let answered_rd = answered.clone();
-    let reader = tokio::spawn(async move {
-        let mut resp = Vec::new();
-        let mut buf = [0u8; 4096];
-        loop {
-            match rd.read(&mut buf).await {
-                Ok(0) | Err(_) => break,
-                Ok(n) => {
-                    resp.extend_from_slice(&buf[..n]);
-                    answered_rd.store(true, std::sync::atomic::Ordering::SeqCst);
-                }
-            }
-        }
-        resp
-    });
-    wr.write_all(head.as_bytes()).await.unwrap();
-    // Stop sending as soon as the server has answered; a write error after
-    // that point is expected, not a failure.
+    let mut stream = stream;
+    // Unpaced: send the entire oversized chunked body as fast as possible,
+    // THEN read. The server drains (bounded) what is left of the body
+    // after the cap before answering 413, so the response is not lost to
+    // a TCP reset. (Before the drain fix this test had to pace its upload
+    // and read concurrently to see the 413 on Windows.)
+    wr_all(&mut stream, head.as_bytes()).await;
     for chunk in payload.as_bytes().chunks(8 * 1024) {
-        if answered.load(std::sync::atomic::Ordering::SeqCst) {
-            break;
-        }
-        let frame = format!("{:x}{CRLF}", chunk.len());
-        if wr.write_all(frame.as_bytes()).await.is_err()
-            || wr.write_all(chunk).await.is_err()
-            || wr.write_all(CRLF.as_bytes()).await.is_err()
-        {
-            break;
-        }
-        // Pace the upload: on loopback the whole body would otherwise be
-        // sent before the server has processed the first chunk, and the
-        // server closing with unread input resets the connection.
-        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        wr_all(&mut stream, format!("{:x}{CRLF}", chunk.len()).as_bytes()).await;
+        wr_all(&mut stream, chunk).await;
+        wr_all(&mut stream, CRLF.as_bytes()).await;
     }
-    let resp = reader.await.unwrap();
+    wr_all(&mut stream, format!("0{CRLF}{CRLF}").as_bytes()).await;
+    let mut resp = Vec::new();
+    let _ = stream.read_to_end(&mut resp).await;
     let text = String::from_utf8_lossy(&resp);
     assert!(
         text.starts_with("HTTP/1.1 413"),
@@ -501,6 +512,14 @@ async fn chunked_oversized_body_is_capped_while_streaming() {
         text.lines().next().unwrap_or("")
     );
     assert!(text.contains("body_too_large"), "{text}");
+}
+
+async fn wr_all(stream: &mut tokio::net::TcpStream, bytes: &[u8]) {
+    use tokio::io::AsyncWriteExt;
+    stream
+        .write_all(bytes)
+        .await
+        .expect("server must keep reading (draining) the body, not reset the connection");
 }
 
 #[tokio::test]
@@ -520,10 +539,13 @@ async fn malformed_json_gets_a_json_error() {
 
 // ---- metrics ----------------------------------------------------------------
 
+const METRICS_TOKEN: &str = "metrics-token-0123456789abcdef01234567";
+
 #[tokio::test]
 async fn metrics_endpoint_exposes_prometheus_text() {
     let addr = spawn_cfg(config_with(&[
         (vars::AUTH_TOKENS, TOKEN),
+        (vars::METRICS_TOKENS, METRICS_TOKEN),
         (vars::REAL_RATE_LIMIT_PER_MIN, "1"),
     ]))
     .await;
@@ -535,7 +557,7 @@ async fn metrics_endpoint_exposes_prometheus_text() {
 
     let resp = reqwest::Client::new()
         .get(format!("http://{addr}/metrics"))
-        .bearer_auth(TOKEN)
+        .bearer_auth(METRICS_TOKEN)
         .send()
         .await
         .unwrap();
@@ -560,6 +582,11 @@ async fn metrics_endpoint_exposes_prometheus_text() {
         "pnc_rejections_total{reason=\"rate\"} 1",
         "pnc_rejections_total{reason=\"queue\"} 0",
         "pnc_rejections_total{reason=\"body\"} 0",
+        "pnc_rejections_total{reason=\"source_policy\"} 0",
+        "pnc_rejections_total{reason=\"input\"} 0",
+        "pnc_rate_limit_fail_open_total 0",
+        "pnc_rate_limit_tracked_clients{limiter=\"global\"} 1",
+        "pnc_rate_limit_evictions_total{limiter=\"compile-real\"} 0",
         "# TYPE pnc_builds_in_flight gauge",
         "pnc_builds_in_flight 0",
         "pnc_builds_queued 0",
@@ -578,6 +605,228 @@ async fn metrics_endpoint_exposes_prometheus_text() {
     {
         let (_, value) = line.rsplit_once(' ').expect(line);
         assert!(value.parse::<f64>().is_ok(), "bad sample line: {line}");
+    }
+}
+
+async fn get_metrics(
+    addr: SocketAddr,
+    token: Option<&str>,
+    extra: &[(&str, &str)],
+) -> reqwest::Response {
+    let mut req = reqwest::Client::new().get(format!("http://{addr}/metrics"));
+    if let Some(t) = token {
+        req = req.bearer_auth(t);
+    }
+    for (k, v) in extra {
+        req = req.header(*k, *v);
+    }
+    req.send().await.unwrap()
+}
+
+#[tokio::test]
+async fn metrics_does_not_accept_the_player_token() {
+    let addr = spawn_cfg(config_with(&[
+        (vars::AUTH_TOKENS, TOKEN),
+        (vars::METRICS_TOKENS, METRICS_TOKEN),
+    ]))
+    .await;
+    assert_eq!(
+        get_metrics(addr, Some(TOKEN), &[]).await.status(),
+        StatusCode::UNAUTHORIZED,
+        "player token must not open /metrics"
+    );
+    assert_eq!(
+        get_metrics(addr, None, &[]).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        get_metrics(addr, Some(METRICS_TOKEN), &[]).await.status(),
+        StatusCode::OK
+    );
+    // And the metrics token does not open the player routes.
+    assert_eq!(
+        post(addr, "/compile", Some(METRICS_TOKEN), &[])
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+}
+
+#[tokio::test]
+async fn metrics_without_token_is_direct_loopback_only() {
+    // Behind a proxy every request has a loopback peer; the proxy's
+    // X-Forwarded-For marks it external, so it is refused.
+    let addr = spawn_cfg(config_with(&[
+        (vars::AUTH_TOKENS, TOKEN),
+        (vars::TRUST_PROXY, "true"),
+        (vars::ALLOW_UNSANDBOXED_BUILDS, "true"),
+    ]))
+    .await;
+    assert_eq!(
+        get_metrics(addr, None, &[]).await.status(),
+        StatusCode::OK,
+        "direct loopback scrape"
+    );
+    let proxied = get_metrics(addr, Some(TOKEN), &[("x-forwarded-for", "203.0.113.9")]).await;
+    assert_eq!(proxied.status(), StatusCode::FORBIDDEN);
+    let body: RejectionBody = proxied.json().await.unwrap();
+    assert_eq!(body.error, "forbidden");
+}
+
+#[tokio::test]
+async fn health_is_never_rate_limited() {
+    let addr = spawn_cfg(config_with(&[(vars::RATE_LIMIT_PER_MIN, "1")])).await;
+    assert_eq!(
+        post(addr, "/compile", None, &[]).await.status(),
+        StatusCode::OK
+    );
+    assert_eq!(
+        post(addr, "/compile", None, &[]).await.status(),
+        StatusCode::TOO_MANY_REQUESTS
+    );
+    for _ in 0..20 {
+        let resp = reqwest::get(format!("http://{addr}/health")).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+}
+
+#[tokio::test]
+async fn full_limiter_table_fails_open_for_new_clients_and_counts_it() {
+    let addr = spawn_cfg(config_with(&[
+        (vars::RATE_LIMIT_PER_MIN, "1"),
+        (vars::RATE_LIMIT_MAX_CLIENTS, "2"),
+        (vars::TRUST_PROXY, "true"),
+        (vars::ALLOW_UNSANDBOXED_BUILDS, "true"),
+    ]))
+    .await;
+    let from = |ip: &'static str| [("x-forwarded-for", ip)];
+    for ip in ["198.51.100.1", "198.51.100.2"] {
+        assert_eq!(
+            post(addr, "/compile", None, &from(ip)).await.status(),
+            StatusCode::OK
+        );
+    }
+    // Table is full of drained buckets: a third client is NOT refused
+    // (the old behaviour denied every new client, /health included).
+    assert_eq!(
+        post(addr, "/compile", None, &from("198.51.100.3"))
+            .await
+            .status(),
+        StatusCode::OK
+    );
+    // Tracked clients are still limited.
+    assert_eq!(
+        post(addr, "/compile", None, &from("198.51.100.1"))
+            .await
+            .status(),
+        StatusCode::TOO_MANY_REQUESTS
+    );
+    assert_eq!(
+        reqwest::get(format!("http://{addr}/health"))
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::OK
+    );
+    // Direct loopback scrape (no XFF): itself a new client -> fail-open.
+    let text = get_metrics(addr, None, &[]).await.text().await.unwrap();
+    let fail_opens: u64 = text
+        .lines()
+        .find_map(|l| l.strip_prefix("pnc_rate_limit_fail_open_total "))
+        .and_then(|v| v.parse().ok())
+        .expect("fail-open counter present");
+    assert!(fail_opens >= 1, "{text}");
+}
+
+#[tokio::test]
+async fn deny_listed_source_is_refused_before_build_and_counted() {
+    let addr = spawn_cfg(config_with(&[])).await;
+    let send = |source: &'static str| async move {
+        reqwest::Client::new()
+            .post(format!("http://{addr}/compile-real"))
+            .json(&serde_json::json!({"source": source, "encounter_id": "probe"}))
+            .send()
+            .await
+            .unwrap()
+    };
+    for hostile in [
+        "fn main() { print!(\"{}\", include_str!(\"/etc/hostname\")); }",
+        "#[path = \"/etc/hostname\"] mod m; fn main() {}",
+        "use std::include_bytes as b; fn main() { b!(\"x\"); }",
+        "#![feature(never_type)] fn main() {}",
+    ] {
+        let resp = send(hostile).await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST, "{hostile}");
+        let body: RejectionBody = resp.json().await.unwrap();
+        assert_eq!(body.error, "source_policy");
+        assert!(!body.ok);
+        assert!(
+            body.stderr.starts_with("this server does not allow"),
+            "{}",
+            body.stderr
+        );
+    }
+    // Lessons may mention the names in comments and strings: allowed
+    // (reaches the stub grader).
+    let benign = send(
+        "// include_str! reads a file at compile time\n\
+         fn main() { println!(\"#[path] and include_bytes! are disabled\"); }",
+    )
+    .await;
+    assert_eq!(benign.status(), StatusCode::OK);
+    let text = get_metrics(addr, None, &[]).await.text().await.unwrap();
+    assert!(
+        text.contains("pnc_rejections_total{reason=\"source_policy\"} 4"),
+        "{text}"
+    );
+}
+
+#[tokio::test]
+async fn deny_list_can_be_disabled_only_explicitly() {
+    let addr = spawn_cfg(config_with(&[(vars::SOURCE_DENYLIST, "false")])).await;
+    let resp = reqwest::Client::new()
+        .post(format!("http://{addr}/compile-real"))
+        .json(&serde_json::json!({
+            "source": "fn main() { include_str!(\"x\"); }",
+            "encounter_id": "probe"
+        }))
+        .send()
+        .await
+        .unwrap();
+    // Reaches the (stub) grader: the server-side check is off.
+    assert_eq!(resp.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn encounter_id_is_capped_and_charset_restricted() {
+    let addr = spawn_cfg(config_with(&[])).await;
+    let send = |id: String| async move {
+        reqwest::Client::new()
+            .post(format!("http://{addr}/compile"))
+            .json(&serde_json::json!({"source": "fn main() {}", "encounter_id": id}))
+            .send()
+            .await
+            .unwrap()
+    };
+    for bad in [
+        String::new(),
+        "a".repeat(65),
+        "../etc/passwd".to_string(),
+        "id\nINJECTED log line".to_string(),
+        "has space".to_string(),
+        "ünïcode".to_string(),
+    ] {
+        let resp = send(bad.clone()).await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST, "{bad:?}");
+        let body: RejectionBody = resp.json().await.unwrap();
+        assert!(body.stderr.contains("invalid encounter_id"), "{body:?}");
+    }
+    for good in ["intro_let_binding", "act-3_mission-2", &"a".repeat(64)] {
+        assert_eq!(
+            send(good.to_string()).await.status(),
+            StatusCode::OK,
+            "{good}"
+        );
     }
 }
 

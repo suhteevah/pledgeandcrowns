@@ -9,7 +9,11 @@
 //! kokonoe box, mark it `#[ignore]` and document why like
 //! `cargo_grader.rs` does.
 
-use pledge_compile_api::wasm_runner::{PIPE_CAP_BYTES, run_wasm};
+use std::time::Duration;
+
+use pledge_compile_api::wasm_runner::{
+    MAX_WASM_BYTES, PIPE_CAP_BYTES, run_wasm, run_wasm_with_compile_timeout,
+};
 
 /// 200 ms, 10M fuel, 8 MiB memory — comfortable defaults for the
 /// trivial / well-behaved cases.
@@ -200,6 +204,81 @@ fn rejects_disabled_simd_feature() {
         "error should reference the disabled SIMD feature, got {:?}",
         err
     );
+}
+
+#[test]
+fn rejects_oversized_module_before_compiling() {
+    // A syntactically valid module padded with a custom section past the
+    // cap. Refused on size alone.
+    let mut bytes = compile_wat(r#"(module (func (export "_start")))"#);
+    let pad = MAX_WASM_BYTES + 1 - bytes.len();
+    // Custom section: id 0, LEB128 size, name length 1, name "p", payload.
+    let payload_len = pad + 2;
+    bytes.push(0);
+    let mut n = payload_len;
+    loop {
+        let mut b = (n & 0x7f) as u8;
+        n >>= 7;
+        if n != 0 {
+            b |= 0x80;
+        }
+        bytes.push(b);
+        if n == 0 {
+            break;
+        }
+    }
+    bytes.push(1);
+    bytes.push(b'p');
+    bytes.resize(bytes.len() + pad, 0);
+    assert!(bytes.len() > MAX_WASM_BYTES);
+    let err = run_wasm(&bytes, FAST_TIMEOUT_MS, DEFAULT_FUEL, DEFAULT_MEM)
+        .expect_err("oversized module must be refused");
+    assert!(format!("{err}").contains("limit"), "{err}");
+}
+
+#[test]
+fn module_compile_timeout_fails_the_run() {
+    // A zero compile budget can never be met: exercises the timeout path
+    // deterministically without needing a pathological module.
+    let bytes = compile_wat(r#"(module (memory (export "memory") 1) (func (export "_start")))"#);
+    let v = run_wasm_with_compile_timeout(
+        &bytes,
+        FAST_TIMEOUT_MS,
+        DEFAULT_FUEL,
+        DEFAULT_MEM,
+        Duration::ZERO,
+    )
+    .expect("compile timeout is a verdict, not an Err");
+    assert!(!v.ok);
+    assert!(v.stderr.contains("module compile exceeded"), "{v:?}");
+}
+
+#[test]
+fn table_growth_is_capped_by_the_resource_limiter() {
+    // table.grow by 1M elements must fail (-1) under the element cap,
+    // and the module traps on that result.
+    let bytes = compile_wat(
+        r#"
+        (module
+          (memory (export "memory") 1)
+          (table 1 funcref)
+          (func (export "_start")
+            (if (i32.ne
+                  (table.grow (ref.null func) (i32.const 1000000))
+                  (i32.const -1))
+              (then unreachable))))
+        "#,
+    );
+    let v = run_wasm(&bytes, FAST_TIMEOUT_MS, DEFAULT_FUEL, DEFAULT_MEM).unwrap();
+    assert!(v.ok, "table.grow past the cap must return -1, got {v:?}");
+}
+
+#[test]
+fn second_memory_or_instance_is_refused() {
+    // multi-memory is disabled at the engine level, so a two-memory
+    // module fails validation; the store limit (1 memory) backs it up.
+    let bytes = compile_wat(r#"(module (memory 1) (memory 1) (func (export "_start")))"#);
+    assert!(run_wasm(&bytes, FAST_TIMEOUT_MS, DEFAULT_FUEL, DEFAULT_MEM).is_err());
 }
 
 #[test]

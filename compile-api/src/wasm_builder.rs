@@ -5,31 +5,30 @@
 //!
 //! `build_wasm` takes player Rust source, wraps it in a server-owned
 //! **binary** crate skeleton, and runs
-//! `cargo build --target wasm32-wasip1 --release` to produce a runnable
-//! `.wasm`. [`compile_and_run`] then hands those bytes to the hardened
-//! sandbox in [`crate::wasm_runner`] for an honest "does it compile AND
-//! run?" verdict.
+//! `cargo build --target wasm32-wasip1 --release --offline` to produce a
+//! runnable `.wasm`. [`compile_and_run`] then hands those bytes to the
+//! hardened sandbox in [`crate::wasm_runner`] for an honest "does it
+//! compile AND run?" verdict.
 //!
 //! # Security contract (per `design/05-tech-architecture.md` §2)
 //!
-//! Identical to [`crate::cargo_grader`]:
 //! - Server owns the manifest. Player input goes ONLY into `src/main.rs`.
 //!   It never touches `Cargo.toml`, never appears as a path component,
 //!   never appears as a process arg.
-//! - Fresh UUID-v4 sandbox per call at
-//!   `<temp>/pledge-wasm-builder/<uuid>/`; the dir name is never derived
-//!   from input.
-//! - The cargo subprocess runs with a stripped, allow-listed environment
-//!   and a sandbox-pinned `CARGO_TARGET_DIR` so the parent build state
-//!   can't leak in (or out).
-//! - Wall-clock watchdog kills a runaway build; stderr capture is bounded.
-//! - Sandbox auto-cleanup via a Drop guard on every exit path.
-//!
-//! The sandbox + watchdog logic deliberately mirrors
-//! `cargo_grader::run_cargo_check` rather than sharing it: the build
-//! target (`wasm32-wasip1`, `bin` crate-type) and the check target
-//! (host, `rlib`) answer different questions and are reviewed
-//! independently. The duplication is the seam.
+//! - Fresh UUID-v4 job dir per call under a checked build root (see
+//!   [`crate::build_root`]); the dir name is never derived from input.
+//! - Before any build, the source is checked against the compile-time
+//!   file-read deny-list ([`crate::source_policy`]) — the second layer.
+//! - The build runs in the filesystem sandbox selected by
+//!   `PNC_BUILD_SANDBOX` ([`crate::build_sandbox`]) — the first layer —
+//!   with an exact, allow-listed environment and a job-local
+//!   `CARGO_TARGET_DIR`.
+//! - A wall-clock watchdog kills the whole build process tree
+//!   ([`crate::proc_tree`]) and returns only once it is confirmed dead;
+//!   output capture is bounded.
+//! - The built module is size-capped before it is read into memory.
+//! - Job dir auto-cleanup via a Drop guard on every exit path, after the
+//!   process tree is dead.
 //!
 //! # Test invocation
 //!
@@ -43,31 +42,25 @@
 //! ```
 
 use std::fs;
-use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-use std::sync::mpsc;
-use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow};
-use uuid::Uuid;
 
-use crate::wasm_runner::{self, RunVerdict};
+use crate::build_root::{self, JobDirGuard};
+use crate::build_sandbox::{self, SandboxSettings, WASIP1_TARGET};
+use crate::proc_tree;
+use crate::source_policy;
+use crate::wasm_runner::{self, MAX_WASM_BYTES, RunVerdict};
 
-/// Rust target triple the player crate is built for. WASI preview1 so the
-/// emitted module is `_start`-shaped and runnable by
-/// [`crate::wasm_runner`]'s p1 linker.
-const WASIP1_TARGET: &str = "wasm32-wasip1";
-
-/// Hard cap on stderr capture from `cargo build`.
+/// Hard cap on stdout/stderr capture from `cargo build`.
 const STDERR_CAP_BYTES: usize = 16 * 1024;
 
-/// Wall-clock timeout for the cargo build subprocess. A dependency-free
-/// student crate links in ~1-3s warm against the prebuilt wasip1 std;
-/// 30s is generous headroom for a cold linker without letting a
-/// pathological-macro submission hog a worker indefinitely.
-const CARGO_BUILD_TIMEOUT: Duration = Duration::from_secs(30);
+/// Wall-clock timeout for the cargo build subprocess tree. A
+/// dependency-free student crate links in ~1-3s warm against the prebuilt
+/// wasip1 std; 30s is generous headroom for a cold linker without letting
+/// a pathological-macro submission hog a worker indefinitely.
+pub const CARGO_BUILD_TIMEOUT: Duration = Duration::from_secs(30);
 
 // ---- Sandbox execution budget for the run phase --------------------------
 // These bound the *execution* of the built wasm in `wasm_runner`. Tuned for
@@ -108,13 +101,44 @@ impl Default for RunLimits {
     }
 }
 
+/// Where and how builds run. Built from [`crate::Config`] by the server;
+/// [`BuildSettings::default`] is the dev setup (temp-dir root, no
+/// sandbox, deny-list on).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BuildSettings {
+    pub root: PathBuf,
+    pub sandbox: SandboxSettings,
+    pub source_denylist: bool,
+}
+
+impl Default for BuildSettings {
+    fn default() -> Self {
+        Self {
+            root: build_root::default_root(crate::config::DEFAULT_BUILD_ROOT_NAME),
+            sandbox: SandboxSettings::default(),
+            source_denylist: true,
+        }
+    }
+}
+
+impl BuildSettings {
+    pub fn from_config(cfg: &crate::Config) -> Self {
+        Self {
+            root: cfg.build_root.clone(),
+            sandbox: cfg.sandbox.clone(),
+            source_denylist: cfg.source_denylist,
+        }
+    }
+}
+
 /// Verdict from a single `build_wasm` invocation.
 #[derive(Debug, Clone)]
 pub struct BuildVerdict {
     /// True iff `cargo build` exited 0 and the artifact was read.
     pub ok: bool,
     /// On failure: cargo stderr (compiler diagnostics), capped at
-    /// [`STDERR_CAP_BYTES`]. On success: usually empty.
+    /// [`STDERR_CAP_BYTES`], or the deny-list message. On success:
+    /// usually empty.
     pub stderr: String,
     /// The built module bytes on success; `None` on any failure.
     pub wasm: Option<Vec<u8>>,
@@ -147,67 +171,71 @@ impl RealOutcome {
     }
 }
 
-/// RAII guard that deletes the sandbox directory on drop.
-struct SandboxGuard {
-    path: PathBuf,
-}
-
-impl Drop for SandboxGuard {
-    fn drop(&mut self) {
-        if self.path.exists()
-            && let Err(e) = fs::remove_dir_all(&self.path)
-        {
-            tracing::warn!(
-                "wasm_builder: failed to clean sandbox {}: {}",
-                self.path.display(),
-                e
-            );
-        }
-    }
+/// Build player `source` to a `wasm32-wasip1` module with the dev
+/// [`BuildSettings`].
+pub fn build_wasm(source: &str) -> Result<BuildVerdict> {
+    build_wasm_in(source, &BuildSettings::default())
 }
 
 /// Build player `source` to a `wasm32-wasip1` module. See module docs for
 /// the security contract.
 ///
 /// Returns `Err` only for setup-time failures (empty source, can't create
-/// tempdir, can't spawn cargo). A failed `cargo build` is a *successful*
-/// call returning `Ok(BuildVerdict { ok: false, .. })`.
-pub fn build_wasm(source: &str) -> Result<BuildVerdict> {
-    if source.trim().is_empty() {
-        return Err(anyhow!("source is empty or whitespace-only"));
-    }
-
-    let sandbox = create_sandbox()?;
-    let _guard = SandboxGuard {
-        path: sandbox.clone(),
-    };
-
-    write_bin_skeleton(&sandbox, source)?;
-    run_cargo_build(&sandbox)
+/// the job dir, can't spawn the build, process tree would not die). A
+/// failed `cargo build` or a deny-listed source is a *successful* call
+/// returning `Ok(BuildVerdict { ok: false, .. })`.
+pub fn build_wasm_in(source: &str, settings: &BuildSettings) -> Result<BuildVerdict> {
+    Ok(build_wasm_inner(source, settings)?.0)
 }
 
-/// Test-only hook: run a `build_wasm` and return the sandbox path AFTER
+/// Test-only hook: run a `build_wasm` and return the job dir path AFTER
 /// cleanup so a test can assert the directory no longer exists.
 #[doc(hidden)]
 pub fn build_wasm_with_sandbox_path(source: &str) -> Result<(BuildVerdict, PathBuf)> {
+    let (verdict, path) = build_wasm_inner(source, &BuildSettings::default())?;
+    let path = path.ok_or_else(|| anyhow!("wasm_builder: no job dir was created"))?;
+    Ok((verdict, path))
+}
+
+fn build_wasm_inner(
+    source: &str,
+    settings: &BuildSettings,
+) -> Result<(BuildVerdict, Option<PathBuf>)> {
     if source.trim().is_empty() {
         return Err(anyhow!("source is empty or whitespace-only"));
     }
-    let sandbox = create_sandbox()?;
-    let path_for_caller = sandbox.clone();
+    if settings.source_denylist
+        && let Err(violation) = source_policy::check(source)
+    {
+        tracing::warn!(
+            kind = violation.kind(),
+            "wasm_builder: source refused by deny-list: {violation}"
+        );
+        return Ok((
+            BuildVerdict {
+                ok: false,
+                stderr: violation.player_message(),
+                wasm: None,
+            },
+            None,
+        ));
+    }
+
+    let job = build_root::create_job_dir(&settings.root)
+        .context("wasm_builder: failed to create job dir")?;
+    let path_for_caller = job.clone();
     let verdict = {
-        let _guard = SandboxGuard {
-            path: sandbox.clone(),
-        };
-        write_bin_skeleton(&sandbox, source)?;
-        run_cargo_build(&sandbox)?
+        // Dropped after run_cargo_build returns, i.e. after the build's
+        // process tree is confirmed dead.
+        let guard = JobDirGuard::new(job);
+        write_bin_skeleton(guard.path(), source)?;
+        run_cargo_build(guard.path(), &settings.sandbox)?
     };
-    Ok((verdict, path_for_caller))
+    Ok((verdict, Some(path_for_caller)))
 }
 
 /// Build player source to wasm and, if it compiled, run it under the
-/// hardened sandbox with the default [`RunLimits`]. The honest end-to-end
-/// grader path.
+/// hardened sandbox with the default [`RunLimits`] and dev settings.
 ///
 /// Returns `Err` only for build-setup failures; a non-compiling or
 /// trapping submission is a successful call with the relevant booleans
@@ -216,12 +244,21 @@ pub fn compile_and_run(source: &str) -> Result<RealOutcome> {
     compile_and_run_with(source, &RunLimits::default())
 }
 
-/// [`compile_and_run`] with an explicit execution budget. Blocking: it
-/// spawns `cargo` and runs wasmtime synchronously, so async callers must
-/// put it on a blocking thread (the HTTP route uses `spawn_blocking`).
+/// [`compile_and_run`] with an explicit execution budget (dev settings).
 pub fn compile_and_run_with(source: &str, limits: &RunLimits) -> Result<RealOutcome> {
+    compile_and_run_in(source, limits, &BuildSettings::default())
+}
+
+/// The server's build-and-run path. Blocking: it spawns the build and
+/// runs wasmtime synchronously, so async callers must put it on a
+/// blocking thread (the HTTP route uses `spawn_blocking`).
+pub fn compile_and_run_in(
+    source: &str,
+    limits: &RunLimits,
+    settings: &BuildSettings,
+) -> Result<RealOutcome> {
     let build_started = Instant::now();
-    let build = build_wasm(source)?;
+    let build = build_wasm_in(source, settings)?;
     let build_time = build_started.elapsed();
     let Some(bytes) = build.wasm else {
         tracing::debug!("wasm_builder: build failed after {build_time:?}, skipping run");
@@ -257,28 +294,38 @@ pub fn compile_and_run_with(source: &str, limits: &RunLimits) -> Result<RealOutc
     })
 }
 
-fn create_sandbox() -> Result<PathBuf> {
-    let root = std::env::temp_dir().join("pledge-wasm-builder");
-    fs::create_dir_all(&root).with_context(|| {
-        format!(
-            "wasm_builder: failed to create sandbox root {}",
-            root.display()
-        )
-    })?;
-    let dir = root.join(Uuid::new_v4().to_string());
-    fs::create_dir(&dir).with_context(|| {
-        format!(
-            "wasm_builder: failed to create sandbox dir {}",
-            dir.display()
-        )
-    })?;
-    fs::create_dir(dir.join("src"))
-        .with_context(|| format!("wasm_builder: failed to create src/ in {}", dir.display()))?;
-    tracing::debug!("wasm_builder: created sandbox {}", dir.display());
-    Ok(dir)
+/// Startup self-test: for `bwrap`, the isolation probe in
+/// [`build_sandbox::probe_isolation`]; for every mode, a real build and
+/// run of a trivial program through the exact production path, which
+/// proves the toolchain, the binds and the rlimits work together.
+pub fn startup_self_test(settings: &BuildSettings) -> Result<()> {
+    if settings.sandbox.mode == build_sandbox::SandboxMode::Bwrap {
+        build_sandbox::probe_isolation(&settings.sandbox, &settings.root)
+            .context("build sandbox isolation probe failed")?;
+    }
+    let outcome = compile_and_run_in(
+        "fn main() { println!(\"pnc-self-test\"); }",
+        &RunLimits::default(),
+        settings,
+    )
+    .context("build self-test could not run")?;
+    if !outcome.ok() || !outcome.stdout.contains("pnc-self-test") {
+        return Err(anyhow!(
+            "build self-test failed (compiled={}, ran_ok={}): {}",
+            outcome.compiled,
+            outcome.ran_ok,
+            outcome.stderr
+        ));
+    }
+    tracing::info!(
+        sandbox = %settings.sandbox.mode,
+        build_ms = outcome.build_time.as_millis() as u64,
+        "build self-test passed"
+    );
+    Ok(())
 }
 
-fn write_bin_skeleton(sandbox: &Path, source: &str) -> Result<()> {
+fn write_bin_skeleton(job: &Path, source: &str) -> Result<()> {
     // Server-owned manifest. Frozen, no dependencies, edition 2024.
     // Player input does NOT flow into this string. `panic = "abort"`
     // keeps panics from unwinding: in wasm a panic becomes a clean trap
@@ -302,7 +349,7 @@ codegen-units = 16
 lto = false
 panic = "abort"
 "#;
-    fs::write(sandbox.join("Cargo.toml"), manifest)
+    fs::write(job.join("Cargo.toml"), manifest)
         .context("wasm_builder: failed to write Cargo.toml")?;
 
     // Prefix a crate-level allow so unused bindings in a student snippet
@@ -312,151 +359,56 @@ panic = "abort"
     let mut main_rs = String::with_capacity(source.len() + 64);
     main_rs.push_str("#![allow(dead_code, unused)]\n");
     main_rs.push_str(source);
-    fs::write(sandbox.join("src").join("main.rs"), main_rs)
+    fs::write(job.join("src").join("main.rs"), main_rs)
         .context("wasm_builder: failed to write src/main.rs")?;
     Ok(())
 }
 
-fn run_cargo_build(sandbox: &Path) -> Result<BuildVerdict> {
-    let manifest = sandbox.join("Cargo.toml");
-    let manifest_str = manifest
-        .to_str()
-        .ok_or_else(|| anyhow!("wasm_builder: manifest path not valid UTF-8"))?;
-    let sandbox_target = sandbox.join("target");
-
-    tracing::debug!("wasm_builder: cargo build wasip1 in {}", sandbox.display());
-    let started = Instant::now();
-    let mut cmd = Command::new("cargo");
-    cmd.arg("build")
-        .arg("--target")
-        .arg(WASIP1_TARGET)
-        .arg("--release")
-        .arg("--offline")
-        .arg("--quiet")
-        .arg("--manifest-path")
-        .arg(manifest_str)
-        .current_dir(sandbox)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-    // Strip the inherited environment and rebuild it from a small
-    // allowlist (mirrors cargo_grader). Without env_clear, a workspace-
-    // wide CARGO_TARGET_DIR would point cargo back at the parent build
-    // dir, smuggling state between invocations and breaking cleanup.
-    cmd.env_clear();
-    for name in [
-        "PATH",                   // resolve `cargo`, `rustc`, linker, rust-lld
-        "CARGO_HOME",             // toolchain + registry cache
-        "RUSTUP_HOME",            // rustup root (resolves the wasip1 std)
-        "USERPROFILE",            // Windows: HOME analogue
-        "HOME",                   // Unix: home
-        "TEMP",                   // Windows: temp dir cargo uses for fingerprints
-        "TMP",                    // Windows: same, alt name
-        "TMPDIR",                 // Unix: temp dir
-        "SYSTEMROOT",             // Windows: required for some toolchain bits
-        "PROCESSOR_ARCHITECTURE", // Windows: rustc host detection
-    ] {
-        if let Ok(v) = std::env::var(name) {
-            cmd.env(name, v);
-        }
-    }
-    cmd.env("CARGO_TARGET_DIR", &sandbox_target);
-    cmd.env("CARGO_TERM_COLOR", "never");
-
-    let mut child = cmd
-        .spawn()
-        .context("wasm_builder: failed to spawn cargo build")?;
-
-    // Bounded capture on dedicated threads; signal on EOF so the watchdog
-    // wakes immediately on a fast build rather than busy-polling.
-    let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
-        let _ = child.kill();
-        return Err(anyhow!("wasm_builder: cargo stdio was not piped"));
-    };
-    let (tx, rx) = mpsc::channel::<()>();
-    let tx_stdout = tx.clone();
-    let tx_stderr = tx.clone();
-    let stdout_handle = thread::spawn(move || {
-        let s = read_capped(stdout);
-        let _ = tx_stdout.send(());
-        s
-    });
-    let stderr_handle = thread::spawn(move || {
-        let s = read_capped(stderr);
-        let _ = tx_stderr.send(());
-        s
-    });
-    drop(tx);
-
-    let mut killed_for_timeout = false;
-    loop {
-        let elapsed = started.elapsed();
-        if elapsed >= CARGO_BUILD_TIMEOUT {
-            tracing::warn!(
-                "wasm_builder: timing out cargo build after {:?}",
-                CARGO_BUILD_TIMEOUT
-            );
-            let _ = child.kill();
-            killed_for_timeout = true;
-            break;
-        }
-        let remaining = CARGO_BUILD_TIMEOUT - elapsed;
-        match rx.recv_timeout(remaining) {
-            Ok(()) => continue,
-            Err(mpsc::RecvTimeoutError::Disconnected) => break,
-            Err(mpsc::RecvTimeoutError::Timeout) => {
-                tracing::warn!(
-                    "wasm_builder: timing out cargo build after {:?}",
-                    CARGO_BUILD_TIMEOUT
-                );
-                let _ = child.kill();
-                killed_for_timeout = true;
-                break;
-            }
-        }
-    }
-    let status = child
-        .wait()
-        .context("wasm_builder: wait after pipes closed / kill")?;
-
-    let stdout_buf = stdout_handle
-        .join()
-        .map_err(|_| anyhow!("wasm_builder: stdout reader thread panicked"))?;
-    let stderr_buf = stderr_handle
-        .join()
-        .map_err(|_| anyhow!("wasm_builder: stderr reader thread panicked"))?;
-
-    let elapsed = started.elapsed();
+fn run_cargo_build(job: &Path, sandbox: &SandboxSettings) -> Result<BuildVerdict> {
+    let spec = build_sandbox::cargo_build_spec(sandbox, job)
+        .context("wasm_builder: could not construct the build command")?;
     tracing::debug!(
-        "wasm_builder: cargo build exit={:?} elapsed={:?} ok_path={}",
-        status.code(),
-        elapsed,
-        status.success()
+        mode = %sandbox.mode,
+        argv = ?spec.argv_lossy(),
+        "wasm_builder: cargo build wasip1 in {}",
+        job.display()
+    );
+    let out = proc_tree::run_captured(
+        spec.to_command(),
+        CARGO_BUILD_TIMEOUT,
+        STDERR_CAP_BYTES,
+        "cargo build",
+    )
+    .context("wasm_builder: build process supervision failed")?;
+    tracing::debug!(
+        "wasm_builder: cargo build exit={:?} elapsed={:?} timed_out={}",
+        out.status.code(),
+        out.elapsed,
+        out.timed_out
     );
 
-    if killed_for_timeout {
+    if out.timed_out {
         return Ok(BuildVerdict {
             ok: false,
             stderr: format!(
                 "cargo build timed out after {}s\n--- partial stderr ---\n{}",
                 CARGO_BUILD_TIMEOUT.as_secs(),
-                stderr_buf
+                out.stderr
             ),
             wasm: None,
         });
     }
 
-    if !status.success() {
+    if !out.status.success() {
         return Ok(BuildVerdict {
             ok: false,
             // On a build failure cargo's diagnostics are on stderr;
             // forward stdout too on the off chance something useful
             // landed there.
-            stderr: if stderr_buf.is_empty() {
-                stdout_buf
+            stderr: if out.stderr.is_empty() {
+                out.stdout
             } else {
-                stderr_buf
+                out.stderr
             },
             wasm: None,
         });
@@ -464,19 +416,13 @@ fn run_cargo_build(sandbox: &Path) -> Result<BuildVerdict> {
 
     // Read the artifact. Bin target `player_submission` -> `<name>.wasm`
     // under the target/<triple>/release dir.
-    let artifact = sandbox_target
+    let artifact = job
+        .join("target")
         .join(WASIP1_TARGET)
         .join("release")
         .join("player_submission.wasm");
-    match fs::read(&artifact) {
-        Ok(bytes) => {
-            tracing::debug!("wasm_builder: read {} wasm bytes", bytes.len());
-            Ok(BuildVerdict {
-                ok: true,
-                stderr: stdout_buf,
-                wasm: Some(bytes),
-            })
-        }
+    let len = match fs::metadata(&artifact) {
+        Ok(m) => m.len(),
         Err(e) => {
             // Built clean but no artifact — almost always "no `main`"
             // (a lib-shaped snippet built as a bin). Report it honestly
@@ -485,42 +431,31 @@ fn run_cargo_build(sandbox: &Path) -> Result<BuildVerdict> {
                 "wasm_builder: build succeeded but artifact missing at {}: {e}",
                 artifact.display()
             );
-            Ok(BuildVerdict {
+            return Ok(BuildVerdict {
                 ok: false,
                 stderr: format!("build produced no runnable binary (is there a `fn main`?): {e}"),
                 wasm: None,
-            })
+            });
         }
+    };
+    if len > MAX_WASM_BYTES as u64 {
+        tracing::warn!(
+            bytes = len,
+            limit = MAX_WASM_BYTES,
+            "wasm_builder: rejected oversized artifact"
+        );
+        return Ok(BuildVerdict {
+            ok: false,
+            stderr: format!("built module is {len} bytes, over the {MAX_WASM_BYTES}-byte limit"),
+            wasm: None,
+        });
     }
-}
-
-/// Read up to [`STDERR_CAP_BYTES`] from `r`, then drain the rest so the
-/// writer never blocks on a full pipe. Returns lossy UTF-8 of the prefix.
-fn read_capped<R: Read>(mut r: R) -> String {
-    let mut buf = Vec::with_capacity(4096);
-    let mut chunk = [0u8; 4096];
-    let mut truncated = false;
-    loop {
-        match r.read(&mut chunk) {
-            Ok(0) => break,
-            Ok(n) => {
-                if buf.len() < STDERR_CAP_BYTES {
-                    let remaining = STDERR_CAP_BYTES - buf.len();
-                    let take = n.min(remaining);
-                    buf.extend_from_slice(&chunk[..take]);
-                    if take < n {
-                        truncated = true;
-                    }
-                } else {
-                    truncated = true;
-                }
-            }
-            Err(_) => break,
-        }
-    }
-    let mut out = String::from_utf8_lossy(&buf).into_owned();
-    if truncated {
-        out.push_str("\n... [truncated]");
-    }
-    out
+    let bytes = fs::read(&artifact)
+        .with_context(|| format!("wasm_builder: failed to read {}", artifact.display()))?;
+    tracing::debug!("wasm_builder: read {} wasm bytes", bytes.len());
+    Ok(BuildVerdict {
+        ok: true,
+        stderr: out.stdout,
+        wasm: Some(bytes),
+    })
 }

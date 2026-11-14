@@ -5,24 +5,32 @@
 //!
 //! # Request path
 //!
-//! - `GET /health` — open (still subject to the per-IP global limit).
+//! - `GET /health` — open, and never rate limited.
 //! - `POST /compile` — pattern grader; cheap, runs on the async path.
-//! - `POST /compile-real` — real `cargo build` + sandboxed wasm run.
+//! - `POST /compile-real` — real `cargo build` (in the build sandbox, see
+//!   [`build_sandbox`]) + sandboxed wasm run. Source is first checked
+//!   against the compile-time file-read deny-list ([`source_policy`]).
 //!   Blocking work runs on `spawn_blocking` behind a build semaphore
 //!   (`PNC_MAX_CONCURRENT_BUILDS`) with a bounded wait queue
 //!   (`PNC_MAX_QUEUED_BUILDS`); overflow gets 503 + `Retry-After`.
-//! - `GET /metrics` — Prometheus text format.
+//! - `GET /metrics` — Prometheus text format. Its own token
+//!   (`PNC_METRICS_TOKENS`) or direct-loopback only; player tokens are
+//!   not accepted.
 //!
-//! The three non-health routes require `Authorization: Bearer <token>`
+//! `/compile` and `/compile-real` require `Authorization: Bearer <token>`
 //! whenever a token is configured. See [`middleware`] for layer order and
 //! [`config`] for every knob.
 
+pub mod build_root;
+pub mod build_sandbox;
 pub mod cargo_grader;
 pub mod config;
 pub mod grader;
 pub mod metrics;
 pub mod middleware;
+pub mod proc_tree;
 pub mod rate_limit;
+pub mod source_policy;
 pub mod wasm_builder;
 pub mod wasm_runner;
 
@@ -45,8 +53,8 @@ use tower_http::trace::TraceLayer;
 
 pub use config::{Config, ConfigError};
 use metrics::{Metrics, RejectReason};
-use rate_limit::RateLimiter;
-use wasm_builder::{RealOutcome, RunLimits};
+use rate_limit::{OnFull, RateLimiter};
+use wasm_builder::{BuildSettings, RealOutcome, RunLimits};
 
 /// Hard cap on player source bytes accepted by `/compile` and
 /// `/compile-real`. The pattern grader is fast for any input but the
@@ -69,6 +77,20 @@ pub const MAX_BODY_BYTES: usize = MAX_SOURCE_BYTES + 4 * 1024;
 /// `Retry-After` sent with a 503 when the build queue is full. Roughly
 /// one warm build.
 pub const QUEUE_RETRY_AFTER_SECS: u64 = 5;
+
+/// Longest accepted `encounter_id`, in bytes.
+pub const MAX_ENCOUNTER_ID_BYTES: usize = 64;
+
+/// `encounter_id` must be 1..=64 bytes of `[A-Za-z0-9_-]`. Checked before
+/// the value is logged, echoed or used, so it can carry neither log
+/// injection nor a path.
+pub fn valid_encounter_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= MAX_ENCOUNTER_ID_BYTES
+        && id
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+}
 
 #[derive(Deserialize)]
 pub struct CompileRequest {
@@ -116,6 +138,13 @@ pub enum Rejection {
     BodyTooLarge,
     #[error("{message}")]
     BadRequest { status: StatusCode, message: String },
+    #[error("{0}")]
+    Forbidden(String),
+    /// Player source hit the compile-time file-read deny-list. The
+    /// message is the player-facing text from
+    /// [`source_policy::PolicyViolation::player_message`].
+    #[error("{0}")]
+    SourcePolicy(String),
     #[error("client address unavailable")]
     ClientAddrUnavailable,
     #[error("internal error: {0}")]
@@ -130,6 +159,8 @@ impl Rejection {
             Self::QueueFull { .. } => StatusCode::SERVICE_UNAVAILABLE,
             Self::BodyTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
             Self::BadRequest { status, .. } => *status,
+            Self::Forbidden(_) => StatusCode::FORBIDDEN,
+            Self::SourcePolicy(_) => StatusCode::BAD_REQUEST,
             Self::ClientAddrUnavailable | Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -141,6 +172,8 @@ impl Rejection {
             Self::QueueFull { .. } => "queue_full",
             Self::BodyTooLarge => "body_too_large",
             Self::BadRequest { .. } => "bad_request",
+            Self::Forbidden(_) => "forbidden",
+            Self::SourcePolicy(_) => "source_policy",
             Self::ClientAddrUnavailable | Self::Internal(_) => "internal",
         }
     }
@@ -199,15 +232,33 @@ struct Inner {
 pub struct AppState(Arc<Inner>);
 
 impl AppState {
-    /// Production state: real `cargo build` + wasmtime grader.
+    /// Production state: real `cargo build` (in the configured build
+    /// sandbox, under the configured build root) + wasmtime grader.
     pub fn new(config: Config) -> Self {
-        Self::with_real_grader(config, Arc::new(wasm_builder::compile_and_run_with))
+        let settings = BuildSettings::from_config(&config);
+        let grader: RealGrader = Arc::new(move |source: &str, limits: &RunLimits| {
+            wasm_builder::compile_and_run_in(source, limits, &settings)
+        });
+        Self::with_real_grader(config, grader)
     }
 
     /// State with a custom blocking grader for `/compile-real`.
     pub fn with_real_grader(config: Config, real_grader: RealGrader) -> Self {
-        let global_limiter = RateLimiter::new("global", config.rate_limit_per_min);
-        let real_limiter = RateLimiter::new("compile-real", config.real_rate_limit_per_min);
+        // Global limiter fails open under table pressure; the expensive
+        // route evicts least-recently-seen buckets instead (it is also
+        // bounded by the build semaphore + queue). See `rate_limit`.
+        let global_limiter = RateLimiter::with_max_entries(
+            "global",
+            config.rate_limit_per_min,
+            config.rate_limit_max_clients,
+            OnFull::FailOpen,
+        );
+        let real_limiter = RateLimiter::with_max_entries(
+            "compile-real",
+            config.real_rate_limit_per_min,
+            config.rate_limit_max_clients,
+            OnFull::EvictLru,
+        );
         let builds = Arc::new(Semaphore::new(config.max_concurrent_builds));
         Self(Arc::new(Inner {
             config,
@@ -260,7 +311,7 @@ pub fn build_router(state: AppState) -> Router {
         .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION])
         .max_age(Duration::from_secs(600));
 
-    let protected = Router::new()
+    let player = Router::new()
         .route("/compile", post(compile))
         .route(
             "/compile-real",
@@ -269,24 +320,30 @@ pub fn build_router(state: AppState) -> Router {
                 middleware::real_rate_limit,
             )),
         )
-        .route("/metrics", get(metrics_handler))
+        .route_layer(from_fn_with_state(state.clone(), middleware::limit_body))
         .route_layer(from_fn_with_state(
             state.clone(),
             middleware::require_bearer,
         ))
-        .route_layer(from_fn_with_state(
-            state.clone(),
-            middleware::content_length_limit,
-        ))
+        // Backstop only: `limit_body` has already enforced the cap.
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES));
 
-    Router::new()
-        .route("/health", get(health))
-        .merge(protected)
-        .layer(from_fn_with_state(
+    let metrics = Router::new()
+        .route("/metrics", get(metrics_handler))
+        .route_layer(from_fn_with_state(
             state.clone(),
-            middleware::global_rate_limit,
-        ))
+            middleware::require_metrics_access,
+        ));
+
+    let limited = player.merge(metrics).layer(from_fn_with_state(
+        state.clone(),
+        middleware::global_rate_limit,
+    ));
+
+    Router::new()
+        .merge(limited)
+        // Added after the limiter layer, so /health is never limited.
+        .route("/health", get(health))
         .layer(cors)
         .layer(from_fn_with_state(
             state.clone(),
@@ -315,9 +372,37 @@ async fn health() -> impl IntoResponse {
 
 async fn metrics_handler(State(state): State<AppState>) -> impl IntoResponse {
     tracing::debug!("metrics: scrape");
+    let limiters = [
+        ("global", state.global_limiter().stats()),
+        ("compile-real", state.real_limiter().stats()),
+    ];
     (
         [(header::CONTENT_TYPE, metrics::CONTENT_TYPE)],
-        state.metrics().render(),
+        state.metrics().render_with_limiters(&limiters),
+    )
+}
+
+/// Refuse a malformed `encounter_id` before it is logged or used.
+fn reject_bad_encounter(state: &AppState, route: &str, id: &str) -> Option<Response> {
+    if valid_encounter_id(id) {
+        return None;
+    }
+    // Log the length only: the value is attacker-controlled.
+    tracing::warn!(
+        route,
+        encounter_id_bytes = id.len(),
+        "rejected: invalid encounter_id"
+    );
+    state.metrics().record_rejection(RejectReason::Input);
+    Some(
+        Rejection::BadRequest {
+            status: StatusCode::BAD_REQUEST,
+            message: format!(
+                "invalid encounter_id: expected 1-{MAX_ENCOUNTER_ID_BYTES} characters of \
+                 [A-Za-z0-9_-]"
+            ),
+        }
+        .into_response(),
     )
 }
 
@@ -346,6 +431,9 @@ async fn compile(
         Ok(Json(req)) => req,
         Err(rej) => return json_rejection(&state, "/compile", rej),
     };
+    if let Some(r) = reject_bad_encounter(&state, "/compile", &req.encounter_id) {
+        return r;
+    }
     tracing::info!(
         encounter = %req.encounter_id,
         source_bytes = req.source.len(),
@@ -459,6 +547,9 @@ async fn compile_real(
         Ok(Json(req)) => req,
         Err(rej) => return json_rejection(&state, "/compile-real", rej),
     };
+    if let Some(r) = reject_bad_encounter(&state, "/compile-real", &req.encounter_id) {
+        return r;
+    }
     tracing::info!(
         encounter = %req.encounter_id,
         source_bytes = req.source.len(),
@@ -466,6 +557,21 @@ async fn compile_real(
     );
     if let Some(rejection) = reject_invalid_source(&req.source) {
         return rejection.into_response();
+    }
+    // Second layer against compile-time file reads; the build sandbox is
+    // the first. Checked before a build slot is taken.
+    if state.config().source_denylist {
+        if let Err(violation) = source_policy::check(&req.source) {
+            tracing::warn!(
+                encounter = %req.encounter_id,
+                kind = violation.kind(),
+                "rejected: source policy: {violation}"
+            );
+            state.metrics().record_rejection(RejectReason::SourcePolicy);
+            return Rejection::SourcePolicy(violation.player_message()).into_response();
+        }
+    } else {
+        tracing::warn!("compile-real: source deny-list is DISABLED (PNC_SOURCE_DENYLIST=false)");
     }
 
     let permit = match acquire_build_slot(&state).await {

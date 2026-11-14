@@ -28,6 +28,20 @@
 //!   they are normal grading outcomes and surface as
 //!   `Ok(RunVerdict { ok: false, .. })` with a recognisable stderr
 //!   message ("fuel exhausted" or "timeout").
+//! - Module size is capped at [`MAX_WASM_BYTES`] before anything is
+//!   parsed, and Cranelift compilation is single-threaded
+//!   (`parallel_compilation(false)`) so one module cannot occupy every
+//!   core.
+//! - Module compilation is bounded in *wall time* by
+//!   [`MODULE_COMPILE_TIMEOUT`]: it runs on a helper thread and the run
+//!   is failed if it does not finish in time. Honest limit: wasmtime
+//!   cannot cancel a compile, so on timeout the helper thread is detached
+//!   and finishes in the background (its work is bounded by the size
+//!   cap), outside the build semaphore. The end state that removes this
+//!   gap is running the module in the sandboxed, killable build worker
+//!   instead of in the server process; that is not done yet.
+//! - Instance/table/memory counts and table growth are capped through the
+//!   store's resource limiter, in addition to linear memory.
 
 use std::sync::mpsc;
 use std::thread;
@@ -41,6 +55,24 @@ use wasmtime_wasi::p2::pipe::MemoryOutputPipe;
 
 /// Cap on captured stdout / stderr per stream. 64 KiB.
 pub const PIPE_CAP_BYTES: usize = 64 * 1024;
+
+/// Largest module accepted for compilation. A curriculum program built
+/// for `wasm32-wasip1` at opt-level 1 is on the order of 100 KiB; 4 MiB
+/// leaves wide headroom while bounding compile work.
+pub const MAX_WASM_BYTES: usize = 4 * 1024 * 1024;
+
+/// Wall-clock budget for `Module::new` (Cranelift compile).
+pub const MODULE_COMPILE_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// One instance per run (the player module; WASI p1 host functions are
+/// not instances).
+const MAX_INSTANCES: usize = 1;
+/// Rust emits one table and one memory.
+const MAX_TABLES: usize = 2;
+const MAX_MEMORIES: usize = 1;
+/// Elements per table. Rust's indirect-call table for a small program
+/// holds a few hundred entries.
+const MAX_TABLE_ELEMENTS: usize = 64 * 1024;
 
 /// Floor on fuel; anything below this is rejected up front to catch
 /// caller mistakes (zero / one fuel will trap before the module body
@@ -90,8 +122,38 @@ pub fn run_wasm(
     fuel: u64,
     max_memory_bytes: u64,
 ) -> Result<RunVerdict> {
+    run_wasm_with_compile_timeout(
+        bytes,
+        timeout_ms,
+        fuel,
+        max_memory_bytes,
+        MODULE_COMPILE_TIMEOUT,
+    )
+}
+
+/// [`run_wasm`] with an explicit module-compile budget (tests use a zero
+/// budget to exercise the timeout path deterministically).
+#[doc(hidden)]
+pub fn run_wasm_with_compile_timeout(
+    bytes: &[u8],
+    timeout_ms: u64,
+    fuel: u64,
+    max_memory_bytes: u64,
+    compile_timeout: Duration,
+) -> Result<RunVerdict> {
     if bytes.is_empty() {
         bail!("wasm_runner: bytes is empty");
+    }
+    if bytes.len() > MAX_WASM_BYTES {
+        tracing::warn!(
+            bytes = bytes.len(),
+            limit = MAX_WASM_BYTES,
+            "wasm_runner: rejected oversized module"
+        );
+        bail!(
+            "wasm_runner: module is {} bytes, over the {MAX_WASM_BYTES}-byte limit",
+            bytes.len()
+        );
     }
     if fuel < MIN_FUEL {
         bail!("wasm_runner: fuel={fuel} below floor {MIN_FUEL}; pick a saner budget");
@@ -156,9 +218,23 @@ pub fn run_wasm(
     config.wasm_gc(false);
     config.wasm_tail_call(false);
     config.wasm_threads(false);
+    // One core per compile: a large module must not starve the server.
+    config.parallel_compilation(false);
 
     let engine = Engine::new(&config)?;
-    let module = Module::new(&engine, bytes)?;
+    let module = match compile_bounded(&engine, bytes, compile_timeout)? {
+        Some(m) => m,
+        None => {
+            return Ok(RunVerdict {
+                ok: false,
+                stdout: String::new(),
+                stderr: format!(
+                    "module compile exceeded {}s; program too large to run",
+                    compile_timeout.as_secs()
+                ),
+            });
+        }
+    };
 
     // ---- WASI ctx -------------------------------------------------------
     // No env, no args, no preopens, no network. Stdio only, captured to
@@ -172,7 +248,11 @@ pub fn run_wasm(
     let wasi = wasi_builder.build_p1();
 
     let limits = StoreLimitsBuilder::new()
-        .memory_size(max_memory_bytes as usize)
+        .memory_size(usize::try_from(max_memory_bytes).unwrap_or(usize::MAX))
+        .table_elements(MAX_TABLE_ELEMENTS)
+        .instances(MAX_INSTANCES)
+        .tables(MAX_TABLES)
+        .memories(MAX_MEMORIES)
         .build();
 
     let mut store: Store<StoreState> = Store::new(&engine, StoreState { wasi, limits });
@@ -239,6 +319,32 @@ pub fn run_wasm(
             })
         }
         Err(err) => Ok(classify_trap(err, captured_stdout, captured_stderr)),
+    }
+}
+
+/// Compile `bytes` on a helper thread, waiting at most `timeout`.
+/// `Ok(None)` on timeout (the helper is detached; see module docs),
+/// `Err` if compilation itself failed (invalid module, disabled feature).
+fn compile_bounded(engine: &Engine, bytes: &[u8], timeout: Duration) -> Result<Option<Module>> {
+    let (tx, rx) = mpsc::channel();
+    let engine = engine.clone();
+    let owned = bytes.to_vec();
+    thread::spawn(move || {
+        let _ = tx.send(Module::new(&engine, &owned));
+    });
+    match rx.recv_timeout(timeout) {
+        Ok(result) => Ok(Some(result?)),
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            tracing::warn!(
+                ?timeout,
+                bytes = bytes.len(),
+                "wasm_runner: module compile timed out; detaching compile thread"
+            );
+            Ok(None)
+        }
+        Err(mpsc::RecvTimeoutError::Disconnected) => {
+            bail!("wasm_runner: compile thread exited without a result")
+        }
     }
 }
 
