@@ -1519,6 +1519,7 @@ pub struct EpilogueView {
 #[allow(clippy::too_many_arguments)]
 fn handle_interact_key(
     keys: Res<ButtonInput<KeyCode>>,
+    handoff: Option<ResMut<crate::plugins::dialogue::DialogueHandoff>>,
     nearby: Res<NearbyNpc>,
     registry: Res<MissionRegistry>,
     progress: Res<MissionProgress>,
@@ -1533,7 +1534,11 @@ fn handle_interact_key(
     if editor.open {
         return;
     }
-    if !keys.just_pressed(KeyCode::KeyF) {
+    // With DialoguePlugin mounted, F opens a conversation (and is consumed
+    // there); its last line raises the handoff. Bare F remains for
+    // fixtures that mount MissionPlugin alone.
+    let handed_off = handoff.is_some_and(|mut h| h.take());
+    if !handed_off && !keys.just_pressed(KeyCode::KeyF) {
         return;
     }
     let Some(entry) = nearby.current.as_ref() else {
