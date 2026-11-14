@@ -14,6 +14,13 @@
 //!   editor_open fires on the false→true edge of EditorState.open;
 //!   epilogue fires when the win-condition panel first becomes
 //!   visible. All one-shots — no looping outside of music beds.
+//! - **Two channels.** Music beds play on [`MusicChannel`], one-shots on
+//!   [`SfxChannel`], so the settings screen can mix them independently.
+//!   Channel volume is `master x channel` (see [`volume_db`]) and is
+//!   re-applied whenever [`Settings`] changes, so sliders act live.
+//!   Pausing does not touch audio: `PauseState` is a sub-state of
+//!   `InGame`, so `OnExit(GameState::InGame)` (which stops music) only
+//!   fires on Quit to Title.
 
 use crate::assets::{
     AUDIO_EDITOR_OPEN, AUDIO_EPILOGUE, AUDIO_MISSION_CLEAR, AUDIO_MISSION_LOCKED, AUDIO_TITLE,
@@ -23,10 +30,37 @@ use crate::plugins::editor::EditorState;
 use crate::plugins::mission::{
     CompletionView, EpilogueView, MissionLockedAttempt, MissionRegistry,
 };
-use crate::plugins::progress::MissionProgress;
+use crate::plugins::progress::{MissionProgress, Settings};
 use crate::plugins::state::GameState;
 use bevy::prelude::*;
 use bevy_kira_audio::prelude::*;
+
+/// Typed `bevy_kira_audio` channel for looping music beds.
+#[derive(Resource)]
+pub struct MusicChannel;
+
+/// Typed `bevy_kira_audio` channel for one-shot sound effects.
+#[derive(Resource)]
+pub struct SfxChannel;
+
+pub type MusicAudio = AudioChannel<MusicChannel>;
+pub type SfxAudio = AudioChannel<SfxChannel>;
+
+/// Map a master and a channel slider (each 0..=100 percent) to the
+/// channel gain in decibels. The two percentages multiply into a linear
+/// amplitude, which is converted with `20 * log10(amp)`; anything at or
+/// below kira's silence floor (-60 dB), including either slider at 0,
+/// returns exactly `Decibels::SILENCE`.
+pub fn volume_db(master: u8, channel: u8) -> f32 {
+    let silence = Decibels::SILENCE.0;
+    let m = f32::from(master.min(Settings::VOLUME_MAX)) / 100.0;
+    let c = f32::from(channel.min(Settings::VOLUME_MAX)) / 100.0;
+    let amp = m * c;
+    if amp <= 0.0 {
+        return silence;
+    }
+    (20.0 * amp.log10()).max(silence)
+}
 
 /// Cached `Handle<AudioSource>`s for every track we ever play. Loaded
 /// once at startup; missing files yield handles that silently drop on
@@ -56,6 +90,8 @@ impl Plugin for GameAudioPlugin {
     fn build(&self, app: &mut App) {
         tracing::debug!("GameAudioPlugin::build");
         app.add_plugins(AudioPlugin)
+            .add_audio_channel::<MusicChannel>()
+            .add_audio_channel::<SfxChannel>()
             .init_resource::<AudioHandles>()
             .init_resource::<AudioState>()
             .add_systems(Startup, (load_audio_handles, init_audio_state).chain())
@@ -63,6 +99,10 @@ impl Plugin for GameAudioPlugin {
             .add_systems(OnExit(GameState::Title), stop_all_music)
             .add_systems(OnEnter(GameState::InGame), play_village_music)
             .add_systems(OnExit(GameState::InGame), stop_all_music)
+            .add_systems(
+                Update,
+                apply_volume_settings.run_if(resource_exists_and_changed::<Settings>),
+            )
             .add_systems(
                 Update,
                 (
@@ -97,23 +137,40 @@ fn init_audio_state(progress: Res<MissionProgress>, mut state: ResMut<AudioState
     );
 }
 
-fn play_title_music(audio: Res<Audio>, handles: Res<AudioHandles>) {
+/// Push the current [`Settings`] into both channels. Runs on the first
+/// frame (resource added counts as changed) and on every slider move.
+fn apply_volume_settings(settings: Res<Settings>, music: Res<MusicAudio>, sfx: Res<SfxAudio>) {
+    let music_db = volume_db(settings.master_volume, settings.music_volume);
+    let sfx_db = volume_db(settings.master_volume, settings.sfx_volume);
+    tracing::debug!(
+        master = settings.master_volume,
+        music = settings.music_volume,
+        sfx = settings.sfx_volume,
+        music_db,
+        sfx_db,
+        "audio: applying volume settings"
+    );
+    music.set_volume(music_db);
+    sfx.set_volume(sfx_db);
+}
+
+fn play_title_music(audio: Res<MusicAudio>, handles: Res<AudioHandles>) {
     tracing::info!("audio: playing title loop");
     audio.play(handles.title.clone()).looped();
 }
 
-fn play_village_music(audio: Res<Audio>, handles: Res<AudioHandles>) {
+fn play_village_music(audio: Res<MusicAudio>, handles: Res<AudioHandles>) {
     tracing::info!("audio: playing village ambient loop");
     audio.play(handles.village.clone()).looped();
 }
 
-fn stop_all_music(audio: Res<Audio>) {
-    tracing::debug!("audio: stopping all music");
+fn stop_all_music(audio: Res<MusicAudio>) {
+    tracing::debug!("audio: stopping music channel");
     audio.stop();
 }
 
 fn sfx_on_mission_clear(
-    audio: Res<Audio>,
+    audio: Res<SfxAudio>,
     handles: Res<AudioHandles>,
     progress: Res<MissionProgress>,
     mut state: ResMut<AudioState>,
@@ -136,7 +193,7 @@ fn sfx_on_mission_clear(
 /// the message itself is the edge. Drain the reader and play at most
 /// once per frame so a single F-press never stacks the sting.
 fn sfx_on_locked_attempt(
-    audio: Res<Audio>,
+    audio: Res<SfxAudio>,
     handles: Res<AudioHandles>,
     mut attempts: MessageReader<MissionLockedAttempt>,
 ) {
@@ -151,7 +208,7 @@ fn sfx_on_locked_attempt(
 }
 
 fn sfx_on_editor_open(
-    audio: Res<Audio>,
+    audio: Res<SfxAudio>,
     handles: Res<AudioHandles>,
     editor: Res<EditorState>,
     mut state: ResMut<AudioState>,
@@ -165,7 +222,7 @@ fn sfx_on_editor_open(
 
 #[allow(clippy::too_many_arguments)]
 fn sfx_on_epilogue_visible(
-    audio: Res<Audio>,
+    audio: Res<SfxAudio>,
     handles: Res<AudioHandles>,
     progress: Res<MissionProgress>,
     registry: Res<MissionRegistry>,

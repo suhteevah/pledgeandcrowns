@@ -9,6 +9,7 @@ use bevy::prelude::*;
 pub mod audio;
 pub mod compile_client;
 pub mod editor;
+pub mod menu;
 pub mod mission;
 pub mod npc;
 pub mod player;
@@ -38,6 +39,7 @@ impl Plugin for CorePlugin {
             quest_marker::QuestMarkerPlugin,
             screenshot::ShotPlugin,
             editor::EditorPlugin,
+            menu::MenuPlugin,
             mission::MissionPlugin,
             compile_client::CompileClientPlugin,
             audio::GameAudioPlugin,
