@@ -58,7 +58,14 @@ fn main() -> Result<()> {
     let mut skipped = 0usize;
     for (name, src) in REF_FILES.iter() {
         let png_name = png_name_for(name)?;
-        match render_grid(src, &palette) {
+        // Tile sheets (`const REF<NN>_TILES = { name: [...], ... };`) pack
+        // into an atlas; everything else is a single literal grid.
+        let result = if src.contains("_TILES = {") {
+            Ok(render_tiles(src, &palette).with_context(|| format!("tile sheet {name}"))?)
+        } else {
+            render_grid(src, &palette)
+        };
+        match result {
             Ok(img) => {
                 let dst = out_dir.join(&png_name);
                 img.save(&dst)
@@ -234,8 +241,15 @@ fn render_grid(jsx_src: &str, palette: &Palette) -> Result<RgbaImage> {
     }
     let width = rows[0].chars().count() as u32;
     let height = rows.len() as u32;
-    if !rows.iter().all(|r| r.chars().count() as u32 == width) {
-        bail!("irregular row widths (expected {width})");
+    if let Some((y, bad)) = rows
+        .iter()
+        .enumerate()
+        .find(|(_, r)| r.chars().count() as u32 != width)
+    {
+        bail!(
+            "irregular row widths (expected {width}): row {y} is {} wide",
+            bad.chars().count()
+        );
     }
 
     let mut img: RgbaImage = ImageBuffer::from_pixel(width, height, Rgba([0, 0, 0, 0]));
@@ -246,6 +260,78 @@ fn render_grid(jsx_src: &str, palette: &Palette) -> Result<RgbaImage> {
             }
         }
     }
+    Ok(img)
+}
+
+/// Parse a tile-sheet `.jsx` and pack its tiles row-major into one atlas.
+///
+/// The source carries `const REF<NN>_TILES = { name: ['row', ...], ... };`
+/// plus `const REF<NN>_COLS = <n>;`. Every tile must share one size. Atlas
+/// index = declaration order, so the game's tile constants follow the file.
+/// Unlike scaffolding refs, a malformed tile sheet is a hard error naming
+/// the offending tile — silent skips here would ship a shifted atlas.
+fn render_tiles(jsx_src: &str, palette: &Palette) -> Result<RgbaImage> {
+    let tiles_re = Regex::new(r"(?s)const\s+REF\d+_TILES\s*=\s*\{(?P<body>.*?)\}\s*;")?;
+    let body = &tiles_re
+        .captures(jsx_src)
+        .ok_or_else(|| anyhow!("no TILES literal found"))?["body"];
+    let cols_re = Regex::new(r"const\s+REF\d+_COLS\s*=\s*(?P<n>\d+)\s*;")?;
+    let cols: u32 = cols_re
+        .captures(jsx_src)
+        .ok_or_else(|| anyhow!("tile sheet has no `const REF<NN>_COLS = <n>;`"))?["n"]
+        .parse()?;
+    if cols == 0 {
+        bail!("REF<NN>_COLS must be at least 1");
+    }
+
+    let tile_re = Regex::new(r"(?s)(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*:\s*\[(?P<rows>.*?)\]")?;
+    let line_re = Regex::new(r"'([^']*)'")?;
+    let mut tiles: Vec<(&str, Vec<&str>)> = Vec::new();
+    for caps in tile_re.captures_iter(body) {
+        let name = caps.name("name").map_or("", |m| m.as_str());
+        let rows_src = caps.name("rows").map_or("", |m| m.as_str());
+        let rows: Vec<&str> = line_re
+            .captures_iter(rows_src)
+            .filter_map(|c| c.get(1).map(|m| m.as_str()))
+            .collect();
+        tiles.push((name, rows));
+    }
+    let (first_name, first_rows) = tiles.first().ok_or_else(|| anyhow!("empty tile sheet"))?;
+    let th = first_rows.len() as u32;
+    let tw = first_rows
+        .first()
+        .ok_or_else(|| anyhow!("tile `{first_name}` has no rows"))?
+        .chars()
+        .count() as u32;
+
+    let sheet_rows = (tiles.len() as u32).div_ceil(cols);
+    let mut img: RgbaImage =
+        ImageBuffer::from_pixel(cols * tw, sheet_rows * th, Rgba([0, 0, 0, 0]));
+    for (i, (name, rows)) in tiles.iter().enumerate() {
+        if rows.len() as u32 != th {
+            bail!("tile `{name}` has {} rows, expected {th}", rows.len());
+        }
+        let ox = (i as u32 % cols) * tw;
+        let oy = (i as u32 / cols) * th;
+        for (y, row) in rows.iter().enumerate() {
+            let w = row.chars().count() as u32;
+            if w != tw {
+                bail!("tile `{name}` row {y} is {w} wide, expected {tw}");
+            }
+            for (x, ch) in row.chars().enumerate() {
+                if let Some(rgba) = palette
+                    .lookup(ch)
+                    .with_context(|| format!("tile `{name}` row {y}"))?
+                {
+                    img.put_pixel(ox + x as u32, oy + y as u32, Rgba(rgba));
+                }
+            }
+        }
+    }
+    tracing::debug!(
+        "packed {} tiles ({tw}x{th}) into {cols}-column atlas",
+        tiles.len()
+    );
     Ok(img)
 }
 

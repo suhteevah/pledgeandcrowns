@@ -1,6 +1,39 @@
 # HANDOFF.md
 
 ## Last Updated
+2026-11-13 — **Full repo review, finish plan, art tranche 1 designed.**
+
+**Read `docs/FINISH-PLAN.md` first.** It replaces the "What's Next" list below
+and carries the verified state table, the art review, the asset manifest, the
+Opus work tracks and the four decisions waiting on Matt.
+
+### What was done this session (2026-11-13)
+- **Plan:** `docs/FINISH-PLAN.md`.
+- **Art tranche 1 (DRAFT, not wired, awaiting Matt's approval)** on the design
+  canvas https://claude.ai/artifact/G67kHCdEaPS6KpYnD3jA1k — sources in
+  `design/art/refs/ref-66-terrain.jsx` (22-tile terrain v2 with transparent
+  grass-edge overlays), `ref-67-oak.jsx`, `ref-68-cottage.jsx`,
+  `ref-69..74-*kit.jsx` (one costume-kit exemplar per Act 3–8).
+- **`tools/render-refs`:** tile-sheet support (`REF<NN>_TILES` + `REF<NN>_COLS`
+  pack into an atlas) and row-numbered width errors. clippy `-D warnings` and
+  the crate's 6 tests pass. No tests cover `render_tiles` yet (plan task A1).
+- **Nothing is committed.** Working tree: the 9 draft refs, `main.rs`, the plan,
+  this file.
+
+### Findings that change earlier notes
+- `claude.ai/design` standalone **closes by 2026-12-14**. The six remaining
+  rough-9 conversions (blocker 1 below) depend on an artboard there: export or
+  convert before that date. New art goes through the design canvas above.
+- `render-refs` cannot reproduce REF-03, 04, 05, 06, 08, 09, 10; their PNGs are
+  leftovers from the deleted browser harness.
+- Web and mobile builds grade with the offline pattern grader only.
+- compile-api has no deploy artefacts, auth, rate limiting or telemetry.
+- All 57 missions carry `prereq: None`; whether strict-linear gating is real
+  was not verified this session.
+
+---
+
+## Prior session
 2026-07-01 — **Pitch deck + quest markers + non-intrusive in-engine capture.**
 Built a full investor/publisher PDF pitch from real assets; shipped the WoW-style
 golden `!` / `?` quest-marker feature; and stood up a self-driving in-engine
@@ -144,3 +177,143 @@ Hearthstone Square (cobble, ±300). Ferris (index 0, the fresh-save `!`) is at
 - Screenshot tool → `game/src/plugins/screenshot.rs` (+ `lib.rs` focused flag)
 - Curriculum → `design/01-curriculum.md`; art canon → `design/03-art-style-bible.md`, `design/04b-art-deliverables.md`
 - Audit gaps → `.claude/audit-gaps.md`
+
+<!-- ================================================================== -->
+<!-- ⚠️  OUT-OF-TREE APPEND — NOT part of Pledge & Crown development.    -->
+<!-- Written from OUTSIDE this repo by the job-hunter-mcp project        -->
+<!-- (J:\job-hunter-mcp) via Claude Code on 2026-07-01.                  -->
+<!-- Everything ABOVE this line is real P&C project state. Everything    -->
+<!-- BELOW is a personal interview-prep plan that happens to use this    -->
+<!-- game as its training ground. Do not let it pollute P&C planning.    -->
+<!-- ================================================================== -->
+
+# ⚠️ OUT-OF-TREE APPEND — Rust Interview Self-Prep Plan
+> **PROVENANCE:** This section did **not** originate in the Pledge & Crown repo.
+> It was appended by the **job-hunter-mcp** project (`J:\job-hunter-mcp`) on
+> **2026-07-01**. It is Matt's personal prep plan, filed here because P&C *is*
+> the training tool. It is **not** a P&C feature, task, or roadmap item — future
+> P&C sessions should ignore it for project planning. Delete freely once used.
+
+## Why this is here
+
+Matt is going after Rust-heavy SWE roles: **xAI** (Forward Deployed Engineer – X
+API; Backend Engineer – API; Software Engineer – Internal Tools), **ZoomInfo**
+(Sr SWE, API & MCP Platform), **Genius Sports** (Sr SWE, Rust), **OP Labs**
+(Sequencing Protocol Engineer, Rust).
+
+The stated fear: *"without Claude I wouldn't be viable."* The resolution:
+
+> **Viability on the job ≠ viability in the interview.** On the job, everyone
+> uses AI (ZoomInfo is literally hiring for *MCP* fluency). The only AI-free gate
+> is a ~45-min live interview. That gate is **prep-able**, not a verdict.
+
+And the prep tool already exists — **this game.** Acts 1–10 teach the Rust Book
+through Ch. 20, which is the exact surface an interview probes. So:
+
+> **The plan is: play Pledge & Crown, unaided, as the interview gym.**
+
+---
+
+## Part A — The AI-free Rust gym (mapped to this game's own acts)
+
+Run the missions **with Claude/Copilot OFF.** The game already grades you. If you
+can clear these acts unaided, you can clear a whiteboard.
+
+| Interview topic (what they'll probe)        | Play this Act | Missions to drill unaided                        | Roles that lean on it |
+|---------------------------------------------|---------------|--------------------------------------------------|-----------------------|
+| Ownership / borrows / lifetimes             | **Act 2**     | First Move, Mutable Quill, Lifetime Lantern      | ALL Rust roles        |
+| Structs / enums / exhaustive `match`        | Act 3         | impl_method, enum_data_match, if_let, while_let  | ALL                   |
+| Traits / generics / `dyn` / assoc types     | **Act 4**     | trait_def, generic_fn, dyn_trait, assoc_type     | Genius, OP Labs, xAI   |
+| `Result`/`Option`/`?` / custom errors       | Act 5         | result_match, custom_error, from_error, and_then | ALL (idiomatic error handling is table stakes) |
+| Collections + iterator chains + closures    | **Act 6**     | iter_filter, iter_fold, closure_move, iter_zip   | ALL                   |
+| Threads / `Arc<Mutex>` / channels / async   | **Act 7**     | thread_spawn, arc_mutex, mpsc_channel, async_fn  | xAI Backend, OP Labs (consensus), Genius |
+| Smart pointers / interior mutability / cycles | Act 8       | box_basic, rc_refcell, weak_ref                  | Genius, OP Labs        |
+| `unsafe` / FFI / macros / `Drop`/`Send`/`Sync` | Act 9 (WIP) | (concepts; tutorials live even if missions pending) | xAI Backend/Inference, OP Labs |
+| Perf / profiling / alloc reduction / `no_std` | Act 10 (WIP)| (concepts)                                       | xAI Backend/Inference  |
+
+**Bold acts = the ones interviewers actually camp on.** If time is short, drill
+Acts **2, 4, 6, 7, 8** in that priority. Those five are the whole ballgame.
+
+**Suggested cadence (2 weeks, ~1hr/day):**
+- Days 1–3: Act 2 (ownership) until Lifetime Lantern is reflexive. This is *the*
+  Rust gate — if you can explain "why does this need `'a`" out loud, you're 60% there.
+- Days 4–5: Act 4 (traits/generics/dyn). Be able to say when you'd pick a generic
+  bound vs a `Box<dyn Trait>` and why — the Chimera boss is literally that question.
+- Days 6–7: Act 6 (iterators). Rewrite one real loop from Wraith as a pure chain,
+  no intermediate vars (Forge-Golem rules).
+- Days 8–10: Act 7 (concurrency). Explain a deadlock and how you'd dodge it
+  (Lighthouse Crisis). xAI Backend + OP Labs both probe this.
+- Days 11–12: Act 8 (smart pointers). `Rc` cycle → `Weak` fix, out loud.
+- Days 13–14: Mock round — pick one mission per act, no game hints, no AI, talk
+  through it as if an interviewer is watching. Time yourself.
+
+**Rule:** if you reach for AI during a mission, that's a flagged gap — note the
+concept, re-drill that act. The game keeps score; so should you.
+
+---
+
+## Part B — The "explain your own work" script (this is where you WIN)
+
+Most of these interviews open with *"walk me through something you built."* This
+is not a coding-under-pressure test — it's a "do you understand your own work"
+test, and you do. Rehearse a **5-minute cold walkthrough** for each lead artifact:
+
+1. **Wraith Browser** (27K lines Rust, 130 MCP tools, CDP + native engine).
+   - Architecture: engine abstraction (native vs cdp-attach), the MCP tool surface,
+     the stealth/anti-detect layer. Have one hard bug ready (the BR-6→BR-10
+     react-select / reCAPTCHA saga is a *great* debugging story — real, specific,
+     shows systems reasoning).
+2. **ClaudioOS** (bare-metal Rust agent host, `no_std` crates).
+   - Why bare metal, what `no_std` cost you, the trade-offs. Ties straight to
+     xAI Backend/Inference and Act 10's `no_std` outpost.
+3. **10+ MCP servers + this job-hunter orchestrator.**
+   - THE lead for **xAI FDE – X API** and **ZoomInfo MCP Platform.** You've
+     *authored* the thing they're staffing for. Frame: protocol design, tool
+     ergonomics, why an agent-first API differs from a REST API.
+4. **Kalshi "Pixie Dust"** (trading engine, 20x, autonomous).
+   - Shows end-to-end ownership + real stakes. Good for "tell me about impact."
+5. **Pledge & Crown itself** (this repo — Bevy, WASM, a compiler-grading sandbox).
+   - You built a *Rust teaching engine.* That is an absurdly good signal for a
+     Rust role: you understand the language well enough to grade it. Mention the
+     strict-linear curriculum gating and the compile-real sandbox.
+
+For each: **Context → why you built it → hardest technical decision → one bug you
+chased and how.** Write these out once; say them out loud three times.
+
+---
+
+## Part C — Per-role focus (where to spend the marginal hour)
+
+- **xAI – FDE, X API** *(best fit anywhere right now)* — Lead Part B #3 (MCP/SDK/
+  DevEx). Light on algorithms, heavy on "can you build developer-facing tooling
+  and talk to customers." You've done both. Prep the *narrative*, not leetcode.
+- **xAI – Backend Engineer, API** — Expert Rust + high-throughput serving + agent
+  orchestration. Drill Acts **6, 7, 8**; lead the inference-rig (8×P100) + Wraith
+  concurrency stories. Highest raw-Rust bar of the xAI three.
+- **xAI – Internal Tools** — Lowest pedigree bar ("all levels," values shipping).
+  Lead this hunter + Wraith + OpenClaw ecosystem. Most realistic door-opener.
+- **ZoomInfo – Sr SWE, API & MCP Platform** — Your home turf; least fear-justified.
+  Lead MCP authorship. Prep: API/protocol design tradeoffs.
+- **Genius Sports – Sr SWE, Rust** — General Rust fluency. Acts 2, 4, 6, 7, 8.
+- **OP Labs – Sequencing Protocol Engineer** *(the real stretch — and it's NOT
+  about Claude)* — This one needs **distributed-systems / consensus / L2 sequencer
+  domain depth**, not just Rust. If pursued, budget separate study time on the
+  Optimism sequencer + rollup basics. Deprioritize vs the others.
+
+---
+
+## Part D — Interview-day framing
+
+- Think out loud; ask clarifying questions. Interviewers grade *reasoning*, not
+  just the final code.
+- No AI in the room — but **everyone** knows you use it daily. If it comes up,
+  frame it honestly: *"I'm leveraged by AI the same way every engineer here is;
+  here's a system I architected and can walk you through line by line."* That's
+  strength, not apology.
+- The whiteboard tests fundamentals the game already drilled. Trust the reps.
+
+**Done-signal:** you can clear Acts 2/4/6/7/8 missions with AI off, and talk
+through Wraith's architecture cold for 5 minutes. Hit that and the fear is retired.
+
+<!-- END OUT-OF-TREE APPEND (job-hunter-mcp, 2026-07-01) -->
+
