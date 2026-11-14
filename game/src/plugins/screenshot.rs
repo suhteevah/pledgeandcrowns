@@ -44,6 +44,17 @@ const VANTAGES: &[Vantage] = &[
         label: "meadow",
         pos: Vec2::new(-180.0, 560.0),
     },
+    // Main street entering the square's west edge: fringe + concave nub
+    // overlays where road meets plaza.
+    Vantage {
+        label: "junction",
+        pos: Vec2::new(-330.0, 0.0),
+    },
+    // North map edge: oak treeline behind the Guildhall Quarter cottages.
+    Vantage {
+        label: "treeline",
+        pos: Vec2::new(-720.0, 980.0),
+    },
 ];
 
 #[derive(Resource)]

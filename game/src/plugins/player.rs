@@ -9,9 +9,15 @@
 //! player can't walk off the painted background.
 
 use crate::assets::SPRITE_PLAYER;
+use crate::plugins::prop::{Aabb, Solid, slide_move, ysort_z};
 use crate::plugins::state::GameState;
 use crate::plugins::world::{WORLD_HALF_H, WORLD_HALF_W};
 use bevy::prelude::*;
+
+/// The player's collision footprint relative to the sprite centre: a small
+/// box at the feet (the sprite is 32px, centre-anchored), so the head and
+/// shoulders can overlap a roof or canopy while the feet stop at the wall.
+const PLAYER_FOOT: Aabb = Aabb::from_base(0.0, 6.0, -16.0, -10.0);
 
 /// Camera lerp factor per second; 1.0 = snap, 0.0 = never moves.
 const CAMERA_FOLLOW_SPEED: f32 = 6.0;
@@ -78,7 +84,8 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
             custom_size: Some(Vec2::splat(PLAYER_DISPLAY)),
             ..default()
         },
-        Transform::from_xyz(0.0, 0.0, 10.0),
+        // z is owned by prop::ysort from here on; seed it consistently.
+        Transform::from_xyz(0.0, 0.0, ysort_z(-PLAYER_DISPLAY * 0.5)),
         Player,
     ));
 }
@@ -88,6 +95,7 @@ fn move_player(
     time: Res<Time>,
     editor: Res<crate::plugins::editor::EditorState>,
     mut query: Query<&mut Transform, With<Player>>,
+    solids_q: Query<&Solid>,
 ) {
     // Don't bleed gameplay movement through to the editor — typing
     // WASD in your code would otherwise still walk the player around
@@ -119,8 +127,12 @@ fn move_player(
     }
 
     let delta = dir.normalize() * PLAYER_SPEED_PX_PER_SEC * time.delta_secs();
-    transform.translation.x =
-        (transform.translation.x + delta.x).clamp(-WORLD_HALF_W, WORLD_HALF_W);
-    transform.translation.y =
-        (transform.translation.y + delta.y).clamp(-WORLD_HALF_H, WORLD_HALF_H);
+    let pos = transform.translation.truncate();
+    let solids: Vec<Aabb> = solids_q.iter().map(|s| s.0).collect();
+    let moved = slide_move(pos, delta, PLAYER_FOOT, &solids);
+    if (moved - (pos + delta)).length_squared() > 1e-6 {
+        tracing::trace!(?pos, ?delta, ?moved, "player movement clipped by a prop");
+    }
+    transform.translation.x = moved.x.clamp(-WORLD_HALF_W, WORLD_HALF_W);
+    transform.translation.y = moved.y.clamp(-WORLD_HALF_H, WORLD_HALF_H);
 }

@@ -14,6 +14,15 @@ pub const SPRITE_BORROW_CHECKER: &str = "sprites/npc/borrow_checker_idle_0.png";
 pub const SPRITE_TILES_VILLAGE: &str = "sprites/tiles_village.png";
 pub const SPRITE_TITLE: &str = "sprites/title.png";
 
+// Village terrain v2 + props (2026-11-13, tranche T1, approved by Matt).
+// Sources: design/art/refs/ref-66-terrain.jsx (22-tile, 8-col atlas),
+// ref-67-oak.jsx (32x48), ref-68-cottage.jsx (64x64), rendered via
+// `cargo run -p render-refs`. The old `tiles_village.png` stays on disk but
+// is no longer used by the world.
+pub const SPRITE_TILES_VILLAGE_V2: &str = "sprites/tiles_village_v2.png";
+pub const SPRITE_PROP_OAK: &str = "sprites/props/oak.png";
+pub const SPRITE_PROP_COTTAGE: &str = "sprites/props/cottage.png";
+
 // NPC batch 1 (2026-05-02) — Smith, Cartographer, Trait Mage, Bellringer, Cooper.
 // Sources: design/art/refs/ref-11..15-*.jsx, rendered via scripts/render-refs.py.
 pub const SPRITE_SMITH: &str = "sprites/npc/smith_idle_0.png";
@@ -144,6 +153,9 @@ pub const ALL_SPRITE_PATHS: &[&str] = &[
     SPRITE_BORROW_CHECKER,
     SPRITE_TILES_VILLAGE,
     SPRITE_TITLE,
+    SPRITE_TILES_VILLAGE_V2,
+    SPRITE_PROP_OAK,
+    SPRITE_PROP_COTTAGE,
     SPRITE_SMITH,
     SPRITE_CARTOGRAPHER,
     SPRITE_TRAIT_MAGE,
