@@ -26,23 +26,52 @@ pub struct Mission {
     /// renderer styles them. Keep each mission ~100-200 words — the
     /// audience is dev-curious adults, not absolute beginners.
     pub tutorial: &'static str,
-    /// Mission id that must be cleared before this one is unlocked. The
-    /// first mission has `None`. Set linearly in `MissionRegistry::default`
-    /// — registry tests enforce no cycles, no dangling references, full
-    /// reachability from a no-prereq root.
+    /// Mission id that must be cleared before this one is unlocked.
+    ///
+    /// Every literal in `MissionRegistry::default` writes `prereq: None`;
+    /// that is a placeholder. After the list is built, a loop sets each
+    /// mission's prereq to the mission listed immediately before it, so
+    /// progression is strict-linear in registry order and only the first
+    /// mission ends up with `None`. Registry tests enforce no cycles, no
+    /// dangling references and full reachability;
+    /// `tests/mission_text.rs` proves N+1 stays locked until N is cleared.
     pub prereq: Option<&'static str>,
+    /// False when this build does not include the mission (the `demo`
+    /// feature stops after [`DEMO_LAST_MISSION_ID`]). Like `prereq`, the
+    /// literals all write `true` and `MissionRegistry::default` sets it.
+    pub available: bool,
     pub starter_code: &'static str,
 }
 
+/// The last mission of Act 2: the final mission playable in the free demo
+/// (`--features demo`). Acts 1-2 are the first 21 missions in the
+/// registry; Act 3 opens with `impl_method`.
+pub const DEMO_LAST_MISSION_ID: &str = "while_loop";
+
+/// Where the end-of-demo panel will point players for the full game.
+/// Deliberately empty and unused: the store, price and name are blocked
+/// on the trademark search and store setup (CLAUDE.md hard rule 6).
+pub const FULL_GAME_URL: Option<&str> = None;
+
 impl Mission {
-    /// True when the player can start this mission. Cleared missions are
-    /// always considered unlocked (so the completion-view revisit flow
-    /// works regardless of progression rules).
+    /// True when the player can start this mission: it is in this build
+    /// and its prereq (if any) is cleared. This does not look at whether
+    /// the mission itself is cleared; callers check that separately so
+    /// the completion-view revisit flow works.
     pub fn is_unlocked(&self, progress: &MissionProgress) -> bool {
-        match self.prereq {
-            None => true,
-            Some(prev) => progress.is_cleared(prev),
-        }
+        let unlocked = self.available
+            && match self.prereq {
+                None => true,
+                Some(prev) => progress.is_cleared(prev),
+            };
+        tracing::trace!(
+            mission = self.id,
+            available = self.available,
+            prereq = ?self.prereq,
+            unlocked,
+            "is_unlocked"
+        );
+        unlocked
     }
 }
 
@@ -52,14 +81,30 @@ pub struct MissionRegistry {
 }
 
 impl MissionRegistry {
-    /// First not-yet-cleared mission in registry order. Drives the "next
-    /// mission" hint in the HUD so players know where to head.
+    /// First not-yet-cleared mission in registry order, among the
+    /// missions this build includes. Drives the "next mission" hint in
+    /// the HUD so players know where to head. `None` once everything
+    /// available is cleared.
     pub fn next_locked(&self, progress: &MissionProgress) -> Option<&Mission> {
-        self.missions.iter().find(|m| !progress.is_cleared(m.id))
+        self.missions
+            .iter()
+            .find(|m| m.available && !progress.is_cleared(m.id))
     }
 
     pub fn find(&self, id: &str) -> Option<&Mission> {
         self.missions.iter().find(|m| m.id == id)
+    }
+
+    /// True when `id` names a mission this build includes. Unknown ids
+    /// are unavailable.
+    pub fn is_available(&self, id: &str) -> bool {
+        self.find(id).is_some_and(|m| m.available)
+    }
+
+    /// True in a `demo` build once the last demo mission is cleared.
+    /// Always false in the full game.
+    pub fn demo_complete(&self, progress: &MissionProgress) -> bool {
+        cfg!(feature = "demo") && progress.is_cleared(DEMO_LAST_MISSION_ID)
     }
 }
 
@@ -91,6 +136,7 @@ holding the value `42`. Update the `println!` accordingly.\n\n\
 The grader is looking for a `let answer` binding and the literal `42`. \
 A type annotation is allowed but not required.",
                 prereq: None,
+                available: true,
                 starter_code: "fn main() {\n    let _todo = 0;\n    println!(\"{_todo}\");\n}\n",
             },
             Mission {
@@ -116,6 +162,7 @@ result.\n\n\
 The grader needs to see `fn double`, the type `i32`, and the expression \
 `* 2`. `n * 2` is the canonical body.",
                 prereq: None,
+                available: true,
                 starter_code: "fn _todo() {}\n\nfn main() {\n    // call your function with 21 and print the result\n}\n",
             },
             Mission {
@@ -139,6 +186,7 @@ it and print the reference. Do not move the value — just borrow it.\n\n\
 The grader looks for `&value` and `println!`. The simplest answer is \
 `let r = &value; println!(\"{r}\");`",
                 prereq: None,
+                available: true,
                 starter_code: "fn main() {\n    let value = String::from(\"sample\");\n    // build a reference to the binding above and print it\n}\n",
             },
             Mission {
@@ -162,6 +210,7 @@ operator.\n\n\
 The grader requires both `let mut` and `+= 1` to appear in the source. \
 The Smith's rule: name what changes. The `mut` keyword *is* that name.",
                 prereq: None,
+                available: true,
                 starter_code: "fn main() {\n    let x = 0;\n    // make x mutable, then add one\n    println!(\"{x}\");\n}\n",
             },
             Mission {
@@ -186,6 +235,7 @@ the same with the sign of `n`. The grader requires `if `, `else`, and a \
 literal comparison `< 0` to appear. The canonical body is a three-arm \
 `if` / `else if` / `else`.",
                 prereq: None,
+                available: true,
                 starter_code: "fn sign(_n: i32) -> &'static str {\n    // three branches, one per sign\n    \"replace me\"\n}\n\nfn main() {\n    println!(\"{}\", sign(-3));\n}\n",
             },
             Mission {
@@ -210,6 +260,7 @@ least `100`, then break and return that value.\n\n\
 ## Hint\n\
 The grader looks for `loop`, `break`, and `*= 2` (the doubling step).",
                 prereq: None,
+                available: true,
                 starter_code: "fn main() {\n    let mut _n = 1;\n    // loop until _n >= 100, doubling each step, then break the value\n    println!(\"{_n}\");\n}\n",
             },
             Mission {
@@ -234,6 +285,7 @@ both `Some` and `None` arms.\n\n\
 The grader requires `match`, `Some(`, and `None` to all appear. \
 Don't shortcut with `.unwrap_or(0)` — this mission is teaching `match`.",
                 prereq: None,
+                available: true,
                 starter_code: "fn unwrap_or_zero(_x: Option<i32>) -> i32 {\n    // pattern-match and return the inner value or 0\n    -1\n}\n\nfn main() {\n    println!(\"{}\", unwrap_or_zero(Some(7)));\n}\n",
             },
             Mission {
@@ -245,8 +297,8 @@ The Herald wears a tabard of three banded fields and reads each one aloud — \
 that is what a `struct` is. \
 A `struct` groups related values under one type with named fields. \
 Fields are private outside the defining module by default; you'd add \
-`pub` to expose them. Construction uses the `TypeName { field: value, .. }` \
-literal; access uses `instance.field`.\n\n\
+`pub` to expose them. Construction uses the `TypeName { field: value }` \
+literal, one `field: value` per field; access uses `instance.field`.\n\n\
 ## Syntax\n\
 ```\nstruct Point { x: i32, y: i32 }\nlet p = Point { x: 3, y: 4 };\nprintln!(\"{}\", p.x);\n```\n\
 Fields are reordering-tolerant in the literal — name them, don't position \
@@ -259,6 +311,7 @@ build one and `println!` its name.\n\n\
 The grader looks for `struct Knight`, `name:`, `hp:`, and `.name` in \
 the source.",
                 prereq: None,
+                available: true,
                 starter_code: "// define Knight here\n\nfn main() {\n    // build a Knight and print its name\n}\n",
             },
             Mission {
@@ -285,6 +338,7 @@ The grader looks for `vec!`, `.iter()`, and `.sum`. The annotation on \
 the binding (or a turbofish on `sum`) is required for the code to \
 actually compile, but the grader only checks tokens.",
                 prereq: None,
+                available: true,
                 starter_code: "fn main() {\n    // build a Vec<i32>, sum it via .iter().sum(), print the total\n    println!(\"todo\");\n}\n",
             },
             Mission {
@@ -310,6 +364,7 @@ both.\n\n\
 The grader requires `let (` (the pattern open), a `,` (separator), \
 and `) =` (pattern close + assign).",
                 prereq: None,
+                available: true,
                 starter_code: "fn main() {\n    let _pair = (3, 4);\n    // destructure into a and b in a single let, then print both\n}\n",
             },
             Mission {
@@ -325,8 +380,8 @@ rather than a runtime gremlin.\n\n\
 ## Syntax\n\
 ```\nfn set_to(x: &mut i32, v: i32) {\n    *x = v;   // deref to write\n}\nlet mut n = 0;\nset_to(&mut n, 7);\n```\n\
 The `*x` deref is required to assign through the reference; without it \
-you'd be reassigning the local `x` binding (the reference itself), not \
-the value it points at.\n\n\
+the compiler rejects the assignment (E0308): `x` is a `&mut i32`, not an \
+`i32`.\n\n\
 ## Task\n\
 Write `fn bump(x: &mut i32)` that sets `*x` to a new value. Then call it \
 from `main` against a mutable local.\n\n\
@@ -334,6 +389,7 @@ from `main` against a mutable local.\n\n\
 The grader requires `fn bump`, the parameter type `&mut i32`, and a \
 `*x` deref in the body.",
                 prereq: None,
+                available: true,
                 starter_code: "fn _todo(_x: i32) {}\n\nfn main() {\n    let mut _n = 0;\n    // call your function with a mutable borrow of _n\n    println!(\"{_n}\");\n}\n",
             },
             Mission {
@@ -357,6 +413,7 @@ Write `fn greet(name: &str)`. From `main`, build a `String` and call \
 The grader requires `fn greet`, the type `&str`, and a `String::from` \
 caller in `main`.",
                 prereq: None,
+                available: true,
                 starter_code: "fn _todo(_n: i32) {}\n\nfn main() {\n    // define a function above that takes a string slice,\n    // then call it once with a String and once with a literal\n}\n",
             },
             Mission {
@@ -381,6 +438,7 @@ Implement `fn safe(x: Option<i32>) -> i32` using `.unwrap_or` to return \
 The grader requires both `Option<` and `.unwrap_or(`. Don't reach for \
 `match` on this one — that's the previous mission.",
                 prereq: None,
+                available: true,
                 starter_code: "fn safe(_x: i32) -> i32 {\n    // collapse the absent case to a default with a combinator\n    -1\n}\n\nfn main() {\n    println!(\"{}\", safe(0));\n}\n",
             },
             Mission {
@@ -402,6 +460,7 @@ Write a `main` that iterates `i` over `0..10` and prints each value.\n\n\
 ## Hint\n\
 The grader requires `for `, ` in `, and the literal range `0..10`.",
                 prereq: None,
+                available: true,
                 starter_code: "fn main() {\n    // walk the range 0..10 with a for loop, printing each step\n    println!(\"todo\");\n}\n",
             },
             Mission {
@@ -425,6 +484,7 @@ returns their sum. Then call it from `main` and print the result.\n\n\
 The grader requires `let add`, the closure-literal opener `= |`, and \
 the body fragment `+ b`.",
                 prereq: None,
+                available: true,
                 starter_code: "fn main() {\n    let _todo = 0;\n    // bind a closure named `add` that returns a + b, then call it\n    println!(\"{_todo}\");\n}\n",
             },
             Mission {
@@ -449,6 +509,7 @@ slice, then call it from `main` against a small literal array.\n\n\
 The grader requires `fn sum_slice`, the slice type `&[i32]`, and a \
 `.iter()` call somewhere in the body.",
                 prereq: None,
+                available: true,
                 starter_code: "fn _todo(_n: i32) -> i32 { 0 }\n\nfn main() {\n    // define sum_slice above with a slice parameter, then call it\n}\n",
             },
             Mission {
@@ -473,6 +534,7 @@ and `?` to short-circuit on failure, returning `Ok(n)` on success.\n\n\
 The grader requires `Result<`, `.parse`, and a `?` operator (followed by \
 `;` or a newline) to all appear.",
                 prereq: None,
+                available: true,
                 starter_code: "fn parse_int(_s: &str) -> i32 {\n    // change the signature to return Result, then propagate the parse error with ?\n    0\n}\n\nfn main() {\n    let _ = parse_int(\"42\");\n}\n",
             },
             Mission {
@@ -496,6 +558,7 @@ in `main`, and print it with the debug formatter.\n\n\
 The grader requires `#[derive(Debug)]`, `struct Item`, and `:?` (the \
 debug formatter) to all appear.",
                 prereq: None,
+                available: true,
                 starter_code: "// add a derive attribute, then define struct Item\nstruct Item { name: String }\n\nfn main() {\n    let _item = Item { name: String::from(\"ring\") };\n    // print _item using the debug formatter\n}\n",
             },
             Mission {
@@ -511,8 +574,9 @@ a concrete container; the target type (often `Vec<_>`) is inferred from \
 the binding's annotation or specified with a turbofish.\n\n\
 ## Syntax\n\
 ```\nlet v = vec![1, 2, 3];\nlet doubled: Vec<i32> = v.iter().map(|x| x * 2).collect();\n// or with a turbofish:\nlet doubled = v.iter().map(|x| x * 2).collect::<Vec<_>>();\n```\n\
-The closure receives `&i32` here; arithmetic auto-derefs so `x * 2` \
-works without an explicit `*x`.\n\n\
+The closure receives `&i32` here. std implements arithmetic operators for \
+`&i32`, so `x * 2` works without an explicit `*x`; comparisons like \
+`x == 2` still need `*x`.\n\n\
 ## Task\n\
 Build a `Vec<i32>`, map each element through a `|x|` closure that \
 doubles it, and collect the result into a new `Vec`.\n\n\
@@ -520,6 +584,7 @@ doubles it, and collect the result into a new `Vec`.\n\n\
 The grader requires `.map(`, `.collect`, and a single-element closure \
 binder `|x|`.",
                 prereq: None,
+                available: true,
                 starter_code: "fn main() {\n    let v = vec![1, 2, 3];\n    // chain iter / map / collect into a new Vec\n    let _ = v;\n}\n",
             },
             Mission {
@@ -546,6 +611,7 @@ that takes a `Direction` and uses `match` to map each variant to a value.\n\n\
 The grader requires `enum Direction`, a `match ` expression, and at \
 least one `Direction::` variant path.",
                 prereq: None,
+                available: true,
                 starter_code: "// define enum Direction with several variants\n\nfn main() {\n    // match on a Direction value and produce something\n}\n",
             },
             Mission {
@@ -570,6 +636,7 @@ decrement.\n\n\
 The grader requires `while `, a `> 0` predicate, and `-= 1` for the \
 decrement step.",
                 prereq: None,
+                available: true,
                 starter_code: "fn main() {\n    let mut _n = 5;\n    // count down with a while loop and a -= 1 step\n    println!(\"{_n}\");\n}\n",
             },
             // ── Act 3: The Guildhall Quarter ──────────────────────────
@@ -598,6 +665,7 @@ The `Hero` struct is given. Add an `impl Hero` block with a method \
 The grader looks for `impl`, `&self`, and a `self.` field access. The \
 Guildmaster's rule: a member is defined by their duties.",
                 prereq: None,
+                available: true,
                 starter_code: "struct Hero { level: i32 }\n\nfn main() {\n    let _h = Hero { level: 3 };\n    // give Hero a `power` method (it borrows the hero) returning its power, then call it\n}\n",
             },
             Mission {
@@ -612,8 +680,8 @@ being implemented), and you call it with path syntax `TypeName::new(...)`. \
 Rust has no `constructor` keyword; this is the idiom.\n\n\
 ## Syntax\n\
 ```\nimpl Hero {\n    fn new(level: i32) -> Self {\n        Self { level }\n    }\n}\nlet h = Hero::new(5);\n```\n\
-`Self { level }` is shorthand for `Hero { level }` when the field and the \
-local share a name.\n\n\
+`Self { level }` is shorthand for `Hero { level: level }`: `Self` names \
+the type, and the field name can stand alone when the local shares it.\n\n\
 ## Task\n\
 Give `Hero` an associated function `new(level: i32) -> Self`, then build a \
 hero with `Hero::new(5)` and print its level.\n\n\
@@ -621,6 +689,7 @@ hero with `Hero::new(5)` and print its level.\n\n\
 The grader needs `fn new`, `Self`, and a `::new` call. The Recruiter forges \
 a member from nothing but a name.",
                 prereq: None,
+                available: true,
                 starter_code: "struct Hero { level: i32 }\n\nfn main() {\n    // add a constructor associated function that builds a Hero from a level, then call it\n    let _ = Hero { level: 1 };\n}\n",
             },
             Mission {
@@ -644,6 +713,7 @@ only when it's present.\n\n\
 The grader needs `if let` and `Some(`. The Locksmith tries one key: if it \
 fits, the door opens; if not, nothing happens.",
                 prereq: None,
+                available: true,
                 starter_code: "fn main() {\n    let maybe: Option<i32> = Some(7);\n    // print the inner value only when the option actually holds one\n    let _ = maybe;\n}\n",
             },
             Mission {
@@ -666,6 +736,7 @@ every element as you remove it.\n\n\
 The grader needs `while let` and `.pop(`. The Porter empties the cart \
 crate by crate until there's nothing left to lift.",
                 prereq: None,
+                available: true,
                 starter_code: "fn main() {\n    let mut stack = vec![1, 2, 3];\n    // remove and print each element until the stack is empty\n    let _ = &mut stack;\n}\n",
             },
             Mission {
@@ -689,6 +760,7 @@ print the wrapped number via `.0`.\n\n\
 The grader needs `struct Meters(` and a `.0` field access. The Surveyor \
 reads the rod: a bare number, now named.",
                 prereq: None,
+                available: true,
                 starter_code: "fn main() {\n    let _raw: f64 = 3.5;\n    // wrap that raw f64 in a one-field `Meters` newtype, then read the wrapped value back out\n}\n",
             },
             Mission {
@@ -712,6 +784,7 @@ the inner number.\n\n\
 The grader needs `enum Item`, `Weapon`, a `match`, and a `=>` arm. Handle \
 both kinds — a non-exhaustive match won't compile.",
                 prereq: None,
+                available: true,
                 starter_code: "fn value(item: i32) -> i32 {\n    // define an `Item` type with two kinds (a weapon carrying damage, a potion carrying heal),\n    // take an Item here instead of an i32, and handle every kind to return its number\n    item\n}\n\nfn main() {\n    let _ = value(0);\n}\n",
             },
             // ── Act 4: The Trait Mage's Tower ─────────────────────────
@@ -740,6 +813,7 @@ The signature in the trait ends with `;`; the body lives in the `impl`.\n\n\
 The grader needs `trait `, `impl `, and ` for `. Vexis: a capability named \
 once, granted to a type.",
                 prereq: None,
+                available: true,
                 starter_code: "struct Fire;\n\nfn main() {\n    let _f = Fire;\n    // define an Element capability (a name() method), grant it to Fire, then call name()\n}\n",
             },
             Mission {
@@ -764,6 +838,7 @@ two, then call it on two integers in `main`.\n\n\
 The grader needs the type parameter `<T` and the bound `PartialOrd`. One \
 wand, any element — bounded by what it can compare.",
                 prereq: None,
+                available: true,
                 starter_code: "fn main() {\n    // write a generic `larger` function returning the bigger of two comparable values,\n    // then call it on two integers\n    println!(\"{}\", 0);\n}\n",
             },
             Mission {
@@ -780,7 +855,7 @@ generic structs/enums.\n\n\
 ## Syntax\n\
 ```\nstruct Pair<T> {\n    a: T,\n    b: T,\n}\nlet p = Pair { a: 1, b: 2 };   // Pair<i32>, inferred\nlet _ = (p.a, p.b);\n```\n\
 The compiler infers `T` from the values you pass; you can also annotate \
-`Pair::<i32> { .. }` explicitly.\n\n\
+`Pair::<i32> { a: 1, b: 2 }` explicitly.\n\n\
 ## Task\n\
 Define `struct Pair<T>` with two fields of type `T`, build one from two \
 integers, and read both fields.\n\n\
@@ -788,6 +863,7 @@ integers, and read both fields.\n\n\
 The grader needs `struct `, the parameter `<T>`, and a field typed `: T`. \
 A vessel for any type — so long as both halves agree.",
                 prereq: None,
+                available: true,
                 starter_code: "fn main() {\n    // define a generic Pair that holds two values of one shared type,\n    // build one from two integers, then read both fields\n    let _ = (1, 2);\n}\n",
             },
             Mission {
@@ -803,15 +879,17 @@ usually behind a pointer like `Box<dyn Trait>`. Calls through it are \
 flexibility (mix types in one `Vec`) for a small indirection cost.\n\n\
 ## Syntax\n\
 ```\nlet zoo: Vec<Box<dyn Element>> = vec![\n    Box::new(Fire),\n    Box::new(Water),\n];\nfor e in &zoo {\n    println!(\"{}\", e.name());\n}\n```\n\
-`Box::new` moves each value to the heap and erases its concrete type down \
-to `dyn Element`.\n\n\
+`Box::new` moves each value to the heap; the `Vec<Box<dyn Element>>` \
+annotation then coerces each `Box<Fire>` / `Box<Water>` to \
+`Box<dyn Element>`, erasing the concrete type.\n\n\
 ## Task\n\
 `Element`, `Fire`, and `Water` are provided. Build a \
 `Vec<Box<dyn Element>>` holding one of each, then print every `name()`.\n\n\
 ## Hint\n\
-The grader needs `Box<dyn` and `dyn `. Many shapes, one cage — dispatched \
+The grader needs `Box<dyn` and `Box::new`. Many shapes, one cage — dispatched \
 at a touch.",
                 prereq: None,
+                available: true,
                 starter_code: "trait Element {\n    fn name(&self) -> &str;\n}\nstruct Fire;\nimpl Element for Fire {\n    fn name(&self) -> &str { \"fire\" }\n}\nstruct Water;\nimpl Element for Water {\n    fn name(&self) -> &str { \"water\" }\n}\n\nfn main() {\n    // collect a Fire and a Water into one Vec of trait objects, then print each name()\n    let _ = (Fire, Water);\n}\n",
             },
             Mission {
@@ -837,6 +915,7 @@ parameters and the return to it, and it will.\n\n\
 The grader needs the lifetime parameter `<'a>` and an annotated reference \
 `&'a`. The borrow lives exactly as long as `'a`.",
                 prereq: None,
+                available: true,
                 starter_code: "fn longest(x: &str, y: &str) -> &str {\n    // this won't compile yet: add a lifetime 'a tying the inputs and the return together\n    if x.len() > y.len() { x } else { y }\n}\n\nfn main() {\n    let _ = longest(\"aa\", \"b\");\n}\n",
             },
             Mission {
@@ -862,6 +941,7 @@ Give `trait Producer` an associated `type Output`, have `make` return \
 The grader needs `type Output` and `Self::Output`. Each producer names \
 its own yield — the type follows the trait.",
                 prereq: None,
+                available: true,
                 starter_code: "trait Producer {\n    fn make(&self) -> i32;\n}\n\nfn main() {\n    // change Producer so each implementor names its own output type (an associated type),\n    // then implement it for a Coiner that makes an i32\n    let _ = ();\n}\n",
             },
             // ── Act 5: The Tavern of Tribulations ─────────────────────
@@ -889,6 +969,7 @@ on `Ok`, and `-1` on `Err`.\n\n\
 The grader needs `match `, `Ok(`, and `Err(`. The Barkeep serves what's \
 poured — or mops up what's spilled.",
                 prereq: None,
+                available: true,
                 starter_code: "fn describe(r: Result<i32, String>) -> i32 {\n    // handle both outcomes: the value on success, -1 on failure\n    let _ = r;\n    0\n}\n\nfn main() {\n    let _ = describe(Ok(5));\n}\n",
             },
             Mission {
@@ -915,6 +996,7 @@ of range.\n\n\
 The grader needs `enum `, `Result<`, and an `Err(`. The Bouncer has a name \
 for every kind of trouble.",
                 prereq: None,
+                available: true,
                 starter_code: "fn check(temp: i32) -> i32 {\n    // define an error type with named failure kinds, change this to return a Result,\n    // and produce a failure when temp is out of range\n    temp\n}\n\nfn main() {\n    let _ = check(50);\n}\n",
             },
             Mission {
@@ -939,6 +1021,7 @@ errors, IO errors, and your own errors through a single `Result<_, AppError>`.\n
 The grader needs `impl From<`, ` for `, and `fn from`. The Interpreter \
 turns one tongue's complaint into another's.",
                 prereq: None,
+                available: true,
                 starter_code: "struct ParseFail;\nenum AppError {\n    Parse,\n}\n\nfn main() {\n    // make AppError convertible from ParseFail: implement the standard conversion\n    // trait so that `ParseFail.into()` yields an AppError\n    let _ = ParseFail;\n}\n",
             },
             Mission {
@@ -961,6 +1044,7 @@ still wrapped — don't unwrap, don't `match`.\n\n\
 The grader needs `Option<` and `.map(`. The Mixologist changes what's in \
 the glass — only if the glass holds something.",
                 prereq: None,
+                available: true,
                 starter_code: "fn add_one(o: Option<i32>) -> Option<i32> {\n    // if there's a value, return it plus one — still wrapped — without unwrapping\n    o\n}\n\nfn main() {\n    let _ = add_one(Some(3));\n}\n",
             },
             Mission {
@@ -975,15 +1059,16 @@ failure straight through. Chaining `.and_then` is how you express \"do this, \
 then this, then this — stop at the first failure\" without a pyramid of \
 `match`es.\n\n\
 ## Syntax\n\
-```\nfn half(n: i32) -> Option<i32> {\n    if n % 2 == 0 { Some(n / 2) } else { None }\n}\nSome(8).and_then(half).and_then(half);  // Some(2)\nSome(8).and_then(half).and_then(half).and_then(half);  // None (3 is odd)\n```\n\
+```\nfn half(n: i32) -> Option<i32> {\n    if n % 2 == 0 { Some(n / 2) } else { None }\n}\nSome(8).and_then(half).and_then(half);  // Some(2)\nSome(8).and_then(half).and_then(half).and_then(half);  // Some(1)\nSome(8).and_then(half).and_then(half).and_then(half).and_then(half);  // None (1 is odd)\n```\n\
 `Result::and_then` works the same way over `Ok`/`Err`.\n\n\
 ## Task\n\
-`half` is given. Chain it on `Some(8)` with `.and_then` (at least once) so \
-an odd intermediate short-circuits to `None`.\n\n\
+`half` is given. Chain it on `Some(8)` with `.and_then` four times, so \
+the odd intermediate (1) short-circuits to `None`.\n\n\
 ## Hint\n\
 The grader needs `Option` and `.and_then(`. The Tabkeeper runs the tab — \
 one unpaid round and the whole chain is cut.",
                 prereq: None,
+                available: true,
                 starter_code: "fn half(n: i32) -> Option<i32> {\n    if n % 2 == 0 { Some(n / 2) } else { None }\n}\n\nfn main() {\n    // chain `half` on Some(8) so the first failure short-circuits to None\n    let _ = half(8);\n}\n",
             },
             Mission {
@@ -1006,6 +1091,7 @@ fallback lazily with `.unwrap_or_else(|| ...)`.\n\n\
 The grader needs `.unwrap_or_else(` and a closure `||`. The Cellarer broaches \
 a fresh cask only when the old one runs dry.",
                 prereq: None,
+                available: true,
                 starter_code: "fn value(o: Option<i32>) -> i32 {\n    // unwrap the option, computing the fallback lazily with a closure (only if needed)\n    let _ = o;\n    0\n}\n\nfn main() {\n    let _ = value(None);\n}\n",
             },
             // ── Act 6: The Iterator Forge ─────────────────────────────
@@ -1033,6 +1119,7 @@ then `get` it back.\n\n\
 The grader needs `HashMap`, `.insert(`, and `.get(`. The Keymaster files \
 every store under its own key.",
                 prereq: None,
+                available: true,
                 starter_code: "fn main() {\n    // store a value under a string key in a map, then look it up by that key\n    let _ = ();\n}\n",
             },
             Mission {
@@ -1056,6 +1143,7 @@ gather the survivors with `.collect`.\n\n\
 The grader needs `.filter(` and `.collect`. The Sifter shakes the screen — \
 only what fits the mesh falls through.",
                 prereq: None,
+                available: true,
                 starter_code: "fn main() {\n    let v = vec![1, 2, 3, 4];\n    // keep only the even numbers, gathering the survivors into a new collection\n    let _ = &v;\n}\n",
             },
             Mission {
@@ -1079,6 +1167,7 @@ this mission is about fold).\n\n\
 The grader needs `.fold(`. The Smelter pours many ores into one crucible — \
 one ingot comes out.",
                 prereq: None,
+                available: true,
                 starter_code: "fn main() {\n    let v = vec![1, 2, 3];\n    // reduce the vec to a single total by accumulating across it (don't use .sum())\n    let _ = &v;\n}\n",
             },
             Mission {
@@ -1101,6 +1190,7 @@ has both the position and the value.\n\n\
 The grader needs `.enumerate(`. The Tallywright numbers every item as it \
 passes the bench.",
                 prereq: None,
+                available: true,
                 starter_code: "fn main() {\n    let v = vec![10, 20, 30];\n    // walk the vec so each step gives you both the position and the value\n    let _ = &v;\n}\n",
             },
             Mission {
@@ -1123,6 +1213,7 @@ one with the nth of the other.\n\n\
 The grader needs `.zip(`. The Riveter joins two plates rivet by rivet — \
 aligned, pair by pair.",
                 prereq: None,
+                available: true,
                 starter_code: "fn main() {\n    let a = vec![1, 2];\n    let b = vec![3, 4];\n    // walk both vecs together, pairing the nth of one with the nth of the other\n    let _ = (&a, &b);\n}\n",
             },
             Mission {
@@ -1145,6 +1236,7 @@ prints it, and call the closure.\n\n\
 The grader needs a `move` closure — the literal `move |`. The Bondsmith \
 seals the charge into himself; it travels where he goes.",
                 prereq: None,
+                available: true,
                 starter_code: "fn main() {\n    let name = String::from(\"Garin\");\n    // capture `name` BY VALUE into a closure (so the closure owns it), then call it\n    let _ = &name;\n}\n",
             },
             // ── Act 7: The Concurrent Coast ───────────────────────────
@@ -1172,6 +1264,7 @@ wait for it.\n\n\
 The grader needs `thread::spawn` and `.join(`. The Dockmaster sends a \
 worker off, then waits at the gate for them to return.",
                 prereq: None,
+                available: true,
                 starter_code: "fn main() {\n    // run a small computation on another thread, then wait for it to finish\n    let _ = ();\n}\n",
             },
             Mission {
@@ -1196,6 +1289,7 @@ value through the guard.\n\n\
 The grader needs `Arc`, `Mutex`, and `.lock(`. The Keeper holds the one key \
 to the lamp — only one hand on it at a time.",
                 prereq: None,
+                available: true,
                 starter_code: "fn main() {\n    // wrap a number so it can be shared across threads and mutated one-at-a-time behind a guard\n    let _ = 0;\n}\n",
             },
             Mission {
@@ -1220,6 +1314,7 @@ receiver.\n\n\
 The grader needs `mpsc::channel`, `.send(`, and `.recv(`. The Signaler \
 flashes the message down the coast; the next tower reads it.",
                 prereq: None,
+                available: true,
                 starter_code: "fn main() {\n    // open a channel, push a value in at one end, and pull it out at the other\n    let _ = ();\n}\n",
             },
             Mission {
@@ -1244,6 +1339,7 @@ Ordering::SeqCst)`.\n\n\
 The grader needs `Atomic` and `.fetch_add(`. The Tidewatch's gauge clicks \
 up one notch — no gatekeeper needed.",
                 prereq: None,
+                available: true,
                 starter_code: "fn main() {\n    // make a shared counter that can be incremented without a lock, then bump it by one\n    let _ = 0;\n}\n",
             },
             Mission {
@@ -1267,6 +1363,7 @@ Inside `thread::scope`, `s.spawn` a thread that borrows a local `Vec`.\n\n\
 The grader needs `thread::scope` and `.spawn(`. The Harbormaster won't \
 close the harbor until every boat is back in.",
                 prereq: None,
+                available: true,
                 starter_code: "fn main() {\n    let data = vec![1, 2, 3];\n    // run threads that borrow `data` and are guaranteed to finish before this function returns\n    let _ = &data;\n}\n",
             },
             Mission {
@@ -1292,6 +1389,7 @@ calls it with `.await`.\n\n\
 The grader needs `async fn` and `.await`. The Tideforecaster reads the \
 almanac and waits for a tide that hasn't come in yet.",
                 prereq: None,
+                available: true,
                 starter_code: "fn main() {\n    // define an async function that doubles a number, and another that calls it and waits on the result\n    // (it won't actually run here without a runtime like tokio - that's expected)\n    let _ = ();\n}\n",
             },
             // ── Act 8: The Vault of Pointers ──────────────────────────
@@ -1319,6 +1417,7 @@ A `Node` is given with a non-recursive `next`. Make `next` an \
 The grader needs `Box<` and `Box::new`. The Vaultwright builds a box on the \
 heap to hold what the stack cannot.",
                 prereq: None,
+                available: true,
                 starter_code: "struct Node {\n    value: i32,\n    next: Option<i32>,\n}\n\nfn main() {\n    // make `next` able to hold another Node on the heap behind a pointer, then build a 2-node list\n    let _ = Node { value: 1, next: None };\n}\n",
             },
             Mission {
@@ -1342,6 +1441,7 @@ Wrap a value in `Rc::new`, then make a second handle to it with `Rc::clone`.\n\n
 The grader needs `Rc::new` and `Rc::clone`. The Sharekeeper hands out claims \
 to one hoard — and keeps count.",
                 prereq: None,
+                available: true,
                 starter_code: "fn main() {\n    // give two owners a shared, reference-counted handle to the same value (single-threaded)\n    let _ = String::from(\"hoard\");\n}\n",
             },
             Mission {
@@ -1366,6 +1466,7 @@ Put a value in `RefCell::new`, then mutate it through `.borrow_mut()`.\n\n\
 The grader needs `RefCell` and `.borrow_mut(`. The Warden lets you change \
 what's in the box — but checks the ledger as you do.",
                 prereq: None,
+                available: true,
                 starter_code: "fn main() {\n    // hold a value you can mutate through a shared reference, with the borrow rules checked at runtime\n    let _ = 0;\n}\n",
             },
             Mission {
@@ -1373,10 +1474,11 @@ what's in the box — but checks the ledger as you do.",
                 npc_name: "The Swapwarden",
                 prompt: "Swap a `Copy` value through a shared reference with `Cell` + `.set()`.",
                 tutorial: "## Concept\n\
-`Cell<T>` is the simpler sibling of `RefCell`, for `Copy` types. It gives \
-interior mutability with no borrow guards and no runtime checks: you can't \
-get a reference *into* a `Cell`, only `.get()` a copy out or `.set()` / \
-`.replace()` a whole new value in. Because you never hold a reference to the \
+`Cell<T>` is the simpler sibling of `RefCell`, most useful for small `Copy` \
+types. It gives interior mutability with no borrow guards and no runtime \
+checks: through a shared `&Cell` you can't get a reference *into* it, only \
+`.get()` a copy out (that needs `T: Copy`) or `.set()` / `.replace()` a \
+whole new value in (any `T`). Because you never hold a reference to the \
 interior, there's nothing to check — it's cheaper than `RefCell` when the \
 value is small and `Copy`.\n\n\
 ## Syntax\n\
@@ -1388,6 +1490,7 @@ Put a number in `Cell::new`, `.set()` a new value, then `.get()` it back.\n\n\
 The grader needs `Cell::new` and `.set(`. The Swapwarden trades the whole \
 coin in the slot — no borrowing, just a swap.",
                 prereq: None,
+                available: true,
                 starter_code: "fn main() {\n    // hold a single Copy value you can swap out through a shared reference (no borrow guard)\n    let _ = 1;\n}\n",
             },
             Mission {
@@ -1412,6 +1515,7 @@ through `.borrow_mut()` on the clone.\n\n\
 The grader needs `Rc::new`, `RefCell`, and `.borrow_mut(`. The Strongbox: \
 many keys to one box, and the box can be opened and changed.",
                 prereq: None,
+                available: true,
                 starter_code: "fn main() {\n    // make a value that several owners share AND can mutate (the single-threaded shared-mutable pattern)\n    let _ = 0;\n}\n",
             },
             Mission {
@@ -1437,6 +1541,7 @@ From an `Rc`, make a `Weak` with `Rc::downgrade`, then try to access it with \
 The grader needs `Weak`, `downgrade`, and `.upgrade(`. The Ghostkeeper holds \
 a tether to a hoard that may already have vanished.",
                 prereq: None,
+                available: true,
                 starter_code: "fn main() {\n    // make a non-owning handle to an Rc value (one that won't keep it alive, and might find it gone), then try to access it\n    let _ = ();\n}\n",
             },
         ];
@@ -1446,6 +1551,29 @@ a tether to a hoard that may already have vanished.",
         // when the registry has Acts 3+ to organize.
         for i in 1..missions.len() {
             missions[i].prereq = Some(missions[i - 1].id);
+        }
+        // Demo build: everything after the Act 2 boundary is unavailable.
+        // If the boundary id ever stops resolving, keep every mission
+        // available rather than shipping an empty game; the
+        // `demo_boundary_is_the_last_act_2_mission` test catches it.
+        if cfg!(feature = "demo") {
+            match missions.iter().position(|m| m.id == DEMO_LAST_MISSION_ID) {
+                Some(last) => {
+                    for m in &mut missions[last + 1..] {
+                        m.available = false;
+                    }
+                    tracing::info!(
+                        last_free = DEMO_LAST_MISSION_ID,
+                        free = last + 1,
+                        total = missions.len(),
+                        "demo build: missions after the Act 2 boundary are unavailable"
+                    );
+                }
+                None => tracing::error!(
+                    boundary = DEMO_LAST_MISSION_ID,
+                    "demo boundary mission not in registry; demo gate disabled"
+                ),
+            }
         }
         Self { missions }
     }
@@ -1490,7 +1618,29 @@ impl Plugin for MissionPlugin {
                 )
                     .run_if(in_state(GameState::InGame)),
             );
+        #[cfg(feature = "demo")]
+        app.init_resource::<DemoEndView>()
+            .add_systems(
+                Update,
+                (
+                    reopen_demo_end_on_locked_attempt,
+                    dismiss_demo_end_on_escape,
+                )
+                    .run_if(in_state(GameState::InGame)),
+            )
+            .add_systems(
+                EguiPrimaryContextPass,
+                draw_demo_end_panel.run_if(in_state(GameState::InGame)),
+            );
     }
+}
+
+/// End-of-demo panel state (`demo` feature only). The panel auto-shows
+/// once [`DEMO_LAST_MISSION_ID`] is cleared; Esc hides it for the
+/// session, and trying to start a full-game mission brings it back.
+#[derive(Resource, Default)]
+pub struct DemoEndView {
+    pub dismissed_this_session: bool,
 }
 
 #[derive(Resource, Default)]
@@ -1557,6 +1707,20 @@ fn handle_interact_key(
         );
         return;
     };
+
+    // Not in this build (demo): never open the editor, even for a
+    // mission a full-game save already cleared.
+    if !mission.available {
+        tracing::info!(
+            "F-press on {} which is not in this build (demo ends after {})",
+            mission.id,
+            DEMO_LAST_MISSION_ID
+        );
+        locked_attempts.write(MissionLockedAttempt {
+            mission_id: mission.id.to_string(),
+        });
+        return;
+    }
 
     let cleared = progress.is_cleared(mission.id);
     let unlocked = mission.is_unlocked(&progress);
@@ -1667,7 +1831,8 @@ fn draw_interaction_prompt(
         return;
     };
 
-    let cleared = progress.is_cleared(entry.mission_id);
+    let available = registry.is_available(entry.mission_id);
+    let cleared = available && progress.is_cleared(entry.mission_id);
     let mission = registry.find(entry.mission_id);
     let unlocked = mission.is_some_and(|m| m.is_unlocked(&progress));
     let prereq_npc_name = mission
@@ -1680,7 +1845,9 @@ fn draw_interaction_prompt(
         .resizable(false)
         .anchor(egui::Align2::CENTER_BOTTOM, egui::Vec2::new(0.0, -24.0))
         .show(ctx, |ui| {
-            if cleared {
+            if !available {
+                ui.label(format!("[full game] {} waits beyond the demo", entry.name));
+            } else if cleared {
                 ui.label(format!("[done] [F] talk to {}", entry.name));
             } else if !unlocked {
                 let hint = prereq_npc_name.unwrap_or("the previous mission");
@@ -1763,6 +1930,8 @@ fn draw_epilogue_panel(
         || completion.mission_id.is_some()
         || epilogue.dismissed_this_session
         || progress.cleared_count() != registry.missions.len()
+        // A demo build ends with its own panel, even on a full-game save.
+        || registry.missions.iter().any(|m| !m.available)
     {
         return;
     }
@@ -1795,6 +1964,134 @@ fn draw_epilogue_panel(
                 "More acts are being forged. For now: revisit any NPC with [F] \
                  to re-read a lesson, or wander the village.",
             );
+            ui.separator();
+            ui.label("[Esc] close");
+        });
+}
+
+/// What the full game adds after the demo, one line per act. Only acts
+/// that are built and in the registry belong here (Acts 3-8); do not
+/// list planned acts or features that do not exist yet.
+#[cfg(feature = "demo")]
+const FULL_GAME_ACTS: &[(&str, &str)] = &[
+    (
+        "Act 3 - The Guildhall Quarter",
+        "methods, associated functions, if let, while let, tuple structs, enums that carry data",
+    ),
+    (
+        "Act 4 - The Trait Mage's Tower",
+        "traits, generics, trait objects, lifetimes, associated types",
+    ),
+    (
+        "Act 5 - The Tavern of Tribulations",
+        "matching on Result, custom error types, From with ?, map, and_then, unwrap_or_else",
+    ),
+    (
+        "Act 6 - The Iterator Forge",
+        "HashMap, filter, fold, enumerate, zip, move closures",
+    ),
+    (
+        "Act 7 - The Concurrent Coast",
+        "threads, Arc<Mutex<T>>, channels, atomics, scoped threads, async fn",
+    ),
+    (
+        "Act 8 - The Vault of Pointers",
+        "Box, Rc, RefCell, Cell, Rc<RefCell<T>>, Weak",
+    ),
+];
+
+#[cfg(feature = "demo")]
+fn reopen_demo_end_on_locked_attempt(
+    mut attempts: MessageReader<MissionLockedAttempt>,
+    registry: Res<MissionRegistry>,
+    progress: Res<MissionProgress>,
+    mut view: ResMut<DemoEndView>,
+) {
+    for attempt in attempts.read() {
+        if !registry.is_available(&attempt.mission_id) && registry.demo_complete(&progress) {
+            tracing::info!(
+                mission = attempt.mission_id,
+                "full-game mission attempted in demo; showing end-of-demo panel"
+            );
+            view.dismissed_this_session = false;
+        }
+    }
+}
+
+#[cfg(feature = "demo")]
+fn dismiss_demo_end_on_escape(
+    keys: Res<ButtonInput<KeyCode>>,
+    registry: Res<MissionRegistry>,
+    progress: Res<MissionProgress>,
+    completion: Res<CompletionView>,
+    editor: Res<EditorState>,
+    mut view: ResMut<DemoEndView>,
+) {
+    if !keys.just_pressed(KeyCode::Escape) {
+        return;
+    }
+    // Same guard as the epilogue: only an Esc that actually closes the
+    // visible panel sets the flag.
+    let visible = registry.demo_complete(&progress)
+        && !view.dismissed_this_session
+        && completion.mission_id.is_none()
+        && !editor.open;
+    if visible {
+        view.dismissed_this_session = true;
+        tracing::info!("end-of-demo panel dismissed via Escape");
+    }
+}
+
+/// End-of-demo panel. Same visual language as the completion and
+/// epilogue panels. No price, store, link or email capture: those are
+/// blocked on the trademark search and store setup (see
+/// [`FULL_GAME_URL`]).
+#[cfg(feature = "demo")]
+fn draw_demo_end_panel(
+    mut contexts: EguiContexts,
+    progress: Res<MissionProgress>,
+    registry: Res<MissionRegistry>,
+    completion: Res<CompletionView>,
+    editor: Res<EditorState>,
+    dialogue: Option<Res<crate::plugins::dialogue::Dialogue>>,
+    view: Res<DemoEndView>,
+) {
+    if editor.open
+        || completion.mission_id.is_some()
+        || view.dismissed_this_session
+        || dialogue.is_some_and(|d| d.active.is_some())
+        || !registry.demo_complete(&progress)
+    {
+        return;
+    }
+    let Ok(ctx) = contexts.ctx_mut() else {
+        return;
+    };
+    let free = registry.missions.iter().filter(|m| m.available).count();
+    let more = registry.missions.len() - free;
+
+    egui::Window::new("demo end")
+        .title_bar(false)
+        .resizable(false)
+        .collapsible(false)
+        .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+        .min_width(520.0)
+        .show(ctx, |ui| {
+            ui.heading("The demo ends here.");
+            ui.separator();
+            ui.label(format!(
+                "You have cleared all {free} encounters of Acts 1 and 2. The road out \
+                 of the village continues in the full game."
+            ));
+            ui.add_space(6.0);
+            ui.label(format!(
+                "The full game has {more} more encounters across Acts 3 to 8:"
+            ));
+            for (act, topics) in FULL_GAME_ACTS {
+                ui.small(format!("{act}: {topics}"));
+            }
+            ui.add_space(6.0);
+            ui.small("Revisit any NPC with [F] to re-read a lesson, or wander the village.");
             ui.separator();
             ui.label("[Esc] close");
         });
