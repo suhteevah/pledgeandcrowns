@@ -4,11 +4,20 @@
 //! it is cleared.
 //!
 //! Flow: F near an NPC opens a conversation chosen by
-//! [`select_conversation`] from (NPC id, [`MissionStatus`]). Lines reveal
-//! with a typewriter; F / Space / Enter completes the line, a second press
-//! advances, Esc closes. When an Offer or InProgress conversation finishes,
-//! [`DialogueHandoff`] is raised and `mission::handle_interact_key` runs the
-//! pre-dialogue F behaviour (open the mission in the editor).
+//! [`select_conversation`] from (NPC id, [`MissionStatus`], [`NextHint`]).
+//! Lines reveal with a typewriter; F / Space / Enter completes the line, a
+//! second press advances, Esc closes. When an Offer or InProgress
+//! conversation finishes, [`DialogueHandoff`] is raised and
+//! `mission::handle_interact_key` runs the pre-dialogue F behaviour (open
+//! the mission in the editor). Whether a mission's offer has been heard is
+//! saved with the progress (`MissionProgress::mark_opened`), so a restart
+//! does not make every villager re-greet.
+//!
+//! Text: backtick spans in a line are inline code. [`parse_spans`] splits a
+//! line into plain/code [`Span`]s with the backticks removed; the typewriter
+//! counts visible characters only ([`reveal_spans`]), so it never shows a
+//! backtick or a half-open code span. The typewriter is ticked from Bevy's
+//! `Time<Real>`; tests drive it with `TimeUpdateStrategy::ManualDuration`.
 //!
 //! Input ownership: [`dialogue_input`] runs inside `InputSystems`, right
 //! after Bevy's keyboard system and therefore before every other reader
@@ -19,8 +28,6 @@
 //! Screenshot mode (`PNC_SHOTS`) never presses F, so it is never blocked.
 
 pub mod lines;
-
-use std::collections::HashSet;
 
 use bevy::input::InputSystems;
 use bevy::input::keyboard::keyboard_input_system;
@@ -33,7 +40,7 @@ use crate::plugins::npc::{NPC_ROSTER, NearbyNpc};
 use crate::plugins::progress::MissionProgress;
 use crate::plugins::state::{GameState, PauseState};
 
-use lines::{AUTHORED, GENERIC, StatusLines};
+use lines::{AUTHORED, GENERIC, NOT_YET_ELSEWHERE, NOT_YET_NOTHING, StatusLines};
 
 // --- Bible role colours (design/03-art-style-bible.md, UI style) ---------
 /// Primary UI surface.
@@ -44,6 +51,9 @@ pub const BASALT: egui::Color32 = egui::Color32::from_rgb(0x3E, 0x38, 0x33);
 pub const OXBLOOD: egui::Color32 = egui::Color32::from_rgb(0x6B, 0x1F, 0x35);
 /// Body text (universal outline colour, never pure black).
 pub const COALBLACK: egui::Color32 = egui::Color32::from_rgb(0x16, 0x13, 0x13);
+/// Inline-code chip behind Coalblack monospace text (contrast ~9:1; Main
+/// teal text on Parchment is only ~3.9:1, below the 4.5:1 floor).
+pub const AGED_PAPER: egui::Color32 = egui::Color32::from_rgb(0xBF, 0xB2, 0xA0);
 
 /// Longest line (in chars, after `{next}` substitution) the box shows.
 /// The box is at most [`BOX_MAX_WIDTH`] points wide; minus the portrait
@@ -58,6 +68,10 @@ pub const CHARS_PER_SEC: f32 = 45.0;
 pub const PORTRAIT_SLOT: f32 = 64.0;
 const BOX_MAX_WIDTH: f32 = 760.0;
 const BODY_TEXT_SIZE: f32 = 16.0;
+/// Inline code is monospace, a touch smaller so its x-height matches.
+const CODE_TEXT_SIZE: f32 = 15.0;
+/// Key hint under the text (was egui's ~9 pt `small()`).
+pub const HINT_TEXT_SIZE: f32 = 13.0;
 /// Substituted for `{next}` when no mission is left to point at.
 const NEXT_FALLBACK: &str = "the others";
 
@@ -157,17 +171,62 @@ pub fn render_line(template: &str, next_npc: Option<&str>) -> String {
     template.replace("{next}", next_npc.unwrap_or(NEXT_FALLBACK))
 }
 
-/// Choose the conversation for an NPC. `next_npc` is the speaker of the
-/// registry's next uncleared mission (`MissionRegistry::next_locked`),
-/// used by the NotYetAvailable hint.
-pub fn select_conversation(
-    npc_id: &str,
-    status: MissionStatus,
-    next_npc: Option<&str>,
-) -> Conversation {
-    let lines = line_templates(npc_id, status)
+/// Who a NotYetAvailable line sends the player to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NextHint {
+    /// The next playable mission is the speaker's direct prerequisite.
+    DirectPrereq(&'static str),
+    /// The next playable mission is somewhere earlier in the chain.
+    Elsewhere(&'static str),
+    /// Nothing is playable (e.g. the speaker is outside this build and
+    /// everything in it is cleared).
+    Nothing,
+}
+
+impl NextHint {
+    pub fn name(self) -> Option<&'static str> {
+        match self {
+            NextHint::DirectPrereq(n) | NextHint::Elsewhere(n) => Some(n),
+            NextHint::Nothing => None,
+        }
+    }
+}
+
+/// The NPC to point a locked speaker's visitor at: the first mission in
+/// registry order that the player can actually start right now (available,
+/// unlocked, not cleared), other than the speaker's own. Tagged as the
+/// speaker's direct prerequisite when it is exactly that mission.
+pub fn next_hint(
+    registry: &MissionRegistry,
+    progress: &MissionProgress,
+    speaker_mission: &str,
+) -> NextHint {
+    let frontier = registry
+        .missions
         .iter()
-        .map(|t| render_line(t, next_npc))
+        .find(|m| m.id != speaker_mission && !progress.is_cleared(m.id) && m.is_unlocked(progress));
+    let prereq = registry.find(speaker_mission).and_then(|m| m.prereq);
+    let hint = match frontier {
+        Some(m) if Some(m.id) == prereq => NextHint::DirectPrereq(m.npc_name),
+        Some(m) => NextHint::Elsewhere(m.npc_name),
+        None => NextHint::Nothing,
+    };
+    tracing::debug!(speaker_mission, ?hint, "next_hint");
+    hint
+}
+
+/// Choose the conversation for an NPC. `hint` only matters for
+/// NotYetAvailable: the NPC's own `not_yet` lines when the hint is their
+/// direct prerequisite, otherwise a neutral "see X first" line.
+pub fn select_conversation(npc_id: &str, status: MissionStatus, hint: NextHint) -> Conversation {
+    let templates: &[&str] = match (status, hint) {
+        (MissionStatus::NotYetAvailable, NextHint::Elsewhere(_)) => &[NOT_YET_ELSEWHERE],
+        (MissionStatus::NotYetAvailable, NextHint::Nothing) => &[NOT_YET_NOTHING],
+        _ => line_templates(npc_id, status),
+    };
+    let lines = templates
+        .iter()
+        .map(|t| render_line(t, hint.name()))
         .collect();
     let finish = match status {
         // Cleared hands off too: the mission panel shows the recap, which is
@@ -178,6 +237,74 @@ pub fn select_conversation(
         MissionStatus::NotYetAvailable => Finish::Close,
     };
     Conversation { lines, finish }
+}
+
+// --- Pure inline-code spans ----------------------------------------------
+
+/// A run of dialogue text: plain prose or inline code.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Span {
+    pub text: String,
+    pub code: bool,
+}
+
+impl Span {
+    pub fn new(text: &str, code: bool) -> Self {
+        Self {
+            text: text.to_string(),
+            code,
+        }
+    }
+}
+
+/// Split a line on backticks into plain/code spans, dropping the backticks.
+/// Empty spans are skipped and neighbours of the same kind merged. A stray
+/// unmatched backtick is dropped and the text after it stays plain (the
+/// authored-lines test keeps backticks paired, so this is a safety net).
+pub fn parse_spans(line: &str) -> Vec<Span> {
+    let parts: Vec<&str> = line.split('`').collect();
+    let balanced = parts.len() % 2 == 1;
+    let mut out: Vec<Span> = Vec::new();
+    for (i, part) in parts.iter().enumerate() {
+        let code = i % 2 == 1 && (balanced || i + 1 < parts.len());
+        if part.is_empty() {
+            continue;
+        }
+        match out.last_mut() {
+            Some(last) if last.code == code => last.text.push_str(part),
+            _ => out.push(Span::new(part, code)),
+        }
+    }
+    out
+}
+
+/// Visible characters in `spans` (what the typewriter counts).
+pub fn visible_len(spans: &[Span]) -> usize {
+    spans.iter().map(|s| s.text.chars().count()).sum()
+}
+
+/// The first `n` visible characters of `spans`. A code span cut short is
+/// still a (shorter) code span, so the box never shows half a delimiter.
+pub fn reveal_spans(spans: &[Span], n: usize) -> Vec<Span> {
+    let mut left = n;
+    let mut out = Vec::new();
+    for s in spans {
+        if left == 0 {
+            break;
+        }
+        let len = s.text.chars().count();
+        if len <= left {
+            out.push(s.clone());
+            left -= len;
+        } else {
+            out.push(Span {
+                text: s.text.chars().take(left).collect(),
+                code: s.code,
+            });
+            left = 0;
+        }
+    }
+    out
 }
 
 // --- Pure paging / typewriter --------------------------------------------
@@ -198,7 +325,8 @@ pub enum Press {
 pub struct DialogueRun {
     lines: Vec<String>,
     page: usize,
-    /// Characters of the current line revealed so far.
+    /// Visible characters (backticks excluded) of the current line revealed
+    /// so far.
     shown: usize,
     /// Fractional characters carried between ticks.
     carry: f32,
@@ -222,22 +350,29 @@ impl DialogueRun {
         self.lines.len()
     }
 
-    /// The full current line (empty once past the end).
+    /// The full current line as authored, backticks included (empty once
+    /// past the end).
     pub fn line(&self) -> &str {
         self.lines.get(self.page).map(String::as_str).unwrap_or("")
     }
 
-    fn line_chars(&self) -> usize {
-        self.line().chars().count()
+    /// The current line's spans, fully revealed.
+    pub fn spans(&self) -> Vec<Span> {
+        parse_spans(self.line())
     }
 
-    /// The revealed prefix of the current line.
-    pub fn visible(&self) -> &str {
-        let line = self.line();
-        match line.char_indices().nth(self.shown) {
-            Some((byte, _)) => &line[..byte],
-            None => line,
-        }
+    fn line_chars(&self) -> usize {
+        visible_len(&self.spans())
+    }
+
+    /// The revealed spans of the current line (what the box draws).
+    pub fn visible_spans(&self) -> Vec<Span> {
+        reveal_spans(&self.spans(), self.shown)
+    }
+
+    /// The revealed text of the current line, without backticks.
+    pub fn visible(&self) -> String {
+        self.visible_spans().into_iter().map(|s| s.text).collect()
     }
 
     pub fn is_line_complete(&self) -> bool {
@@ -322,13 +457,6 @@ impl DialogueHandoff {
     }
 }
 
-/// Missions whose panel was opened from dialogue this session (drives
-/// InProgress vs Offer). Session-only; not saved.
-#[derive(Resource, Default, Debug)]
-pub struct DialogueMemory {
-    pub opened: HashSet<&'static str>,
-}
-
 pub struct DialoguePlugin;
 
 impl Plugin for DialoguePlugin {
@@ -336,7 +464,6 @@ impl Plugin for DialoguePlugin {
         tracing::debug!("DialoguePlugin::build");
         app.init_resource::<Dialogue>()
             .init_resource::<DialogueHandoff>()
-            .init_resource::<DialogueMemory>()
             .add_systems(
                 PreUpdate,
                 dialogue_input
@@ -371,11 +498,10 @@ pub fn dialogue_input(
     editor: Option<Res<EditorState>>,
     completion: Option<Res<CompletionView>>,
     registry: Option<Res<MissionRegistry>>,
-    progress: Option<Res<MissionProgress>>,
+    mut progress: Option<ResMut<MissionProgress>>,
     asset_server: Option<Res<AssetServer>>,
     mut dialogue: ResMut<Dialogue>,
     mut handoff: ResMut<DialogueHandoff>,
-    mut memory: ResMut<DialogueMemory>,
     mut locked: MessageWriter<MissionLockedAttempt>,
 ) {
     if pause.is_some_and(|p| *p.get() == PauseState::Paused) {
@@ -399,7 +525,13 @@ pub fn dialogue_input(
             if press == Press::Finished {
                 tracing::debug!(npc = active.npc_id, finish = ?active.finish, "dialogue finished");
                 if active.finish == Finish::OpenMission {
-                    memory.opened.insert(active.npc_id);
+                    // Saved with the progress; only touch it (and so
+                    // trigger a save) the first time.
+                    match progress.as_mut() {
+                        Some(p) if !p.is_opened(active.npc_id) => p.mark_opened(active.npc_id),
+                        Some(_) => {}
+                        None => tracing::warn!("dialogue: no MissionProgress; opened not saved"),
+                    }
                     handoff.raise();
                 }
                 dialogue.active = None;
@@ -421,7 +553,7 @@ pub fn dialogue_input(
     let Some(entry) = nearby.as_ref().and_then(|n| n.current.clone()) else {
         return;
     };
-    let (Some(registry), Some(progress)) = (registry, progress) else {
+    let (Some(registry), Some(progress)) = (registry, progress.as_deref()) else {
         tracing::warn!("dialogue: registry/progress missing; F ignored");
         return;
     };
@@ -432,8 +564,8 @@ pub fn dialogue_input(
 
     let status = mission_status(
         progress.is_cleared(mission.id),
-        mission.is_unlocked(&progress),
-        memory.opened.contains(entry.mission_id),
+        mission.is_unlocked(progress),
+        progress.is_opened(mission.id),
     );
     if status == MissionStatus::NotYetAvailable {
         // Keep the locked sting that F used to fire directly.
@@ -441,8 +573,8 @@ pub fn dialogue_input(
             mission_id: mission.id.to_string(),
         });
     }
-    let next_npc = registry.next_locked(&progress).map(|m| m.npc_name);
-    let convo = select_conversation(entry.mission_id, status, next_npc);
+    let hint = next_hint(&registry, progress, mission.id);
+    let convo = select_conversation(entry.mission_id, status, hint);
 
     let spec = NPC_ROSTER.iter().find(|s| s.mission_id == entry.mission_id);
     let portrait = spec
@@ -476,15 +608,35 @@ fn tick_typewriter(time: Res<Time<Real>>, mut dialogue: ResMut<Dialogue>) {
     }
 }
 
-fn reset_dialogue(
-    mut dialogue: ResMut<Dialogue>,
-    mut handoff: ResMut<DialogueHandoff>,
-    mut memory: ResMut<DialogueMemory>,
-) {
+fn reset_dialogue(mut dialogue: ResMut<Dialogue>, mut handoff: ResMut<DialogueHandoff>) {
     tracing::debug!(was_open = dialogue.is_open(), "left InGame: dialogue reset");
     dialogue.active = None;
     handoff.take();
-    memory.opened.clear();
+}
+
+/// Lay out revealed spans: Coalblack proportional prose, inline code as
+/// Coalblack monospace on an Aged-paper chip.
+fn spans_job(spans: &[Span], wrap_width: f32) -> egui::text::LayoutJob {
+    let mut job = egui::text::LayoutJob::default();
+    job.wrap.max_width = wrap_width;
+    for s in spans {
+        let format = if s.code {
+            egui::TextFormat {
+                font_id: egui::FontId::monospace(CODE_TEXT_SIZE),
+                color: COALBLACK,
+                background: AGED_PAPER,
+                ..Default::default()
+            }
+        } else {
+            egui::TextFormat {
+                font_id: egui::FontId::proportional(BODY_TEXT_SIZE),
+                color: COALBLACK,
+                ..Default::default()
+            }
+        };
+        job.append(&s.text, 0.0, format);
+    }
+    job
 }
 
 /// Largest integer scale of `native` that fits `slot` (at least 1).
@@ -553,15 +705,17 @@ fn draw_dialogue(mut contexts: EguiContexts, dialogue: Res<Dialogue>) {
                                 });
                             ui.add_space(6.0);
                             ui.set_min_height(BODY_TEXT_SIZE * 3.6);
-                            ui.label(
-                                egui::RichText::new(active.run.visible())
-                                    .color(COALBLACK)
-                                    .size(BODY_TEXT_SIZE),
-                            );
+                            let job = spans_job(&active.run.visible_spans(), ui.available_width());
+                            ui.label(job);
                         });
                     });
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-                        ui.label(egui::RichText::new(hint).color(BASALT).small());
+                        ui.label(
+                            egui::RichText::new(hint)
+                                .color(BASALT)
+                                .size(HINT_TEXT_SIZE)
+                                .strong(),
+                        );
                     });
                 });
             });

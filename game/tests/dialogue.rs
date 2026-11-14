@@ -1,19 +1,32 @@
 // SPDX-License-Identifier: MIT
-//! Dialogue: conversation selection, paging/typewriter state machine, line
-//! coverage for the whole roster, and the F -> dialogue -> mission handoff.
+//! Dialogue: conversation selection, the NotYetAvailable pointer, inline
+//! code spans, paging/typewriter state machine, line coverage for the whole
+//! roster, and the F -> dialogue -> mission handoff.
+//!
+//! No test here reads the wall clock: the pure typewriter takes explicit
+//! `dt`s, and the headless app runs `TimeUpdateStrategy::ManualDuration`
+//! (zero by default), so `Time<Real>` only moves when a test says so.
+
+use std::time::Duration;
 
 use bevy::prelude::*;
 use bevy::state::app::StatesPlugin;
-use pledge_and_crown::plugins::dialogue::lines::{AUTHORED, GENERIC};
+use bevy::time::TimeUpdateStrategy;
+use pledge_and_crown::plugins::dialogue::lines::{
+    AUTHORED, GENERIC, NOT_YET_ELSEWHERE, NOT_YET_NOTHING,
+};
 use pledge_and_crown::plugins::dialogue::{
-    Dialogue, DialogueHandoff, DialoguePlugin, DialogueRun, Finish, MAX_LINE_CHARS, MissionStatus,
-    Press, line_templates, mission_status, portrait_scale, render_line, select_conversation,
+    CHARS_PER_SEC, Dialogue, DialogueHandoff, DialoguePlugin, DialogueRun, Finish, MAX_LINE_CHARS,
+    MissionStatus, NextHint, Press, Span, line_templates, mission_status, next_hint, parse_spans,
+    portrait_scale, render_line, reveal_spans, select_conversation, visible_len,
 };
 use pledge_and_crown::plugins::editor::EditorState;
 use pledge_and_crown::plugins::mission::{MissionLockedAttempt, MissionPlugin, MissionRegistry};
 use pledge_and_crown::plugins::npc::{NPC_ROSTER, NearbyEntry, NearbyNpc};
-use pledge_and_crown::plugins::progress::ProgressPlugin;
+use pledge_and_crown::plugins::progress::{MissionProgress, ProgressPlugin};
 use pledge_and_crown::plugins::state::{GameState, StatePlugin};
+
+const FERRIS: NextHint = NextHint::DirectPrereq("Ferris");
 
 // --- selection -----------------------------------------------------------
 
@@ -43,31 +56,135 @@ fn offer_and_in_progress_open_the_mission_others_just_close() {
         (MissionStatus::InProgress, Finish::OpenMission),
         (MissionStatus::Cleared, Finish::OpenMission),
     ] {
-        let c = select_conversation(id, status, Some("Ferris"));
+        let c = select_conversation(id, status, FERRIS);
         assert_eq!(c.finish, finish, "{status:?}");
         assert!(!c.lines.is_empty(), "{status:?} produced no lines");
     }
 }
 
-#[test]
-fn not_yet_available_names_the_next_npc() {
-    let reg = MissionRegistry::default();
-    let progress = Default::default();
-    let next = reg.next_locked(&progress).map(|m| m.npc_name);
-    assert_eq!(next, Some("Ferris"));
-    // Authored and generic NPCs both point at whoever is next.
-    for npc in ["double_function", "weak_ref"] {
-        let c = select_conversation(npc, MissionStatus::NotYetAvailable, next);
-        assert!(
-            c.lines.iter().any(|l| l.contains("Ferris")),
-            "{npc}: hint must name the next NPC, got {:?}",
-            c.lines
-        );
-        assert!(c.lines.iter().all(|l| !l.contains("{next}")));
+// --- NotYetAvailable pointer ----------------------------------------------
+
+fn progress_with(ids: &[&str]) -> MissionProgress {
+    let mut p = MissionProgress::default();
+    for id in ids {
+        p.mark_cleared(id);
     }
-    // No next mission: a neutral fallback, never a raw placeholder.
-    let c = select_conversation("weak_ref", MissionStatus::NotYetAvailable, None);
-    assert!(c.lines.iter().all(|l| !l.contains('{')));
+    p
+}
+
+/// Ids of the first `n` missions in registry order.
+fn first_n(reg: &MissionRegistry, n: usize) -> Vec<&'static str> {
+    reg.missions.iter().take(n).map(|m| m.id).collect()
+}
+
+fn not_yet_line(reg: &MissionRegistry, p: &MissionProgress, speaker: &str) -> Vec<String> {
+    let m = reg.find(speaker).expect("speaker in registry");
+    assert_eq!(
+        mission_status(p.is_cleared(m.id), m.is_unlocked(p), false),
+        MissionStatus::NotYetAvailable,
+        "{speaker} should be locked here"
+    );
+    select_conversation(
+        speaker,
+        MissionStatus::NotYetAvailable,
+        next_hint(reg, p, speaker),
+    )
+    .lines
+}
+
+#[test]
+fn fresh_save_late_npc_sends_you_to_ferris_without_claiming_to_be_next() {
+    let reg = MissionRegistry::default();
+    let p = MissionProgress::default();
+    // Mid-roster speaker (inside the demo too): Ferris is next, but not
+    // this NPC's prerequisite, so no "then come back to me".
+    let speaker = reg.missions[15].id;
+    assert_eq!(next_hint(&reg, &p, speaker), NextHint::Elsewhere("Ferris"));
+    assert_eq!(
+        not_yet_line(&reg, &p, speaker),
+        vec!["I'm not ready for you yet. See Ferris first.".to_string()]
+    );
+    // The second NPC's direct prerequisite IS Ferris: their own voice.
+    let second = reg.missions[1].id;
+    assert_eq!(next_hint(&reg, &p, second), FERRIS);
+    let lines = not_yet_line(&reg, &p, second);
+    assert!(lines.iter().any(|l| l.contains("Ferris")), "{lines:?}");
+    assert!(lines.iter().all(|l| !l.contains("not ready")), "{lines:?}");
+}
+
+#[test]
+fn mid_game_save_points_at_the_next_playable_npc() {
+    let reg = MissionRegistry::default();
+    let p = progress_with(&first_n(&reg, 6));
+    let next = &reg.missions[6];
+    let speaker = reg.missions[15].id;
+    assert_eq!(
+        next_hint(&reg, &p, speaker),
+        NextHint::Elsewhere(next.npc_name)
+    );
+    let lines = not_yet_line(&reg, &p, speaker);
+    assert_eq!(
+        lines,
+        vec![format!(
+            "I'm not ready for you yet. See {} first.",
+            next.npc_name
+        )]
+    );
+    assert!(lines.iter().all(|l| !l.contains("Ferris")));
+}
+
+#[test]
+fn save_cleared_up_to_the_prereq_names_it_as_the_prereq() {
+    let reg = MissionRegistry::default();
+    // Generic-voiced speaker (index 10) and an authored one (index 3).
+    for idx in [10usize, 3] {
+        let speaker = &reg.missions[idx];
+        let pre = &reg.missions[idx - 1];
+        assert_eq!(speaker.prereq, Some(pre.id), "linear registry");
+        let p = progress_with(&first_n(&reg, idx - 1));
+        assert_eq!(
+            next_hint(&reg, &p, speaker.id),
+            NextHint::DirectPrereq(pre.npc_name)
+        );
+        let lines = not_yet_line(&reg, &p, speaker.id);
+        assert_eq!(
+            lines,
+            line_templates(speaker.id, MissionStatus::NotYetAvailable)
+                .iter()
+                .map(|t| render_line(t, Some(pre.npc_name)))
+                .collect::<Vec<_>>()
+        );
+        assert!(lines.iter().any(|l| l.contains(pre.npc_name)), "{lines:?}");
+    }
+}
+
+#[test]
+fn save_cleared_up_to_the_speaker_is_an_offer_not_a_refusal() {
+    let reg = MissionRegistry::default();
+    let speaker = &reg.missions[10];
+    let p = progress_with(&first_n(&reg, 10));
+    assert_eq!(
+        mission_status(
+            p.is_cleared(speaker.id),
+            speaker.is_unlocked(&p),
+            p.is_opened(speaker.id)
+        ),
+        MissionStatus::Offer
+    );
+}
+
+#[test]
+fn nothing_playable_gives_a_neutral_line() {
+    let mut reg = MissionRegistry::default();
+    let last = reg.missions.len() - 1;
+    reg.missions[last].available = false;
+    let all: Vec<&str> = reg.missions[..last].iter().map(|m| m.id).collect();
+    let p = progress_with(&all);
+    let speaker = reg.missions[last].id;
+    assert_eq!(next_hint(&reg, &p, speaker), NextHint::Nothing);
+    let c = select_conversation(speaker, MissionStatus::NotYetAvailable, NextHint::Nothing);
+    assert_eq!(c.lines, vec![NOT_YET_NOTHING.to_string()]);
+    assert_eq!(c.finish, Finish::Close);
 }
 
 #[test]
@@ -96,7 +213,7 @@ fn authored_npc_uses_authored_lines_others_use_generic() {
 fn every_roster_npc_has_lines_for_every_status() {
     for spec in NPC_ROSTER {
         for status in MissionStatus::ALL {
-            let c = select_conversation(spec.mission_id, status, Some("Ferris"));
+            let c = select_conversation(spec.mission_id, status, FERRIS);
             assert!(
                 !c.lines.is_empty() && c.lines.iter().all(|l| !l.trim().is_empty()),
                 "{} has no usable {status:?} line",
@@ -135,6 +252,10 @@ fn all_lines_fit_the_box() {
         .map(|s| s.name)
         .max_by_key(|n| n.chars().count())
         .unwrap();
+    for t in [NOT_YET_ELSEWHERE, NOT_YET_NOTHING] {
+        let l = render_line(t, Some(longest));
+        assert!(l.chars().count() <= MAX_LINE_CHARS, "{l}");
+    }
     let tables = AUTHORED
         .iter()
         .map(|r| (r.npc_id, r.lines))
@@ -151,6 +272,11 @@ fn all_lines_fit_the_box() {
             for t in lines {
                 let l = render_line(t, Some(longest));
                 assert!(!l.trim().is_empty(), "{id} {status:?}: empty line");
+                assert_eq!(
+                    l.matches('`').count() % 2,
+                    0,
+                    "{id} {status:?}: unpaired backtick: {l}"
+                );
                 assert!(
                     l.chars().count() <= MAX_LINE_CHARS,
                     "{id} {status:?}: {} chars > {MAX_LINE_CHARS}: {l}",
@@ -159,6 +285,62 @@ fn all_lines_fit_the_box() {
             }
         }
     }
+}
+
+// --- inline code spans ----------------------------------------------------
+
+fn plain(t: &str) -> Span {
+    Span::new(t, false)
+}
+
+fn code(t: &str) -> Span {
+    Span::new(t, true)
+}
+
+#[test]
+fn backticks_become_code_spans_and_vanish() {
+    assert_eq!(
+        parse_spans("Mark it `mut`, then strike."),
+        vec![plain("Mark it "), code("mut"), plain(", then strike.")]
+    );
+    assert_eq!(
+        parse_spans("`let` then `x`"),
+        vec![code("let"), plain(" then "), code("x")]
+    );
+    assert_eq!(parse_spans("no code"), vec![plain("no code")]);
+    assert_eq!(parse_spans(""), Vec::<Span>::new());
+    // Empty pair contributes nothing; neighbours merge.
+    assert_eq!(parse_spans("a``b"), vec![plain("ab")]);
+    // A stray backtick is dropped, never shown, and does not open code.
+    assert_eq!(parse_spans("odd ` tick"), vec![plain("odd  tick")]);
+    for line in ["`a` b `c`", "odd ` tick", "x `&mut T` y"] {
+        let spans = parse_spans(line);
+        assert!(spans.iter().all(|s| !s.text.contains('`')), "{line}");
+    }
+}
+
+#[test]
+fn reveal_counts_visible_chars_and_never_half_opens_code() {
+    let spans = parse_spans("with `let`, go");
+    assert_eq!(visible_len(&spans), "with let, go".len());
+    assert_eq!(reveal_spans(&spans, 0), Vec::<Span>::new());
+    assert_eq!(reveal_spans(&spans, 5), vec![plain("with ")]);
+    // Two chars into the code: a short, closed code span.
+    assert_eq!(reveal_spans(&spans, 7), vec![plain("with "), code("le")]);
+    assert_eq!(reveal_spans(&spans, 8), vec![plain("with "), code("let")]);
+    assert_eq!(reveal_spans(&spans, 999), spans);
+}
+
+#[test]
+fn typewriter_skips_backticks() {
+    let mut r = run(&["a `b` c"]);
+    r.tick(3.0 / 40.0, 40.0); // 3 visible chars
+    assert_eq!(r.visible(), "a b");
+    assert_eq!(r.visible_spans(), vec![plain("a "), code("b")]);
+    r.tick(1.0, 40.0);
+    assert!(r.is_line_complete());
+    assert_eq!(r.visible(), "a b c");
+    assert_eq!(r.line(), "a `b` c", "the raw line keeps its markup");
 }
 
 // --- paging / typewriter -------------------------------------------------
@@ -222,9 +404,13 @@ fn portrait_scale_is_integer_and_fits() {
 
 // --- headless app: F -> dialogue -> mission ------------------------------
 
+/// Headless app on a manual clock: `Time<Real>` advances by exactly the
+/// `TimeUpdateStrategy` duration per update (zero unless a test sets it),
+/// so the typewriter never races the test.
 fn app_with_nearby(name: &'static str, mission_id: &'static str) -> App {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins)
+        .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::ZERO))
         .add_plugins(StatesPlugin)
         .add_plugins(StatePlugin)
         .add_plugins(ProgressPlugin)
@@ -306,6 +492,57 @@ fn reopening_after_the_mission_uses_in_progress() {
         .as_ref()
         .map(|a| a.status);
     assert_eq!(status, Some(MissionStatus::InProgress));
+    assert!(
+        app.world()
+            .resource::<MissionProgress>()
+            .is_opened("intro_let_binding"),
+        "opened is stored in the (saved) progress, not session memory"
+    );
+}
+
+#[test]
+fn opened_progress_survives_into_a_new_app_as_in_progress() {
+    // Simulates a restart: the save carried `opened`, so the first talk
+    // after loading is the nudge, not the greeting again.
+    let mut app = app_with_nearby("Ferris", "intro_let_binding");
+    app.world_mut()
+        .resource_mut::<MissionProgress>()
+        .mark_opened("intro_let_binding");
+    tap(&mut app, KeyCode::KeyF);
+    let status = app
+        .world()
+        .resource::<Dialogue>()
+        .active
+        .as_ref()
+        .map(|a| a.status);
+    assert_eq!(status, Some(MissionStatus::InProgress));
+}
+
+#[test]
+fn typewriter_follows_the_bevy_clock_not_the_wall_clock() {
+    let mut app = app_with_nearby("Ferris", "intro_let_binding");
+    tap(&mut app, KeyCode::KeyF);
+    let visible = |app: &App| {
+        app.world()
+            .resource::<Dialogue>()
+            .active
+            .as_ref()
+            .map(|a| a.run.visible())
+            .unwrap_or_default()
+    };
+    // Frozen clock: nothing types no matter how many frames run.
+    for _ in 0..5 {
+        app.update();
+    }
+    assert_eq!(visible(&app), "");
+    // 100 ms of Bevy time = floor(4.5) chars at 45 chars/s.
+    app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_millis(
+        100,
+    )));
+    app.update();
+    let expect = (0.1 * CHARS_PER_SEC).floor() as usize;
+    assert_eq!(visible(&app).chars().count(), expect);
+    assert_eq!(visible(&app), "Welc");
 }
 
 #[test]

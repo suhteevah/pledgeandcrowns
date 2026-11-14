@@ -13,6 +13,12 @@
 //!
 //! The same y-sort system also orders the player and NPC sprites, by querying
 //! their existing marker components (`Player`, `Npc`) — npc.rs is untouched.
+//!
+//! Occlusion fade: a roof or canopy that y-sorts in front of a character can
+//! hide it completely. [`fade_occluders`] fades any prop whose opaque art
+//! ([`PropKind::visual_local`]) overlaps a character drawn behind it down to
+//! [`OCCLUDER_ALPHA`] over [`FADE_SECS`], and back to opaque once clear. The
+//! decision ([`occludes`]) and the ramp ([`step_alpha`]) are pure functions.
 
 use crate::assets::{SPRITE_PROP_COTTAGE, SPRITE_PROP_OAK};
 use crate::plugins::npc::Npc;
@@ -119,7 +125,11 @@ impl PropKind {
     /// Solid footprint relative to the anchor (bottom-centre).
     /// Oak: the trunk base (REF-67 cols 10..21, rows 36..44).
     /// Cottage: the wall rows only (REF-68 cols 5..58, rows 37..58 = 54x22),
-    /// so the player can walk behind the roof.
+    /// so the player can walk behind the roof. Deliberately NOT widened to
+    /// the 60 px roof eave (cols 2..61): the eave overhangs the wall by only
+    /// 3 px, while the player's body reaches ~5 px past its feet box, so a
+    /// wider box would still overlap the eave and only push the player off
+    /// the wall. The occlusion fade keeps a character under the eave visible.
     pub fn solid_local(self) -> Aabb {
         match self {
             PropKind::Oak => Aabb::from_base(0.0, 6.0, 3.0, 11.0),
@@ -129,6 +139,20 @@ impl PropKind {
 
     pub fn solid_at(self, base: Vec2) -> Aabb {
         self.solid_local().translated(base)
+    }
+
+    /// Opaque bounds of the art relative to the anchor, used for the
+    /// occlusion fade. Oak: REF-67 cols 2..29, rows 1..44. Cottage: REF-68
+    /// cols 2..61 (the eave), rows 0..58 (chimney top to footing).
+    pub fn visual_local(self) -> Aabb {
+        match self {
+            PropKind::Oak => Aabb::from_base(0.0, 14.0, 3.0, 47.0),
+            PropKind::Cottage => Aabb::from_base(0.0, 30.0, 5.0, 64.0),
+        }
+    }
+
+    pub fn visual_at(self, base: Vec2) -> Aabb {
+        self.visual_local().translated(base)
     }
 
     /// Full sprite rectangle for a prop anchored at `base`.
@@ -305,6 +329,41 @@ pub fn ysort_z(ground_y: f32) -> f32 {
     YSORT_Z_MIN + t * YSORT_Z_SPAN
 }
 
+/// Alpha a prop fades to while it hides a character.
+pub const OCCLUDER_ALPHA: f32 = 0.45;
+/// Time a full fade (opaque <-> [`OCCLUDER_ALPHA`]) takes.
+pub const FADE_SECS: f32 = 0.15;
+
+/// The part of a character sprite that counts as "the character": the
+/// middle half of its width (the 32 px art is mostly transparent at the
+/// sides) over its full height. `center` is the sprite centre.
+pub fn character_body(center: Vec2, size: Vec2) -> Aabb {
+    Aabb::from_base(
+        center.x,
+        size.x * 0.25,
+        center.y - size.y * 0.5,
+        center.y + size.y * 0.5,
+    )
+}
+
+/// True when a prop drawn in front of a character (higher z) covers part
+/// of it, i.e. the prop should fade so the character is not lost.
+pub fn occludes(character: Aabb, character_z: f32, prop: Aabb, prop_z: f32) -> bool {
+    prop_z > character_z && prop.overlaps(&character)
+}
+
+/// Fade target for a prop.
+pub fn fade_target(occluding: bool) -> f32 {
+    if occluding { OCCLUDER_ALPHA } else { 1.0 }
+}
+
+/// Move `current` toward `target` at the rate that crosses the full fade
+/// range in [`FADE_SECS`], never overshooting.
+pub fn step_alpha(current: f32, target: f32, dt: f32) -> f32 {
+    let max = (1.0 - OCCLUDER_ALPHA) / FADE_SECS * dt.max(0.0);
+    current + (target - current).clamp(-max, max)
+}
+
 pub struct PropPlugin;
 
 impl Plugin for PropPlugin {
@@ -313,7 +372,8 @@ impl Plugin for PropPlugin {
         app.add_systems(OnEnter(GameState::InGame), spawn_props)
             .add_systems(
                 PostUpdate,
-                ysort
+                (ysort, fade_occluders)
+                    .chain()
                     .run_if(in_state(GameState::InGame))
                     .before(bevy::transform::TransformSystems::Propagate),
             );
@@ -370,6 +430,44 @@ fn ysort(mut q: Query<(&mut Transform, &Sprite, &Anchor, Option<&Prop>), YSorted
     }
 }
 
+type Characters = (Or<(With<Player>, With<Npc>)>, Without<Prop>);
+
+/// Fade props that hide the player or an NPC (see module docs).
+fn fade_occluders(
+    time: Res<Time>,
+    chars: Query<(&Transform, &Sprite, &Anchor), Characters>,
+    mut props: Query<(&Transform, &Prop, &mut Sprite)>,
+    mut last_faded: Local<usize>,
+) {
+    let bodies: Vec<(Aabb, f32)> = chars
+        .iter()
+        .map(|(tf, sprite, anchor)| {
+            let size = sprite.custom_size.unwrap_or(Vec2::ZERO);
+            let center = tf.translation.truncate() - anchor.as_vec() * size;
+            (character_body(center, size), tf.translation.z)
+        })
+        .collect();
+    let dt = time.delta_secs();
+    let mut faded = 0usize;
+    for (tf, prop, mut sprite) in props.iter_mut() {
+        let rect = prop.kind.visual_at(tf.translation.truncate());
+        let z = tf.translation.z;
+        let hiding = bodies.iter().any(|(b, bz)| occludes(*b, *bz, rect, z));
+        if hiding {
+            faded += 1;
+        }
+        let current = sprite.color.alpha();
+        let next = step_alpha(current, fade_target(hiding), dt);
+        if (next - current).abs() > f32::EPSILON {
+            sprite.color.set_alpha(next);
+        }
+    }
+    if faded != *last_faded {
+        tracing::debug!(faded, was = *last_faded, "occluding props changed");
+        *last_faded = faded;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -420,6 +518,115 @@ mod tests {
         assert!(ysort_z(-100.0) > ysort_z(100.0));
         assert!(ysort_z(-WORLD_HALF_H) <= YSORT_Z_MIN + YSORT_Z_SPAN);
         assert!(ysort_z(WORLD_HALF_H) >= YSORT_Z_MIN);
+    }
+
+    fn player_body_at_feet(feet_bottom: Vec2) -> Aabb {
+        character_body(feet_bottom + Vec2::new(0.0, 16.0), Vec2::splat(32.0))
+    }
+
+    #[test]
+    fn roof_fades_when_the_player_stands_behind_the_cottage() {
+        let base = Vec2::new(100.0, 200.0);
+        let k = PropKind::Cottage;
+        let prop_z = ysort_z(base.y + k.ground_offset());
+        let solid = k.solid_at(base);
+        // Feet flush with the back wall: behind, roof covers the sprite.
+        let feet = Vec2::new(base.x, solid.max.y);
+        assert!(occludes(
+            player_body_at_feet(feet),
+            ysort_z(feet.y),
+            k.visual_at(base),
+            prop_z
+        ));
+        // Feet flush with the front wall: player draws in front, no fade.
+        let feet = Vec2::new(base.x, solid.min.y - 6.0);
+        assert!(!occludes(
+            player_body_at_feet(feet),
+            ysort_z(feet.y),
+            k.visual_at(base),
+            prop_z
+        ));
+        // Far behind (north of the chimney): nothing to fade.
+        let feet = Vec2::new(base.x, base.y + 70.0);
+        assert!(!occludes(
+            player_body_at_feet(feet),
+            ysort_z(feet.y),
+            k.visual_at(base),
+            prop_z
+        ));
+    }
+
+    #[test]
+    fn eave_fades_when_the_player_stands_beside_the_wall() {
+        let base = Vec2::new(0.0, 0.0);
+        let k = PropKind::Cottage;
+        let solid = k.solid_at(base);
+        // Feet box (half 6) flush with the east wall, mid-wall height.
+        for x in [solid.max.x + 6.0, solid.min.x - 6.0] {
+            let feet = Vec2::new(x, (solid.min.y + solid.max.y) * 0.5 - 3.0);
+            assert!(
+                occludes(
+                    player_body_at_feet(feet),
+                    ysort_z(feet.y),
+                    k.visual_at(base),
+                    ysort_z(base.y + k.ground_offset())
+                ),
+                "eave must fade with the player at x={x}"
+            );
+        }
+    }
+
+    #[test]
+    fn canopy_fades_when_the_player_is_behind_the_oak() {
+        let base = Vec2::new(-400.0, 450.0);
+        let k = PropKind::Oak;
+        let feet = Vec2::new(base.x + 6.0, k.solid_at(base).max.y);
+        assert!(occludes(
+            player_body_at_feet(feet),
+            ysort_z(feet.y),
+            k.visual_at(base),
+            ysort_z(base.y + k.ground_offset())
+        ));
+        // Beside the oak but well clear of the canopy: no fade.
+        let feet = Vec2::new(base.x + 40.0, base.y + 10.0);
+        assert!(!occludes(
+            player_body_at_feet(feet),
+            ysort_z(feet.y),
+            k.visual_at(base),
+            ysort_z(base.y + k.ground_offset())
+        ));
+    }
+
+    #[test]
+    fn alpha_ramps_in_about_150ms_and_never_overshoots() {
+        let mut a = 1.0;
+        let dt = 1.0 / 60.0;
+        let mut frames = 0;
+        while (a - OCCLUDER_ALPHA).abs() > 1e-5 {
+            a = step_alpha(a, fade_target(true), dt);
+            assert!(a >= OCCLUDER_ALPHA - 1e-6);
+            frames += 1;
+            assert!(frames < 100, "fade never settled");
+        }
+        assert!((9..=10).contains(&frames), "~0.15 s at 60 Hz, got {frames}");
+        for _ in 0..20 {
+            a = step_alpha(a, fade_target(false), dt);
+            assert!(a <= 1.0 + 1e-6);
+        }
+        assert!((a - 1.0).abs() < 1e-5, "restores when clear");
+        assert_eq!(step_alpha(0.7, 1.0, -1.0), 0.7, "negative dt is a no-op");
+    }
+
+    #[test]
+    fn visual_rect_covers_the_solid_and_sits_in_the_sprite() {
+        for k in [PropKind::Oak, PropKind::Cottage] {
+            let v = k.visual_local();
+            let s = k.solid_local();
+            let sprite = k.sprite_rect_at(Vec2::ZERO);
+            assert!(v.min.x <= s.min.x && v.max.x >= s.max.x && v.min.y <= s.min.y);
+            assert!(v.min.x >= sprite.min.x && v.max.x <= sprite.max.x);
+            assert!(v.min.y >= sprite.min.y && v.max.y <= sprite.max.y);
+        }
     }
 
     #[test]
