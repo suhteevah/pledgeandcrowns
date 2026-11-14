@@ -7,12 +7,18 @@
 //! those plazas in roster order. Oaks and cottages are sprites, not tiles —
 //! see `prop.rs`.
 //!
-//! Tiles come from the REF-66 terrain v2 atlas (22 tiles, 8 columns). Two
-//! tilemap layers share it:
+//! Tiles come from the REF-76 village atlas (24 tiles, 8 columns): the 22
+//! REF-66 terrain v2 tiles followed by the 2 REF-75 plaza flagstones, copied
+//! verbatim (render-refs tests guard the copy). A tilemap binds one texture,
+//! which is why the flagstone shares the terrain sheet instead of having its
+//! own. Two tilemap layers share it:
 //!
-//! 1. **Base** — every tile is classified [`Ground::Grass`], `Cobble` or `Dirt`
-//!    by [`ground_at_tile`]; the variant (grass_a/b/tuft/flowers, cobble_a/b,
-//!    dirt_a/b) is picked by a deterministic per-tile hash. No tinting.
+//! 1. **Base** — every tile is classified [`Ground::Grass`], `Cobble`, `Dirt`
+//!    or `Flagstone` by [`ground_at_tile`]; the variant (grass_a/b/tuft/
+//!    flowers, cobble_a/b, dirt_a/b, flag_a/b) is picked by a deterministic
+//!    per-tile hash. No tinting. Each plaza is flagstone inside a one-tile
+//!    cobble border (see [`plaza_zone`]), so cobble is always the paving that
+//!    meets grass and roads.
 //! 2. **Overlay** — transparent grass-edge tiles on non-grass tiles that border
 //!    grass, chosen by the pure [`fringe_for`] from the 8 neighbours.
 //!
@@ -20,7 +26,7 @@
 //! which is also screen-up for our 2D camera, and atlas images are drawn
 //! upright. So the art's "north" (top of the tile image) is tile `y + 1`.
 
-use crate::assets::SPRITE_TILES_VILLAGE_V2;
+use crate::assets::SPRITE_TILES_VILLAGE_V3;
 use crate::plugins::state::GameState;
 use bevy::prelude::*;
 use bevy_ecs_tilemap::prelude::*;
@@ -34,7 +40,9 @@ const MAP_H: u32 = 140;
 pub const WORLD_HALF_W: f32 = (MAP_W as f32) * TILE_PX * 0.5;
 pub const WORLD_HALF_H: f32 = (MAP_H as f32) * TILE_PX * 0.5;
 
-// --- Tile indices into the REF-66 atlas (8 columns, row-major) ----
+// --- Tile indices into the REF-76 atlas (8 columns, row-major) ----
+// Index = declaration order in `design/art/refs/ref-76-village-atlas.jsx`;
+// `atlas_constants_match_ref76_tile_order` pins every constant below to it.
 const T_GRASS_A: u32 = 0;
 const T_GRASS_B: u32 = 1;
 const T_GRASS_TUFT: u32 = 2;
@@ -57,12 +65,15 @@ const T_NUB_NW: u32 = 18;
 const T_NUB_NE: u32 = 19;
 const T_NUB_SW: u32 = 20;
 const T_NUB_SE: u32 = 21;
+/// REF-75 plaza flagstone, two interchangeable variants.
+const T_FLAG_A: u32 = 22;
+const T_FLAG_B: u32 = 23;
 
 /// z of the overlay tilemap; the base layer sits at 0. Y-sorted sprites live
 /// above both (see `prop::ysort_z`).
 const OVERLAY_Z: f32 = 0.5;
 
-/// A village quarter: a square cobble plaza centered at `center`, home to
+/// A village quarter: a square paved plaza centered at `center`, home to
 /// `count` roster NPCs (assigned sequentially by [`district_slot`]). Cottages
 /// ring the plaza (see `prop::COTTAGE_SPOTS`).
 pub struct District {
@@ -208,8 +219,54 @@ fn world_to_tile(w: Vec2) -> (u32, u32) {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Ground {
     Grass,
+    /// Plaza border ring (REF-66 cobble).
     Cobble,
     Dirt,
+    /// Plaza interior (REF-75 flagstone).
+    Flagstone,
+}
+
+/// Where a tile sits relative to one plaza. Ordered so that `max` over all
+/// plazas gives the tile's zone (plazas never overlap).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum PlazaZone {
+    Outside,
+    /// Inside the plaza with at least one of its 8 neighbours outside: the
+    /// one-tile cobble ring, including the corners and where roads enter.
+    Border,
+    /// Inside the plaza with all 8 neighbours inside too: flagstone.
+    Interior,
+}
+
+/// Pure zone rule for tile `(x, y)` given an `inside` test (in signed tile
+/// coordinates, so callers can answer "outside" for off-map neighbours).
+pub fn classify_plaza(x: i64, y: i64, inside: impl Fn(i64, i64) -> bool) -> PlazaZone {
+    if !inside(x, y) {
+        return PlazaZone::Outside;
+    }
+    let all_neighbours_inside = (-1..=1)
+        .flat_map(|dy| (-1..=1).map(move |dx| (dx, dy)))
+        .all(|(dx, dy)| inside(x + dx, y + dy));
+    if all_neighbours_inside {
+        PlazaZone::Interior
+    } else {
+        PlazaZone::Border
+    }
+}
+
+/// True if the centre of tile `(x, y)` lies inside `d`'s plaza square.
+/// Off-map tiles are never inside.
+fn tile_in_plaza(d: &District, x: i64, y: i64) -> bool {
+    if x < 0 || y < 0 || x >= MAP_W as i64 || y >= MAP_H as i64 {
+        return false;
+    }
+    let w = tile_to_world(x as u32, y as u32);
+    (w.x - d.center.x).abs() <= d.plaza_half && (w.y - d.center.y).abs() <= d.plaza_half
+}
+
+/// Zone of tile `(x, y)` for district `d`.
+pub fn plaza_zone(d: &District, x: u32, y: u32) -> PlazaZone {
+    classify_plaza(x as i64, y as i64, |tx, ty| tile_in_plaza(d, tx, ty))
 }
 
 /// True if tile `(x, y)` lies on a road: within `ROAD_HALF_TILES` (Chebyshev
@@ -224,15 +281,18 @@ fn on_road(x: u32, y: u32) -> bool {
     })
 }
 
-/// Classify tile `(x, y)`: district plazas are cobble, the street grid is
-/// dirt, everything else (including the map border, where the oak treeline
-/// props stand) is grass.
+/// Classify tile `(x, y)`: plaza interiors are flagstone inside a one-tile
+/// cobble border, the street grid is dirt, everything else (including the
+/// map border, where the oak treeline props stand) is grass.
 pub fn ground_at_tile(x: u32, y: u32) -> Ground {
-    let w = tile_to_world(x, y);
-    let in_plaza = DISTRICTS.iter().any(|d| {
-        (w.x - d.center.x).abs() <= d.plaza_half && (w.y - d.center.y).abs() <= d.plaza_half
-    });
-    if in_plaza {
+    let zone = DISTRICTS
+        .iter()
+        .map(|d| plaza_zone(d, x, y))
+        .max()
+        .unwrap_or(PlazaZone::Outside);
+    if zone == PlazaZone::Interior {
+        Ground::Flagstone
+    } else if zone == PlazaZone::Border {
         Ground::Cobble
     } else if on_road(x, y) {
         Ground::Dirt
@@ -286,6 +346,13 @@ fn base_tile(x: u32, y: u32, ground: Ground) -> u32 {
                 T_DIRT_A
             } else {
                 T_DIRT_B
+            }
+        }
+        Ground::Flagstone => {
+            if h % 2 == 0 {
+                T_FLAG_A
+            } else {
+                T_FLAG_B
             }
         }
     }
@@ -382,11 +449,11 @@ fn overlay_at(x: u32, y: u32, ground: &impl Fn(u32, u32) -> Ground) -> Option<u3
 
 fn spawn_village(mut commands: Commands, asset_server: Res<AssetServer>) {
     tracing::info!(
-        "spawning Hearthstone Village terrain v2 ({MAP_W}x{MAP_H}, {} districts)",
+        "spawning Hearthstone Village terrain v2 + flagstone plazas ({MAP_W}x{MAP_H}, {} districts)",
         DISTRICTS.len()
     );
 
-    let texture = asset_server.load(SPRITE_TILES_VILLAGE_V2);
+    let texture = asset_server.load(SPRITE_TILES_VILLAGE_V3);
     let map_size = TilemapSize { x: MAP_W, y: MAP_H };
     let tile_size = TilemapTileSize {
         x: TILE_PX,
@@ -405,7 +472,8 @@ fn spawn_village(mut commands: Commands, asset_server: Res<AssetServer>) {
     let overlay_entity = commands.spawn_empty().id();
     let mut base_storage = TileStorage::empty(map_size);
     let mut overlay_storage = TileStorage::empty(map_size);
-    let (mut grass, mut cobble, mut dirt, mut overlays) = (0usize, 0usize, 0usize, 0usize);
+    let (mut grass, mut cobble, mut dirt, mut flagstone, mut overlays) =
+        (0usize, 0usize, 0usize, 0usize, 0usize);
 
     for x in 0..map_size.x {
         for y in 0..map_size.y {
@@ -415,6 +483,7 @@ fn spawn_village(mut commands: Commands, asset_server: Res<AssetServer>) {
                 Ground::Grass => grass += 1,
                 Ground::Cobble => cobble += 1,
                 Ground::Dirt => dirt += 1,
+                Ground::Flagstone => flagstone += 1,
             }
             let tile = commands
                 .spawn(TileBundle {
@@ -440,7 +509,14 @@ fn spawn_village(mut commands: Commands, asset_server: Res<AssetServer>) {
             }
         }
     }
-    tracing::debug!(grass, cobble, dirt, overlays, "terrain classified");
+    tracing::debug!(
+        grass,
+        cobble,
+        dirt,
+        flagstone,
+        overlays,
+        "terrain classified"
+    );
 
     commands.entity(base_entity).insert(TilemapBundle {
         grid_size,
@@ -551,9 +627,9 @@ mod tests {
     }
 
     #[test]
-    fn plaza_centres_are_cobble_and_border_is_grass() {
+    fn plaza_centres_are_flagstone_and_map_border_is_grass() {
         for d in DISTRICTS {
-            assert_eq!(ground_at(d.center), Ground::Cobble, "{}", d.name);
+            assert_eq!(ground_at(d.center), Ground::Flagstone, "{}", d.name);
         }
         for x in 0..MAP_W {
             assert_eq!(ground_at_tile(x, 0), Ground::Grass);
@@ -570,6 +646,7 @@ mod tests {
                 Ground::Grass => t <= T_FLOWERS_ROSE,
                 Ground::Cobble => t == T_COBBLE_A || t == T_COBBLE_B,
                 Ground::Dirt => t == T_DIRT_A || t == T_DIRT_B,
+                Ground::Flagstone => t == T_FLAG_A || t == T_FLAG_B,
             };
             assert!(ok, "tile {t} wrong for {g:?}");
         }
@@ -585,5 +662,200 @@ mod tests {
         }
         assert!(counts.iter().all(|&c| c > 0), "{counts:?}");
         assert!(counts[T_GRASS_A as usize] + counts[T_GRASS_B as usize] > 1200);
+    }
+
+    // --- Flagstone plazas (REF-75 via the REF-76 atlas) ---------------------
+
+    #[test]
+    fn classify_plaza_on_a_small_square() {
+        // A 5x5 plaza covering tiles 0..=4 on both axes.
+        let inside = |x: i64, y: i64| (0..=4).contains(&x) && (0..=4).contains(&y);
+        let z = |x, y| classify_plaza(x, y, inside);
+        // Corners and edge midpoints are the one-tile border.
+        for (x, y) in [
+            (0, 0),
+            (4, 0),
+            (0, 4),
+            (4, 4),
+            (2, 0),
+            (0, 2),
+            (4, 2),
+            (2, 4),
+        ] {
+            assert_eq!(z(x, y), PlazaZone::Border, "({x},{y})");
+        }
+        // The 3x3 core, including the tiles diagonally inside each corner.
+        for (x, y) in [(1, 1), (3, 1), (1, 3), (3, 3), (2, 2)] {
+            assert_eq!(z(x, y), PlazaZone::Interior, "({x},{y})");
+        }
+        // Just outside, including the diagonal past a corner.
+        for (x, y) in [(-1, -1), (5, 5), (-1, 2), (2, 5)] {
+            assert_eq!(z(x, y), PlazaZone::Outside, "({x},{y})");
+        }
+    }
+
+    /// Inclusive tile bounds `(x0, x1, y0, y1)` of a district's plaza.
+    fn plaza_bounds(d: &District) -> (u32, u32, u32, u32) {
+        let xs: Vec<u32> = (0..MAP_W)
+            .filter(|&x| (0..MAP_H).any(|y| tile_in_plaza(d, x as i64, y as i64)))
+            .collect();
+        let ys: Vec<u32> = (0..MAP_H)
+            .filter(|&y| (0..MAP_W).any(|x| tile_in_plaza(d, x as i64, y as i64)))
+            .collect();
+        (xs[0], xs[xs.len() - 1], ys[0], ys[ys.len() - 1])
+    }
+
+    #[test]
+    fn every_plaza_is_flagstone_inside_a_one_tile_cobble_ring() {
+        for d in DISTRICTS {
+            let (x0, x1, y0, y1) = plaza_bounds(d);
+            for y in y0..=y1 {
+                for x in x0..=x1 {
+                    let ring = x == x0 || x == x1 || y == y0 || y == y1;
+                    let want = if ring {
+                        Ground::Cobble
+                    } else {
+                        Ground::Flagstone
+                    };
+                    assert_eq!(ground_at_tile(x, y), want, "{} ({x},{y})", d.name);
+                }
+            }
+            // Each corner: cobble, flagstone diagonally inside, not paving
+            // diagonally outside.
+            for (cx, cy, ix, iy, ox, oy) in [
+                (x0, y0, x0 + 1, y0 + 1, x0 - 1, y0 - 1),
+                (x1, y0, x1 - 1, y0 + 1, x1 + 1, y0 - 1),
+                (x0, y1, x0 + 1, y1 - 1, x0 - 1, y1 + 1),
+                (x1, y1, x1 - 1, y1 - 1, x1 + 1, y1 + 1),
+            ] {
+                assert_eq!(plaza_zone(d, cx, cy), PlazaZone::Border, "{}", d.name);
+                assert_eq!(plaza_zone(d, ix, iy), PlazaZone::Interior, "{}", d.name);
+                assert_eq!(plaza_zone(d, ox, oy), PlazaZone::Outside, "{}", d.name);
+                assert_eq!(ground_at_tile(ox, oy), Ground::Grass, "{}", d.name);
+            }
+        }
+    }
+
+    #[test]
+    fn road_entering_the_hub_meets_the_cobble_border() {
+        // The N-S main street enters Hearthstone Square through its north and
+        // south edges: dirt outside, cobble on the ring, flagstone inside, for
+        // all three road columns.
+        let hub = &DISTRICTS[0];
+        let (_, _, y0, y1) = plaza_bounds(hub);
+        let (rx, _) = world_to_tile(Vec2::ZERO);
+        for x in rx - ROAD_HALF_TILES..=rx + ROAD_HALF_TILES {
+            assert_eq!(ground_at_tile(x, y1 + 1), Ground::Dirt, "north road x={x}");
+            assert_eq!(ground_at_tile(x, y1), Ground::Cobble, "north ring x={x}");
+            assert_eq!(ground_at_tile(x, y1 - 1), Ground::Flagstone, "x={x}");
+            assert_eq!(ground_at_tile(x, y0 - 1), Ground::Dirt, "south road x={x}");
+            assert_eq!(ground_at_tile(x, y0), Ground::Cobble, "south ring x={x}");
+            assert_eq!(ground_at_tile(x, y0 + 1), Ground::Flagstone, "x={x}");
+        }
+    }
+
+    #[test]
+    fn flagstone_only_touches_paving_and_never_gets_an_overlay() {
+        // Cobble is always the tile between flagstone and grass/dirt, so the
+        // grass-edge overlay logic never has to deal with flagstone.
+        let ground = |x: u32, y: u32| ground_at_tile(x, y);
+        for y in 1..MAP_H - 1 {
+            for x in 1..MAP_W - 1 {
+                if ground(x, y) != Ground::Flagstone {
+                    continue;
+                }
+                assert_eq!(overlay_at(x, y, &ground), None, "({x},{y})");
+                for (dx, dy) in [
+                    (-1i32, -1i32),
+                    (0, -1),
+                    (1, -1),
+                    (-1, 0),
+                    (1, 0),
+                    (-1, 1),
+                    (0, 1),
+                    (1, 1),
+                ] {
+                    let n = ground(x.wrapping_add_signed(dx), y.wrapping_add_signed(dy));
+                    assert!(
+                        matches!(n, Ground::Flagstone | Ground::Cobble),
+                        "flagstone ({x},{y}) touches {n:?}"
+                    );
+                }
+            }
+        }
+        // And the ring still gets grass edges: the hub's NW corner tile.
+        let (x0, _, _, y1) = plaza_bounds(&DISTRICTS[0]);
+        assert_eq!(overlay_at(x0, y1, &ground), Some(T_CORNER_NW));
+    }
+
+    #[test]
+    fn flag_variants_are_roughly_half_each() {
+        let (mut a, mut b) = (0usize, 0usize);
+        for y in 0..MAP_H {
+            for x in 0..MAP_W {
+                if ground_at_tile(x, y) == Ground::Flagstone {
+                    match base_tile(x, y, Ground::Flagstone) {
+                        T_FLAG_A => a += 1,
+                        T_FLAG_B => b += 1,
+                        t => panic!("flagstone picked tile {t}"),
+                    }
+                }
+            }
+        }
+        let share = a as f64 / (a + b) as f64;
+        assert!((0.45..=0.55).contains(&share), "flag_a {a}, flag_b {b}");
+    }
+
+    /// Every atlas constant names the tile at that position in REF-76.
+    #[test]
+    fn atlas_constants_match_ref76_tile_order() {
+        const SRC: &str = include_str!("../../../design/art/refs/ref-76-village-atlas.jsx");
+        let names: Vec<&str> = SRC
+            .lines()
+            .filter_map(|l| l.strip_prefix("  ")?.strip_suffix(": ["))
+            .collect();
+        assert_eq!(names.len(), 24, "REF-76 tile count: {names:?}");
+        let expected: [(u32, &str); 23] = [
+            (T_GRASS_A, "grass_a"),
+            (T_GRASS_B, "grass_b"),
+            (T_GRASS_TUFT, "grass_tuft"),
+            (T_FLOWERS_GOLD, "flowers_gold"),
+            (T_FLOWERS_ROSE, "flowers_rose"),
+            (T_COBBLE_A, "cobble_a"),
+            (T_COBBLE_B, "cobble_b"),
+            (T_DIRT_A, "dirt_a"),
+            (T_DIRT_B, "dirt_b"),
+            (T_FRINGE_N, "fringe_n"),
+            (T_FRINGE_S, "fringe_s"),
+            (T_FRINGE_W, "fringe_w"),
+            (T_FRINGE_E, "fringe_e"),
+            (T_CORNER_NW, "corner_nw"),
+            (T_CORNER_NE, "corner_ne"),
+            (T_CORNER_SW, "corner_sw"),
+            (T_CORNER_SE, "corner_se"),
+            (T_NUB_NW, "nub_nw"),
+            (T_NUB_NE, "nub_ne"),
+            (T_NUB_SW, "nub_sw"),
+            (T_NUB_SE, "nub_se"),
+            (T_FLAG_A, "flag_a"),
+            (T_FLAG_B, "flag_b"),
+        ];
+        for (idx, name) in expected {
+            assert_eq!(names[idx as usize], name, "atlas index {idx}");
+        }
+    }
+
+    /// The atlas the world loads is exactly the render-refs output for REF-76.
+    #[test]
+    fn game_atlas_is_the_rendered_ref76() {
+        let game = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let asset = std::fs::read(game.join("assets").join(SPRITE_TILES_VILLAGE_V3))
+            .expect("read game atlas");
+        let render =
+            std::fs::read(game.join("../design/art/refs/png/REF76.png")).expect("read REF76.png");
+        assert!(
+            asset == render,
+            "tiles_village_v3.png differs from REF76.png"
+        );
     }
 }

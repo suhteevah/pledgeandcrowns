@@ -20,6 +20,12 @@ pub const SPRITE_TITLE: &str = "sprites/title.png";
 // `cargo run -p render-refs`. The old `tiles_village.png` stays on disk but
 // is no longer used by the world.
 pub const SPRITE_TILES_VILLAGE_V2: &str = "sprites/tiles_village_v2.png";
+// Combined village atlas (2026-11-14): REF-66's 22 tiles + REF-75 plaza
+// flagstone (approved by Matt 2026-11-14), copied verbatim into
+// design/art/refs/ref-76-village-atlas.jsx and rendered via
+// `cargo run -p render-refs`. Same 128x48 layout as v2 with indices 22-23
+// added; this is the one the world loads. v2 stays on disk, unused.
+pub const SPRITE_TILES_VILLAGE_V3: &str = "sprites/tiles_village_v3.png";
 pub const SPRITE_PROP_OAK: &str = "sprites/props/oak.png";
 pub const SPRITE_PROP_COTTAGE: &str = "sprites/props/cottage.png";
 
@@ -154,6 +160,7 @@ pub const ALL_SPRITE_PATHS: &[&str] = &[
     SPRITE_TILES_VILLAGE,
     SPRITE_TITLE,
     SPRITE_TILES_VILLAGE_V2,
+    SPRITE_TILES_VILLAGE_V3,
     SPRITE_PROP_OAK,
     SPRITE_PROP_COTTAGE,
     SPRITE_SMITH,

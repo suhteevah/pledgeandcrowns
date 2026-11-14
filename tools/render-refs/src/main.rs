@@ -577,6 +577,50 @@ const REF97_TILES = {
         assert!(err.contains("COLS"), "{err}");
     }
 
+    fn baked(name: &str) -> &'static str {
+        REF_FILES
+            .iter()
+            .find(|(n, _)| *n == name)
+            .map(|(_, src)| *src)
+            .unwrap_or_else(|| panic!("{name} is not a baked ref"))
+    }
+
+    /// Copy the `tw`x`th` tile at atlas index `i` out of a `cols`-wide atlas.
+    fn tile_px(img: &RgbaImage, cols: u32, i: u32, tw: u32, th: u32) -> Vec<[u8; 4]> {
+        let (ox, oy) = ((i % cols) * tw, (i / cols) * th);
+        (0..th)
+            .flat_map(|y| (0..tw).map(move |x| (x, y)))
+            .map(|(x, y)| img.get_pixel(ox + x, oy + y).0)
+            .collect()
+    }
+
+    /// REF-76 is a mechanical copy: the 22 REF-66 tiles in order, then the
+    /// 2 REF-75 tiles. Compared on rendered pixels, so any edited row,
+    /// reordering or dropped tile in the combined sheet fails here.
+    #[test]
+    fn ref76_atlas_is_verbatim_copy_of_ref66_and_ref75() {
+        let p = Palette::parse(PALETTE_SRC).unwrap();
+        let r66 = render_tiles(baked("ref-66-terrain.jsx"), &p).unwrap();
+        let r75 = render_tiles(baked("ref-75-flagstone.jsx"), &p).unwrap();
+        let r76 = render_tiles(baked("ref-76-village-atlas.jsx"), &p).unwrap();
+        assert_eq!((r76.width(), r76.height()), (128, 48), "REF-76 atlas size");
+        for i in 0..22 {
+            assert_eq!(
+                tile_px(&r76, 8, i, 16, 16),
+                tile_px(&r66, 8, i, 16, 16),
+                "REF-76 tile {i} differs from REF-66 tile {i}"
+            );
+        }
+        for i in 0..2 {
+            assert_eq!(
+                tile_px(&r76, 8, 22 + i, 16, 16),
+                tile_px(&r75, 2, i, 16, 16),
+                "REF-76 tile {} differs from REF-75 tile {i}",
+                22 + i
+            );
+        }
+    }
+
     #[test]
     fn render_tiles_rejects_zero_cols() {
         let p = Palette::parse(MINI_PALETTE).unwrap();

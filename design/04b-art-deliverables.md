@@ -244,7 +244,7 @@ Refs landed against the bible. Source `.jsx` lives at `design/art/refs/ref-NN-<s
 | 63 | The Swapwarden | 32×32 | ref-63-swapwarden.jsx | specs/swapwarden.md | `sprites/npc/swapwarden_idle_0.png` |
 | 64 | The Strongbox | 32×32 | ref-64-strongbox.jsx | specs/strongbox.md | `sprites/npc/strongbox_idle_0.png` |
 | 65 | The Ghostkeeper | 32×32 | ref-65-ghostkeeper.jsx | specs/ghostkeeper.md | `sprites/npc/ghostkeeper_idle_0.png` |
-| 66 | Hearthstone Village terrain v2 | 16×16 ×22 (8-col atlas, 128×48) | ref-66-terrain.jsx | (header) | `sprites/tiles_village_v2.png` (replaces REF-04 in the world) |
+| 66 | Hearthstone Village terrain v2 | 16×16 ×22 (8-col atlas, 128×48) | ref-66-terrain.jsx | (header) | `sprites/tiles_village_v2.png` (file kept, unused; its tiles ship in the world via REF-76, indices 0-21) |
 | 67 | Village oak (prop sprite) | 32×48 | ref-67-oak.jsx | (header) | `sprites/props/oak.png` |
 | 68 | Hearthstone cottage (prop sprite) | 64×64 | ref-68-cottage.jsx | (header) | `sprites/props/cottage.png` |
 | 69 | Costume kit, Act 3 Guildhall (Guildmaster) | 32×32 | ref-69-guildkit.jsx | (header) | (kit exemplar, not wired) |
@@ -253,8 +253,12 @@ Refs landed against the bible. Source `.jsx` lives at `design/art/refs/ref-NN-<s
 | 72 | Costume kit, Act 6 Forge (Smelter) | 32×32 | ref-72-forgekit.jsx | (header) | (kit exemplar, not wired) |
 | 73 | Costume kit, Act 7 Coast (Dockmaster) | 32×32 | ref-73-coastkit.jsx | (header) | (kit exemplar, not wired) |
 | 74 | Costume kit, Act 8 Vault (Warden) | 32×32 | ref-74-vaultkit.jsx | (header) | (kit exemplar, not wired) |
+| 75 | Plaza flagstone | 16×16 ×2 (2-col sheet, 32×16) | ref-75-flagstone.jsx | (header) | via REF-76: `sprites/tiles_village_v3.png` indices 22-23 (plaza interiors) |
+| 76 | Village combined atlas (REF-66 + REF-75, mechanical copy, no new art) | 16×16 ×24 (8-col atlas, 128×48) | ref-76-village-atlas.jsx | (header) | `sprites/tiles_village_v3.png` (the world's terrain atlas) |
 
 Props (REF-67, REF-68) are sprites, not tiles: y-sorted, anchored bottom-centre. Terrain (REF-66) uses an opaque base layer plus a transparent grass-edge overlay layer.
+
+A tilemap binds one atlas texture, so the plaza flagstone (REF-75) reaches the world through REF-76, a verbatim copy of the REF-66 tiles (0-21) followed by the REF-75 tiles (22-23). render-refs' `ref76_atlas_is_verbatim_copy_of_ref66_and_ref75` test fails if the copy drifts from either source; edit the source ref, never REF-76's rows. Plaza interiors are flagstone inside a one-tile REF-66 cobble ring; roads stay dirt.
 
 **NPC batches landed:**
 - Batch 1 (2026-05-02) — REF-11..15: Smith, Cartographer, Trait Mage, Bellringer, Cooper. Specs in `design/art/specs/`. Replaces SPRITE_PLAYER placeholders for the corresponding entries in `NPC_ROSTER`.
@@ -270,6 +274,7 @@ Props (REF-67, REF-68) are sprites, not tiles: y-sorted, anchored bottom-centre.
 
 **Tranches (canvas flow):**
 - Tranche 1 (approved by Matt 2026-11-13) — REF-66 terrain v2, REF-67 oak, REF-68 cottage, REF-69..74 costume-kit exemplars for Acts 3-8. REF-66/67/68 are wired into the game. REF-69..74 are approved kits only and are not wired to any NPC.
+- REF-75 plaza flagstone (approved by Matt 2026-11-14) — wired 2026-11-14 via the REF-76 combined atlas.
 - Tranche 2 (planned) — redraw the 40 Act 3-8 villagers on the REF-69..74 kits.
 
 **Remaining placeholders:** no `SPRITE_PLAYER` placeholders remain; all 57 NPCs (Acts 1-8) carry distinct art. That art is not final: the 40 Act 3-8 villagers still use their first-pass sprites (batches 5-10) until tranche 2 redraws them. See `game/src/plugins/npc.rs` for live truth.

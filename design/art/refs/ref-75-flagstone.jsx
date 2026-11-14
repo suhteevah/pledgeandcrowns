@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-75 - Plaza flagstone, 16x16 tiles, 2-column sheet.
-// APPROVED by Matt 2026-11-14. Not yet wired into the game.
+// APPROVED by Matt 2026-11-14. Wired 2026-11-14 via the REF-76 combined atlas (sprites/tiles_village_v3.png, indices 22-23).
 //
 // Why: REF-66 cobble (stone grey pavers, basalt mortar) is right for streets
 // but across a 600 px plaza it reads as a brick wall. These are large pale

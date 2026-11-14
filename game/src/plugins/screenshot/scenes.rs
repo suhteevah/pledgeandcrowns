@@ -381,6 +381,18 @@ fn world_scenes(v: &mut Vec<Scene>) {
             teardown: None,
         });
     }
+    // Hearthstone Square's north-east corner: flagstone interior, the
+    // one-tile cobble ring turning the corner, the N-S street entering
+    // through the north edge (left of frame) and two hub villagers.
+    v.push(scene(
+        "plaza-corner",
+        vec![
+            Action::EnterState(GameState::InGame, ENTER_GAME_SETTLE),
+            teleport_to(Vec2::new(150.0, 235.0)),
+        ],
+        0.7,
+        None,
+    ));
     // Quest marker: fresh progress, so Ferris carries the golden '!'.
     let ferris = npc_slot(FIRST_MISSION).unwrap_or(Vec2::ZERO);
     v.push(scene(
