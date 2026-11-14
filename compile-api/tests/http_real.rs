@@ -49,7 +49,9 @@ async fn post_compile_real(
 #[ignore = "slow: shells out to cargo check"]
 async fn compile_real_passes_canonical_intro() {
     let addr = spawn_server().await;
-    let src = "fn main() { let answer = 42; }";
+    // The intro mission's expectation is a printed `42` (the task says to
+    // update the println!), so the canonical answer prints it.
+    let src = "fn main() { let answer = 42; println!(\"{answer}\"); }";
     let (status, body) = post_compile_real(addr, "intro_let_binding", src).await;
     assert_eq!(status.as_u16(), 200);
     assert!(body.ok, "expected ok=true, got {body:?}");
@@ -58,15 +60,26 @@ async fn compile_real_passes_canonical_intro() {
         "expected [real] marker, got stdout={:?}",
         body.stdout
     );
-    // /compile-real returns the build+run verdict only — no
-    // per-encounter pattern-grader flavor stitched in. The canonical
-    // intro prints nothing, so the route reports the clean-run marker.
-    // (This assertion predated the wasm execution layer and expected a
-    // "cargo check: ok" marker that the route no longer emits.)
+    // /compile-real returns the build+run verdict plus the mission's
+    // output check — no pattern-grader flavor stitched in.
     assert_eq!(
-        body.stdout, "[real] compiled + ran: ok",
-        "expected clean-run marker"
+        body.stdout, "[real] 42\n-- checked: does what the mission asks",
+        "expected program output + checked marker"
     );
+    assert_eq!(body.behaviour_checked, Some(true));
+}
+
+#[tokio::test]
+#[ignore = "slow: shells out to cargo build + runs wasm"]
+async fn compile_real_rejects_a_silent_intro() {
+    // Compiles and runs cleanly, but never prints the answer: before
+    // per-mission expectations this was a pass.
+    let addr = spawn_server().await;
+    let (status, body) =
+        post_compile_real(addr, "intro_let_binding", "fn main() { let answer = 42; }").await;
+    assert_eq!(status.as_u16(), 200);
+    assert!(!body.ok, "{body:?}");
+    assert_eq!(body.behaviour_checked, Some(true));
 }
 
 #[tokio::test]

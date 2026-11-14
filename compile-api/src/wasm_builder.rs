@@ -83,6 +83,39 @@ pub const DEFAULT_RUN_MAX_MEMORY_BYTES: u64 = 16 * 1024 * 1024;
 /// what shipped before.
 pub const MAX_RUN_MAX_MEMORY_BYTES: u64 = 128 * 1024 * 1024;
 
+/// Text the server places before the player's source in `src/main.rs`,
+/// for plain and harness builds alike. Prefixing a crate-level allow keeps
+/// unused bindings in a student snippet from failing the build on lints.
+pub const PLAYER_PREAMBLE: &str = "#![allow(dead_code, unused)]\n";
+
+/// Lines in [`PLAYER_PREAMBLE`]. rustc line numbers for player code are
+/// this many lines past the player's own; the game client subtracts it
+/// (`SERVER_PREAMBLE_LINES`).
+pub const PLAYER_PREAMBLE_LINES: usize = 1;
+
+/// Line appended after the player's source in a harness build. It comes
+/// after the player's last line, so it never shifts player line numbers.
+pub const HARNESS_DECLARATION: &str = "\n#[doc(hidden)]\npub(crate) mod __pnc_harness;\n";
+
+/// How the server lays out the crate around the player's source. In both
+/// layouts the player's source is the single file `src/main.rs` (after
+/// [`PLAYER_PREAMBLE`]) and never touches the manifest.
+#[derive(Debug, Clone, Copy)]
+pub enum Layout<'a> {
+    /// `src/main.rs` is the crate root; the player's `fn main` runs.
+    Plain,
+    /// Server entry `src/pnc_entry.rs` is the crate root and declares the
+    /// player's file as module `main`; the server checker
+    /// `src/main/__pnc_harness.rs` is a child module of the player's code.
+    /// See `crate::expectations` for the design.
+    Harness {
+        /// Server entry crate root source.
+        entry: &'a str,
+        /// Server checker module source.
+        checker: &'a str,
+    },
+}
+
 /// Execution budget handed to [`wasm_runner::run_wasm`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RunLimits {
@@ -185,20 +218,21 @@ pub fn build_wasm(source: &str) -> Result<BuildVerdict> {
 /// failed `cargo build` or a deny-listed source is a *successful* call
 /// returning `Ok(BuildVerdict { ok: false, .. })`.
 pub fn build_wasm_in(source: &str, settings: &BuildSettings) -> Result<BuildVerdict> {
-    Ok(build_wasm_inner(source, settings)?.0)
+    Ok(build_wasm_inner(source, &Layout::Plain, settings)?.0)
 }
 
 /// Test-only hook: run a `build_wasm` and return the job dir path AFTER
 /// cleanup so a test can assert the directory no longer exists.
 #[doc(hidden)]
 pub fn build_wasm_with_sandbox_path(source: &str) -> Result<(BuildVerdict, PathBuf)> {
-    let (verdict, path) = build_wasm_inner(source, &BuildSettings::default())?;
+    let (verdict, path) = build_wasm_inner(source, &Layout::Plain, &BuildSettings::default())?;
     let path = path.ok_or_else(|| anyhow!("wasm_builder: no job dir was created"))?;
     Ok((verdict, path))
 }
 
 fn build_wasm_inner(
     source: &str,
+    layout: &Layout<'_>,
     settings: &BuildSettings,
 ) -> Result<(BuildVerdict, Option<PathBuf>)> {
     if source.trim().is_empty() {
@@ -228,7 +262,7 @@ fn build_wasm_inner(
         // Dropped after run_cargo_build returns, i.e. after the build's
         // process tree is confirmed dead.
         let guard = JobDirGuard::new(job);
-        write_bin_skeleton(guard.path(), source)?;
+        write_skeleton(guard.path(), source, layout)?;
         run_cargo_build(guard.path(), &settings.sandbox)?
     };
     Ok((verdict, Some(path_for_caller)))
@@ -257,8 +291,24 @@ pub fn compile_and_run_in(
     limits: &RunLimits,
     settings: &BuildSettings,
 ) -> Result<RealOutcome> {
+    compile_and_run_layout(source, &Layout::Plain, true, limits, settings)
+}
+
+/// Build `source` in `layout` and, when `run` is true and it compiled,
+/// run it in the sandbox. With `run == false` the module is never
+/// executed: the outcome has `compiled` set, `ran_ok == false` and
+/// `run_time == None` (used for missions that cannot run on wasip1).
+/// The source deny-list applies to the player's `source` only; server
+/// files in the layout are trusted.
+pub fn compile_and_run_layout(
+    source: &str,
+    layout: &Layout<'_>,
+    run: bool,
+    limits: &RunLimits,
+    settings: &BuildSettings,
+) -> Result<RealOutcome> {
     let build_started = Instant::now();
-    let build = build_wasm_in(source, settings)?;
+    let build = build_wasm_inner(source, layout, settings)?.0;
     let build_time = build_started.elapsed();
     let Some(bytes) = build.wasm else {
         tracing::debug!("wasm_builder: build failed after {build_time:?}, skipping run");
@@ -271,6 +321,17 @@ pub fn compile_and_run_in(
             run_time: None,
         });
     };
+    if !run {
+        tracing::debug!("wasm_builder: built in {build_time:?}; run skipped by caller");
+        return Ok(RealOutcome {
+            compiled: true,
+            ran_ok: false,
+            stdout: String::new(),
+            stderr: build.stderr,
+            build_time,
+            run_time: None,
+        });
+    }
 
     let run_started = Instant::now();
     let RunVerdict { ok, stdout, stderr } = wasm_runner::run_wasm(
@@ -325,42 +386,67 @@ pub fn startup_self_test(settings: &BuildSettings) -> Result<()> {
     Ok(())
 }
 
-fn write_bin_skeleton(job: &Path, source: &str) -> Result<()> {
-    // Server-owned manifest. Frozen, no dependencies, edition 2024.
-    // Player input does NOT flow into this string. `panic = "abort"`
-    // keeps panics from unwinding: in wasm a panic becomes a clean trap
-    // (the player's panic message is still printed to stderr first), so
-    // "your code panicked" surfaces as ran_ok=false rather than a murky
-    // partial state. opt-level 1 + codegen-units 16 favors build latency
-    // (this is graded interactively) over runtime micro-perf.
-    let manifest = r#"[package]
+/// Server-owned manifest. Frozen, no dependencies, edition 2024. Player
+/// input does NOT flow into this string. `panic = "abort"` keeps panics
+/// from unwinding: in wasm a panic becomes a clean trap (the player's panic
+/// message is still printed to stderr first), so "your code panicked"
+/// surfaces as ran_ok=false rather than a murky partial state. opt-level 1
+/// with codegen-units 16 favors build latency (this is graded interactively)
+/// over runtime micro-perf. `autobins = false` so a harness build, whose
+/// bin root is `src/pnc_entry.rs`, does not also auto-discover
+/// `src/main.rs` as a second binary. `bin_path` is one of two literals.
+fn manifest(bin_path: &str) -> String {
+    format!(
+        r#"[package]
 name = "player_submission"
 version = "0.0.0"
 edition = "2024"
 publish = false
+autobins = false
 
 [[bin]]
 name = "player_submission"
-path = "src/main.rs"
+path = "{bin_path}"
 
 [profile.release]
 opt-level = 1
 codegen-units = 16
 lto = false
 panic = "abort"
-"#;
-    fs::write(job.join("Cargo.toml"), manifest)
-        .context("wasm_builder: failed to write Cargo.toml")?;
+"#
+    )
+}
 
-    // Prefix a crate-level allow so unused bindings in a student snippet
-    // don't fail the build on lints; do NOT otherwise modify the source.
-    // The attr is an inner attribute and must be the first thing in the
-    // crate — player inner attributes (if any) follow it, which is legal.
-    let mut main_rs = String::with_capacity(source.len() + 64);
-    main_rs.push_str("#![allow(dead_code, unused)]\n");
+fn write_skeleton(job: &Path, source: &str, layout: &Layout<'_>) -> Result<()> {
+    let src_dir = job.join("src");
+    // The player's file: preamble + source, never otherwise modified. The
+    // preamble is an inner attribute and must be first; player inner
+    // attributes (if any) follow it, which is legal both as a crate root
+    // and as a module file.
+    let mut main_rs = String::with_capacity(source.len() + 128);
+    main_rs.push_str(PLAYER_PREAMBLE);
     main_rs.push_str(source);
-    fs::write(job.join("src").join("main.rs"), main_rs)
+    let bin_path = match layout {
+        Layout::Plain => "src/main.rs",
+        Layout::Harness { entry, checker } => {
+            main_rs.push_str(HARNESS_DECLARATION);
+            fs::write(src_dir.join("pnc_entry.rs"), entry)
+                .context("wasm_builder: failed to write src/pnc_entry.rs")?;
+            let module_dir = src_dir.join("main");
+            fs::create_dir(&module_dir).context("wasm_builder: failed to create src/main/")?;
+            fs::write(module_dir.join("__pnc_harness.rs"), checker)
+                .context("wasm_builder: failed to write the checker module")?;
+            "src/pnc_entry.rs"
+        }
+    };
+    fs::write(job.join("Cargo.toml"), manifest(bin_path))
+        .context("wasm_builder: failed to write Cargo.toml")?;
+    fs::write(src_dir.join("main.rs"), main_rs)
         .context("wasm_builder: failed to write src/main.rs")?;
+    tracing::debug!(
+        harness = matches!(layout, Layout::Harness { .. }),
+        "wasm_builder: wrote crate skeleton"
+    );
     Ok(())
 }
 
