@@ -32,23 +32,110 @@ pub enum ResultKind {
     Error,
 }
 
+/// What exactly a result says, for the result banner. Finer than
+/// [`ResultKind`]; written by `compile_client/outcome.rs` as the tag in
+/// front of the message (`[ok]`, `[ok:unverified]`, `[fail:compile]`...).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResultTag {
+    /// `[ok]`: behaviour was checked and matched.
+    Verified,
+    /// `[ok:unverified]` (or any unknown `[ok:...]`): accepted, behaviour
+    /// not checked.
+    Unverified,
+    /// `[ok:pattern]`: pattern grader (server `/compile` or offline stub).
+    PatternOnly,
+    /// `[fail]` (or any unknown `[fail:...]`): rejected, no detail.
+    Failed,
+    /// `[fail:compile]`
+    CompileError,
+    /// `[fail:runtime]`
+    RuntimeError,
+    /// `[fail:output]`
+    WrongOutput,
+    /// `[fail:static]`
+    StaticCheckFailed,
+    /// Not graded: transport / client errors (any other leading tag).
+    NotChecked,
+    /// `compiling…`
+    Pending,
+}
+
+impl ResultTag {
+    fn from_tag(tag: &str) -> Option<Self> {
+        Some(match tag {
+            "ok" => Self::Verified,
+            "ok:pattern" => Self::PatternOnly,
+            "fail" => Self::Failed,
+            "fail:compile" => Self::CompileError,
+            "fail:runtime" => Self::RuntimeError,
+            "fail:output" => Self::WrongOutput,
+            "fail:static" => Self::StaticCheckFailed,
+            // Never read an unknown pass tag as verified.
+            t if t.starts_with("ok:") => Self::Unverified,
+            t if t.starts_with("fail:") => Self::Failed,
+            _ => return None,
+        })
+    }
+
+    pub fn kind(self) -> ResultKind {
+        match self {
+            Self::Verified | Self::Unverified | Self::PatternOnly => ResultKind::Pass,
+            Self::Failed
+            | Self::CompileError
+            | Self::RuntimeError
+            | Self::WrongOutput
+            | Self::StaticCheckFailed => ResultKind::Fail,
+            Self::NotChecked => ResultKind::Error,
+            Self::Pending => ResultKind::Pending,
+        }
+    }
+}
+
 /// A compile result split for display.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParsedResult<'a> {
     pub kind: ResultKind,
+    pub tag: ResultTag,
     /// True when the native client fell back to the offline stub grader.
     pub offline: bool,
-    /// Message with the `[ok]` / `[fail]` tag and offline banner removed.
+    /// Message with the verdict tag and offline banner removed. Still
+    /// carries server markers; [`error_lines`] reads this, and
+    /// [`clean_for_display`] tidies it for the player.
     pub body: &'a str,
+}
+
+/// Structured extras of a server verdict that don't fit the string
+/// protocol: the server's note and expected/actual on a wrong answer.
+/// `for_result` is the `last_compile_result` string this belongs to; the
+/// editor ignores a detail whose string no longer matches (another plugin
+/// cleared or replaced the result).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ResultDetail {
+    pub for_result: String,
+    pub note: Option<String>,
+    pub expected: Option<String>,
+    pub actual: Option<String>,
+}
+
+impl ResultDetail {
+    /// No extras, for `formatted`.
+    pub fn bare(formatted: &str) -> Self {
+        Self {
+            for_result: formatted.to_string(),
+            ..Self::default()
+        }
+    }
 }
 
 const OFFLINE_BANNER_PREFIX: &str = "[offline mode";
 const PENDING_TEXT: &str = "compiling…";
 
 /// Classify a `last_compile_result` string. Formats produced by
-/// `compile_client.rs`: `[ok] ...`, `[fail] ...`, an optional leading
-/// `[offline mode — server unreachable]` line, `[client error] ...`,
-/// `[wasm] no stub grader ...`, and the `compiling…` placeholder.
+/// `compile_client`: a verdict tag (`[ok]`, `[ok:unverified]`,
+/// `[ok:pattern]`, `[fail]`, `[fail:compile|runtime|output|static]`), an
+/// optional leading `[offline mode — server unreachable]` line,
+/// `[client error] ...` and other refusal tags, and the `compiling…`
+/// placeholder.
 pub fn parse_result(raw: &str) -> ParsedResult<'_> {
     let mut rest = raw;
     let mut offline = false;
@@ -56,19 +143,268 @@ pub fn parse_result(raw: &str) -> ParsedResult<'_> {
         offline = true;
         rest = rest.split_once('\n').map_or("", |(_, tail)| tail);
     }
-    let (kind, body) = if let Some(b) = rest.strip_prefix("[ok]") {
-        (ResultKind::Pass, b)
-    } else if let Some(b) = rest.strip_prefix("[fail]") {
-        (ResultKind::Fail, b)
-    } else if rest.trim() == PENDING_TEXT {
-        (ResultKind::Pending, rest)
-    } else {
-        (ResultKind::Error, rest)
+    let verdict = rest
+        .strip_prefix('[')
+        .and_then(|r| r.split_once(']'))
+        .and_then(|(tag, body)| ResultTag::from_tag(tag).map(|t| (t, body)));
+    let (tag, body) = match verdict {
+        Some(v) => v,
+        None if rest.trim() == PENDING_TEXT => (ResultTag::Pending, rest),
+        None => (ResultTag::NotChecked, rest),
     };
     ParsedResult {
-        kind,
+        kind: tag.kind(),
+        tag,
         offline,
         body: body.trim_start_matches(' '),
+    }
+}
+
+/// Words that start a whole line of transport/tooling noise. Display only.
+const NOISE_LINES: &[&str] = &["--stderr--", "--stdout--"];
+/// Server verdict lines (`compile-api` `real_response`); the banner says
+/// the same thing.
+const VERDICT_LINE_PREFIXES: &[&str] = &["-- checked:", "-- not checked:"];
+/// Route / grader markers at the start of a line (`[real]` from
+/// `/compile-real`, `[stub]` from the offline grader, `[freeform]` from the
+/// pattern grader's no-grader reply).
+const LINE_MARKERS: &[&str] = &["[real]", "[stub]", "[freeform]"];
+/// Cargo progress lines (indented status words); rustc diagnostics follow.
+const CARGO_PROGRESS: &[&str] = &[
+    "Compiling ",
+    "Checking ",
+    "Finished ",
+    "Running ",
+    "Blocking waiting",
+    "Updating ",
+    "Downloaded ",
+];
+/// Section separators the server uses, mapped to plain headings.
+const SECTION_RENAMES: &[(&str, &str)] = &[
+    ("--- captured stderr ---", "Your program's error output:"),
+    (
+        "--- your program's stderr ---",
+        "Your program's error output:",
+    ),
+    (
+        "--- partial stderr ---",
+        "Build output before the time limit:",
+    ),
+];
+
+/// Every marker [`clean_for_display`] removes or rewrites (for docs/tests).
+pub fn noise_markers() -> Vec<&'static str> {
+    let mut v: Vec<&'static str> = Vec::new();
+    v.extend(NOISE_LINES);
+    v.extend(VERDICT_LINE_PREFIXES);
+    v.extend(LINE_MARKERS);
+    v.extend(SECTION_RENAMES.iter().map(|(from, _)| *from));
+    v.push("error: could not compile");
+    v
+}
+
+/// Player-facing copy of a result body: transport markers, server verdict
+/// lines and cargo progress noise removed, server section separators
+/// renamed, blank runs collapsed. Never used for [`error_lines`], which
+/// must see the server text exactly.
+pub fn clean_for_display(body: &str) -> String {
+    let mut out: Vec<String> = Vec::new();
+    for raw in body.lines() {
+        let line = raw.trim_end();
+        let trimmed = line.trim_start();
+        if NOISE_LINES.contains(&trimmed)
+            || VERDICT_LINE_PREFIXES.iter().any(|p| trimmed.starts_with(p))
+            || trimmed.starts_with("error: could not compile")
+            || (line.starts_with(' ') && CARGO_PROGRESS.iter().any(|p| trimmed.starts_with(p)))
+        {
+            continue;
+        }
+        if let Some((_, to)) = SECTION_RENAMES.iter().find(|(from, _)| trimmed == *from) {
+            out.push(String::new());
+            out.push((*to).to_string());
+            continue;
+        }
+        let mut kept = line;
+        if let Some(rest) = LINE_MARKERS.iter().find_map(|m| kept.strip_prefix(m)) {
+            kept = rest.strip_prefix(' ').unwrap_or(rest);
+            if kept.trim().is_empty() {
+                continue;
+            }
+        }
+        out.push(kept.to_string());
+    }
+    // Collapse blank runs and trim blank edges.
+    let mut cleaned: Vec<String> = Vec::with_capacity(out.len());
+    for line in out {
+        let blank = line.trim().is_empty();
+        if blank && cleaned.last().is_none_or(|l: &String| l.trim().is_empty()) {
+            continue;
+        }
+        cleaned.push(line);
+    }
+    while cleaned.last().is_some_and(|l| l.trim().is_empty()) {
+        cleaned.pop();
+    }
+    cleaned.join("\n")
+}
+
+/// For a wrong-output result whose expected/actual are shown on their own:
+/// the part of the cleaned body that adds something (the program's error
+/// output), or `None` when the body only repeats expected/actual.
+pub fn wrong_output_extra(cleaned: &str) -> Option<&str> {
+    const HEADING: &str = "Your program's error output:";
+    cleaned
+        .find(HEADING)
+        .map(|i| cleaned[i..].trim())
+        .filter(|s| !s.is_empty())
+}
+
+/// Visual class of the result banner (colours in `palette`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BannerStyle {
+    /// Verified pass.
+    Pass,
+    /// Pass whose behaviour was not checked (calm, not an alarm).
+    Unverified,
+    Fail,
+    /// Not graded at all (busy, offline, refused).
+    NotChecked,
+    Pending,
+}
+
+/// What the result banner says: a short title and one plain line.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Banner {
+    pub title: &'static str,
+    pub style: BannerStyle,
+    pub reason: String,
+}
+
+/// Capitalise the first letter and end with a full stop.
+fn sentence(s: &str) -> String {
+    let s = s.trim();
+    let mut chars = s.chars();
+    let mut out: String = match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => return String::new(),
+    };
+    if !out.ends_with(['.', '!', '?']) {
+        out.push('.');
+    }
+    out
+}
+
+/// Banner for a parsed result. `note` is the server's one-line note, if
+/// it sent one (shown as the reason for an unverified pass).
+pub fn banner(p: &ParsedResult<'_>, note: Option<&str>) -> Banner {
+    let note = note.map(sentence).filter(|n| !n.is_empty());
+    let (title, style, reason) = match (p.tag, p.offline) {
+        (ResultTag::Pending, _) => (
+            "COMPILING…",
+            BannerStyle::Pending,
+            "Sending your code to the compile server.".to_string(),
+        ),
+        (ResultTag::NotChecked, _) => (
+            "NOT CHECKED",
+            BannerStyle::NotChecked,
+            "Your code was not graded this time. This does not count as a failed attempt."
+                .to_string(),
+        ),
+        (ResultTag::Verified, _) => (
+            "PASS · VERIFIED",
+            BannerStyle::Pass,
+            "Checked: your program does what this mission asks.".to_string(),
+        ),
+        (t, true) if t.kind() == ResultKind::Pass => (
+            "PASS · OFFLINE PATTERN CHECK",
+            BannerStyle::Unverified,
+            "The server was unreachable, so only a pattern check ran. This pass is not saved yet."
+                .to_string(),
+        ),
+        (ResultTag::PatternOnly, false) => (
+            "PASS · PATTERN CHECK ONLY",
+            BannerStyle::Unverified,
+            note.unwrap_or_else(|| {
+                "Your code has what this mission looks for, but it was not compiled or run."
+                    .to_string()
+            }),
+        ),
+        (ResultTag::Unverified, false) => (
+            "PASS · NOT VERIFIED",
+            BannerStyle::Unverified,
+            note.unwrap_or_else(|| {
+                "It was accepted, but nothing checked what your code does.".to_string()
+            }),
+        ),
+        (_, true) => (
+            "FAIL · OFFLINE PATTERN CHECK",
+            BannerStyle::Fail,
+            "The server was unreachable; an offline pattern check rejected this.".to_string(),
+        ),
+        (ResultTag::CompileError, false) => (
+            "FAIL · DOES NOT COMPILE",
+            BannerStyle::Fail,
+            "rustc rejected the code. Fix the first error first; later ones often follow from it."
+                .to_string(),
+        ),
+        (ResultTag::RuntimeError, false) => (
+            "FAIL · CRASHED WHILE RUNNING",
+            BannerStyle::Fail,
+            "It compiled, but stopped with an error when it ran.".to_string(),
+        ),
+        (ResultTag::WrongOutput, false) => (
+            "FAIL · WRONG OUTPUT",
+            BannerStyle::Fail,
+            "It ran, but did not do what this mission asks.".to_string(),
+        ),
+        (ResultTag::StaticCheckFailed, false) => (
+            "FAIL · LESSON NOT USED",
+            BannerStyle::Fail,
+            "It compiles, but does not use what this mission teaches.".to_string(),
+        ),
+        (_, false) => (
+            "FAIL",
+            BannerStyle::Fail,
+            "Not accepted yet. The details are below.".to_string(),
+        ),
+    };
+    Banner {
+        title,
+        style,
+        reason,
+    }
+}
+
+/// How the result pane colours one cleaned line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LineRole {
+    /// `error[E..]: ...` / `error: ...` header.
+    ErrorHeader,
+    /// `warning: ...` header.
+    WarningHeader,
+    /// ` --> file:line:col`.
+    Location,
+    /// `help:` / `note:` / `= note:`.
+    Hint,
+    Plain,
+}
+
+pub fn line_role(line: &str) -> LineRole {
+    let t = line.trim_start();
+    if line.starts_with("error") {
+        LineRole::ErrorHeader
+    } else if line.starts_with("warning") {
+        LineRole::WarningHeader
+    } else if t.starts_with("--> ") {
+        LineRole::Location
+    } else if t.starts_with("help:")
+        || t.starts_with("note:")
+        || t.starts_with("= note:")
+        || t.starts_with("= help:")
+    {
+        LineRole::Hint
+    } else {
+        LineRole::Plain
     }
 }
 
@@ -286,6 +622,163 @@ error: could not compile `player` (bin \"player\") due to 1 previous error; 1 wa
     fn works_through_compile_client_wrapper() {
         let wrapped = format!("[fail] build failed\n--stderr--\n{SINGLE_ERROR}");
         assert_eq!(error_lines(&wrapped, SERVER_PREAMBLE_LINES), vec![3]);
+    }
+
+    #[test]
+    fn parse_result_reads_every_verdict_tag() {
+        for (raw, tag, kind) in [
+            ("[ok] 42", ResultTag::Verified, ResultKind::Pass),
+            (
+                "[ok:unverified] 42",
+                ResultTag::Unverified,
+                ResultKind::Pass,
+            ),
+            ("[ok:pattern] 42", ResultTag::PatternOnly, ResultKind::Pass),
+            ("[ok:someday] 42", ResultTag::Unverified, ResultKind::Pass),
+            ("[fail] x", ResultTag::Failed, ResultKind::Fail),
+            (
+                "[fail:compile] x",
+                ResultTag::CompileError,
+                ResultKind::Fail,
+            ),
+            (
+                "[fail:runtime] x",
+                ResultTag::RuntimeError,
+                ResultKind::Fail,
+            ),
+            ("[fail:output] x", ResultTag::WrongOutput, ResultKind::Fail),
+            (
+                "[fail:static] x",
+                ResultTag::StaticCheckFailed,
+                ResultKind::Fail,
+            ),
+            ("[fail:new] x", ResultTag::Failed, ResultKind::Fail),
+            (
+                "[rate limited] wait",
+                ResultTag::NotChecked,
+                ResultKind::Error,
+            ),
+        ] {
+            let p = parse_result(raw);
+            assert_eq!((p.tag, p.kind), (tag, kind), "{raw}");
+        }
+        assert_eq!(parse_result("[fail:compile] x").body, "x");
+    }
+
+    #[test]
+    fn error_lines_survive_every_failure_tag() {
+        let wrapped = format!("[fail:compile] [real]\n--stderr--\n{SINGLE_ERROR}");
+        let p = parse_result(&wrapped);
+        assert_eq!(error_lines(p.body, SERVER_PREAMBLE_LINES), vec![3]);
+    }
+
+    #[test]
+    fn clean_for_display_strips_noise_but_keeps_the_error() {
+        let raw = format!(
+            "[real]\n--stderr--\n{SINGLE_ERROR}\n--- captured stderr ---\npanicked\n-- not checked: x\n[stub] fine"
+        );
+        let c = clean_for_display(&raw);
+        for gone in [
+            "[real]",
+            "--stderr--",
+            "Checking player",
+            "could not compile",
+            "-- not checked",
+            "[stub]",
+            "--- captured",
+        ] {
+            assert!(!c.contains(gone), "{gone} left in:\n{c}");
+        }
+        assert!(c.starts_with("error[E0384]"), "{c}");
+        assert!(c.contains(" --> src/main.rs:4:5"));
+        assert!(c.contains("rustc --explain E0384"));
+        assert!(c.contains("Your program's error output:\npanicked"));
+        assert!(c.ends_with("fine"));
+        assert!(!c.contains("\n\n\n"));
+        // The parser still reads the raw body, not the cleaned one.
+        assert_eq!(error_lines(&raw, SERVER_PREAMBLE_LINES), vec![3]);
+        assert_eq!(
+            clean_for_display("[real] 42\n-- checked: does what the mission asks"),
+            "42"
+        );
+        assert_eq!(clean_for_display("[real]"), "");
+        assert!(noise_markers().contains(&"[real]"));
+    }
+
+    #[test]
+    fn wrong_output_extra_keeps_only_new_information() {
+        let only =
+            "41\nYour program ran, but did not do what this mission asks.\nExpected `42`\nGot:\n41";
+        assert_eq!(wrong_output_extra(only), None);
+        let more = format!("{only}\n\nYour program's error output:\nboom");
+        assert_eq!(
+            wrong_output_extra(&more),
+            Some("Your program's error output:\nboom")
+        );
+    }
+
+    #[test]
+    fn banner_distinguishes_verified_unverified_and_pattern() {
+        let b = banner(&parse_result("[ok] 42"), None);
+        assert_eq!((b.title, b.style), ("PASS · VERIFIED", BannerStyle::Pass));
+
+        let b = banner(
+            &parse_result("[ok:unverified] compiled"),
+            Some("behaviour not checked on this server: needs a GPU"),
+        );
+        assert_eq!(
+            (b.title, b.style),
+            ("PASS · NOT VERIFIED", BannerStyle::Unverified)
+        );
+        assert_eq!(
+            b.reason,
+            "Behaviour not checked on this server: needs a GPU."
+        );
+        let b = banner(&parse_result("[ok:unverified] x"), None);
+        assert!(!b.reason.is_empty());
+
+        let b = banner(&parse_result("[ok:pattern] nice"), None);
+        assert_eq!(
+            (b.title, b.style),
+            ("PASS · PATTERN CHECK ONLY", BannerStyle::Unverified)
+        );
+
+        let b = banner(
+            &parse_result("[offline mode — server unreachable]\n[ok:pattern] x"),
+            None,
+        );
+        assert_eq!(b.style, BannerStyle::Unverified);
+        assert!(b.title.contains("OFFLINE"));
+    }
+
+    #[test]
+    fn banner_failures_and_non_grades() {
+        for (raw, title) in [
+            ("[fail:compile] x", "FAIL · DOES NOT COMPILE"),
+            ("[fail:runtime] x", "FAIL · CRASHED WHILE RUNNING"),
+            ("[fail:output] x", "FAIL · WRONG OUTPUT"),
+            ("[fail:static] x", "FAIL · LESSON NOT USED"),
+            ("[fail] x", "FAIL"),
+        ] {
+            let b = banner(&parse_result(raw), None);
+            assert_eq!((b.title, b.style), (title, BannerStyle::Fail), "{raw}");
+        }
+        let b = banner(&parse_result("[server busy] wait"), None);
+        assert_eq!(b.style, BannerStyle::NotChecked);
+        assert_eq!(
+            banner(&parse_result("compiling…"), None).style,
+            BannerStyle::Pending
+        );
+    }
+
+    #[test]
+    fn line_roles() {
+        assert_eq!(line_role("error[E0384]: x"), LineRole::ErrorHeader);
+        assert_eq!(line_role("warning: unused"), LineRole::WarningHeader);
+        assert_eq!(line_role(" --> src/main.rs:4:5"), LineRole::Location);
+        assert_eq!(line_role("help: consider"), LineRole::Hint);
+        assert_eq!(line_role("  = note: `#[warn]`"), LineRole::Hint);
+        assert_eq!(line_role("3 |     let x = 5;"), LineRole::Plain);
     }
 
     #[test]

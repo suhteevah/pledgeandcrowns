@@ -1,27 +1,34 @@
 // SPDX-License-Identifier: MIT
 //! In-game Cast Editor (`design/02-mechanics.md` §The Cast Editor).
 //!
-//! Layout: toolbar (Compile / Reset to starter / Show solution) on top,
-//! code page with a line-number gutter in the centre, and a right-hand
-//! column holding the scrollable goal pane above the result pane.
+//! Layout ([`layout`]): a fixed fraction of the screen, centred, with an
+//! Oxblood title bar, a toolbar (Compile / Reset to starter / Show
+//! solution), the code page on the left, and a right-hand column holding
+//! the goal pane (or the revealed solution) above the result pane. Every
+//! pane has a fixed rectangle and scrolls internally, so the editor never
+//! grows past the window edge.
 //!
 //! Keys: `E` opens the editor when a mission is active, `Esc` closes it,
 //! `Ctrl+Enter` compiles. Other plugins read `EditorState::open` (audio,
 //! player movement, pause handling); that field's meaning is unchanged.
 //!
 //! Colours come only from [`palette`] (bible §UI Style). Pure logic
-//! lives in the submodules so it can be unit-tested without a renderer.
+//! lives in the submodules so it can be unit-tested without a renderer;
+//! egui drawing helpers are in [`widgets`].
 
 pub mod diagnostics;
 pub mod highlight;
+pub mod layout;
+pub mod markdown;
 pub mod palette;
 pub mod session;
 pub mod solutions;
+pub mod widgets;
 
 use crate::plugins::mission::{ActiveMission, Mission};
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass, egui};
-use diagnostics::{ParsedResult, ResultKind, SERVER_PREAMBLE_LINES};
+use diagnostics::{ParsedResult, ResultDetail, ResultKind, ResultTag, SERVER_PREAMBLE_LINES};
 use session::{FailureTracker, SolutionGate};
 use std::collections::BTreeSet;
 
@@ -30,6 +37,11 @@ pub struct EditorState {
     pub open: bool,
     pub source: String,
     pub last_compile_result: Option<String>,
+    /// Structured extras (server note, expected/actual) for the result in
+    /// `last_compile_result`. Ignored unless its `for_result` matches that
+    /// string, so a plugin that clears or replaces only the string can
+    /// never show stale extras.
+    pub last_result_detail: Option<ResultDetail>,
     /// Set by the editor UI when "Compile" is clicked. The
     /// `compile_client` plugin reads this each frame, dispatches the
     /// network request, and resets it.
@@ -48,6 +60,7 @@ impl Default for EditorState {
             open: false,
             source: String::new(),
             last_compile_result: None,
+            last_result_detail: None,
             compile_pending: false,
             encounter_id: "freeform".to_string(),
         }
@@ -60,6 +73,26 @@ impl EditorState {
     pub fn is_open(&self) -> bool {
         self.open
     }
+
+    /// Show a verdict: the editor string plus its structured extras.
+    pub fn set_result(&mut self, formatted: String, detail: ResultDetail) {
+        tracing::debug!(
+            bytes = formatted.len(),
+            note = detail.note.is_some(),
+            expected = detail.expected.is_some(),
+            "editor: result set"
+        );
+        self.last_compile_result = Some(formatted);
+        self.last_result_detail = Some(detail);
+    }
+
+    /// The extras for the current result, if they belong to it.
+    pub fn current_detail(&self) -> Option<&ResultDetail> {
+        let current = self.last_compile_result.as_deref()?;
+        self.last_result_detail
+            .as_ref()
+            .filter(|d| d.for_result == current)
+    }
 }
 
 /// Editor-private session state: failure counts, the in-flight compile
@@ -71,7 +104,12 @@ pub struct EditorSession {
     /// request time so a late result is attributed to the right mission.
     awaiting_result_for: Option<String>,
     confirm_reset: bool,
+    /// The solution pane replaces the goal pane while this is set.
     show_solution: bool,
+    /// "Copy into editor" asked to confirm overwriting an edited buffer.
+    confirm_copy: bool,
+    /// One-line feedback under the solution buttons.
+    copy_note: Option<&'static str>,
     /// Encounter the transient toggles belong to; a change clears them.
     ui_encounter: String,
 }
@@ -100,8 +138,23 @@ impl EditorSession {
     pub fn reveal_solution(&mut self, encounter_id: &str) {
         tracing::debug!("scripted: reveal solution for {encounter_id}");
         self.ui_encounter = encounter_id.to_string();
-        self.confirm_reset = false;
+        self.clear_toggles();
         self.show_solution = true;
+    }
+
+    /// Scripted-capture hook (`screenshot` plugin): back to the goal pane
+    /// with no pending confirmations, as on a fresh mission. Never called
+    /// in normal play.
+    pub fn reset_view(&mut self) {
+        tracing::debug!("scripted: editor view reset");
+        self.clear_toggles();
+    }
+
+    fn clear_toggles(&mut self) {
+        self.confirm_reset = false;
+        self.show_solution = false;
+        self.confirm_copy = false;
+        self.copy_note = None;
     }
 }
 
@@ -196,7 +249,19 @@ fn request_compile(state: &mut EditorState, session: &mut EditorSession) {
     // Clear the previous verdict so `track_compile_results` can't mistake
     // it for the new one (the wasm path never shows `compiling…`).
     state.last_compile_result = None;
+    state.last_result_detail = None;
     session.awaiting_result_for = Some(state.encounter_id.clone());
+}
+
+/// A child `Ui` confined (and clipped) to `rect`, with `margin` padding.
+fn pane_ui(ui: &mut egui::Ui, rect: egui::Rect, margin: f32) -> egui::Ui {
+    let mut child = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(rect.shrink(margin))
+            .layout(egui::Layout::top_down(egui::Align::Min)),
+    );
+    child.set_clip_rect(rect.intersect(ui.clip_rect()));
+    child
 }
 
 fn draw_editor(
@@ -222,8 +287,7 @@ fn draw_editor(
             state.encounter_id
         );
         session.ui_encounter = state.encounter_id.clone();
-        session.confirm_reset = false;
-        session.show_solution = false;
+        session.clear_toggles();
     }
 
     let mission = active
@@ -231,17 +295,36 @@ fn draw_editor(
         .as_ref()
         .filter(|m| m.id == state.encounter_id);
 
-    let frame =
-        egui::Frame::window(&ctx.style()).stroke(egui::Stroke::new(2.0_f32, palette::FRAME));
-    egui::Window::new("Code Editor")
-        .frame(frame)
-        .default_width(1040.0)
-        .default_height(600.0)
+    let screen = ctx.content_rect();
+    let has_result = state.last_compile_result.is_some();
+    let lay = layout::editor_layout(screen.size(), has_result);
+    let offset = screen.min.to_vec2();
+    let r = |rect: egui::Rect| rect.translate(offset);
+
+    egui::Area::new(egui::Id::new("cast_editor"))
+        .order(egui::Order::Middle)
+        .fixed_pos(r(lay.window).min)
+        .constrain(false)
         .show(ctx, |ui| {
+            widgets::apply_parchment_style(ui.style_mut());
+            let (window, _) = ui.allocate_exact_size(lay.window.size(), egui::Sense::hover());
+            widgets::paint_window_frame(ui.painter(), window);
+
+            let npc = mission.map_or("", |m| m.npc_name);
+            let title = if npc.is_empty() {
+                "CAST EDITOR".to_string()
+            } else {
+                format!("CAST EDITOR  ·  {npc}")
+            };
+            let mut title_ui = pane_ui(ui, r(lay.title), 0.0);
+            widgets::title_bar(&mut title_ui, &title, "Esc closes  ·  Ctrl+Enter compiles");
+
             let Some(mission) = mission else {
-                draw_empty_state(ui);
+                let mut body = pane_ui(ui, r(lay.code).union(r(lay.result)), 12.0);
+                draw_empty_state(&mut body);
                 return;
             };
+
             // Consume Ctrl+Enter before the TextEdit sees it, so it
             // compiles instead of inserting a newline.
             let mut compile_now = ui
@@ -253,27 +336,18 @@ fn draw_editor(
 
             let solution = solutions::canonical_solution(mission.id);
             let gate = session::solution_gate(session.failures(mission.id), solution);
-            if !matches!(gate, SolutionGate::Available(_)) {
-                session.show_solution = false;
-            }
+            let revealed = match gate {
+                SolutionGate::Available(s) if session.show_solution => Some(s),
+                _ => {
+                    session.show_solution = false;
+                    None
+                }
+            };
 
-            egui::TopBottomPanel::top("editor_toolbar").show_inside(ui, |ui| {
-                ui.horizontal(|ui| {
-                    if ui.button("Compile").on_hover_text("Ctrl+Enter").clicked() {
-                        compile_now = true;
-                    }
-                    draw_reset_controls(ui, state, session, mission.starter_code);
-                    draw_solution_button(ui, session, gate);
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.weak("Esc closes  ·  Ctrl+Enter compiles");
-                    });
-                });
-            });
-
-            let parsed = state
-                .last_compile_result
-                .as_deref()
-                .map(diagnostics::parse_result);
+            // Snapshot the result: the panes below may edit `state`.
+            let result_raw = state.last_compile_result.clone();
+            let detail = state.current_detail().cloned();
+            let parsed = result_raw.as_deref().map(diagnostics::parse_result);
             let error_lines: BTreeSet<usize> = match parsed.as_ref() {
                 Some(p) if p.kind != ResultKind::Pass => {
                     diagnostics::error_lines(p.body, SERVER_PREAMBLE_LINES)
@@ -283,26 +357,35 @@ fn draw_editor(
                 _ => BTreeSet::new(),
             };
 
-            egui::SidePanel::right("goal_panel")
-                .resizable(true)
-                .default_width(380.0)
-                .show_inside(ui, |ui| {
-                    egui::TopBottomPanel::bottom("result_panel")
-                        .resizable(true)
-                        .default_height(180.0)
-                        .show_inside(ui, |ui| draw_result(ui, parsed.as_ref()));
-                    egui::CentralPanel::default().show_inside(ui, |ui| {
-                        let revealed = match gate {
-                            SolutionGate::Available(s) if session.show_solution => Some(s),
-                            _ => None,
-                        };
-                        draw_goal(ui, mission, revealed);
-                    });
-                });
-
-            egui::CentralPanel::default().show_inside(ui, |ui| {
-                draw_code(ui, &mut state.source, &error_lines);
+            let mut bar = pane_ui(ui, r(lay.toolbar), 2.0);
+            bar.horizontal_centered(|ui| {
+                let compile = egui::Button::new(
+                    egui::RichText::new("Compile")
+                        .color(palette::TEXT_ON_DARK)
+                        .strong(),
+                )
+                .fill(palette::ACCENT);
+                if ui.add(compile).clicked() {
+                    compile_now = true;
+                }
+                draw_reset_controls(ui, state, session, mission.starter_code);
+                draw_solution_button(ui, session, gate);
             });
+
+            widgets::paint_pane(ui.painter(), r(lay.code), palette::PAGE_BG);
+            let mut code_ui = pane_ui(ui, r(lay.code), 2.0);
+            draw_code(&mut code_ui, &mut state.source, &error_lines);
+
+            widgets::paint_pane(ui.painter(), r(lay.goal), palette::SURFACE);
+            let mut goal_ui = pane_ui(ui, r(lay.goal), 8.0);
+            match revealed {
+                Some(code) => draw_solution(&mut goal_ui, state, session, code),
+                None => draw_goal(&mut goal_ui, mission),
+            }
+
+            widgets::paint_pane(ui.painter(), r(lay.result), palette::SURFACE);
+            let mut result_ui = pane_ui(ui, r(lay.result), 8.0);
+            draw_result(&mut result_ui, parsed.as_ref(), detail.as_ref());
 
             if compile_now {
                 request_compile(state, session);
@@ -311,7 +394,7 @@ fn draw_editor(
 }
 
 fn draw_empty_state(ui: &mut egui::Ui) {
-    ui.heading("No mission loaded");
+    widgets::caption(ui, "NO MISSION LOADED");
     ui.label("Walk up to an NPC and press F to start a mission. Esc closes this window.");
 }
 
@@ -322,7 +405,11 @@ fn draw_reset_controls(
     starter: &str,
 ) {
     if session.confirm_reset {
-        ui.colored_label(palette::ERROR, "Discard your changes?");
+        ui.label(
+            egui::RichText::new("Discard your changes?")
+                .color(palette::ACCENT)
+                .strong(),
+        );
         if ui.button("Yes, reset").clicked() {
             tracing::info!("reset to starter confirmed for {}", state.encounter_id);
             state.source = starter.to_string();
@@ -346,129 +433,206 @@ fn draw_solution_button(ui: &mut egui::Ui, session: &mut EditorSession, gate: So
     match gate {
         SolutionGate::Available(_) => {
             let label = if session.show_solution {
-                "Hide solution"
+                "Back to goal"
             } else {
                 "Show solution"
             };
             if ui.button(label).clicked() {
                 session.show_solution = !session.show_solution;
-                tracing::info!("solution visibility toggled to {}", session.show_solution);
+                session.confirm_copy = false;
+                session.copy_note = None;
+                tracing::info!("solution pane toggled to {}", session.show_solution);
             }
         }
         SolutionGate::Unauthored => {
-            ui.add_enabled(false, egui::Button::new("Show solution"))
-                .on_disabled_hover_text(
-                    "No reference solution has been written for this mission yet.",
-                );
+            widgets::disabled_button(ui, "Show solution");
+            ui.label(
+                egui::RichText::new("No reference solution for this mission yet.")
+                    .color(palette::TEXT_MUTED)
+                    .size(12.0),
+            );
         }
         SolutionGate::Locked { remaining } => {
-            ui.add_enabled(false, egui::Button::new("Show solution"))
-                .on_disabled_hover_text(format!(
-                    "Unlocks after {} failed compiles on this mission ({remaining} to go).",
-                    session::SOLUTION_UNLOCK_FAILURES
-                ));
+            widgets::disabled_button(ui, "Show solution");
+            let plural = if remaining == 1 { "" } else { "s" };
+            ui.label(
+                egui::RichText::new(format!(
+                    "Unlocks after {remaining} more failed compile{plural}."
+                ))
+                .color(palette::TEXT_MUTED)
+                .size(12.0),
+            );
         }
     }
 }
 
-fn draw_goal(ui: &mut egui::Ui, mission: &Mission, solution: Option<&str>) {
+fn draw_goal(ui: &mut egui::Ui, mission: &Mission) {
     egui::ScrollArea::vertical()
         .id_salt("goal_scroll")
+        .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
         .auto_shrink([false; 2])
         .show(ui, |ui| {
-            ui.heading(mission.npc_name);
-            ui.strong("GOAL");
-            ui.label(mission.prompt);
+            widgets::caption(ui, "GOAL");
+            widgets::draw_markdown(ui, mission.prompt);
+            ui.add_space(4.0);
             ui.separator();
-            draw_tutorial(ui, mission.tutorial);
-            if let Some(code) = solution {
-                ui.separator();
-                ui.strong("REFERENCE SOLUTION");
-                ui.add(
-                    egui::TextEdit::multiline(&mut code.to_string())
-                        .font(egui::TextStyle::Monospace)
-                        .desired_width(f32::INFINITY)
-                        .interactive(false),
-                );
+            widgets::draw_markdown(ui, mission.tutorial);
+        });
+}
+
+/// The revealed reference solution, in place of the goal pane, with
+/// "Copy into editor" (confirming before it overwrites edited code) and
+/// "Back to goal".
+fn draw_solution(
+    ui: &mut egui::Ui,
+    state: &mut EditorState,
+    session: &mut EditorSession,
+    code: &str,
+) {
+    widgets::caption(ui, "REFERENCE SOLUTION");
+    ui.horizontal_wrapped(|ui| {
+        if session.confirm_copy {
+            ui.label(
+                egui::RichText::new("Replace your code with this?")
+                    .color(palette::ACCENT)
+                    .strong(),
+            );
+            if ui.button("Yes, replace").clicked() {
+                tracing::info!("solution copied into editor for {}", state.encounter_id);
+                state.source = code.to_string();
+                session.confirm_copy = false;
+                session.copy_note = Some("Copied into the editor. Press Compile to check it.");
+            }
+            if ui.button("Cancel").clicked() {
+                tracing::debug!("copy solution cancelled");
+                session.confirm_copy = false;
+            }
+        } else {
+            if ui.button("Copy into editor").clicked() {
+                if session::reset_needs_confirm(&state.source, code) {
+                    tracing::debug!("copy solution over edited buffer; asking to confirm");
+                    session.confirm_copy = true;
+                    session.copy_note = None;
+                } else {
+                    tracing::debug!("copy solution: buffer already matches");
+                    session.copy_note = Some("Your code already matches the solution.");
+                }
+            }
+            if ui.button("Back to goal").clicked() {
+                tracing::info!("solution pane closed");
+                session.show_solution = false;
+                session.copy_note = None;
+            }
+        }
+    });
+    if let Some(note) = session.copy_note {
+        ui.label(
+            egui::RichText::new(note)
+                .color(palette::TEXT_MUTED)
+                .size(12.0),
+        );
+    }
+    ui.add_space(4.0);
+    let font = widgets::mono_font();
+    egui::Frame::new()
+        .fill(palette::PAGE_BG)
+        .stroke(egui::Stroke::new(1.0_f32, palette::FRAME))
+        .inner_margin(egui::Margin::same(6))
+        .show(ui, |ui| {
+            egui::ScrollArea::both()
+                .id_salt("solution_scroll")
+                .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
+                .auto_shrink([false; 2])
+                .show(ui, |ui| {
+                    let job = highlight::layout_job(code, font, &BTreeSet::new());
+                    ui.add(egui::Label::new(job).extend());
+                });
+        });
+}
+
+fn draw_result(
+    ui: &mut egui::Ui,
+    parsed: Option<&ParsedResult<'_>>,
+    detail: Option<&ResultDetail>,
+) {
+    let Some(p) = parsed else {
+        widgets::caption(ui, "RESULT");
+        ui.label(
+            egui::RichText::new("Nothing yet. Press Compile (Ctrl+Enter) to check your code.")
+                .color(palette::TEXT_MUTED),
+        );
+        return;
+    };
+    let banner = diagnostics::banner(p, detail.and_then(|d| d.note.as_deref()));
+    widgets::draw_banner(ui, &banner);
+    if p.kind == ResultKind::Pending {
+        return;
+    }
+    ui.add_space(2.0);
+    let cleaned = diagnostics::clean_for_display(p.body);
+    // A fresh scroll state per result, so a new verdict starts at its top.
+    let salt = ("result_scroll", p.body.len(), p.body.lines().count());
+    egui::ScrollArea::vertical()
+        .id_salt(salt)
+        .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
+        .auto_shrink([false; 2])
+        .show(ui, |ui| {
+            let wrong = p.tag == ResultTag::WrongOutput;
+            let expected = detail.and_then(|d| d.expected.as_deref());
+            let actual = detail.and_then(|d| d.actual.as_deref());
+            if wrong && (expected.is_some() || actual.is_some()) {
+                widgets::draw_expected_actual(ui, expected, actual);
+                if let Some(extra) = diagnostics::wrong_output_extra(&cleaned) {
+                    ui.add_space(4.0);
+                    widgets::draw_output(ui, extra);
+                }
+            } else {
+                if p.kind == ResultKind::Pass && !cleaned.is_empty() && !p.offline {
+                    widgets::caption(ui, "OUTPUT");
+                }
+                widgets::draw_output(ui, &cleaned);
             }
         });
 }
 
-fn draw_result(ui: &mut egui::Ui, parsed: Option<&ParsedResult<'_>>) {
-    ui.strong("COMPILER OUTPUT");
-    let Some(p) = parsed else {
-        ui.weak("(no output yet: press Compile or Ctrl+Enter)");
-        return;
-    };
-    let (heading, color) = match p.kind {
-        ResultKind::Pass => ("PASS", palette::PASS),
-        ResultKind::Fail => ("FAIL", palette::ERROR),
-        ResultKind::Pending => ("COMPILING…", palette::COMMENT),
-        ResultKind::Error => ("ERROR", palette::ERROR),
-    };
-    ui.horizontal(|ui| {
-        ui.colored_label(color, egui::RichText::new(heading).strong());
-        if p.offline {
-            ui.weak("offline grader (server unreachable)");
-        }
-    });
-    if p.kind != ResultKind::Pending {
-        egui::ScrollArea::vertical()
-            .id_salt("result_scroll")
-            .auto_shrink([false; 2])
-            .show(ui, |ui| {
-                ui.add(egui::Label::new(egui::RichText::new(p.body).monospace()).wrap());
-            });
-    }
-}
-
-/// Code page: Parchment fill, Basalt frame, line-number gutter with
-/// error lines in Alarm scarlet, and the highlighted TextEdit. Wrapping
-/// is off so each gutter row lines up with exactly one source line.
+/// Code page: Parchment fill, line-number gutter with error lines marked,
+/// and the highlighted TextEdit filling the pane. Wrapping is off so each
+/// gutter row lines up with exactly one source line; the page scrolls in
+/// both directions inside its fixed rectangle.
 fn draw_code(ui: &mut egui::Ui, source: &mut String, error_lines: &BTreeSet<usize>) {
-    {
-        let visuals = ui.visuals_mut();
-        visuals.extreme_bg_color = palette::PAGE_BG;
-        visuals.text_cursor.stroke.color = palette::PLAIN;
-    }
-    let font_id = egui::TextStyle::Monospace.resolve(ui.style());
+    let font_id = widgets::mono_font();
     let gutter = gutter_job(source, &font_id, error_lines);
+    let page = ui.available_size();
 
-    egui::Frame::new()
-        .fill(palette::PAGE_BG)
-        .stroke(egui::Stroke::new(1.0_f32, palette::FRAME))
+    egui::ScrollArea::both()
+        .id_salt("source_scroll")
+        .auto_shrink([false; 2])
         .show(ui, |ui| {
-            egui::ScrollArea::both()
-                .id_salt("source_scroll")
-                .auto_shrink([false; 2])
-                .show(ui, |ui| {
-                    ui.horizontal_top(|ui| {
-                        ui.vertical(|ui| {
-                            // Match the TextEdit's top margin (2 px).
-                            ui.add_space(2.0);
-                            ui.add(egui::Label::new(gutter).selectable(false));
-                        });
-                        let layout_font = font_id.clone();
-                        let errs = error_lines.clone();
-                        let mut layouter =
-                            move |ui: &egui::Ui, text: &dyn egui::TextBuffer, _wrap_width: f32| {
-                                let job = highlight::layout_job(
-                                    text.as_str(),
-                                    layout_font.clone(),
-                                    &errs,
-                                );
-                                ui.ctx().fonts_mut(|f| f.layout_job(job))
-                            };
-                        ui.add(
-                            egui::TextEdit::multiline(source)
-                                .code_editor()
-                                .margin(egui::Margin::symmetric(4, 2))
-                                .desired_rows(18)
-                                .desired_width(ui.available_width().max(200.0))
-                                .layouter(&mut layouter),
-                        );
-                    });
+            ui.horizontal_top(|ui| {
+                ui.vertical(|ui| {
+                    // Match the TextEdit's top margin.
+                    ui.add_space(4.0);
+                    ui.add(egui::Label::new(gutter).selectable(false));
                 });
+                let layout_font = font_id.clone();
+                let errs = error_lines.clone();
+                let mut layouter =
+                    move |ui: &egui::Ui, text: &dyn egui::TextBuffer, _wrap_width: f32| {
+                        let job = highlight::layout_job(text.as_str(), layout_font.clone(), &errs);
+                        ui.ctx().fonts_mut(|f| f.layout_job(job))
+                    };
+                let width = ui.available_width().max(200.0);
+                ui.add(
+                    egui::TextEdit::multiline(source)
+                        .code_editor()
+                        .font(font_id.clone())
+                        .frame(false)
+                        .margin(egui::Margin::symmetric(6, 4))
+                        .desired_width(width)
+                        .min_size(egui::vec2(width, (page.y - 8.0).max(0.0)))
+                        .layouter(&mut layouter),
+                );
+            });
         });
 }
 
@@ -478,14 +642,14 @@ fn gutter_job(
     error_lines: &BTreeSet<usize>,
 ) -> egui::text::LayoutJob {
     let line_count = source.matches('\n').count() + 1;
-    let width = line_count.to_string().len();
+    let width = line_count.to_string().len().max(2);
     let mut job = egui::text::LayoutJob::default();
     for n in 1..=line_count {
         let is_err = error_lines.contains(&n);
         let text = if n == line_count {
-            format!("{n:>width$}")
+            format!(" {n:>width$}")
         } else {
-            format!("{n:>width$}\n")
+            format!(" {n:>width$}\n")
         };
         job.append(
             &text,
@@ -493,50 +657,18 @@ fn gutter_job(
             egui::TextFormat {
                 font_id: font_id.clone(),
                 color: if is_err {
-                    palette::ERROR
+                    palette::GUTTER_ERROR
                 } else {
                     palette::GUTTER
+                },
+                background: if is_err {
+                    palette::CHIP_BG
+                } else {
+                    egui::Color32::TRANSPARENT
                 },
                 ..Default::default()
             },
         );
     }
     job
-}
-
-/// Lightweight tutorial renderer. Recognises `## Heading` lines and
-/// triple-backtick code fences; everything else is wrapped body text.
-fn draw_tutorial(ui: &mut egui::Ui, body: &str) {
-    let mut in_code = false;
-    let mut code_buf = String::new();
-    for line in body.split('\n') {
-        if line.trim() == "```" {
-            if in_code {
-                ui.add(
-                    egui::TextEdit::multiline(&mut code_buf.clone())
-                        .font(egui::TextStyle::Monospace)
-                        .desired_width(f32::INFINITY)
-                        .interactive(false),
-                );
-                code_buf.clear();
-                in_code = false;
-            } else {
-                in_code = true;
-            }
-            continue;
-        }
-        if in_code {
-            if !code_buf.is_empty() {
-                code_buf.push('\n');
-            }
-            code_buf.push_str(line);
-        } else if let Some(rest) = line.strip_prefix("## ") {
-            ui.add_space(6.0);
-            ui.heading(rest);
-        } else if line.is_empty() {
-            ui.add_space(4.0);
-        } else {
-            ui.label(line);
-        }
-    }
 }

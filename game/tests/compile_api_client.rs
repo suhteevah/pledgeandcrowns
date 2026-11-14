@@ -11,18 +11,19 @@
 //! (the server's runtime lives on a separate thread).
 
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use pledge_and_crown::plugins::compile_client::config::{
     ApiEndpoint, ApiToken, CompileMode, DEFAULT_PATTERN_TIMEOUT,
 };
 use pledge_and_crown::plugins::compile_client::outcome::{
-    ApiOutcome, classify, verdict_with_server,
+    ApiOutcome, Grade, Unverified, classify, verdict_with_server,
 };
 use pledge_and_crown::plugins::compile_client::transport::post_compile_blocking;
 use pledge_and_crown::plugins::stub_grader::stub_verdict;
 use pledge_compile_api::config::Secret;
+use pledge_compile_api::expectations::{GradeState, GradedRun};
 use pledge_compile_api::wasm_builder::RealOutcome;
 use pledge_compile_api::{AppState, Config, build_router, serve};
 
@@ -69,7 +70,7 @@ fn endpoint(addr: SocketAddr, token: Option<&str>, mode: CompileMode) -> ApiEndp
 }
 
 fn grade(ep: &ApiEndpoint, source: &str) -> ApiOutcome {
-    classify(post_compile_blocking(ep, source, MISSION))
+    classify(ep.mode, post_compile_blocking(ep, source, MISSION))
 }
 
 #[test]
@@ -77,13 +78,18 @@ fn authed_pass_is_graded_and_saved() {
     let addr = start_server(AppState::new(authed_config()));
     let ep = endpoint(addr, Some(TOKEN), CompileMode::Pattern);
     let o = grade(&ep, PASSING);
-    assert!(matches!(o, ApiOutcome::Graded { ok: true, .. }), "{o:?}");
+    // The pattern route never checks behaviour: a pass, never "verified".
+    assert_eq!(
+        o.grade(),
+        Some(Grade::PassedUnverified(Unverified::PatternOnly)),
+        "{o:?}"
+    );
     let v = verdict_with_server(&o, MISSION, || panic!("no fallback on success"));
     assert!(v.ok && v.persist_clear);
-    assert!(v.formatted.starts_with("[ok]"), "{}", v.formatted);
+    assert!(v.formatted.starts_with("[ok:pattern]"), "{}", v.formatted);
 
     let o = grade(&ep, "fn main() {}");
-    assert!(matches!(o, ApiOutcome::Graded { ok: false, .. }), "{o:?}");
+    assert_eq!(o.grade(), Some(Grade::Failed), "{o:?}");
 }
 
 #[test]
@@ -134,14 +140,30 @@ fn rate_limit_reports_retry_after() {
 
 #[test]
 fn full_build_queue_is_busy() {
-    // One build slot, no queue, and a grader that holds the slot.
+    // One build slot, no queue, and a grader that holds the slot until the
+    // test releases it. Synchronised on channels, not sleeps: the second
+    // request is only sent once the first is provably inside the grader
+    // (so holding the slot), however loaded the machine is.
     let cfg = Config {
         max_concurrent_builds: 1,
         max_queued_builds: 0,
         ..authed_config()
     };
-    let slow: pledge_compile_api::RealGrader = Arc::new(|_src, _limits| {
-        std::thread::sleep(Duration::from_secs(3));
+    let (entered_tx, entered_rx) = std::sync::mpsc::channel::<()>();
+    let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+    let entered_tx = Mutex::new(entered_tx);
+    let release_rx = Mutex::new(release_rx);
+    let holding: pledge_compile_api::RealGrader = Arc::new(move |_src, _limits| {
+        entered_tx
+            .lock()
+            .expect("entered lock")
+            .send(())
+            .expect("signal entered");
+        release_rx
+            .lock()
+            .expect("release lock")
+            .recv_timeout(Duration::from_secs(60))
+            .expect("test never released the build slot");
         Ok(RealOutcome {
             compiled: true,
             ran_ok: true,
@@ -151,14 +173,17 @@ fn full_build_queue_is_busy() {
             run_time: Some(Duration::from_millis(1)),
         })
     });
-    let addr = start_server(AppState::with_real_grader(cfg, slow));
+    let addr = start_server(AppState::with_real_grader(cfg, holding));
     let ep = endpoint(addr, Some(TOKEN), CompileMode::Real);
     let holder = {
         let ep = ep.clone();
         std::thread::spawn(move || grade(&ep, PASSING))
     };
-    std::thread::sleep(Duration::from_millis(700));
+    entered_rx
+        .recv_timeout(Duration::from_secs(60))
+        .expect("first build never reached the grader");
     let o = grade(&ep, PASSING);
+    release_tx.send(()).expect("release the build slot");
     assert!(
         matches!(
             o,
@@ -169,10 +194,89 @@ fn full_build_queue_is_busy() {
         "{o:?}"
     );
     let first = holder.join().expect("holder thread");
-    assert!(
-        matches!(first, ApiOutcome::Graded { ok: true, .. }),
+    // The injected grader checks nothing: an honest unverified pass.
+    assert_eq!(
+        first.grade(),
+        Some(Grade::PassedUnverified(Unverified::RanNotChecked)),
         "{first:?}"
     );
+}
+
+/// A mission grader that returns `state` for any source.
+fn fixed_grade(
+    state: GradeState,
+    expected: Option<&'static str>,
+    actual: Option<&'static str>,
+) -> pledge_compile_api::MissionGrader {
+    Arc::new(move |_enc, _src, _limits| {
+        Ok(GradedRun {
+            outcome: RealOutcome {
+                compiled: !matches!(state, GradeState::CompileError),
+                ran_ok: matches!(
+                    state,
+                    GradeState::Passed | GradeState::RanNotChecked | GradeState::WrongOutput
+                ),
+                stdout: "41".to_string(),
+                stderr: String::new(),
+                build_time: Duration::from_millis(1),
+                run_time: None,
+            },
+            state,
+            expected: expected.map(str::to_string),
+            actual: actual.map(str::to_string),
+            note: format!("note for {state:?}"),
+        })
+    })
+}
+
+#[test]
+fn real_route_grades_map_end_to_end() {
+    let cases = [
+        (GradeState::Passed, Grade::Passed, true),
+        (
+            GradeState::CompiledNotChecked,
+            Grade::PassedUnverified(Unverified::CompiledNotChecked),
+            true,
+        ),
+        (
+            GradeState::RanNotChecked,
+            Grade::PassedUnverified(Unverified::RanNotChecked),
+            true,
+        ),
+        (GradeState::WrongOutput, Grade::WrongOutput, false),
+        (GradeState::CompileError, Grade::CompileError, false),
+        (GradeState::RuntimeError, Grade::RuntimeError, false),
+        (
+            GradeState::StaticCheckFailed,
+            Grade::StaticCheckFailed,
+            false,
+        ),
+    ];
+    for (state, want, saved) in cases {
+        let (expected, actual) = if state == GradeState::WrongOutput {
+            (Some("a line reading `42`"), Some("41"))
+        } else {
+            (None, None)
+        };
+        let addr = start_server(AppState::with_mission_grader(
+            authed_config(),
+            fixed_grade(state, expected, actual),
+        ));
+        let o = grade(&endpoint(addr, Some(TOKEN), CompileMode::Real), PASSING);
+        assert_eq!(o.grade(), Some(want), "{state:?}: {o:?}");
+        let v = verdict_with_server(&o, MISSION, || panic!("no fallback"));
+        assert_eq!(v.persist_clear, saved, "{state:?}");
+        assert_eq!(v.detail.expected.as_deref(), expected, "{state:?}");
+        assert_eq!(v.detail.actual.as_deref(), actual, "{state:?}");
+        assert!(
+            v.detail
+                .note
+                .as_deref()
+                .is_some_and(|n| n.contains("note for")),
+            "{state:?}: {:?}",
+            v.detail.note
+        );
+    }
 }
 
 #[test]
