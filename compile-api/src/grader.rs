@@ -181,8 +181,55 @@ impl MissionRule {
                 return Err(format!("{} — {}", self.npc, c.hint));
             }
         }
+        // One shared rule for every mission, checked last so a missing
+        // concept is always reported first: the program needs an entry point.
+        if !has_entry_point(&code) {
+            tracing::debug!(id = self.id, "grader: no top-level `fn main`");
+            return Err(format!("{} — {}", self.npc, MAIN_HINT));
+        }
         Ok(self.pass)
     }
+}
+
+/// Fail hint when every mission check passes but there is no `fn main`.
+pub const MAIN_HINT: &str = "every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`";
+
+/// True when the code has a top-level `fn main(` item, optionally `pub`,
+/// `pub(..)` or `const`. A `main` nested in a `mod`, `impl`, trait or fn
+/// body is not the entry point, and rustc rejects an `async`, `unsafe` or
+/// `extern` main, so none of those count. (A `main` re-exported with `use`
+/// from a module is valid Rust but is not recognised.)
+pub fn has_entry_point(code: &[Token]) -> bool {
+    let mut depth = 0usize;
+    for (i, t) in code.iter().enumerate() {
+        if t.kind == TokenKind::Punct {
+            match t.text.as_str() {
+                "(" | "[" | "{" => depth += 1,
+                ")" | "]" | "}" => depth = depth.saturating_sub(1),
+                _ => {}
+            }
+            continue;
+        }
+        let ident = |k: usize, text: &str| {
+            code.get(k)
+                .is_some_and(|t| t.kind == TokenKind::Ident && t.text == text)
+        };
+        let is_main = depth == 0
+            && ident(i, "fn")
+            && ident(i + 1, "main")
+            && code
+                .get(i + 2)
+                .is_some_and(|t| t.kind == TokenKind::Punct && t.text == "(");
+        let bad_qualifier = i.checked_sub(1).and_then(|p| code.get(p)).is_some_and(|p| {
+            p.kind == TokenKind::Str
+                || (p.kind == TokenKind::Ident
+                    && matches!(p.text.as_str(), "async" | "unsafe" | "extern"))
+        });
+        if is_main && !bad_qualifier {
+            return true;
+        }
+    }
+    false
 }
 
 /// Look up the rule for an encounter id.
@@ -988,7 +1035,7 @@ pub static MISSION_RULES: &[MissionRule] = &[
         npc: "the Smelter waits",
         checks: &[
             check(&[".fold("], "missing required: `.fold(`"),
-            check(&[".fold( $.. |$_ $.., $X $..| $.. $X", ".fold( $.. |$_ $.., &$X $..| $.. $X"], "the closure must use each element: `|acc, x| acc + x`"),
+            check(&[".fold( $.. |$_ $.., $X $..| $.. $X", ".fold( $.. |$_ $.., &$X $..| $.. $X", "let $F = |$_ $.., $X $..| $.. $X $.. .fold( $.. , $F )", "fn $F ( $_ $.., $X : $.. ) -> $_ { $.. $X $.. } $.. .fold( $.. , $F )", ".fold( $.. , $F ) $.. } $.. fn $F ( $_ $.., $X : $.. ) -> $_ { $.. $X $.. }"], "the closure must use each element: `|acc, x| acc + x`"),
         ],
         pass: "the Smelter tips the crucible. \"many ores, one ingot.\"",
     },
@@ -1137,6 +1184,12 @@ pub static MISSION_RULES: &[MissionRule] = &[
 mod tests {
     use super::*;
 
+    /// Append the entry point every mission requires (checked after the
+    /// mission's own checks), for tests that focus on one function.
+    fn with_main(src: &str) -> String {
+        format!("{src}\nfn main() {{}}")
+    }
+
     // ── rule table shape ───────────────────────────────────────────
 
     #[test]
@@ -1203,20 +1256,35 @@ mod tests {
     #[test]
     fn double_pass_canonical() {
         let src = "fn double(n: i32) -> i32 { n * 2 }";
-        assert!(grade("double_function", src).ok);
+        assert!(grade("double_function", &with_main(src)).ok);
     }
 
     #[test]
     fn double_pass_no_space_in_multiply() {
         let src = "fn double(n: i32) -> i32 { n*2 }";
-        assert!(grade("double_function", src).ok, "should accept `n*2`");
+        assert!(
+            grade("double_function", &with_main(src)).ok,
+            "should accept `n*2`"
+        );
     }
 
     #[test]
     fn double_pass_commutative_and_addition() {
         // Audit G1: both are correct doublings and used to be rejected.
-        assert!(grade("double_function", "fn double(n: i32) -> i32 { 2 * n }").ok);
-        assert!(grade("double_function", "fn double(n: i32) -> i32 { n + n }").ok);
+        assert!(
+            grade(
+                "double_function",
+                &with_main("fn double(n: i32) -> i32 { 2 * n }")
+            )
+            .ok
+        );
+        assert!(
+            grade(
+                "double_function",
+                &with_main("fn double(n: i32) -> i32 { n + n }")
+            )
+            .ok
+        );
     }
 
     #[test]
@@ -1421,7 +1489,7 @@ mod tests {
     #[test]
     fn if_else_pass_canonical() {
         let src = r#"fn sign(n: i32) -> &'static str { if n < 0 { "neg" } else if n == 0 { "zero" } else { "pos" } }"#;
-        assert!(grade("if_else_sign", src).ok);
+        assert!(grade("if_else_sign", &with_main(src)).ok);
     }
 
     #[test]
@@ -1494,7 +1562,7 @@ mod tests {
         None => 0,
     }
 }"#;
-        assert!(grade("match_option", src).ok);
+        assert!(grade("match_option", &with_main(src)).ok);
     }
 
     #[test]
@@ -1656,7 +1724,7 @@ fn main() {
     #[test]
     fn borrow_mut_pass_canonical() {
         let src = "fn bump(x: &mut i32) { *x = 99; }";
-        assert!(grade("borrow_mut", src).ok);
+        assert!(grade("borrow_mut", &with_main(src)).ok);
     }
 
     #[test]
@@ -1717,13 +1785,13 @@ fn main() { let s = String::from("you"); greet(&s); greet("anon"); }"#;
     #[test]
     fn option_unwrap_or_pass_canonical() {
         let src = "fn safe(x: Option<i32>) -> i32 { x.unwrap_or(0) }";
-        assert!(grade("option_unwrap_or", src).ok);
+        assert!(grade("option_unwrap_or", &with_main(src)).ok);
     }
 
     #[test]
     fn option_unwrap_or_pass_with_nonzero_default() {
         let src = "fn safe(x: Option<i32>) -> i32 { x.unwrap_or(42) }";
-        assert!(grade("option_unwrap_or", src).ok);
+        assert!(grade("option_unwrap_or", &with_main(src)).ok);
     }
 
     #[test]
@@ -1807,14 +1875,14 @@ fn main() { let s = String::from("you"); greet(&s); greet("anon"); }"#;
     #[test]
     fn slice_basic_pass_canonical() {
         let src = "fn sum_slice(xs: &[i32]) -> i32 { xs.iter().sum() }";
-        assert!(grade("slice_basic", src).ok);
+        assert!(grade("slice_basic", &with_main(src)).ok);
     }
 
     #[test]
     fn slice_basic_pass_with_loop_body() {
         let src =
             "fn sum_slice(xs: &[i32]) -> i32 { let mut s = 0; for x in xs.iter() { s += *x; } s }";
-        assert!(grade("slice_basic", src).ok);
+        assert!(grade("slice_basic", &with_main(src)).ok);
     }
 
     #[test]
@@ -1841,13 +1909,13 @@ fn main() { let s = String::from("you"); greet(&s); greet("anon"); }"#;
     let n = s.parse::<i32>().map_err(|e| e.to_string())?;
     Ok(n)
 }"#;
-        assert!(grade("result_question_mark", src).ok);
+        assert!(grade("result_question_mark", &with_main(src)).ok);
     }
 
     #[test]
     fn result_qm_pass_inline_qmark_newline() {
         let src = "fn f() -> Result<i32, String> { let n: i32 = \"1\".parse().map_err(|e: std::num::ParseIntError| e.to_string())?\n;Ok(n) }";
-        assert!(grade("result_question_mark", src).ok);
+        assert!(grade("result_question_mark", &with_main(src)).ok);
     }
 
     #[test]
@@ -1942,13 +2010,13 @@ fn name(d: Direction) -> &'static str {
         Direction::West => "w",
     }
 }"#;
-        assert!(grade("enum_match", src).ok);
+        assert!(grade("enum_match", &with_main(src)).ok);
     }
 
     #[test]
     fn enum_match_pass_minimal_two_variants() {
         let src = "enum Direction { Up, Down } fn f(d: Direction) -> i32 { match d { Direction::Up => 1, Direction::Down => 0 } }";
-        assert!(grade("enum_match", src).ok);
+        assert!(grade("enum_match", &with_main(src)).ok);
     }
 
     #[test]
@@ -2488,7 +2556,13 @@ fn name(d: Direction) -> &'static str {
     #[test]
     fn whitespace_never_matters() {
         assert!(grade("mut_binding", "fn main() { let mut x = 0; x+=\n1; }").ok);
-        assert!(grade("double_function", "fn double(n:i32)->i32{n\n*\n2}").ok);
+        assert!(
+            grade(
+                "double_function",
+                &with_main("fn double(n:i32)->i32{n\n*\n2}")
+            )
+            .ok
+        );
     }
 
     #[test]

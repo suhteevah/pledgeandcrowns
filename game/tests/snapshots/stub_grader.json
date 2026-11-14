@@ -30,6 +30,16 @@
     }
   },
   {
+    "case": "near_miss_0",
+    "id": "intro_let_binding",
+    "input": " main() { let answer = 42; }",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] not yet — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "near_miss_3",
     "id": "intro_let_binding",
     "input": "fn main() {  answer = 42; }",
@@ -90,6 +100,16 @@
     }
   },
   {
+    "case": "near_miss_2",
+    "id": "double_function",
+    "input": "fn double(n:  -> i32 { n * 2 }\nfn main() {}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] not yet — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "near_miss_7",
     "id": "double_function",
     "input": "fn double(n: i32) -> i32 { n  2 }\nfn main() {}\n",
@@ -126,6 +146,16 @@
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Borrow Checker is silent — missing required: `&value`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_0",
+    "id": "borrow_preview",
+    "input": " main() {\n    let value = String::from(\"ok\");\n    let r = &value;\n    println!(\"{r}\");\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Borrow Checker is silent — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
       "stdout": ""
     }
   },
@@ -180,6 +210,16 @@
     }
   },
   {
+    "case": "near_miss_0",
+    "id": "mut_binding",
+    "input": " main() { let mut x = 0; x += 1; }",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Smith eyes you — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "near_miss_3",
     "id": "mut_binding",
     "input": "fn main() {  mut x = 0; x += 1; }",
@@ -202,7 +242,7 @@
   {
     "case": "canonical",
     "id": "if_else_sign",
-    "input": "fn sign(n: i32) -> &'static str {\n    if n < 0 { \"neg\" } else if n == 0 { \"zero\" } else { \"pos\" }\n}",
+    "input": "fn sign(n: i32) -> &'static str {\n    if n < 0 { \"neg\" } else if n == 0 { \"zero\" } else { \"pos\" }\n}\nfn main() {\n    println!(\"{}\", sign(-3));\n}",
     "verdict": {
       "ok": true,
       "stderr": "",
@@ -230,9 +270,19 @@
     }
   },
   {
+    "case": "near_miss_2",
+    "id": "if_else_sign",
+    "input": "fn sign(n:  -> &'static str {\n    if n < 0 { \"neg\" } else if n == 0 { \"zero\" } else { \"pos\" }\n}\nfn main() {\n    println!(\"{}\", sign(-3));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Cartographer frowns — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "near_miss_9",
     "id": "if_else_sign",
-    "input": "fn sign(n: i32) -> &'static str {\n    if n  0 { \"neg\" } else if n == 0 { \"zero\" } else { \"pos\" }\n}",
+    "input": "fn sign(n: i32) -> &'static str {\n    if n  0 { \"neg\" } else if n == 0 { \"zero\" } else { \"pos\" }\n}\nfn main() {\n    println!(\"{}\", sign(-3));\n}",
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Cartographer frowns — missing required: `< 0`",
@@ -242,7 +292,7 @@
   {
     "case": "near_miss_11",
     "id": "if_else_sign",
-    "input": "fn sign(n: i32) -> &'static str {\n    if n < 0  \"neg\" } else if n == 0 { \"zero\" } else { \"pos\" }\n}",
+    "input": "fn sign(n: i32) -> &'static str {\n    if n < 0  \"neg\" } else if n == 0 { \"zero\" } else { \"pos\" }\n}\nfn main() {\n    println!(\"{}\", sign(-3));\n}",
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Cartographer frowns — the `< 0` branch should give `\"neg\"`",
@@ -252,7 +302,7 @@
   {
     "case": "near_miss_17",
     "id": "if_else_sign",
-    "input": "fn sign(n: i32) -> &'static str {\n    if n < 0 { \"neg\" } else if n  0 { \"zero\" } else { \"pos\" }\n}",
+    "input": "fn sign(n: i32) -> &'static str {\n    if n < 0 { \"neg\" } else if n  0 { \"zero\" } else { \"pos\" }\n}\nfn main() {\n    println!(\"{}\", sign(-3));\n}",
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Cartographer frowns — zero should give `\"zero\"`",
@@ -262,7 +312,7 @@
   {
     "case": "near_miss_21",
     "id": "if_else_sign",
-    "input": "fn sign(n: i32) -> &'static str {\n    if n < 0 { \"neg\" } else if n == 0 { \"zero\"  else { \"pos\" }\n}",
+    "input": "fn sign(n: i32) -> &'static str {\n    if n < 0 { \"neg\" } else if n == 0 { \"zero\"  else { \"pos\" }\n}\nfn main() {\n    println!(\"{}\", sign(-3));\n}",
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Cartographer frowns — a positive number should give `\"pos\"`",
@@ -296,6 +346,16 @@
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Bellringer waits — missing required: `loop`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_0",
+    "id": "loop_break",
+    "input": " main() {\n    let mut n = 1;\n    let _ = loop {\n        if n >= 100 { break n; }\n        n *= 2;\n    };\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Bellringer waits — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
       "stdout": ""
     }
   },
@@ -342,7 +402,7 @@
   {
     "case": "canonical",
     "id": "match_option",
-    "input": "fn unwrap_or_zero(x: Option<i32>) -> i32 {\n    match x {\n        Some(n) => n,\n        None => 0,\n    }\n}",
+    "input": "fn unwrap_or_zero(x: Option<i32>) -> i32 {\n    match x {\n        Some(n) => n,\n        None => 0,\n    }\n}\nfn main() {\n    println!(\"{}\", unwrap_or_zero(Some(7)));\n}",
     "verdict": {
       "ok": true,
       "stderr": "",
@@ -370,9 +430,19 @@
     }
   },
   {
+    "case": "near_miss_2",
+    "id": "match_option",
+    "input": "fn unwrap_or_zero(x:  -> i32 {\n    match x {\n        Some(n) => n,\n        None => 0,\n    }\n}\nfn main() {\n    println!(\"{}\", unwrap_or_zero(Some(7)));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Oracle's eyes are closed — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "near_miss_6",
     "id": "match_option",
-    "input": "fn unwrap_or_zero(x: Option<i32>) -> i32 {\n     x {\n        Some(n) => n,\n        None => 0,\n    }\n}",
+    "input": "fn unwrap_or_zero(x: Option<i32>) -> i32 {\n     x {\n        Some(n) => n,\n        None => 0,\n    }\n}\nfn main() {\n    println!(\"{}\", unwrap_or_zero(Some(7)));\n}",
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Oracle's eyes are closed — missing required: `match`",
@@ -382,17 +452,7 @@
   {
     "case": "near_miss_9",
     "id": "match_option",
-    "input": "fn unwrap_or_zero(x: Option<i32>) -> i32 {\n    match x {\n         => n,\n        None => 0,\n    }\n}",
-    "verdict": {
-      "ok": false,
-      "stderr": "[stub] the Oracle's eyes are closed — missing required: `Some(`",
-      "stdout": ""
-    }
-  },
-  {
-    "case": "near_miss_10",
-    "id": "match_option",
-    "input": "fn unwrap_or_zero(x: Option<i32>) -> i32 {\n    match x {\n        Some(n)  n,\n        None => 0,\n    }\n}",
+    "input": "fn unwrap_or_zero(x: Option<i32>) -> i32 {\n    match x {\n         => n,\n        None => 0,\n    }\n}\nfn main() {\n    println!(\"{}\", unwrap_or_zero(Some(7)));\n}",
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Oracle's eyes are closed — the `Some(n)` arm should give back the `n` it binds",
@@ -402,7 +462,7 @@
   {
     "case": "near_miss_12",
     "id": "match_option",
-    "input": "fn unwrap_or_zero(x: Option<i32>) -> i32 {\n    match x {\n        Some(n) => n,\n         => 0,\n    }\n}",
+    "input": "fn unwrap_or_zero(x: Option<i32>) -> i32 {\n    match x {\n        Some(n) => n,\n         => 0,\n    }\n}\nfn main() {\n    println!(\"{}\", unwrap_or_zero(Some(7)));\n}",
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Oracle's eyes are closed — missing required: `None`",
@@ -412,7 +472,7 @@
   {
     "case": "near_miss_13",
     "id": "match_option",
-    "input": "fn unwrap_or_zero(x: Option<i32>) -> i32 {\n    match x {\n        Some(n) => n,\n        None  0,\n    }\n}",
+    "input": "fn unwrap_or_zero(x: Option<i32>) -> i32 {\n    match x {\n        Some(n) => n,\n        None  0,\n    }\n}\nfn main() {\n    println!(\"{}\", unwrap_or_zero(Some(7)));\n}",
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Oracle's eyes are closed — the `None` arm should give `0`",
@@ -460,6 +520,16 @@
     }
   },
   {
+    "case": "near_miss_7",
+    "id": "struct_basic",
+    "input": "struct Knight { name: String, hp: i32 \nfn main() {\n    let k = Knight { name: String::from(\"Garin\"), hp: 30 };\n    let _ = k.name;\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Herald squints — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "near_miss_24",
     "id": "struct_basic",
     "input": "struct Knight { name: String, hp: i32 }\nfn main() {\n    let k = Knight { name: String::from(\"Garin\"), hp: 30 };\n    let _ = \n}",
@@ -496,6 +566,16 @@
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Cooper waits — missing required: `vec!`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_0",
+    "id": "vec_iter",
+    "input": " main() {\n    let v = vec![1, 2, 3];\n    let s: i32 = v.iter().sum();\n    println!(\"{s}\");\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Cooper waits — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
       "stdout": ""
     }
   },
@@ -546,6 +626,16 @@
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Twin waits — missing required: `let (`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_0",
+    "id": "tuple_destructure",
+    "input": " main() {\n    let (a, b) = (3, 4);\n    println!(\"{a} {b}\");\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Twin waits — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
       "stdout": ""
     }
   },
@@ -630,6 +720,16 @@
     }
   },
   {
+    "case": "near_miss_8",
+    "id": "borrow_mut",
+    "input": "fn bump(x: &mut i32) { *x = 99; \nfn main() { let mut n = 0; bump(&mut n); println!(\"{n}\"); }",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Forgewright glares — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "canonical",
     "id": "string_vs_str",
     "input": "fn greet(name: &str) { println!(\"hi {name}\"); }\nfn main() { let s = String::from(\"you\"); greet(&s); greet(\"anon\"); }",
@@ -690,6 +790,16 @@
     }
   },
   {
+    "case": "near_miss_6",
+    "id": "string_vs_str",
+    "input": "fn greet(name: &str) { println!(\"hi {name}\"); \nfn main() { let s = String::from(\"you\"); greet(&s); greet(\"anon\"); }",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Linguist tilts her head — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "canonical",
     "id": "option_unwrap_or",
     "input": "fn safe(x: Option<i32>) -> i32 { x.unwrap_or(0) }\nfn main() { println!(\"{}\", safe(Some(7))); }",
@@ -740,6 +850,16 @@
     }
   },
   {
+    "case": "near_miss_7",
+    "id": "option_unwrap_or",
+    "input": "fn safe(x: Option<i32>) -> i32 { x.unwrap_or(0) \nfn main() { println!(\"{}\", safe(Some(7))); }",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Pilgrim shakes his head — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "canonical",
     "id": "for_in_range",
     "input": "fn main() {\n    for i in 0..10 {\n        println!(\"{i}\");\n    }\n}",
@@ -766,6 +886,16 @@
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Drillmaster barks — missing required: `for `",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_0",
+    "id": "for_in_range",
+    "input": " main() {\n    for i in 0..10 {\n        println!(\"{i}\");\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Drillmaster barks — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
       "stdout": ""
     }
   },
@@ -826,6 +956,16 @@
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Reckoner's quill hovers — missing required: `let add`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_0",
+    "id": "closure_basic",
+    "input": " main() {\n    let add = |a, b| a + b;\n    println!(\"{}\", add(2, 3));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Reckoner's quill hovers — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
       "stdout": ""
     }
   },
@@ -920,6 +1060,16 @@
     }
   },
   {
+    "case": "near_miss_7",
+    "id": "slice_basic",
+    "input": "fn sum_slice(xs: &[i32]) -> i32 { xs.iter().sum() \nfn main() { let _ = sum_slice(&[1, 2, 3]); }",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Quartermaster squints — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "canonical",
     "id": "result_question_mark",
     "input": "fn parse_int(s: &str) -> Result<i32, String> {\n    let n = s.parse::<i32>().map_err(|e| e.to_string())?;\n    Ok(n)\n}\nfn main() { let _ = parse_int(\"42\"); }",
@@ -946,6 +1096,16 @@
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Auditor's pen taps — missing required: `Result<`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_2",
+    "id": "result_question_mark",
+    "input": "fn parse_int(s:  -> Result<i32, String> {\n    let n = s.parse::<i32>().map_err(|e| e.to_string())?;\n    Ok(n)\n}\nfn main() { let _ = parse_int(\"42\"); }",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Auditor's pen taps — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
       "stdout": ""
     }
   },
@@ -1030,6 +1190,16 @@
     }
   },
   {
+    "case": "near_miss_6",
+    "id": "derive_debug",
+    "input": "#[derive(Debug)]\nstruct Item { name: String \nfn main() { let item = Item { name: String::from(\"ring\") }; println!(\"{item:?}\"); }",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Chronicler shakes his head — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "near_miss_18",
     "id": "derive_debug",
     "input": "#[derive(Debug)]\nstruct Item { name: String }\nfn main() { let item = Item { name: String::from(\"ring\") };  }",
@@ -1066,6 +1236,16 @@
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Alchemist stirs — missing required: `.map(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_0",
+    "id": "iter_map_collect",
+    "input": " main() {\n    let v = vec![1, 2, 3];\n    let doubled: Vec<i32> = v.iter().map(|x| x * 2).collect();\n    let _ = doubled;\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Alchemist stirs — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
       "stdout": ""
     }
   },
@@ -1130,6 +1310,16 @@
     }
   },
   {
+    "case": "near_miss_5",
+    "id": "enum_match",
+    "input": "enum Direction { North, South \nfn name(d: Direction) -> &'static str {\n    match d {\n        Direction::North => \"n\",\n        Direction::South => \"s\",\n    }\n}\nfn main() { let _ = name(Direction::North); }",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Heraldic Sage frowns — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "near_miss_13",
     "id": "enum_match",
     "input": "enum Direction { North, South }\nfn name(d: Direction) -> &'static str {\n     d {\n        Direction::North => \"n\",\n        Direction::South => \"s\",\n    }\n}\nfn main() { let _ = name(Direction::North); }",
@@ -1166,6 +1356,16 @@
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Tinker frowns — missing required: `while `",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_0",
+    "id": "while_loop",
+    "input": " main() {\n    let mut n = 5;\n    while n > 0 { n -= 1; }\n    println!(\"{n}\");\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Tinker frowns — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
       "stdout": ""
     }
   },
@@ -1230,6 +1430,16 @@
     }
   },
   {
+    "case": "near_miss_5",
+    "id": "impl_method",
+    "input": "struct Hero { level: i32 \nimpl Hero {\n    fn power(&self) -> i32 { self.level * 10 }\n}\nfn main() {\n    let h = Hero { level: 3 };\n    println!(\"{}\", h.power());\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Guildmaster waits — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "near_miss_6",
     "id": "impl_method",
     "input": "struct Hero { level: i32 }\n Hero {\n    fn power(&self) -> i32 { self.level * 10 }\n}\nfn main() {\n    let h = Hero { level: 3 };\n    println!(\"{}\", h.power());\n}",
@@ -1290,6 +1500,16 @@
     }
   },
   {
+    "case": "near_miss_5",
+    "id": "assoc_new",
+    "input": "struct Hero { level: i32 \nimpl Hero {\n    fn new(level: i32) -> Self { Self { level } }\n}\nfn main() {\n    let h = Hero::new(5);\n    println!(\"{}\", h.level);\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Recruiter shakes her head — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "near_miss_9",
     "id": "assoc_new",
     "input": "struct Hero { level: i32 }\nimpl Hero {\n     new(level: i32) -> Self { Self { level } }\n}\nfn main() {\n    let h = Hero::new(5);\n    println!(\"{}\", h.level);\n}",
@@ -1340,6 +1560,16 @@
     }
   },
   {
+    "case": "near_miss_0",
+    "id": "if_let",
+    "input": " main() {\n    let maybe: Option<i32> = Some(7);\n    if let Some(n) = maybe {\n        println!(\"{n}\");\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Locksmith frowns — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "near_miss_8",
     "id": "if_let",
     "input": "fn main() {\n    let maybe: Option<i32> = Some(7);\n     let Some(n) = maybe {\n        println!(\"{n}\");\n    }\n}",
@@ -1376,6 +1606,16 @@
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Porter sets the crate down — missing required: `while let`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_0",
+    "id": "while_let",
+    "input": " main() {\n    let mut stack = vec![1, 2, 3];\n    while let Some(top) = stack.pop() {\n        println!(\"{top}\");\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Porter sets the crate down — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
       "stdout": ""
     }
   },
@@ -1440,6 +1680,16 @@
     }
   },
   {
+    "case": "near_miss_2",
+    "id": "tuple_struct",
+    "input": "struct Meters(f64);\n main() {\n    let d = Meters(3.5);\n    println!(\"{}\", d.0);\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Surveyor squints down the line — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "near_miss_10",
     "id": "tuple_struct",
     "input": "struct Meters(f64);\nfn main() {\n    let d = Meters(3.5);\n    println!(\"{}\", \n}",
@@ -1486,6 +1736,16 @@
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Armorer taps the anvil — missing required: `enum Item`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_7",
+    "id": "enum_data_match",
+    "input": "enum Item {\n    Weapon { damage: i32 \n    Potion { heal: i32 },\n}\nfn value(item: Item) -> i32 {\n    match item {\n        Item::Weapon { damage } => damage,\n        Item::Potion { heal } => heal,\n    }\n}\nfn main() {\n    let _ = value(Item::Weapon { damage: 10 });\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Armorer taps the anvil — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
       "stdout": ""
     }
   },
@@ -1550,6 +1810,16 @@
     }
   },
   {
+    "case": "near_miss_7",
+    "id": "trait_def",
+    "input": "trait Element {\n    fn name(&self) -> &str;\n\nstruct Fire;\nimpl Element for Fire {\n    fn name(&self) -> &str { \"fire\" }\n}\nfn main() {\n    let f = Fire;\n    println!(\"{}\", f.name());\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] Vexis waits — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "near_miss_10",
     "id": "trait_def",
     "input": "trait Element {\n    fn name(&self) -> &str;\n}\nstruct Fire;\n Element for Fire {\n    fn name(&self) -> &str { \"fire\" }\n}\nfn main() {\n    let f = Fire;\n    println!(\"{}\", f.name());\n}",
@@ -1606,6 +1876,16 @@
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Wandwright frowns — bound the parameter so it can be compared: `T: PartialOrd`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_5",
+    "id": "generic_fn",
+    "input": "fn larger<T: PartialOrd>(a: T, b:  -> T {\n    if a > b { a } else { b }\n}\nfn main() {\n    println!(\"{}\", larger(3, 7));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Wandwright frowns — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
       "stdout": ""
     }
   },
@@ -1670,6 +1950,16 @@
     }
   },
   {
+    "case": "near_miss_7",
+    "id": "generic_struct",
+    "input": "struct Pair<T> {\n    a: T,\n    b: T,\n\nfn main() {\n    let p = Pair { a: 1, b: 2 };\n    let _ = (p.a, p.b);\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Conjurer waits — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "canonical",
     "id": "dyn_trait",
     "input": "trait Element {\n    fn name(&self) -> &str;\n}\nstruct Fire;\nimpl Element for Fire {\n    fn name(&self) -> &str { \"fire\" }\n}\nstruct Water;\nimpl Element for Water {\n    fn name(&self) -> &str { \"water\" }\n}\nfn main() {\n    let zoo: Vec<Box<dyn Element>> = vec![Box::new(Fire), Box::new(Water)];\n    for e in &zoo {\n        println!(\"{}\", e.name());\n    }\n}",
@@ -1696,6 +1986,16 @@
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Familiar flickers — missing required: `Box<dyn ...>`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_7",
+    "id": "dyn_trait",
+    "input": "trait Element {\n    fn name(&self) -> &str;\n\nstruct Fire;\nimpl Element for Fire {\n    fn name(&self) -> &str { \"fire\" }\n}\nstruct Water;\nimpl Element for Water {\n    fn name(&self) -> &str { \"water\" }\n}\nfn main() {\n    let zoo: Vec<Box<dyn Element>> = vec![Box::new(Fire), Box::new(Water)];\n    for e in &zoo {\n        println!(\"{}\", e.name());\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Familiar flickers — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
       "stdout": ""
     }
   },
@@ -1750,6 +2050,16 @@
     }
   },
   {
+    "case": "near_miss_6",
+    "id": "lifetimes",
+    "input": "fn longest<'a>(x: &'a str, y: &'a  -> &'a str {\n    if x.len() > y.len() { x } else { y }\n}\nfn main() {\n    let _ = longest(\"aa\", \"b\");\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Lanternkeeper waits — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "canonical",
     "id": "assoc_type",
     "input": "trait Producer {\n    type Output;\n    fn make(&self) -> Self::Output;\n}\nstruct Coiner;\nimpl Producer for Coiner {\n    type Output = i32;\n    fn make(&self) -> Self::Output { 7 }\n}\nfn main() {\n    let c = Coiner;\n    let _ = c.make();\n}",
@@ -1780,6 +2090,16 @@
     }
   },
   {
+    "case": "near_miss_9",
+    "id": "assoc_type",
+    "input": "trait Producer {\n    type Output;\n    fn make(&self) -> Self::Output;\n\nstruct Coiner;\nimpl Producer for Coiner {\n    type Output = i32;\n    fn make(&self) -> Self::Output { 7 }\n}\nfn main() {\n    let c = Coiner;\n    let _ = c.make();\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Loremaster turns the page — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "canonical",
     "id": "result_match",
     "input": "fn describe(r: Result<i32, String>) -> i32 {\n    match r {\n        Ok(v) => v,\n        Err(_e) => -1,\n    }\n}\nfn main() {\n    let _ = describe(Ok(5));\n}",
@@ -1806,6 +2126,16 @@
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Barkeep waits — missing required: `match `",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_3",
+    "id": "result_match",
+    "input": "fn describe(r: Result<i32,  -> i32 {\n    match r {\n        Ok(v) => v,\n        Err(_e) => -1,\n    }\n}\nfn main() {\n    let _ = describe(Ok(5));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Barkeep waits — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
       "stdout": ""
     }
   },
@@ -1870,6 +2200,16 @@
     }
   },
   {
+    "case": "near_miss_5",
+    "id": "custom_error",
+    "input": "enum BrewError {\n    TooHot,\n    TooCold,\n\nfn check(temp: i32) -> Result<i32, BrewError> {\n    if temp > 100 {\n        Err(BrewError::TooHot)\n    } else if temp < 0 {\n        Err(BrewError::TooCold)\n    } else {\n        Ok(temp)\n    }\n}\nfn main() {\n    let _ = check(50);\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Bouncer crosses his arms — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "near_miss_10",
     "id": "custom_error",
     "input": "enum BrewError {\n    TooHot,\n    TooCold,\n}\nfn check(temp: i32) ->  BrewError> {\n    if temp > 100 {\n        Err(BrewError::TooHot)\n    } else if temp < 0 {\n        Err(BrewError::TooCold)\n    } else {\n        Ok(temp)\n    }\n}\nfn main() {\n    let _ = check(50);\n}",
@@ -1906,6 +2246,16 @@
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Interpreter pauses — missing required: `impl From<...>`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_6",
+    "id": "from_error",
+    "input": "struct ParseFail;\nenum AppError {\n    Parse,\n\nimpl From<ParseFail> for AppError {\n    fn from(_e: ParseFail) -> Self {\n        AppError::Parse\n    }\n}\nfn main() {\n    let _e: AppError = ParseFail.into();\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Interpreter pauses — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
       "stdout": ""
     }
   },
@@ -1970,6 +2320,16 @@
     }
   },
   {
+    "case": "near_miss_2",
+    "id": "option_map",
+    "input": "fn add_one(o:  -> Option<i32> {\n    o.map(|x| x + 1)\n}\nfn main() {\n    let _ = add_one(Some(3));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Mixologist waits — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "near_miss_6",
     "id": "option_map",
     "input": "fn add_one(o: Option<i32>) -> Option<i32> {\n     x + 1)\n}\nfn main() {\n    let _ = add_one(Some(3));\n}",
@@ -2006,6 +2366,16 @@
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Tabkeeper waits — the steps should yield an `Option`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_2",
+    "id": "and_then",
+    "input": "fn half(n:  -> Option<i32> {\n    if n % 2 == 0 { Some(n / 2) } else { None }\n}\nfn main() {\n    let _ = Some(8).and_then(half).and_then(half);\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Tabkeeper waits — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
       "stdout": ""
     }
   },
@@ -2060,6 +2430,16 @@
     }
   },
   {
+    "case": "near_miss_2",
+    "id": "unwrap_or_else",
+    "input": "fn value(o:  -> i32 {\n    o.unwrap_or_else(|| 0)\n}\nfn main() {\n    let _ = value(None);\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Cellarer waits — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "near_miss_6",
     "id": "unwrap_or_else",
     "input": "fn value(o: Option<i32>) -> i32 {\n     0)\n}\nfn main() {\n    let _ = value(None);\n}",
@@ -2096,6 +2476,16 @@
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Keymaster waits — missing required: `HashMap`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_2",
+    "id": "hashmap_basic",
+    "input": "use std::collections::HashMap;\n main() {\n    let mut scores = HashMap::new();\n    scores.insert(\"ace\", 1);\n    let _ = scores.get(\"ace\");\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Keymaster waits — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
       "stdout": ""
     }
   },
@@ -2150,6 +2540,16 @@
     }
   },
   {
+    "case": "near_miss_0",
+    "id": "iter_filter",
+    "input": " main() {\n    let v = vec![1, 2, 3, 4];\n    let evens: Vec<&i32> = v.iter().filter(|x| **x % 2 == 0).collect();\n    let _ = evens;\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Sifter shakes the screen — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "near_miss_14",
     "id": "iter_filter",
     "input": "fn main() {\n    let v = vec![1, 2, 3, 4];\n    let evens: Vec<&i32> =  **x % 2 == 0).collect();\n    let _ = evens;\n}",
@@ -2196,6 +2596,16 @@
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Smelter waits — missing required: `.fold(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_0",
+    "id": "iter_fold",
+    "input": " main() {\n    let v = vec![1, 2, 3];\n    let total = v.iter().fold(0, |acc, x| acc + x);\n    let _ = total;\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Smelter waits — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
       "stdout": ""
     }
   },
@@ -2250,6 +2660,16 @@
     }
   },
   {
+    "case": "near_miss_0",
+    "id": "iter_enumerate",
+    "input": " main() {\n    let v = vec![10, 20, 30];\n    for (i, x) in v.iter().enumerate() {\n        let _ = (i, x);\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Tallywright waits — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "near_miss_13",
     "id": "iter_enumerate",
     "input": "fn main() {\n    let v = vec![10, 20, 30];\n    for (i, x) in  {\n        let _ = (i, x);\n    }\n}",
@@ -2286,6 +2706,16 @@
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Riveter waits — missing required: `.zip(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_0",
+    "id": "iter_zip",
+    "input": " main() {\n    let a = vec![1, 2];\n    let b = vec![3, 4];\n    for (x, y) in a.iter().zip(b.iter()) {\n        let _ = (x, y);\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Riveter waits — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
       "stdout": ""
     }
   },
@@ -2330,6 +2760,16 @@
     }
   },
   {
+    "case": "near_miss_0",
+    "id": "closure_move",
+    "input": " main() {\n    let name = String::from(\"Garin\");\n    let greet = move || println!(\"hail, {name}\");\n    greet();\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Bondsmith waits — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "near_miss_10",
     "id": "closure_move",
     "input": "fn main() {\n    let name = String::from(\"Garin\");\n    let greet =  || println!(\"hail, {name}\");\n    greet();\n}",
@@ -2366,6 +2806,16 @@
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Dockmaster waits — missing required: `thread::spawn`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_2",
+    "id": "thread_spawn",
+    "input": "use std::thread;\n main() {\n    let handle = thread::spawn(|| 21 * 2);\n    let _ = handle.join();\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Dockmaster waits — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
       "stdout": ""
     }
   },
@@ -2420,6 +2870,16 @@
     }
   },
   {
+    "case": "near_miss_2",
+    "id": "arc_mutex",
+    "input": "use std::sync::{Arc, \nfn main() {\n    let shared = Arc::new(Mutex::new(0));\n    {\n        let mut guard = shared.lock().unwrap();\n        *guard += 1;\n    }\n    let _ = shared;\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Lighthouse Keeper waits — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "near_miss_15",
     "id": "arc_mutex",
     "input": "use std::sync::{Arc, Mutex};\nfn main() {\n    let shared = Arc::new(Mutex::new(0));\n    {\n        let mut guard = \n        *guard += 1;\n    }\n    let _ = shared;\n}",
@@ -2456,6 +2916,16 @@
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Signaler waits — missing required: `mpsc::channel`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_2",
+    "id": "mpsc_channel",
+    "input": "use std::sync::mpsc;\n main() {\n    let (tx, rx) = mpsc::channel();\n    tx.send(7).unwrap();\n    let _ = rx.recv();\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Signaler waits — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
       "stdout": ""
     }
   },
@@ -2520,6 +2990,16 @@
     }
   },
   {
+    "case": "near_miss_2",
+    "id": "atomic",
+    "input": "use std::sync::atomic::{AtomicUsize, \nfn main() {\n    let counter = AtomicUsize::new(0);\n    counter.fetch_add(1, Ordering::SeqCst);\n    let _ = counter;\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Tidewatch waits — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "near_miss_10",
     "id": "atomic",
     "input": "use std::sync::atomic::{AtomicUsize, Ordering};\nfn main() {\n    let counter = AtomicUsize::new(0);\n     Ordering::SeqCst);\n    let _ = counter;\n}",
@@ -2556,6 +3036,16 @@
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Harbormaster waits — missing required: `thread::scope`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_2",
+    "id": "thread_scope",
+    "input": "use std::thread;\n main() {\n    let data = vec![1, 2, 3];\n    thread::scope(|s| {\n        s.spawn(|| {\n            let _ = &data;\n        });\n    });\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Harbormaster waits — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
       "stdout": ""
     }
   },
@@ -2610,6 +3100,16 @@
     }
   },
   {
+    "case": "near_miss_3",
+    "id": "async_fn",
+    "input": "async fn double(x:  -> i32 {\n    x * 2\n}\nasync fn run() -> i32 {\n    double(21).await\n}\nfn main() {\n    let _future = run();\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Tideforecaster waits — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "near_miss_17",
     "id": "async_fn",
     "input": "async fn double(x: i32) -> i32 {\n    x * 2\n}\nasync fn run() -> i32 {\n    \n}\nfn main() {\n    let _future = run();\n}",
@@ -2660,6 +3160,16 @@
     }
   },
   {
+    "case": "near_miss_7",
+    "id": "box_basic",
+    "input": "struct Node {\n    value: i32,\n    next: Option<Box<Node>>,\n\nfn main() {\n    let list = Node {\n        value: 1,\n        next: Some(Box::new(Node { value: 2, next: None })),\n    };\n    let _ = list;\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Vaultwright waits — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "near_miss_19",
     "id": "box_basic",
     "input": "struct Node {\n    value: i32,\n    next: Option<Box<Node>>,\n}\nfn main() {\n    let list = Node {\n        value: 1,\n        next:  { value: 2, next: None })),\n    };\n    let _ = list;\n}",
@@ -2696,6 +3206,16 @@
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Sharekeeper waits — missing required: `Rc::new`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_2",
+    "id": "rc_basic",
+    "input": "use std::rc::Rc;\n main() {\n    let original = Rc::new(String::from(\"hoard\"));\n    let shared = Rc::clone(&original);\n    let _ = (original, shared);\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Sharekeeper waits — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
       "stdout": ""
     }
   },
@@ -2750,6 +3270,16 @@
     }
   },
   {
+    "case": "near_miss_2",
+    "id": "refcell",
+    "input": "use std::cell::RefCell;\n main() {\n    let guarded = RefCell::new(0);\n    *guarded.borrow_mut() += 1;\n    let _ = guarded.borrow();\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Warden waits — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "near_miss_9",
     "id": "refcell",
     "input": "use std::cell::RefCell;\nfn main() {\n    let guarded = RefCell::new(0);\n     += 1;\n    let _ = guarded.borrow();\n}",
@@ -2786,6 +3316,16 @@
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Swapwarden waits — missing required: `Cell::new`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_2",
+    "id": "cell",
+    "input": "use std::cell::Cell;\n main() {\n    let slot = Cell::new(1);\n    slot.set(5);\n    let _ = slot.get();\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Swapwarden waits — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
       "stdout": ""
     }
   },
@@ -2840,6 +3380,16 @@
     }
   },
   {
+    "case": "near_miss_4",
+    "id": "rc_refcell",
+    "input": "use std::cell::RefCell;\nuse std::rc::Rc;\n main() {\n    let shared = Rc::new(RefCell::new(0));\n    let clone = Rc::clone(&shared);\n    *clone.borrow_mut() += 1;\n    let _ = shared.borrow();\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Strongbox waits — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "near_miss_10",
     "id": "rc_refcell",
     "input": "use std::cell::RefCell;\nuse std::rc::Rc;\nfn main() {\n    let shared = \n    let clone = Rc::clone(&shared);\n    *clone.borrow_mut() += 1;\n    let _ = shared.borrow();\n}",
@@ -2886,6 +3436,16 @@
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Ghostkeeper waits — missing required: a `Weak` reference",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_2",
+    "id": "weak_ref",
+    "input": "use std::rc::{Rc, \nfn main() {\n    let strong = Rc::new(5);\n    let weak: Weak<i32> = Rc::downgrade(&strong);\n    let _ = weak.upgrade();\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Ghostkeeper waits — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
       "stdout": ""
     }
   },

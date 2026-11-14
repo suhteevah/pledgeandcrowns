@@ -3,11 +3,15 @@
 //!
 //! - Every starter must itself compile, except the one mission whose
 //!   lesson is a compile error (`lifetimes`, which must fail with
-//!   exactly `E0106`). Checked with plain `rustc` (`--ignored`, slow).
+//!   exactly `E0106`). Checked with plain `rustc` at the server's edition
+//!   (`common::PLAYER_EDITION`; `--ignored`, slow).
 //! - Progression is strict-linear: mission N+1 is locked until mission N
 //!   is cleared.
 //! - With the `demo` feature, nothing past the demo boundary is playable.
 
+mod common;
+
+use common::PLAYER_EDITION;
 use pledge_and_crown::plugins::mission::{DEMO_LAST_MISSION_ID, MissionRegistry};
 use pledge_and_crown::plugins::progress::MissionProgress;
 use std::path::PathBuf;
@@ -37,7 +41,13 @@ fn every_starter_compiles_or_fails_for_its_intended_reason() {
         let src = dir.join(format!("{}.rs", m.id));
         std::fs::write(&src, m.starter_code).expect("write starter");
         let out = Command::new("rustc")
-            .args(["--edition", "2021", "--crate-type", "bin", "--crate-name"])
+            .args([
+                "--edition",
+                PLAYER_EDITION,
+                "--crate-type",
+                "bin",
+                "--crate-name",
+            ])
             .arg(m.id)
             .arg("-o")
             .arg(dir.join(format!("{}.out", m.id)))

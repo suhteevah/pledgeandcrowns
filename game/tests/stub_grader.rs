@@ -27,6 +27,9 @@ fn canonical_solution(encounter_id: &str) -> Option<&'static str> {
         "if_else_sign" => {
             r#"fn sign(n: i32) -> &'static str {
     if n < 0 { "neg" } else if n == 0 { "zero" } else { "pos" }
+}
+fn main() {
+    println!("{}", sign(-3));
 }"#
         }
         "loop_break" => {
@@ -44,6 +47,9 @@ fn canonical_solution(encounter_id: &str) -> Option<&'static str> {
         Some(n) => n,
         None => 0,
     }
+}
+fn main() {
+    println!("{}", unwrap_or_zero(Some(7)));
 }"#
         }
         "struct_basic" => {
@@ -889,4 +895,74 @@ fn match_gaps_stay_inside_their_bracket_group() {
     ));
     assert!(code_contains("f(a, (b), c)", "f( $.. c"));
     assert!(!code_contains("f(a) c", "f( $.. c"));
+}
+
+// ── Entry point (`fn main`), the one rule shared by every mission ───
+
+use pledge_and_crown::plugins::stub_grader::{MAIN_HINT, has_entry_point};
+
+fn has_main(src: &str) -> bool {
+    has_entry_point(&lex(src))
+}
+
+#[test]
+fn entry_point_accepts_the_forms_rustc_accepts() {
+    for src in [
+        "fn main() {}",
+        "pub fn main() {}",
+        "pub(crate) fn main() {}",
+        "const fn main() {}",
+        "fn main() -> Result<(), String> { Ok(()) }",
+        "fn helper() {}\nfn main(){helper()}",
+        "#[allow(unused)]\nfn main() {}",
+        "mod m { fn main() {} }\nfn main() {}",
+        "struct S;\nimpl S { fn f(&self) {} }\nfn main() {}",
+    ] {
+        assert!(has_main(src), "should count as an entry point:\n{src}");
+    }
+}
+
+#[test]
+fn entry_point_rejects_nested_invalid_hidden_and_lookalike_mains() {
+    for src in [
+        "",
+        "fn helper() {}",
+        // rustc rejects these as entry points (E0752, E0580, E0131).
+        "async fn main() {}",
+        "unsafe fn main() {}",
+        "extern \"C\" fn main() {}",
+        "fn main<T>() {}",
+        // Nested: not the crate root's `main`.
+        "mod m { pub fn main() {} }",
+        "struct S;\nimpl S { fn main() {} }",
+        "trait T { fn main() {} }",
+        "fn outer() { fn main() {} }",
+        // Not code.
+        "// fn main() {}",
+        "/* fn main() {} */",
+        "const S: &str = \"fn main() {}\";",
+        // Lookalikes.
+        "fn mainly() {}",
+        "fn r#main_x() {}",
+        "let main = 1;",
+    ] {
+        assert!(!has_main(src), "should NOT count as an entry point:\n{src}");
+    }
+}
+
+#[test]
+fn missing_main_is_the_last_check_and_names_fn_main() {
+    // Every concept present, no `fn main`: the shared hint, in the NPC voice.
+    let src = "fn double(n: i32) -> i32 { n * 2 }";
+    let v = stub_verdict("double_function", src).expect("shipped mission");
+    assert!(!v.ok);
+    assert_eq!(v.stderr, format!("[stub] not yet — {MAIN_HINT}"));
+    assert!(MAIN_HINT.contains("`fn main()`"));
+    // A concept is missing too: the concept hint comes first.
+    let v = stub_verdict("double_function", "fn double(n: i32) -> i32 { n }").expect("shipped");
+    assert!(!v.ok);
+    assert!(!v.stderr.contains("fn main"), "{v:?}");
+    // With `fn main` added, the same program passes.
+    let ok = stub_verdict("double_function", &format!("{src}\nfn main() {{}}")).expect("shipped");
+    assert!(ok.ok, "{ok:?}");
 }

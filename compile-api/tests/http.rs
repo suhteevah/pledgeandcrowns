@@ -99,7 +99,7 @@ async fn compile_fails_intro_with_wrong_value() {
 #[tokio::test]
 async fn compile_passes_double_function() {
     let addr = spawn_server().await;
-    let src = "fn double(n: i32) -> i32 { n * 2 }";
+    let src = "fn double(n: i32) -> i32 { n * 2 } fn main() {}";
     let (_, body) = post_compile(addr, "double_function", src).await;
     assert!(body.ok);
     assert!(body.stdout.contains("Trait Mage"));
@@ -126,7 +126,7 @@ async fn compile_passes_loop_break() {
 #[tokio::test]
 async fn compile_passes_match_option() {
     let addr = spawn_server().await;
-    let src = "fn f(x: Option<i32>) -> i32 { match x { Some(n) => n, None => 0 } }";
+    let src = "fn f(x: Option<i32>) -> i32 { match x { Some(n) => n, None => 0 } } fn main() {}";
     let (_, body) = post_compile(addr, "match_option", src).await;
     assert!(body.ok);
     assert!(body.stdout.contains("Oracle"));
@@ -173,7 +173,7 @@ async fn compile_passes_while_loop() {
 #[tokio::test]
 async fn compile_passes_borrow_mut() {
     let addr = spawn_server().await;
-    let src = "fn bump(x: &mut i32) { *x = 99; }";
+    let src = "fn bump(x: &mut i32) { *x = 99; } fn main() {}";
     let (_, body) = post_compile(addr, "borrow_mut", src).await;
     assert!(body.ok);
     assert!(body.stdout.contains("Forgewright"));
@@ -191,7 +191,7 @@ async fn compile_passes_string_vs_str() {
 #[tokio::test]
 async fn compile_passes_option_unwrap_or() {
     let addr = spawn_server().await;
-    let src = "fn safe(x: Option<i32>) -> i32 { x.unwrap_or(0) }";
+    let src = "fn safe(x: Option<i32>) -> i32 { x.unwrap_or(0) } fn main() {}";
     let (_, body) = post_compile(addr, "option_unwrap_or", src).await;
     assert!(body.ok);
     assert!(body.stdout.contains("Pilgrim"));
@@ -218,7 +218,7 @@ async fn compile_passes_closure_basic() {
 #[tokio::test]
 async fn compile_passes_slice_basic() {
     let addr = spawn_server().await;
-    let src = "fn sum_slice(xs: &[i32]) -> i32 { xs.iter().sum() }";
+    let src = "fn sum_slice(xs: &[i32]) -> i32 { xs.iter().sum() } fn main() {}";
     let (_, body) = post_compile(addr, "slice_basic", src).await;
     assert!(body.ok);
     assert!(body.stdout.contains("Quartermaster"));
@@ -227,7 +227,7 @@ async fn compile_passes_slice_basic() {
 #[tokio::test]
 async fn compile_passes_result_question_mark() {
     let addr = spawn_server().await;
-    let src = "fn parse_int(s: &str) -> Result<i32, String> { let n = s.parse::<i32>().map_err(|e| e.to_string())?; Ok(n) }";
+    let src = "fn parse_int(s: &str) -> Result<i32, String> { let n = s.parse::<i32>().map_err(|e| e.to_string())?; Ok(n) } fn main() {}";
     let (_, body) = post_compile(addr, "result_question_mark", src).await;
     assert!(body.ok);
     assert!(body.stdout.contains("Auditor"));
@@ -255,7 +255,7 @@ async fn compile_passes_iter_map_collect() {
 #[tokio::test]
 async fn compile_passes_enum_match() {
     let addr = spawn_server().await;
-    let src = "enum Direction { N, S } fn f(d: Direction) -> i32 { match d { Direction::N => 1, Direction::S => 0 } }";
+    let src = "enum Direction { N, S } fn f(d: Direction) -> i32 { match d { Direction::N => 1, Direction::S => 0 } } fn main() {}";
     let (_, body) = post_compile(addr, "enum_match", src).await;
     assert!(body.ok);
     assert!(body.stdout.contains("Heraldic Sage"));

@@ -15,12 +15,18 @@
 //!   6. (`--ignored`) it builds AND runs to a clean exit in the server's
 //!      real wasm sandbox, except the ids in `EXPECTED_SANDBOX_RUN_FAILURES`.
 //!
+//! Every `rustc` build here uses `common::PLAYER_EDITION`, the edition the
+//! server builds player code with.
+//!
 //! Run the slow half with:
 //!
 //! ```text
 //! cargo test -p pledge_and_crown --test solutions -- --ignored
 //! ```
 
+mod common;
+
+use common::{PLAYER_EDITION, SERVER_MANIFEST_SOURCES};
 use pledge_and_crown::plugins::editor::solutions::{all_solutions, canonical_solution};
 use pledge_and_crown::plugins::mission::MissionRegistry;
 use pledge_and_crown::plugins::stub_grader::stub_verdict;
@@ -119,6 +125,37 @@ fn every_solution_is_a_complete_program() {
     }
 }
 
+/// `PLAYER_EDITION` is a copy of the server's manifest edition (the server
+/// does not export it). Every `edition = "..."` in the server's embedded
+/// manifests must equal it, so the two cannot drift silently.
+#[test]
+fn player_edition_matches_the_server_manifests() {
+    let mut found = 0;
+    for path in SERVER_MANIFEST_SOURCES {
+        let text = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("read {path}: {e}"));
+        for line in text.lines() {
+            let Some(rest) = line.trim().strip_prefix("edition") else {
+                continue;
+            };
+            let Some(value) = rest.trim_start().strip_prefix('=') else {
+                continue;
+            };
+            let value = value.trim().trim_matches('"');
+            assert_eq!(
+                value, PLAYER_EDITION,
+                "{path} builds player code with edition {value}, but the tests use \
+                 PLAYER_EDITION = {PLAYER_EDITION}; update game/tests/common/mod.rs"
+            );
+            found += 1;
+        }
+    }
+    assert_eq!(
+        found,
+        SERVER_MANIFEST_SOURCES.len(),
+        "expected exactly one `edition = ...` manifest line per server source"
+    );
+}
+
 #[test]
 fn solutions_pass_the_stub_grader() {
     for (id, src) in covered() {
@@ -174,7 +211,13 @@ fn rustc_build_all(tag: &str, extra: &[&str]) -> Vec<(&'static str, String)> {
         let src_path = dir.join(format!("{id}.rs"));
         std::fs::write(&src_path, src).expect("write solution source");
         let out = Command::new("rustc")
-            .args(["--edition", "2021", "--crate-type", "bin", "--crate-name"])
+            .args([
+                "--edition",
+                PLAYER_EDITION,
+                "--crate-type",
+                "bin",
+                "--crate-name",
+            ])
             .arg(id)
             .args(["-D", "warnings"])
             .args(extra)
