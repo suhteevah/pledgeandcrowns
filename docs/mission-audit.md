@@ -23,7 +23,9 @@ Player-facing solutions live in
 
 Legend: Y = yes, verified by the commands above. "wasip1" means the program
 builds as a `wasm32-wasip1` binary. "runs" means it also ran to a clean exit
-in the server sandbox.
+in the server sandbox. Grader notes (G*, wrong arms, `break;`, `fold`)
+describe the substring graders at 83f5daf; all of them except G0b and H1
+are resolved, see **Grader findings** for the status of each.
 
 | id | concept | solution | native | stub grader | wasip1 | notes |
 |---|---|---|---|---|---|---|
@@ -89,57 +91,161 @@ Known gaps (missions with no solution): **none**.
 
 ## Grader findings
 
-Both graders are substring matchers, and the server and stub agree byte for
-byte. Every finding below was run against **both** graders, with the same
-result from each.
+**Status (grader pass, 2026-11-14).** Both graders now lex the source
+(comments, strings, raw strings, byte strings and char literals are not
+code; lifetimes are told apart from char literals) and match whitespace-
+insensitive token patterns with wildcards (`$_`, `$X`, `$'a`, `$..`). The
+engine and the table are test-enforced textually identical in both crates
+(`server_and_stub_rule_tables_are_textually_identical`). Each finding below
+carries a **Resolved** / **Open** line. Evidence: `grader_corpus` in
+`game/tests/contract.rs` (counts under **Grader corpus** below), plus
+`corpus_correct_programs_compile` (`--ignored`), which builds every
+"correct" corpus program with `rustc`.
+
+The original findings follow. They describe the substring graders as they
+were at 83f5daf; both graders agreed byte for byte, and every finding was
+run against **both**, with the same result from each.
 
 - **G0 (all 57 missions): the grader ignores comments and dead code.**
   `fn main() {}` followed by the real solution inside a `/* ... */` block
   passes all **57 of 57** missions. So does a program that does nothing. The
   pattern grader cannot replace `/compile-real` plus an output check (plan
   item D2).
+  **Resolved** for comments and strings: code inside `//`, `/* */` (nested)
+  or any string literal no longer counts, and the player solution hidden
+  that way fails all 57 missions (corpus (c)). **Open, not closable by a
+  pattern grader:** dead code that is real code (an uncalled `fn`) still
+  counts, and a program that has the right shape but prints the wrong
+  thing still passes. Only `/compile-real` with an output check closes
+  that.
 - **G0b: no `fn main` required.** The `contract.rs` fixtures for
   `if_else_sign` and `match_option` pass both graders, yet `rustc` rejects
   them with `error[E0601]: main function not found`. They would fail
   `/compile-real`. `cargo_grader::compile_check` builds an rlib, so it does
   not catch this either.
+  **Open** (not in this pass's scope). A `fn main` check is expressible in
+  the table; adding it changes every mission's first failure message and
+  needs the two fixtures fixed, so it is left for a separate change.
 - **G1 `double_function`:** `fn double(n: i32) -> i32 { 2 * n }` and
   `n + n` are both correct and both REJECTED. The needle is `* 2` / `*2`.
+  **Resolved:** the check accepts `* 2`, `2 *` or `$X + $X`.
 - **G2 `if_else_sign`:** `if n < 0 { "pos" } else { "neg" }` returns wrong
   answers and is ACCEPTED. Similarly, `match_option` accepts
   `Some(_) => 0, None => 0`, and `loop_break` accepts `break;` with no value.
+  **Resolved** for all three examples. `if_else_sign` now needs the `< 0`
+  branch to give `"neg"`, and `"zero"` / `"pos"` each to sit on a branch
+  whose guard fits (`== 0`, `> 0`, or the final `else` after the other two),
+  so neg/pos and zero/pos swaps fail. `match_option` needs
+  `Some($X) => $X` and `None => 0` (bare, block or `return` arms).
+  `loop_break` needs `break` followed by a value. **Open, not closable:**
+  `if n < 0 { "neg" } else if n > 5 { "pos" } else { "zero" }` (wrong for
+  1..=5) still passes; whether a guard is the *right* comparison is
+  semantics.
 - **G3: parameter names are hard-coded.** `borrow_mut` rejects
   `fn bump(n: &mut i32) { *n += 1; }` because it needs `*x`. `closure_basic`
   rejects `|x, y| x + y` because it needs `+ b`. `iter_map_collect` rejects
   `.map(|n| n * 2)` because it needs `|x|`. All three are correct.
+  **Resolved:** `borrow_mut` captures the parameter name
+  (`fn bump($X: &mut i32) $.. *$X`), `closure_basic` captures both closure
+  parameters and accepts either order of the sum, `iter_map_collect`
+  accepts any single binder (`|$_|`, `|&$_|`, `|$_: T|`).
 - **G4 `string_vs_str`:** `let s = "you".to_string(); greet(&s);` is
   REJECTED. `String::from` is required.
+  **Resolved:** `.to_string()`, `.to_owned()`, `String::new()` and
+  `format!` are accepted too.
 - **G5 `result_question_mark`:**
   `Ok(s.parse::<i32>().map_err(|e| e.to_string())?)` is REJECTED. The `?`
   must be followed by `;` or a newline.
+  **Resolved:** any `?` token in code counts (a `?` in a format string is
+  inside a string literal and does not).
 - **G6 `derive_debug`:** `#[derive(Debug, Clone)]` is REJECTED (the needle
   is the literal `#[derive(Debug)]`). `println!("{item:#?}")` is REJECTED
   (`:#?` does not contain `:?`). The mission's own tutorial shows both
   forms.
+  **Resolved:** `#[derive( $.. Debug` accepts `Debug` anywhere in the
+  derive list; the formatter check looks inside string literals (the only
+  check that does) for `:?` or `:#?`.
 - **G7 `assoc_new`:** `fn new(level: i32) -> Hero { Hero { level } }` is
   REJECTED (needs `Self`).
+  **Resolved:** `Self` or `-> Hero`.
 - **G8 `tuple_struct`:** `struct Meters(f64); fn main() { let _d = Meters(3.0); }`
   is ACCEPTED: the float literal `3.0` satisfies the `.0` needle, and the
   field is never read.
+  **Resolved:** `3.0` lexes as one number token, so only a real field
+  access `.0` matches. **Open, not closable:** `.0` on some other tuple
+  next to an unused `Meters` still passes (needs data flow).
 - **G9 `trait_def`:** an inherent `impl Fire { fn name... }` plus an unused
   `trait Element` and any `for` loop is ACCEPTED. No trait is implemented.
+  **Resolved:** the check captures the trait's name and needs
+  `impl <that name> for` (before or after the trait definition, generic
+  impls allowed), so an inherent impl, a `for` loop, or implementing a
+  different (std) trait all fail.
 - **G10: generic and lifetime names are hard-coded.** `generic_struct`
   rejects `struct Pair<T>(T, T);` (no `: T`) and
   `struct Pair<U> { a: U, b: U }`. `lifetimes` rejects
   `fn longest<'s>(x: &'s str, y: &'s str) -> &'s str`.
+  **Resolved:** `generic_struct` captures the type parameter and needs a
+  field of that type (named or tuple struct, bounds allowed); `lifetimes`
+  accepts any lifetime name used consistently (`<$'a $.. &$'a`);
+  `generic_fn` accepts any type-parameter name.
 - **G11 `iter_zip`:** `for (x, y) in std::iter::zip(&a, &b)` (stable since
   1.59) is REJECTED.
+  **Resolved:** any call to `zip(`.
 - Also REJECTED, but defensible because the task names the construct:
   `mut_binding` `x = x + 1`, `while_loop` `while n != 0`, `for_in_range`
   `0..=9`, `cell` `.replace(5)`, `closure_move` `move||` (no space; rustfmt
   would add one), `unwrap_or_else(Default::default)`.
+  **Unchanged on purpose**, except `move||`, which now passes because
+  whitespace no longer matters.
+- **`iter_fold`:** `fold(0, |acc, _| acc)` accepted (only needle is
+  `.fold(`). **Resolved:** the fold closure's element parameter must be
+  used in its body (`.fold( $.. |$_ $.., $X $..| $.. $X`, `&x` allowed).
+  **Open, not closable:** `|acc, x| x` (keeps the last element) or
+  `|acc, x| acc * x` still pass; only an output check tells a sum from
+  another reduction. A fold given a named function (`fold(0, add)`) is now
+  rejected; the mission's task and hint both ask for a closure.
 - **H1 `dyn_trait` hint drift (RESOLVED: the hint now names `Box<dyn` and `Box::new`):** the hint says "The grader needs `Box<dyn`
   and `dyn `". The grader actually checks `Box<dyn` and `Box::new`.
+  **Open:** the drifted text is the mission tutorial's Hint section in
+  `mission.rs`, not the grader table, whose `dyn_trait` hints (`Box<dyn
+  ...>`, `Box::new`) already name the checked tokens. Fix belongs to the
+  `mission.rs` owner.
+- **Token matching side effects** (new behaviour, all intended):
+  identifiers match whole, so `RefCell::new` no longer satisfies `cell`'s
+  `Cell::new`, and `atomic` lists the std `Atomic*` types instead of
+  matching the substring `Atomic`.
+
+### Grader corpus
+
+`grader_corpus` (both graders, which must agree on every input):
+
+| set | result |
+|---|---|
+| (a) player solutions (`editor/solutions/data.rs`) pass | 57/57 |
+| (b) `contract.rs` canonical fixtures pass | 57/57 |
+| (c) player solution hidden in a block comment, in line comments AND in a raw string, next to an empty `fn main`: all three fail | 57/57 |
+| (d) correct programs pass: 15 audit "correct but rejected" examples + 23 differently-written solutions for the tightened missions | 38/38 |
+| (e) wrong programs the old grader accepted now fail (G2 x4, G8, G9 x2, `iter_fold`) | 8/8 |
+| (f) unmodified starter code fails | 57/57 |
+
+Every (d) program builds with `rustc --edition 2021`
+(`corpus_correct_programs_compile`, `--ignored`). Lexer: 16 lexer tests and
+5 matcher tests in `game/tests/stub_grader.rs`, 5 engine smoke tests in
+the server's `grader.rs`.
+
+### Snapshot diff
+
+All 285 inputs from the previous snapshots were replayed through the new
+graders before regenerating. Results were identical for stub and server:
+**0 verdict changes** (0 fail->pass, 0 pass->fail), 280 byte-identical,
+and 5 failure messages changed. All 5 are starter code (`loop_break`,
+`match_option`, `for_in_range`, `enum_match`, `while_loop`) whose
+`// ...` comments used to satisfy the early checks (`loop`, `match`,
+`for`, `enum Direction`, `while`). They now fail at the first check
+instead. The regenerated snapshots hold 293 cases. Near-misses are chosen
+one per distinct failure message, so the new checks added 11 near-miss
+cases, and 3 old ones dropped out because an earlier token removal now
+produces the same message.
 
 ## Tutorial text (hard rule 3)
 

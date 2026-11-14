@@ -10,11 +10,12 @@
 //! is the ONLY grader.
 //!
 //! IMPORTANT: this MUST NOT add a runtime dependency on
-//! `pledge_compile_api` (MIT game vs AGPL server). The rule table is
-//! duplicated on purpose and kept TEXTUALLY IDENTICAL to the one in
-//! `compile-api/src/grader.rs` between the `BEGIN MISSION TABLE` /
-//! `END MISSION TABLE` markers. `game/tests/contract.rs` enforces both
-//! the textual parity and byte-for-byte output parity.
+//! `pledge_compile_api` (MIT game vs AGPL server). The matching engine and
+//! the rule table are duplicated on purpose and kept TEXTUALLY IDENTICAL
+//! to `compile-api/src/grader.rs` between the `BEGIN GRADER ENGINE` /
+//! `END GRADER ENGINE` and `BEGIN MISSION TABLE` / `END MISSION TABLE`
+//! markers. `game/tests/contract.rs` enforces both the textual parity and
+//! byte-for-byte output parity.
 //!
 //! Hard rule: a stub pass is NEVER persisted as a real mission clear.
 //! The caller in `compile_client.rs` is responsible for gating
@@ -31,20 +32,48 @@
 //!     id: "mut_binding",                  // MissionRegistry encounter id
 //!     npc: "the Smith eyes you",          // fail = "{npc} — {hint}"
 //!     checks: &[
-//!         // Checked in order; the first check whose `any_of` tokens are
-//!         // ALL absent from the source fails with its hint.
+//!         // Checked in order; the first check none of whose `any_of`
+//!         // patterns occurs in the code fails with its hint.
 //!         check(&["let mut"], "missing required: `let mut`"),
-//!         check(&["+= 1", "+=1"], "missing required: `+= 1`"),
+//!         check(&["+= 1"], "missing required: `+= 1`"),
+//!         // check_in_strings(..) also searches string literals.
 //!     ],
 //!     pass: "the Smith strikes the work. \"good — that one bends.\"",
 //! },
 //! ```
 //!
-//! Every check is a plain substring test: a check passes when the source
-//! contains at least one of its `any_of` alternatives (one alternative =
-//! a required token; several = whitespace variants like `*= 2` / `*=2`).
-//! If a future mission genuinely needs logic the table cannot express,
-//! give it a named custom fn rather than contorting the table.
+//! # How a check matches
+//!
+//! The source is lexed first ([`lex`]): comments (line, doc and nested
+//! block) vanish, and every string, raw string, byte string and char
+//! literal becomes ONE token, so code pasted inside a comment or a string
+//! is not code. Lifetimes (`'a`) are told apart from char literals.
+//!
+//! Each pattern in `any_of` is lexed the same way and matched as a
+//! contiguous run of tokens, so whitespace never matters: `"*= 2"` matches
+//! `n *= 2`, `n*=2` and `n *=\n 2`. A string literal in a pattern matches a
+//! string literal with the same contents (`"\"neg\""`). Plain checks look
+//! only at code; a check built with [`check_in_strings`] also looks inside
+//! string literals, which is how `{:?}` in a format string is found.
+//!
+//! Pattern wildcards (`$` never appears in a normal program outside
+//! `macro_rules!`, so it is free to use):
+//!
+//! | pattern | matches |
+//! |---|---|
+//! | `$_` | any one identifier |
+//! | `$X` (any name) | any one identifier; every `$X` in the same pattern must be the same identifier |
+//! | `$'_` | any one lifetime |
+//! | `$'a` (any name) | any one lifetime; repeats must be the same lifetime |
+//! | `$..` | any run of tokens, possibly empty, that stays inside the bracket group it starts in |
+//!
+//! So `"|$X $.., $Y $..| $.. $X + $Y"` accepts `|a, b| a + b` and
+//! `|x: i32, y: i32| -> i32 { x + y }`, and `"<$'a $.. &$'a"` accepts any
+//! lifetime name used consistently. A pattern grader checks shape, never
+//! behaviour: real compilation with an output check is the only thing that
+//! proves a program correct. If a future mission genuinely needs logic the
+//! table cannot express, give it a named custom fn rather than contorting
+//! the table.
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StubVerdict {
@@ -68,47 +97,6 @@ impl StubVerdict {
             stderr: format!("[stub] {}", msg.into()),
         }
     }
-}
-
-/// One ordered grading step: satisfied when the source contains ANY of
-/// `any_of`; otherwise the mission fails with `"{npc} — {hint}"`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Check {
-    pub any_of: &'static [&'static str],
-    pub hint: &'static str,
-}
-
-/// Shorthand constructor so table entries stay on one line each.
-pub const fn check(any_of: &'static [&'static str], hint: &'static str) -> Check {
-    Check { any_of, hint }
-}
-
-/// The full grading rule for one mission. See the module docs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct MissionRule {
-    pub id: &'static str,
-    pub npc: &'static str,
-    pub checks: &'static [Check],
-    pub pass: &'static str,
-}
-
-impl MissionRule {
-    /// Run the checks in order. `Ok(pass message)` or `Err(fail message)`.
-    pub fn evaluate(&self, source: &str) -> Result<&'static str, String> {
-        match self
-            .checks
-            .iter()
-            .find(|c| !c.any_of.iter().any(|tok| source.contains(tok)))
-        {
-            Some(failed) => Err(format!("{} — {}", self.npc, failed.hint)),
-            None => Ok(self.pass),
-        }
-    }
-}
-
-/// Look up the rule for an encounter id.
-pub fn mission_rule(encounter_id: &str) -> Option<&'static MissionRule> {
-    MISSION_RULES.iter().find(|r| r.id == encounter_id)
 }
 
 /// Re-implementation of the server's per-encounter pattern checks.
@@ -137,6 +125,464 @@ pub fn stub_verdict(encounter_id: &str, source: &str) -> Option<StubVerdict> {
     Some(verdict)
 }
 
+// BEGIN GRADER ENGINE — must stay byte-identical to compile-api/src/grader.rs.
+
+/// One ordered grading step: satisfied when the lexed source contains ANY
+/// of the `any_of` patterns; otherwise the mission fails with
+/// `"{npc} — {hint}"`. See the module docs for the pattern language.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Check {
+    pub any_of: &'static [&'static str],
+    pub hint: &'static str,
+    /// Also look inside string literals (format strings such as `{:?}`).
+    /// Off for almost every check: code in a string is not code.
+    pub in_strings: bool,
+}
+
+/// Shorthand constructor so table entries stay on one line each.
+pub const fn check(any_of: &'static [&'static str], hint: &'static str) -> Check {
+    Check {
+        any_of,
+        hint,
+        in_strings: false,
+    }
+}
+
+/// Like [`check`], but the patterns may also match inside string literals.
+pub const fn check_in_strings(any_of: &'static [&'static str], hint: &'static str) -> Check {
+    Check {
+        any_of,
+        hint,
+        in_strings: true,
+    }
+}
+
+/// The full grading rule for one mission. See the module docs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MissionRule {
+    pub id: &'static str,
+    pub npc: &'static str,
+    pub checks: &'static [Check],
+    pub pass: &'static str,
+}
+
+impl MissionRule {
+    /// Run the checks in order. `Ok(pass message)` or `Err(fail message)`.
+    pub fn evaluate(&self, source: &str) -> Result<&'static str, String> {
+        let code = lex(source);
+        let mut budget = EVAL_BUDGET;
+        let mut strings: Option<Vec<Vec<Token>>> = None;
+        for c in self.checks {
+            let patterns: Vec<Vec<Pat>> = c.any_of.iter().map(|p| compile(p)).collect();
+            let mut ok = patterns.iter().any(|p| contains(p, &code, &mut budget));
+            if !ok && c.in_strings {
+                let lexed = strings.get_or_insert_with(|| {
+                    code.iter()
+                        .filter(|t| t.kind == TokenKind::Str)
+                        .map(|t| lex(&t.text))
+                        .collect()
+                });
+                ok = patterns
+                    .iter()
+                    .any(|p| lexed.iter().any(|s| contains(p, s, &mut budget)));
+            }
+            if !ok {
+                if budget == 0 {
+                    tracing::debug!(id = self.id, "grader: match budget exhausted");
+                }
+                return Err(format!("{} — {}", self.npc, c.hint));
+            }
+        }
+        Ok(self.pass)
+    }
+}
+
+/// Look up the rule for an encounter id.
+pub fn mission_rule(encounter_id: &str) -> Option<&'static MissionRule> {
+    MISSION_RULES.iter().find(|r| r.id == encounter_id)
+}
+
+/// True when `pattern` (same language as the mission table) occurs in the
+/// code of `source`, ignoring comments and string contents.
+pub fn code_contains(source: &str, pattern: &str) -> bool {
+    let mut budget = EVAL_BUDGET;
+    contains(&compile(pattern), &lex(source), &mut budget)
+}
+
+/// What kind of lexeme a [`Token`] is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TokenKind {
+    /// Identifier or keyword (`let`, `answer`, `_`). A raw `r#x` is stored as `x`.
+    Ident,
+    /// Lifetime or loop label, stored with its quote (`'a`).
+    Lifetime,
+    /// Number, char or byte literal, stored verbatim (`42`, `3.0`, `'x'`).
+    Literal,
+    /// String literal of any flavour (plain, raw, byte, C); `text` is the
+    /// raw contents between the quotes, escapes left as written.
+    Str,
+    /// Punctuation. `::` `->` `=>` `==` `!=` `<=` `>=` `+=` `-=` `*=` `/=`
+    /// `%=` `^=` `..` `..=` `...` are single tokens; everything else
+    /// (including `&&`, `||`, `<<`, `>>`) is one token per character.
+    Punct,
+}
+
+/// One lexeme of Rust source. Comments and whitespace produce no tokens.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Token {
+    pub kind: TokenKind,
+    pub text: String,
+}
+
+/// Total matcher steps allowed for one `evaluate` call. Real programs use a
+/// tiny fraction of this; it only bounds pathological input. When it runs
+/// out, remaining patterns count as "not found".
+const EVAL_BUDGET: u32 = 5_000_000;
+
+const MULTI_PUNCT: &[&str] = &[
+    "..=", "...", "::", "->", "=>", "==", "!=", "<=", ">=", "+=", "-=", "*=", "/=", "%=", "^=",
+    "..",
+];
+
+fn is_ident_start(c: char) -> bool {
+    c == '_' || c.is_alphabetic()
+}
+
+fn is_ident_continue(c: char) -> bool {
+    c == '_' || c.is_alphanumeric()
+}
+
+fn token(kind: TokenKind, chars: &[char]) -> Token {
+    Token {
+        kind,
+        text: chars.iter().collect(),
+    }
+}
+
+/// Lex Rust source just enough to tell code from comments and literals.
+///
+/// Never panics: unterminated comments, strings and char literals run to
+/// the end of the input; a stray `'` becomes a punctuation token.
+pub fn lex(source: &str) -> Vec<Token> {
+    let chars: Vec<char> = source.chars().collect();
+    let len = chars.len();
+    let mut toks: Vec<Token> = Vec::new();
+    let mut i = 0;
+    while i < len {
+        let c = chars[i];
+        let next = chars.get(i + 1).copied();
+        if c.is_whitespace() {
+            i += 1;
+        } else if c == '/' && next == Some('/') {
+            while i < len && chars[i] != '\n' {
+                i += 1;
+            }
+        } else if c == '/' && next == Some('*') {
+            i = skip_block_comment(&chars, i);
+        } else if let Some((tok, end)) = lex_prefixed_literal(&chars, i) {
+            toks.push(tok);
+            i = end;
+        } else if c == '"' {
+            let (text, end) = lex_quoted(&chars, i + 1);
+            toks.push(Token {
+                kind: TokenKind::Str,
+                text,
+            });
+            i = end;
+        } else if c == '\'' {
+            let (tok, end) = lex_quote(&chars, i, i);
+            toks.push(tok);
+            i = end;
+        } else if c == 'r'
+            && next == Some('#')
+            && chars.get(i + 2).is_some_and(|&n| is_ident_start(n))
+        {
+            let start = i + 2;
+            let mut j = start;
+            while j < len && is_ident_continue(chars[j]) {
+                j += 1;
+            }
+            toks.push(token(TokenKind::Ident, &chars[start..j]));
+            i = j;
+        } else if is_ident_start(c) {
+            let mut j = i;
+            while j < len && is_ident_continue(chars[j]) {
+                j += 1;
+            }
+            toks.push(token(TokenKind::Ident, &chars[i..j]));
+            i = j;
+        } else if c.is_ascii_digit() {
+            let after_dot = toks
+                .last()
+                .is_some_and(|t| t.kind == TokenKind::Punct && t.text == ".");
+            let mut j = i;
+            while j < len && is_ident_continue(chars[j]) {
+                j += 1;
+            }
+            // `3.5` is one literal; `d.0` (tuple field) and `0..10` are not.
+            if !after_dot
+                && chars.get(j) == Some(&'.')
+                && chars.get(j + 1).is_some_and(|d| d.is_ascii_digit())
+            {
+                j += 1;
+                while j < len && is_ident_continue(chars[j]) {
+                    j += 1;
+                }
+            }
+            toks.push(token(TokenKind::Literal, &chars[i..j]));
+            i = j;
+        } else {
+            let ahead: String = chars[i..(i + 3).min(len)].iter().collect();
+            let op = MULTI_PUNCT
+                .iter()
+                .find(|op| ahead.starts_with(**op))
+                .map_or(1, |op| op.len());
+            toks.push(token(TokenKind::Punct, &chars[i..i + op]));
+            i += op;
+        }
+    }
+    toks
+}
+
+/// `i` is at the `/` of `/*`. Block comments nest. Returns the index just
+/// past the closing `*/`, or the end of input.
+fn skip_block_comment(chars: &[char], i: usize) -> usize {
+    let len = chars.len();
+    let mut depth = 0usize;
+    let mut j = i;
+    while j < len {
+        let pair = (chars[j], chars.get(j + 1).copied());
+        if pair == ('/', Some('*')) {
+            depth += 1;
+            j += 2;
+        } else if pair == ('*', Some('/')) {
+            depth = depth.saturating_sub(1);
+            j += 2;
+            if depth == 0 {
+                return j;
+            }
+        } else {
+            j += 1;
+        }
+    }
+    len
+}
+
+/// Contents of a `"`-delimited literal whose body starts at `start`, plus
+/// the index just past the closing quote (or the end of input).
+fn lex_quoted(chars: &[char], start: usize) -> (String, usize) {
+    let len = chars.len();
+    let mut j = start;
+    while j < len {
+        match chars[j] {
+            '\\' => j += 2,
+            '"' => return (chars[start..j].iter().collect(), j + 1),
+            _ => j += 1,
+        }
+    }
+    (chars[start.min(len)..].iter().collect(), len)
+}
+
+/// Raw string body: `p` is just past the `r`. `None` if this is not a raw
+/// string (no `"` after the `#`s).
+fn lex_raw(chars: &[char], p: usize) -> Option<(String, usize)> {
+    let len = chars.len();
+    let mut q = p;
+    while q < len && chars[q] == '#' {
+        q += 1;
+    }
+    if chars.get(q) != Some(&'"') {
+        return None;
+    }
+    let hashes = q - p;
+    let body = q + 1;
+    let mut j = body;
+    while j < len {
+        if chars[j] == '"' && (1..=hashes).all(|k| chars.get(j + k) == Some(&'#')) {
+            return Some((chars[body..j].iter().collect(), j + 1 + hashes));
+        }
+        j += 1;
+    }
+    Some((chars[body.min(len)..].iter().collect(), len))
+}
+
+/// String and char literals that start with a letter: `b"…"`, `c"…"`,
+/// `r"…"`, `r#"…"#`, `br"…"`, `cr#"…"#`, `b'x'`.
+fn lex_prefixed_literal(chars: &[char], i: usize) -> Option<(Token, usize)> {
+    let str_tok = |(text, end): (String, usize)| {
+        (
+            Token {
+                kind: TokenKind::Str,
+                text,
+            },
+            end,
+        )
+    };
+    let next = chars.get(i + 1).copied();
+    match chars[i] {
+        'b' | 'c' if next == Some('"') => Some(str_tok(lex_quoted(chars, i + 2))),
+        'b' if next == Some('\'') => Some(lex_quote(chars, i, i + 1)),
+        'b' | 'c' if next == Some('r') => lex_raw(chars, i + 2).map(str_tok),
+        'r' => lex_raw(chars, i + 1).map(str_tok),
+        _ => None,
+    }
+}
+
+/// `q` is at a `'` (`start` is where the token begins, before any `b`).
+/// Decides between a char literal (`'x'`, `'\n'`, `'"'`), a lifetime or
+/// label (`'a`, `'static`) and a stray quote.
+fn lex_quote(chars: &[char], start: usize, q: usize) -> (Token, usize) {
+    let len = chars.len();
+    match chars.get(q + 1).copied() {
+        Some('\\') => {
+            let mut j = (q + 3).min(len);
+            while j < len && chars[j] != '\'' && chars[j] != '\n' {
+                j += 1;
+            }
+            let end = if j < len && chars[j] == '\'' {
+                j + 1
+            } else {
+                j
+            };
+            (token(TokenKind::Literal, &chars[start..end]), end)
+        }
+        Some(_) if chars.get(q + 2) == Some(&'\'') => {
+            (token(TokenKind::Literal, &chars[start..q + 3]), q + 3)
+        }
+        Some(a) if is_ident_start(a) && start == q => {
+            let mut j = q + 1;
+            while j < len && is_ident_continue(chars[j]) {
+                j += 1;
+            }
+            (token(TokenKind::Lifetime, &chars[q..j]), j)
+        }
+        _ => (token(TokenKind::Punct, &chars[q..q + 1]), q + 1),
+    }
+}
+
+/// One element of a compiled pattern.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Pat {
+    /// A literal token (string literals compare by contents).
+    Tok(Token),
+    /// `$_`: any one identifier.
+    AnyIdent,
+    /// `$X`: any one identifier; every `$X` in the pattern must be the same.
+    Ident(String),
+    /// `$'_`: any one lifetime.
+    AnyLifetime,
+    /// `$'x`: any one lifetime; every `$'x` in the pattern must be the same.
+    Lifetime(String),
+    /// `$..`: any run of tokens (possibly none) that stays inside the
+    /// bracket group it starts in.
+    Gap,
+}
+
+fn compile(pattern: &str) -> Vec<Pat> {
+    let mut out = Vec::new();
+    let mut toks = lex(pattern).into_iter().peekable();
+    while let Some(t) = toks.next() {
+        if t.kind == TokenKind::Punct && t.text == "$" {
+            let wildcard = toks.peek().and_then(|n| match (n.kind, n.text.as_str()) {
+                (TokenKind::Ident, "_") => Some(Pat::AnyIdent),
+                (TokenKind::Ident, name) => Some(Pat::Ident(name.to_string())),
+                (TokenKind::Lifetime, "'_") => Some(Pat::AnyLifetime),
+                (TokenKind::Lifetime, name) => Some(Pat::Lifetime(name.to_string())),
+                (TokenKind::Punct, "..") => Some(Pat::Gap),
+                _ => None,
+            });
+            if let Some(w) = wildcard {
+                toks.next();
+                out.push(w);
+                continue;
+            }
+        }
+        out.push(Pat::Tok(t));
+    }
+    out
+}
+
+/// True when `pat` matches a contiguous run of `toks`.
+fn contains(pat: &[Pat], toks: &[Token], budget: &mut u32) -> bool {
+    let mut m = Matcher {
+        toks,
+        binds: Vec::new(),
+        budget,
+    };
+    (0..=toks.len()).any(|start| {
+        m.binds.clear();
+        m.at(pat, start)
+    })
+}
+
+struct Matcher<'a> {
+    toks: &'a [Token],
+    binds: Vec<(String, String)>,
+    budget: &'a mut u32,
+}
+
+impl Matcher<'_> {
+    fn at(&mut self, pat: &[Pat], ti: usize) -> bool {
+        let Some((first, rest)) = pat.split_first() else {
+            return true;
+        };
+        if *self.budget == 0 {
+            return false;
+        }
+        *self.budget -= 1;
+        let toks = self.toks;
+        if *first == Pat::Gap {
+            let mut depth = 0usize;
+            let mut j = ti;
+            loop {
+                if self.at(rest, j) {
+                    return true;
+                }
+                let Some(t) = toks.get(j) else {
+                    return false;
+                };
+                if t.kind == TokenKind::Punct {
+                    match t.text.as_str() {
+                        "(" | "[" | "{" => depth += 1,
+                        ")" | "]" | "}" if depth == 0 => return false,
+                        ")" | "]" | "}" => depth -= 1,
+                        _ => {}
+                    }
+                }
+                j += 1;
+            }
+        }
+        let Some(t) = toks.get(ti) else {
+            return false;
+        };
+        let mark = self.binds.len();
+        let ok = match first {
+            Pat::Tok(p) => p == t,
+            Pat::AnyIdent => t.kind == TokenKind::Ident,
+            Pat::AnyLifetime => t.kind == TokenKind::Lifetime,
+            Pat::Ident(name) => t.kind == TokenKind::Ident && self.bind(name, &t.text),
+            Pat::Lifetime(name) => t.kind == TokenKind::Lifetime && self.bind(name, &t.text),
+            Pat::Gap => false,
+        };
+        if ok && self.at(rest, ti + 1) {
+            return true;
+        }
+        self.binds.truncate(mark);
+        false
+    }
+
+    fn bind(&mut self, name: &str, text: &str) -> bool {
+        match self.binds.iter().find(|(n, _)| n == name) {
+            Some((_, bound)) => bound == text,
+            None => {
+                self.binds.push((name.to_string(), text.to_string()));
+                true
+            }
+        }
+    }
+}
+// END GRADER ENGINE
+
 // BEGIN MISSION TABLE — must stay byte-identical to compile-api/src/grader.rs.
 #[rustfmt::skip]
 pub static MISSION_RULES: &[MissionRule] = &[
@@ -156,7 +602,7 @@ pub static MISSION_RULES: &[MissionRule] = &[
         checks: &[
             check(&["fn double"], "missing required: `fn double`"),
             check(&["i32"], "missing required: `i32`"),
-            check(&["* 2", "*2"], "missing required: `*2`"),
+            check(&["* 2", "2 *", "$X + $X"], "missing required: `*2`"),
         ],
         pass: "the Trait Mage's staff hums. \"named once, doubled twice over.\"",
     },
@@ -174,7 +620,7 @@ pub static MISSION_RULES: &[MissionRule] = &[
         npc: "the Smith eyes you",
         checks: &[
             check(&["let mut"], "missing required: `let mut`"),
-            check(&["+= 1", "+=1"], "missing required: `+= 1`"),
+            check(&["+= 1"], "missing required: `+= 1`"),
         ],
         pass: "the Smith strikes the work. \"good — that one bends.\"",
     },
@@ -182,9 +628,12 @@ pub static MISSION_RULES: &[MissionRule] = &[
         id: "if_else_sign",
         npc: "the Cartographer frowns",
         checks: &[
-            check(&["if "], "missing required: `if `"),
+            check(&["if"], "missing required: `if `"),
             check(&["else"], "missing required: `else`"),
-            check(&["< 0", "<0"], "missing required: `< 0`"),
+            check(&["< 0"], "missing required: `< 0`"),
+            check(&["< 0 { \"neg\"", "< 0 { return \"neg\"", "< 0 => \"neg\""], "the `< 0` branch should give `\"neg\"`"),
+            check(&["== 0 { \"zero\"", "== 0 { return \"zero\"", "0 => \"zero\"", "> 0 { \"pos\" } else { \"zero\"", "< 0 { \"neg\" } else { \"zero\""], "zero should give `\"zero\"`"),
+            check(&["> 0 { \"pos\"", "> 0 { return \"pos\"", "_ => \"pos\"", "== 0 { \"zero\" } else { \"pos\"", "== 0 { return \"zero\"; } else { return \"pos\"", "< 0 { \"neg\" } else { \"pos\""], "a positive number should give `\"pos\"`"),
         ],
         pass: "the Cartographer nods. \"three roads diverge — well chosen.\"",
     },
@@ -194,7 +643,8 @@ pub static MISSION_RULES: &[MissionRule] = &[
         checks: &[
             check(&["loop"], "missing required: `loop`"),
             check(&["break"], "missing required: `break`"),
-            check(&["*= 2", "*=2"], "the value should double each iteration: `*= 2`"),
+            check(&["*= 2", "$X = $X * 2", "$X = 2 * $X"], "the value should double each iteration: `*= 2`"),
+            check(&["break $_"], "hand the value out of the loop with `break n`"),
         ],
         pass: "the Bellringer pulls the rope — the bell sounds. \"the loop returned its number.\"",
     },
@@ -205,6 +655,8 @@ pub static MISSION_RULES: &[MissionRule] = &[
             check(&["match"], "missing required: `match`"),
             check(&["Some("], "missing required: `Some(`"),
             check(&["None"], "missing required: `None`"),
+            check(&["Some($X) => $X", "Some($X) => { $X", "Some($X) => return $X"], "the `Some(n)` arm should give back the `n` it binds"),
+            check(&["None => 0", "None => { 0", "None => return 0"], "the `None` arm should give `0`"),
         ],
         pass: "the Oracle exhales. \"both paths walked. nothing slips through.\"",
     },
@@ -224,7 +676,7 @@ pub static MISSION_RULES: &[MissionRule] = &[
         checks: &[
             check(&["let ("], "missing required: `let (`"),
             check(&[","], "a tuple needs a comma between its parts"),
-            check(&[") =", ")="], "close the pattern with `) =`"),
+            check(&[") ="], "close the pattern with `) =`"),
         ],
         pass: "the Twin grins. \"two names, one breath. cleanly split.\"",
     },
@@ -232,9 +684,9 @@ pub static MISSION_RULES: &[MissionRule] = &[
         id: "while_loop",
         npc: "the Tinker frowns",
         checks: &[
-            check(&["while "], "missing required: `while `"),
-            check(&["> 0", ">0"], "the predicate should test `> 0`"),
-            check(&["-= 1", "-=1"], "decrement with `-= 1` each iteration"),
+            check(&["while"], "missing required: `while `"),
+            check(&["> 0"], "the predicate should test `> 0`"),
+            check(&["-= 1"], "decrement with `-= 1` each iteration"),
         ],
         pass: "the Tinker pockets the spring. \"counted down, gear by gear.\"",
     },
@@ -256,7 +708,7 @@ pub static MISSION_RULES: &[MissionRule] = &[
         checks: &[
             check(&["fn bump"], "missing required: `fn bump`"),
             check(&["&mut i32"], "the parameter must be `&mut i32` (exclusive borrow)"),
-            check(&["*x"], "write through the reference with a `*x` deref"),
+            check(&["fn bump($X: &mut i32) $.. *$X"], "write through the reference with a `*x` deref"),
         ],
         pass: "the Forgewright nods. \"one writer at the forge — the borrow holds.\"",
     },
@@ -266,7 +718,7 @@ pub static MISSION_RULES: &[MissionRule] = &[
         checks: &[
             check(&["fn greet"], "missing required: `fn greet`"),
             check(&["&str"], "the parameter type should be `&str`"),
-            check(&["String::from"], "call `greet` once with a `String::from(...)` value"),
+            check(&["String::from", ".to_string()", ".to_owned()", "String::new()", "format!"], "call `greet` once with a `String::from(...)` value"),
         ],
         pass: "the Linguist smiles. \"one tongue, two voices — &str carries both.\"",
     },
@@ -283,9 +735,9 @@ pub static MISSION_RULES: &[MissionRule] = &[
         id: "for_in_range",
         npc: "the Drillmaster barks",
         checks: &[
-            check(&["for "], "missing required: `for `"),
-            check(&[" in "], "`for` needs a binding `in` an iterable"),
-            check(&["0..10", "0 .. 10"], "iterate the exact range `0..10`"),
+            check(&["for"], "missing required: `for `"),
+            check(&["in"], "`for` needs a binding `in` an iterable"),
+            check(&["0..10"], "iterate the exact range `0..10`"),
         ],
         pass: "the Drillmaster claps once. \"ten paces, exact and ordered.\"",
     },
@@ -294,8 +746,8 @@ pub static MISSION_RULES: &[MissionRule] = &[
         npc: "the Reckoner's quill hovers",
         checks: &[
             check(&["let add"], "missing required: `let add`"),
-            check(&["= |"], "bind a closure literal with `= |...|`"),
-            check(&["+ b", "+b"], "the body should compute `a + b`"),
+            check(&["= |", "= move |"], "bind a closure literal with `= |...|`"),
+            check(&["|$X $.., $Y $..| $.. $X + $Y", "|$X $.., $Y $..| $.. $Y + $X"], "the body should compute `a + b`"),
         ],
         pass: "the Reckoner inks the ledger. \"summed in a single stroke.\"",
     },
@@ -315,7 +767,7 @@ pub static MISSION_RULES: &[MissionRule] = &[
         checks: &[
             check(&["Result<"], "missing required: `Result<`"),
             check(&[".parse"], "call `.parse` on a string source"),
-            check(&["?;", "?\n"], "propagate the error with the `?` operator"),
+            check(&["?"], "propagate the error with the `?` operator"),
         ],
         pass: "the Auditor marks the tally. \"errors travel upward — the books balance.\"",
     },
@@ -323,9 +775,9 @@ pub static MISSION_RULES: &[MissionRule] = &[
         id: "derive_debug",
         npc: "the Chronicler shakes his head",
         checks: &[
-            check(&["#[derive(Debug)]"], "missing required: `#[derive(Debug)]`"),
+            check(&["#[derive( $.. Debug"], "missing required: `#[derive(Debug)]`"),
             check(&["struct Item"], "define `struct Item`"),
-            check(&[":?"], "print with the debug formatter `{:?}`"),
+            check_in_strings(&[":?", ":#?"], "print with the debug formatter `{:?}`"),
         ],
         pass: "the Chronicler dips his quill. \"derived, not authored.\"",
     },
@@ -335,7 +787,7 @@ pub static MISSION_RULES: &[MissionRule] = &[
         checks: &[
             check(&[".map("], "missing required: `.map(`"),
             check(&[".collect"], "finish with `.collect` to gather the result"),
-            check(&["|x|", "|x |"], "the closure should bind one element as `|x|`"),
+            check(&["|$_|", "|&$_|", "|$_: $..|"], "the closure should bind one element as `|x|`"),
         ],
         pass: "the Alchemist decants the flask. \"every drop transmuted.\"",
     },
@@ -344,7 +796,7 @@ pub static MISSION_RULES: &[MissionRule] = &[
         npc: "the Heraldic Sage frowns",
         checks: &[
             check(&["enum Direction"], "missing required: `enum Direction`"),
-            check(&["match "], "inspect the variant with a `match ` expression"),
+            check(&["match"], "inspect the variant with a `match ` expression"),
             check(&["Direction::"], "name a variant with the `Direction::` path"),
         ],
         pass: "the Heraldic Sage walks the sash. \"every variant a panel, every arm a blazon read.\"",
@@ -365,7 +817,7 @@ pub static MISSION_RULES: &[MissionRule] = &[
         npc: "the Recruiter shakes her head",
         checks: &[
             check(&["fn new"], "missing required: `fn new`"),
-            check(&["Self"], "a constructor returns `Self`"),
+            check(&["Self", "-> Hero"], "a constructor returns `Self`"),
             check(&["::new"], "call it with the `::new` path"),
         ],
         pass: "the Recruiter stamps the roll. \"Self::new — a member forged from a name.\"",
@@ -413,9 +865,9 @@ pub static MISSION_RULES: &[MissionRule] = &[
         id: "trait_def",
         npc: "Vexis waits",
         checks: &[
-            check(&["trait "], "missing required: a `trait ` definition"),
-            check(&["impl "], "implement it with an `impl ` block"),
-            check(&[" for "], "bind the trait to a type: `impl Trait for Type`"),
+            check(&["trait"], "missing required: a `trait ` definition"),
+            check(&["impl"], "implement it with an `impl ` block"),
+            check(&["trait $T $.. impl $T for", "trait $T $.. impl<$..> $T for", "impl $T for $.. trait $T"], "bind the trait to a type: `impl Trait for Type`"),
         ],
         pass: "Vexis lowers his staff. \"a capability named once, granted to a type — that is a trait.\"",
     },
@@ -423,7 +875,7 @@ pub static MISSION_RULES: &[MissionRule] = &[
         id: "generic_fn",
         npc: "the Wandwright frowns",
         checks: &[
-            check(&["<T"], "missing required: a type parameter `<T`"),
+            check(&["<T", "fn $_ < $_"], "missing required: a type parameter `<T`"),
             check(&["PartialOrd"], "bound the parameter so it can be compared: `T: PartialOrd`"),
         ],
         pass: "the Wandwright sights down the blank. \"one wand, any element — bounded by what it can compare.\"",
@@ -432,9 +884,9 @@ pub static MISSION_RULES: &[MissionRule] = &[
         id: "generic_struct",
         npc: "the Conjurer waits",
         checks: &[
-            check(&["struct "], "missing required: a `struct ` definition"),
-            check(&["<T>"], "make it generic with a `<T>` parameter"),
-            check(&[": T"], "give it a field of the generic type `: T`"),
+            check(&["struct"], "missing required: a `struct ` definition"),
+            check(&["struct $_ < $_ >", "struct $_ < $_ :"], "make it generic with a `<T>` parameter"),
+            check(&["struct $_ < $T $.. > { $.. : $T", "struct $_ < $T $.. > ( $.. $T"], "give it a field of the generic type `: T`"),
         ],
         pass: "the Conjurer cups two matching lights. \"a vessel for any type — so long as both halves agree.\"",
     },
@@ -451,8 +903,8 @@ pub static MISSION_RULES: &[MissionRule] = &[
         id: "lifetimes",
         npc: "the Lanternkeeper waits",
         checks: &[
-            check(&["<'a>"], "missing required: a lifetime parameter `<'a>`"),
-            check(&["&'a"], "annotate the references with `&'a`"),
+            check(&["<$'_>", "<$'_,"], "missing required: a lifetime parameter `<'a>`"),
+            check(&["<$'a $.. &$'a"], "annotate the references with `&'a`"),
         ],
         pass: "the Lanternkeeper keeps the flame. \"the borrow lives exactly as long as 'a — no shorter.\"",
     },
@@ -470,7 +922,7 @@ pub static MISSION_RULES: &[MissionRule] = &[
         id: "result_match",
         npc: "the Barkeep waits",
         checks: &[
-            check(&["match "], "missing required: `match `"),
+            check(&["match"], "missing required: `match `"),
             check(&["Ok("], "handle the success arm `Ok(`"),
             check(&["Err("], "handle the failure arm `Err(`"),
         ],
@@ -480,7 +932,7 @@ pub static MISSION_RULES: &[MissionRule] = &[
         id: "custom_error",
         npc: "the Bouncer crosses his arms",
         checks: &[
-            check(&["enum "], "missing required: an error `enum `"),
+            check(&["enum"], "missing required: an error `enum `"),
             check(&["Result<"], "return a `Result<...>` from check"),
             check(&["Err("], "produce a failure with `Err(...)`"),
         ],
@@ -491,7 +943,7 @@ pub static MISSION_RULES: &[MissionRule] = &[
         npc: "the Interpreter pauses",
         checks: &[
             check(&["impl From<"], "missing required: `impl From<...>`"),
-            check(&[" for "], "implement it `for` your error type"),
+            check(&["for"], "implement it `for` your error type"),
             check(&["fn from"], "the conversion is a `fn from` method"),
         ],
         pass: "the Interpreter inclines her head. \"one tongue's failure, spoken in another.\"",
@@ -548,6 +1000,7 @@ pub static MISSION_RULES: &[MissionRule] = &[
         npc: "the Smelter waits",
         checks: &[
             check(&[".fold("], "missing required: `.fold(`"),
+            check(&[".fold( $.. |$_ $.., $X $..| $.. $X", ".fold( $.. |$_ $.., &$X $..| $.. $X"], "the closure must use each element: `|acc, x| acc + x`"),
         ],
         pass: "the Smelter tips the crucible. \"many ores, one ingot.\"",
     },
@@ -563,7 +1016,7 @@ pub static MISSION_RULES: &[MissionRule] = &[
         id: "iter_zip",
         npc: "the Riveter waits",
         checks: &[
-            check(&[".zip("], "missing required: `.zip(`"),
+            check(&["zip("], "missing required: `.zip(`"),
         ],
         pass: "the Riveter drives the rivet. \"two plates, aligned pair by pair.\"",
     },
@@ -609,7 +1062,7 @@ pub static MISSION_RULES: &[MissionRule] = &[
         id: "atomic",
         npc: "the Tidewatch waits",
         checks: &[
-            check(&["Atomic"], "use an `Atomic` type"),
+            check(&["AtomicBool", "AtomicI8", "AtomicI16", "AtomicI32", "AtomicI64", "AtomicIsize", "AtomicU8", "AtomicU16", "AtomicU32", "AtomicU64", "AtomicUsize", "AtomicPtr"], "use an `Atomic` type"),
             check(&[".fetch_add("], "bump it atomically with `.fetch_add(`"),
         ],
         pass: "the Tidewatch clicks the gauge. \"one notch up — no gatekeeper.\"",

@@ -51,6 +51,8 @@ Run-Step "fmt"    "cargo fmt --all -- --check"
 Run-Step "check"  "cargo check --workspace --all-targets"
 Run-Step "clippy" "cargo clippy --workspace --all-targets -- -D warnings"
 Run-Step "test"   "cargo test --workspace"
+# The demo build (Acts 1-2 only) is a shipping configuration; keep it compiling.
+Run-Step "check-demo" "cargo check -p pledge_and_crown --features demo --all-targets"
 
 # Web-only cfg(target_arch = "wasm32") code is never compiled by the
 # native steps above, so it rots silently. Check the game crate for the
