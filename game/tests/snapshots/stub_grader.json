@@ -1,0 +1,2844 @@
+[
+  {
+    "case": "canonical",
+    "id": "intro_let_binding",
+    "input": "fn main() { let answer = 42; }",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] answer bound. Ferris nods approvingly."
+    }
+  },
+  {
+    "case": "starter",
+    "id": "intro_let_binding",
+    "input": "fn main() {\n    let _todo = 0;\n    println!(\"{_todo}\");\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] not yet — missing required: `let answer`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "intro_let_binding",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] not yet — missing required: `let answer`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_3",
+    "id": "intro_let_binding",
+    "input": "fn main() {  answer = 42; }",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] not yet — missing required: `let answer`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_6",
+    "id": "intro_let_binding",
+    "input": "fn main() { let answer =  }",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] not yet — missing required: `42`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "double_function",
+    "input": "fn double(n: i32) -> i32 { n * 2 }\nfn main() {}\n",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Trait Mage's staff hums. \"named once, doubled twice over.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "double_function",
+    "input": "fn _todo() {}\n\nfn main() {\n    // call your function with 21 and print the result\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] not yet — missing required: `fn double`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "double_function",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] not yet — missing required: `fn double`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_0",
+    "id": "double_function",
+    "input": " double(n: i32) -> i32 { n * 2 }\nfn main() {}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] not yet — missing required: `fn double`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_7",
+    "id": "double_function",
+    "input": "fn double(n: i32) -> i32 { n  2 }\nfn main() {}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] not yet — missing required: `*2`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "borrow_preview",
+    "input": "fn main() {\n    let value = String::from(\"ok\");\n    let r = &value;\n    println!(\"{r}\");\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Borrow Checker stirs. \"...acceptable. for now.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "borrow_preview",
+    "input": "fn main() {\n    let value = String::from(\"sample\");\n    // build a reference to the binding above and print it\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Borrow Checker is silent — missing required: `&value`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "borrow_preview",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Borrow Checker is silent — missing required: `&value`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_10",
+    "id": "borrow_preview",
+    "input": "fn main() {\n    let value = String::from(\"ok\");\n    let r = \n    println!(\"{r}\");\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Borrow Checker is silent — missing required: `&value`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_11",
+    "id": "borrow_preview",
+    "input": "fn main() {\n    let value = String::from(\"ok\");\n    let r = &value;\n    \n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Borrow Checker is silent — missing required: `println!`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "mut_binding",
+    "input": "fn main() { let mut x = 0; x += 1; }",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Smith strikes the work. \"good — that one bends.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "mut_binding",
+    "input": "fn main() {\n    let x = 0;\n    // make x mutable, then add one\n    println!(\"{x}\");\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Smith eyes you — missing required: `let mut`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "mut_binding",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Smith eyes you — missing required: `let mut`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_3",
+    "id": "mut_binding",
+    "input": "fn main() {  mut x = 0; x += 1; }",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Smith eyes you — missing required: `let mut`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_9",
+    "id": "mut_binding",
+    "input": "fn main() { let mut x = 0; x  1; }",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Smith eyes you — missing required: `+= 1`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "if_else_sign",
+    "input": "fn sign(n: i32) -> &'static str {\n    if n < 0 { \"neg\" } else if n == 0 { \"zero\" } else { \"pos\" }\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Cartographer nods. \"three roads diverge — well chosen.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "if_else_sign",
+    "input": "fn sign(_n: i32) -> &'static str {\n    // three branches, one per sign\n    \"replace me\"\n}\n\nfn main() {\n    println!(\"{}\", sign(-3));\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Cartographer frowns — missing required: `if `",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "if_else_sign",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Cartographer frowns — missing required: `if `",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_9",
+    "id": "if_else_sign",
+    "input": "fn sign(n: i32) -> &'static str {\n    if n  0 { \"neg\" } else if n == 0 { \"zero\" } else { \"pos\" }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Cartographer frowns — missing required: `< 0`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "loop_break",
+    "input": "fn main() {\n    let mut n = 1;\n    let _ = loop {\n        if n >= 100 { break n; }\n        n *= 2;\n    };\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Bellringer pulls the rope — the bell sounds. \"the loop returned its number.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "loop_break",
+    "input": "fn main() {\n    let mut _n = 1;\n    // loop until _n >= 100, doubling each step, then break the value\n    println!(\"{_n}\");\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Bellringer waits — the value should double each iteration: `*= 2`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "loop_break",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Bellringer waits — missing required: `loop`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_11",
+    "id": "loop_break",
+    "input": "fn main() {\n    let mut n = 1;\n    let _ =  {\n        if n >= 100 { break n; }\n        n *= 2;\n    };\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Bellringer waits — missing required: `loop`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_18",
+    "id": "loop_break",
+    "input": "fn main() {\n    let mut n = 1;\n    let _ = loop {\n        if n >= 100 {  n; }\n        n *= 2;\n    };\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Bellringer waits — missing required: `break`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_22",
+    "id": "loop_break",
+    "input": "fn main() {\n    let mut n = 1;\n    let _ = loop {\n        if n >= 100 { break n; }\n        n  2;\n    };\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Bellringer waits — the value should double each iteration: `*= 2`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "match_option",
+    "input": "fn unwrap_or_zero(x: Option<i32>) -> i32 {\n    match x {\n        Some(n) => n,\n        None => 0,\n    }\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Oracle exhales. \"both paths walked. nothing slips through.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "match_option",
+    "input": "fn unwrap_or_zero(_x: Option<i32>) -> i32 {\n    // pattern-match and return the inner value or 0\n    -1\n}\n\nfn main() {\n    println!(\"{}\", unwrap_or_zero(Some(7)));\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Oracle's eyes are closed — missing required: `None`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "match_option",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Oracle's eyes are closed — missing required: `match`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_6",
+    "id": "match_option",
+    "input": "fn unwrap_or_zero(x: Option<i32>) -> i32 {\n     x {\n        Some(n) => n,\n        None => 0,\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Oracle's eyes are closed — missing required: `match`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_9",
+    "id": "match_option",
+    "input": "fn unwrap_or_zero(x: Option<i32>) -> i32 {\n    match x {\n         => n,\n        None => 0,\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Oracle's eyes are closed — missing required: `Some(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_12",
+    "id": "match_option",
+    "input": "fn unwrap_or_zero(x: Option<i32>) -> i32 {\n    match x {\n        Some(n) => n,\n         => 0,\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Oracle's eyes are closed — missing required: `None`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "struct_basic",
+    "input": "struct Knight { name: String, hp: i32 }\nfn main() {\n    let k = Knight { name: String::from(\"Garin\"), hp: 30 };\n    let _ = k.name;\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Herald reads the tabard. \"by name and by number — both fields announced.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "struct_basic",
+    "input": "// define Knight here\n\nfn main() {\n    // build a Knight and print its name\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Herald squints — missing required: `struct Knight`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "struct_basic",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Herald squints — missing required: `struct Knight`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_0",
+    "id": "struct_basic",
+    "input": " Knight { name: String, hp: i32 }\nfn main() {\n    let k = Knight { name: String::from(\"Garin\"), hp: 30 };\n    let _ = k.name;\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Herald squints — missing required: `struct Knight`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_24",
+    "id": "struct_basic",
+    "input": "struct Knight { name: String, hp: i32 }\nfn main() {\n    let k = Knight { name: String::from(\"Garin\"), hp: 30 };\n    let _ = \n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Herald squints — read the field with `.name`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "vec_iter",
+    "input": "fn main() {\n    let v = vec![1, 2, 3];\n    let s: i32 = v.iter().sum();\n    println!(\"{s}\");\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Cooper hoops the barrel. \"every stave counted, sum sealed.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "vec_iter",
+    "input": "fn main() {\n    // build a Vec<i32>, sum it via .iter().sum(), print the total\n    println!(\"todo\");\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Cooper waits — missing required: `vec!`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "vec_iter",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Cooper waits — missing required: `vec!`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_6",
+    "id": "vec_iter",
+    "input": "fn main() {\n    let v =  2, 3];\n    let s: i32 = v.iter().sum();\n    println!(\"{s}\");\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Cooper waits — missing required: `vec!`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_13",
+    "id": "vec_iter",
+    "input": "fn main() {\n    let v = vec![1, 2, 3];\n    let s: i32 = \n    println!(\"{s}\");\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Cooper waits — call `.iter()` on the vector",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "tuple_destructure",
+    "input": "fn main() {\n    let (a, b) = (3, 4);\n    println!(\"{a} {b}\");\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Twin grins. \"two names, one breath. cleanly split.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "tuple_destructure",
+    "input": "fn main() {\n    let _pair = (3, 4);\n    // destructure into a and b in a single let, then print both\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Twin waits — missing required: `let (`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "tuple_destructure",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Twin waits — missing required: `let (`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_3",
+    "id": "tuple_destructure",
+    "input": "fn main() {\n     (a, b) = (3, 4);\n    println!(\"{a} {b}\");\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Twin waits — missing required: `let (`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_5",
+    "id": "tuple_destructure",
+    "input": "fn main() {\n    let (a,  = (3, 4);\n    println!(\"{a} {b}\");\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Twin waits — close the pattern with `) =`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "borrow_mut",
+    "input": "fn bump(x: &mut i32) { *x = 99; }\nfn main() { let mut n = 0; bump(&mut n); println!(\"{n}\"); }",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Forgewright nods. \"one writer at the forge — the borrow holds.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "borrow_mut",
+    "input": "fn _todo(_x: i32) {}\n\nfn main() {\n    let mut _n = 0;\n    // call your function with a mutable borrow of _n\n    println!(\"{_n}\");\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Forgewright glares — missing required: `fn bump`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "borrow_mut",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Forgewright glares — missing required: `fn bump`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_0",
+    "id": "borrow_mut",
+    "input": " bump(x: &mut i32) { *x = 99; }\nfn main() { let mut n = 0; bump(&mut n); println!(\"{n}\"); }",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Forgewright glares — missing required: `fn bump`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_2",
+    "id": "borrow_mut",
+    "input": "fn bump(x:  i32) { *x = 99; }\nfn main() { let mut n = 0; bump(&mut n); println!(\"{n}\"); }",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Forgewright glares — the parameter must be `&mut i32` (exclusive borrow)",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_5",
+    "id": "borrow_mut",
+    "input": "fn bump(x: &mut i32) {  = 99; }\nfn main() { let mut n = 0; bump(&mut n); println!(\"{n}\"); }",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Forgewright glares — write through the reference with a `*x` deref",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "string_vs_str",
+    "input": "fn greet(name: &str) { println!(\"hi {name}\"); }\nfn main() { let s = String::from(\"you\"); greet(&s); greet(\"anon\"); }",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Linguist smiles. \"one tongue, two voices — &str carries both.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "string_vs_str",
+    "input": "fn _todo(_n: i32) {}\n\nfn main() {\n    // define a function above that takes a string slice,\n    // then call it once with a String and once with a literal\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Linguist tilts her head — missing required: `fn greet`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "string_vs_str",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Linguist tilts her head — missing required: `fn greet`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_0",
+    "id": "string_vs_str",
+    "input": " greet(name: &str) { println!(\"hi {name}\"); }\nfn main() { let s = String::from(\"you\"); greet(&s); greet(\"anon\"); }",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Linguist tilts her head — missing required: `fn greet`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_2",
+    "id": "string_vs_str",
+    "input": "fn greet(name:  { println!(\"hi {name}\"); }\nfn main() { let s = String::from(\"you\"); greet(&s); greet(\"anon\"); }",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Linguist tilts her head — the parameter type should be `&str`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_13",
+    "id": "string_vs_str",
+    "input": "fn greet(name: &str) { println!(\"hi {name}\"); }\nfn main() { let s =  greet(&s); greet(\"anon\"); }",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Linguist tilts her head — call `greet` once with a `String::from(...)` value",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "option_unwrap_or",
+    "input": "fn safe(x: Option<i32>) -> i32 { x.unwrap_or(0) }\nfn main() { println!(\"{}\", safe(Some(7))); }",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Pilgrim raises his lantern. \"the absent path lit a default.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "option_unwrap_or",
+    "input": "fn safe(_x: i32) -> i32 {\n    // collapse the absent case to a default with a combinator\n    -1\n}\n\nfn main() {\n    println!(\"{}\", safe(0));\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Pilgrim shakes his head — missing required: `Option<`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "option_unwrap_or",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Pilgrim shakes his head — missing required: `Option<`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_2",
+    "id": "option_unwrap_or",
+    "input": "fn safe(x:  -> i32 { x.unwrap_or(0) }\nfn main() { println!(\"{}\", safe(Some(7))); }",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Pilgrim shakes his head — missing required: `Option<`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_6",
+    "id": "option_unwrap_or",
+    "input": "fn safe(x: Option<i32>) -> i32 {  }\nfn main() { println!(\"{}\", safe(Some(7))); }",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Pilgrim shakes his head — collapse the absent case with `.unwrap_or(default)`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "for_in_range",
+    "input": "fn main() {\n    for i in 0..10 {\n        println!(\"{i}\");\n    }\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Drillmaster claps once. \"ten paces, exact and ordered.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "for_in_range",
+    "input": "fn main() {\n    // walk the range 0..10 with a for loop, printing each step\n    println!(\"todo\");\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Drillmaster barks — `for` needs a binding `in` an iterable",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "for_in_range",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Drillmaster barks — missing required: `for `",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_3",
+    "id": "for_in_range",
+    "input": "fn main() {\n     i in 0..10 {\n        println!(\"{i}\");\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Drillmaster barks — missing required: `for `",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_5",
+    "id": "for_in_range",
+    "input": "fn main() {\n    for i  0..10 {\n        println!(\"{i}\");\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Drillmaster barks — `for` needs a binding `in` an iterable",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_6",
+    "id": "for_in_range",
+    "input": "fn main() {\n    for i in  {\n        println!(\"{i}\");\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Drillmaster barks — iterate the exact range `0..10`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "closure_basic",
+    "input": "fn main() {\n    let add = |a, b| a + b;\n    println!(\"{}\", add(2, 3));\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Reckoner inks the ledger. \"summed in a single stroke.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "closure_basic",
+    "input": "fn main() {\n    let _todo = 0;\n    // bind a closure named `add` that returns a + b, then call it\n    println!(\"{_todo}\");\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Reckoner's quill hovers — missing required: `let add`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "closure_basic",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Reckoner's quill hovers — missing required: `let add`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_3",
+    "id": "closure_basic",
+    "input": "fn main() {\n     add = |a, b| a + b;\n    println!(\"{}\", add(2, 3));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Reckoner's quill hovers — missing required: `let add`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_5",
+    "id": "closure_basic",
+    "input": "fn main() {\n    let add  |a, b| a + b;\n    println!(\"{}\", add(2, 3));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Reckoner's quill hovers — bind a closure literal with `= |...|`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_9",
+    "id": "closure_basic",
+    "input": "fn main() {\n    let add = |a, b| a  b;\n    println!(\"{}\", add(2, 3));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Reckoner's quill hovers — the body should compute `a + b`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "slice_basic",
+    "input": "fn sum_slice(xs: &[i32]) -> i32 { xs.iter().sum() }\nfn main() { let _ = sum_slice(&[1, 2, 3]); }",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Quartermaster ticks the manifest. \"a window into the stores — counted, not claimed.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "slice_basic",
+    "input": "fn _todo(_n: i32) -> i32 { 0 }\n\nfn main() {\n    // define sum_slice above with a slice parameter, then call it\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Quartermaster squints — missing required: `fn sum_slice`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "slice_basic",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Quartermaster squints — missing required: `fn sum_slice`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_0",
+    "id": "slice_basic",
+    "input": " sum_slice(xs: &[i32]) -> i32 { xs.iter().sum() }\nfn main() { let _ = sum_slice(&[1, 2, 3]); }",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Quartermaster squints — missing required: `fn sum_slice`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_2",
+    "id": "slice_basic",
+    "input": "fn sum_slice(xs:  -> i32 { xs.iter().sum() }\nfn main() { let _ = sum_slice(&[1, 2, 3]); }",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Quartermaster squints — the parameter must be a slice `&[i32]`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_6",
+    "id": "slice_basic",
+    "input": "fn sum_slice(xs: &[i32]) -> i32 {  }\nfn main() { let _ = sum_slice(&[1, 2, 3]); }",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Quartermaster squints — walk the slice with `.iter()`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "result_question_mark",
+    "input": "fn parse_int(s: &str) -> Result<i32, String> {\n    let n = s.parse::<i32>().map_err(|e| e.to_string())?;\n    Ok(n)\n}\nfn main() { let _ = parse_int(\"42\"); }",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Auditor marks the tally. \"errors travel upward — the books balance.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "result_question_mark",
+    "input": "fn parse_int(_s: &str) -> i32 {\n    // change the signature to return Result, then propagate the parse error with ?\n    0\n}\n\nfn main() {\n    let _ = parse_int(\"42\");\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Auditor's pen taps — missing required: `Result<`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "result_question_mark",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Auditor's pen taps — missing required: `Result<`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_4",
+    "id": "result_question_mark",
+    "input": "fn parse_int(s: &str) ->  String> {\n    let n = s.parse::<i32>().map_err(|e| e.to_string())?;\n    Ok(n)\n}\nfn main() { let _ = parse_int(\"42\"); }",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Auditor's pen taps — missing required: `Result<`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_10",
+    "id": "result_question_mark",
+    "input": "fn parse_int(s: &str) -> Result<i32, String> {\n    let n =  e.to_string())?;\n    Ok(n)\n}\nfn main() { let _ = parse_int(\"42\"); }",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Auditor's pen taps — call `.parse` on a string source",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_11",
+    "id": "result_question_mark",
+    "input": "fn parse_int(s: &str) -> Result<i32, String> {\n    let n = s.parse::<i32>().map_err(|e| \n    Ok(n)\n}\nfn main() { let _ = parse_int(\"42\"); }",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Auditor's pen taps — propagate the error with the `?` operator",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "derive_debug",
+    "input": "#[derive(Debug)]\nstruct Item { name: String }\nfn main() { let item = Item { name: String::from(\"ring\") }; println!(\"{item:?}\"); }",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Chronicler dips his quill. \"derived, not authored.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "derive_debug",
+    "input": "// add a derive attribute, then define struct Item\nstruct Item { name: String }\n\nfn main() {\n    let _item = Item { name: String::from(\"ring\") };\n    // print _item using the debug formatter\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Chronicler shakes his head — missing required: `#[derive(Debug)]`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "derive_debug",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Chronicler shakes his head — missing required: `#[derive(Debug)]`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_0",
+    "id": "derive_debug",
+    "input": "\nstruct Item { name: String }\nfn main() { let item = Item { name: String::from(\"ring\") }; println!(\"{item:?}\"); }",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Chronicler shakes his head — missing required: `#[derive(Debug)]`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_1",
+    "id": "derive_debug",
+    "input": "#[derive(Debug)]\n Item { name: String }\nfn main() { let item = Item { name: String::from(\"ring\") }; println!(\"{item:?}\"); }",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Chronicler shakes his head — define `struct Item`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_18",
+    "id": "derive_debug",
+    "input": "#[derive(Debug)]\nstruct Item { name: String }\nfn main() { let item = Item { name: String::from(\"ring\") };  }",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Chronicler shakes his head — print with the debug formatter `{:?}`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "iter_map_collect",
+    "input": "fn main() {\n    let v = vec![1, 2, 3];\n    let doubled: Vec<i32> = v.iter().map(|x| x * 2).collect();\n    let _ = doubled;\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Alchemist decants the flask. \"every drop transmuted.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "iter_map_collect",
+    "input": "fn main() {\n    let v = vec![1, 2, 3];\n    // chain iter / map / collect into a new Vec\n    let _ = v;\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Alchemist stirs — missing required: `.map(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "iter_map_collect",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Alchemist stirs — missing required: `.map(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_13",
+    "id": "iter_map_collect",
+    "input": "fn main() {\n    let v = vec![1, 2, 3];\n    let doubled: Vec<i32> =  x * 2).collect();\n    let _ = doubled;\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Alchemist stirs — missing required: `.map(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_16",
+    "id": "iter_map_collect",
+    "input": "fn main() {\n    let v = vec![1, 2, 3];\n    let doubled: Vec<i32> = v.iter().map(|x| x * \n    let _ = doubled;\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Alchemist stirs — finish with `.collect` to gather the result",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "enum_match",
+    "input": "enum Direction { North, South }\nfn name(d: Direction) -> &'static str {\n    match d {\n        Direction::North => \"n\",\n        Direction::South => \"s\",\n    }\n}\nfn main() { let _ = name(Direction::North); }",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Heraldic Sage walks the sash. \"every variant a panel, every arm a blazon read.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "enum_match",
+    "input": "// define enum Direction with several variants\n\nfn main() {\n    // match on a Direction value and produce something\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Heraldic Sage frowns — name a variant with the `Direction::` path",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "enum_match",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Heraldic Sage frowns — missing required: `enum Direction`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_0",
+    "id": "enum_match",
+    "input": " Direction { North, South }\nfn name(d: Direction) -> &'static str {\n    match d {\n        Direction::North => \"n\",\n        Direction::South => \"s\",\n    }\n}\nfn main() { let _ = name(Direction::North); }",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Heraldic Sage frowns — missing required: `enum Direction`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_13",
+    "id": "enum_match",
+    "input": "enum Direction { North, South }\nfn name(d: Direction) -> &'static str {\n     d {\n        Direction::North => \"n\",\n        Direction::South => \"s\",\n    }\n}\nfn main() { let _ = name(Direction::North); }",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Heraldic Sage frowns — inspect the variant with a `match ` expression",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "while_loop",
+    "input": "fn main() {\n    let mut n = 5;\n    while n > 0 { n -= 1; }\n    println!(\"{n}\");\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Tinker pockets the spring. \"counted down, gear by gear.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "while_loop",
+    "input": "fn main() {\n    let mut _n = 5;\n    // count down with a while loop and a -= 1 step\n    println!(\"{_n}\");\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Tinker frowns — the predicate should test `> 0`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "while_loop",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Tinker frowns — missing required: `while `",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_8",
+    "id": "while_loop",
+    "input": "fn main() {\n    let mut n = 5;\n     n > 0 { n -= 1; }\n    println!(\"{n}\");\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Tinker frowns — missing required: `while `",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_10",
+    "id": "while_loop",
+    "input": "fn main() {\n    let mut n = 5;\n    while n  0 { n -= 1; }\n    println!(\"{n}\");\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Tinker frowns — the predicate should test `> 0`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_14",
+    "id": "while_loop",
+    "input": "fn main() {\n    let mut n = 5;\n    while n > 0 { n  1; }\n    println!(\"{n}\");\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Tinker frowns — decrement with `-= 1` each iteration",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "impl_method",
+    "input": "struct Hero { level: i32 }\nimpl Hero {\n    fn power(&self) -> i32 { self.level * 10 }\n}\nfn main() {\n    let h = Hero { level: 3 };\n    println!(\"{}\", h.power());\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Guildmaster nods. \"duties bound to a name — that is a method.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "impl_method",
+    "input": "struct Hero { level: i32 }\n\nfn main() {\n    let _h = Hero { level: 3 };\n    // give Hero a `power` method (it borrows the hero) returning its power, then call it\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Guildmaster waits — missing required: `impl`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "impl_method",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Guildmaster waits — missing required: `impl`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_6",
+    "id": "impl_method",
+    "input": "struct Hero { level: i32 }\n Hero {\n    fn power(&self) -> i32 { self.level * 10 }\n}\nfn main() {\n    let h = Hero { level: 3 };\n    println!(\"{}\", h.power());\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Guildmaster waits — missing required: `impl`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_10",
+    "id": "impl_method",
+    "input": "struct Hero { level: i32 }\nimpl Hero {\n    fn  -> i32 { self.level * 10 }\n}\nfn main() {\n    let h = Hero { level: 3 };\n    println!(\"{}\", h.power());\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Guildmaster waits — a method borrows the instance with `&self`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_14",
+    "id": "impl_method",
+    "input": "struct Hero { level: i32 }\nimpl Hero {\n    fn power(&self) -> i32 {  * 10 }\n}\nfn main() {\n    let h = Hero { level: 3 };\n    println!(\"{}\", h.power());\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Guildmaster waits — read the instance's data with `self.`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "assoc_new",
+    "input": "struct Hero { level: i32 }\nimpl Hero {\n    fn new(level: i32) -> Self { Self { level } }\n}\nfn main() {\n    let h = Hero::new(5);\n    println!(\"{}\", h.level);\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Recruiter stamps the roll. \"Self::new — a member forged from a name.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "assoc_new",
+    "input": "struct Hero { level: i32 }\n\nfn main() {\n    // add a constructor associated function that builds a Hero from a level, then call it\n    let _ = Hero { level: 1 };\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Recruiter shakes her head — missing required: `fn new`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "assoc_new",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Recruiter shakes her head — missing required: `fn new`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_9",
+    "id": "assoc_new",
+    "input": "struct Hero { level: i32 }\nimpl Hero {\n     new(level: i32) -> Self { Self { level } }\n}\nfn main() {\n    let h = Hero::new(5);\n    println!(\"{}\", h.level);\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Recruiter shakes her head — missing required: `fn new`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_27",
+    "id": "assoc_new",
+    "input": "struct Hero { level: i32 }\nimpl Hero {\n    fn new(level: i32) -> Self { Self { level } }\n}\nfn main() {\n    let h = \n    println!(\"{}\", h.level);\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Recruiter shakes her head — call it with the `::new` path",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "if_let",
+    "input": "fn main() {\n    let maybe: Option<i32> = Some(7);\n    if let Some(n) = maybe {\n        println!(\"{n}\");\n    }\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Locksmith turns the one key that fits. \"Some — and only Some — opens.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "if_let",
+    "input": "fn main() {\n    let maybe: Option<i32> = Some(7);\n    // print the inner value only when the option actually holds one\n    let _ = maybe;\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Locksmith frowns — missing required: `if let`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "if_let",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Locksmith frowns — missing required: `if let`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_8",
+    "id": "if_let",
+    "input": "fn main() {\n    let maybe: Option<i32> = Some(7);\n     let Some(n) = maybe {\n        println!(\"{n}\");\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Locksmith frowns — missing required: `if let`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "while_let",
+    "input": "fn main() {\n    let mut stack = vec![1, 2, 3];\n    while let Some(top) = stack.pop() {\n        println!(\"{top}\");\n    }\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Porter empties the cart, crate by crate. \"while there is a Some, keep unloading.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "while_let",
+    "input": "fn main() {\n    let mut stack = vec![1, 2, 3];\n    // remove and print each element until the stack is empty\n    let _ = &mut stack;\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Porter sets the crate down — missing required: `while let`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "while_let",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Porter sets the crate down — missing required: `while let`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_10",
+    "id": "while_let",
+    "input": "fn main() {\n    let mut stack = vec![1, 2, 3];\n     let Some(top) = stack.pop() {\n        println!(\"{top}\");\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Porter sets the crate down — missing required: `while let`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_14",
+    "id": "while_let",
+    "input": "fn main() {\n    let mut stack = vec![1, 2, 3];\n    while let Some(top) =  {\n        println!(\"{top}\");\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Porter sets the crate down — drain the stack with `.pop()`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "tuple_struct",
+    "input": "struct Meters(f64);\nfn main() {\n    let d = Meters(3.5);\n    println!(\"{}\", d.0);\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Surveyor reads the rod. \"a bare number, now named Meters — a newtype.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "tuple_struct",
+    "input": "fn main() {\n    let _raw: f64 = 3.5;\n    // wrap that raw f64 in a one-field `Meters` newtype, then read the wrapped value back out\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Surveyor squints down the line — missing required: `struct Meters(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "tuple_struct",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Surveyor squints down the line — missing required: `struct Meters(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_0",
+    "id": "tuple_struct",
+    "input": " Meters(f64);\nfn main() {\n    let d = Meters(3.5);\n    println!(\"{}\", d.0);\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Surveyor squints down the line — missing required: `struct Meters(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_10",
+    "id": "tuple_struct",
+    "input": "struct Meters(f64);\nfn main() {\n    let d = Meters(3.5);\n    println!(\"{}\", \n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Surveyor squints down the line — read the wrapped value with `.0`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "enum_data_match",
+    "input": "enum Item {\n    Weapon { damage: i32 },\n    Potion { heal: i32 },\n}\nfn value(item: Item) -> i32 {\n    match item {\n        Item::Weapon { damage } => damage,\n        Item::Potion { heal } => heal,\n    }\n}\nfn main() {\n    let _ = value(Item::Weapon { damage: 10 });\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Armorer lays out the rack. \"weapon or potion — name every kind, miss none.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "enum_data_match",
+    "input": "fn value(item: i32) -> i32 {\n    // define an `Item` type with two kinds (a weapon carrying damage, a potion carrying heal),\n    // take an Item here instead of an i32, and handle every kind to return its number\n    item\n}\n\nfn main() {\n    let _ = value(0);\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Armorer taps the anvil — missing required: `enum Item`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "enum_data_match",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Armorer taps the anvil — missing required: `enum Item`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_0",
+    "id": "enum_data_match",
+    "input": " Item {\n    Weapon { damage: i32 },\n    Potion { heal: i32 },\n}\nfn value(item: Item) -> i32 {\n    match item {\n        Item::Weapon { damage } => damage,\n        Item::Potion { heal } => heal,\n    }\n}\nfn main() {\n    let _ = value(Item::Weapon { damage: 10 });\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Armorer taps the anvil — missing required: `enum Item`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_20",
+    "id": "enum_data_match",
+    "input": "enum Item {\n    Weapon { damage: i32 },\n    Potion { heal: i32 },\n}\nfn value(item: Item) -> i32 {\n     item {\n        Item::Weapon { damage } => damage,\n        Item::Potion { heal } => heal,\n    }\n}\nfn main() {\n    let _ = value(Item::Weapon { damage: 10 });\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Armorer taps the anvil — inspect the item with `match`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "trait_def",
+    "input": "trait Element {\n    fn name(&self) -> &str;\n}\nstruct Fire;\nimpl Element for Fire {\n    fn name(&self) -> &str { \"fire\" }\n}\nfn main() {\n    let f = Fire;\n    println!(\"{}\", f.name());\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] Vexis lowers his staff. \"a capability named once, granted to a type — that is a trait.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "trait_def",
+    "input": "struct Fire;\n\nfn main() {\n    let _f = Fire;\n    // define an Element capability (a name() method), grant it to Fire, then call name()\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] Vexis waits — missing required: a `trait ` definition",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "trait_def",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] Vexis waits — missing required: a `trait ` definition",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_0",
+    "id": "trait_def",
+    "input": " Element {\n    fn name(&self) -> &str;\n}\nstruct Fire;\nimpl Element for Fire {\n    fn name(&self) -> &str { \"fire\" }\n}\nfn main() {\n    let f = Fire;\n    println!(\"{}\", f.name());\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] Vexis waits — missing required: a `trait ` definition",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_10",
+    "id": "trait_def",
+    "input": "trait Element {\n    fn name(&self) -> &str;\n}\nstruct Fire;\n Element for Fire {\n    fn name(&self) -> &str { \"fire\" }\n}\nfn main() {\n    let f = Fire;\n    println!(\"{}\", f.name());\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] Vexis waits — implement it with an `impl ` block",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_12",
+    "id": "trait_def",
+    "input": "trait Element {\n    fn name(&self) -> &str;\n}\nstruct Fire;\nimpl Element  Fire {\n    fn name(&self) -> &str { \"fire\" }\n}\nfn main() {\n    let f = Fire;\n    println!(\"{}\", f.name());\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] Vexis waits — bind the trait to a type: `impl Trait for Type`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "generic_fn",
+    "input": "fn larger<T: PartialOrd>(a: T, b: T) -> T {\n    if a > b { a } else { b }\n}\nfn main() {\n    println!(\"{}\", larger(3, 7));\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Wandwright sights down the blank. \"one wand, any element — bounded by what it can compare.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "generic_fn",
+    "input": "fn main() {\n    // write a generic `larger` function returning the bigger of two comparable values,\n    // then call it on two integers\n    println!(\"{}\", 0);\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Wandwright frowns — missing required: a type parameter `<T`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "generic_fn",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Wandwright frowns — missing required: a type parameter `<T`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_1",
+    "id": "generic_fn",
+    "input": "fn  PartialOrd>(a: T, b: T) -> T {\n    if a > b { a } else { b }\n}\nfn main() {\n    println!(\"{}\", larger(3, 7));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Wandwright frowns — missing required: a type parameter `<T`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_2",
+    "id": "generic_fn",
+    "input": "fn larger<T:  T, b: T) -> T {\n    if a > b { a } else { b }\n}\nfn main() {\n    println!(\"{}\", larger(3, 7));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Wandwright frowns — bound the parameter so it can be compared: `T: PartialOrd`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "generic_struct",
+    "input": "struct Pair<T> {\n    a: T,\n    b: T,\n}\nfn main() {\n    let p = Pair { a: 1, b: 2 };\n    let _ = (p.a, p.b);\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Conjurer cups two matching lights. \"a vessel for any type — so long as both halves agree.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "generic_struct",
+    "input": "fn main() {\n    // define a generic Pair that holds two values of one shared type,\n    // build one from two integers, then read both fields\n    let _ = (1, 2);\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Conjurer waits — missing required: a `struct ` definition",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "generic_struct",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Conjurer waits — missing required: a `struct ` definition",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_0",
+    "id": "generic_struct",
+    "input": " Pair<T> {\n    a: T,\n    b: T,\n}\nfn main() {\n    let p = Pair { a: 1, b: 2 };\n    let _ = (p.a, p.b);\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Conjurer waits — missing required: a `struct ` definition",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_1",
+    "id": "generic_struct",
+    "input": "struct  {\n    a: T,\n    b: T,\n}\nfn main() {\n    let p = Pair { a: 1, b: 2 };\n    let _ = (p.a, p.b);\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Conjurer waits — make it generic with a `<T>` parameter",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "dyn_trait",
+    "input": "trait Element {\n    fn name(&self) -> &str;\n}\nstruct Fire;\nimpl Element for Fire {\n    fn name(&self) -> &str { \"fire\" }\n}\nstruct Water;\nimpl Element for Water {\n    fn name(&self) -> &str { \"water\" }\n}\nfn main() {\n    let zoo: Vec<Box<dyn Element>> = vec![Box::new(Fire), Box::new(Water)];\n    for e in &zoo {\n        println!(\"{}\", e.name());\n    }\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Familiar shifts through its forms. \"many shapes, one cage — dispatched at a touch.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "dyn_trait",
+    "input": "trait Element {\n    fn name(&self) -> &str;\n}\nstruct Fire;\nimpl Element for Fire {\n    fn name(&self) -> &str { \"fire\" }\n}\nstruct Water;\nimpl Element for Water {\n    fn name(&self) -> &str { \"water\" }\n}\n\nfn main() {\n    // collect a Fire and a Water into one Vec of trait objects, then print each name()\n    let _ = (Fire, Water);\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Familiar flickers — missing required: `Box<dyn ...>`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "dyn_trait",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Familiar flickers — missing required: `Box<dyn ...>`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_43",
+    "id": "dyn_trait",
+    "input": "trait Element {\n    fn name(&self) -> &str;\n}\nstruct Fire;\nimpl Element for Fire {\n    fn name(&self) -> &str { \"fire\" }\n}\nstruct Water;\nimpl Element for Water {\n    fn name(&self) -> &str { \"water\" }\n}\nfn main() {\n    let zoo:  Element>> = vec![Box::new(Fire), Box::new(Water)];\n    for e in &zoo {\n        println!(\"{}\", e.name());\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Familiar flickers — missing required: `Box<dyn ...>`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "lifetimes",
+    "input": "fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {\n    if x.len() > y.len() { x } else { y }\n}\nfn main() {\n    let _ = longest(\"aa\", \"b\");\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Lanternkeeper keeps the flame. \"the borrow lives exactly as long as 'a — no shorter.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "lifetimes",
+    "input": "fn longest(x: &str, y: &str) -> &str {\n    // this won't compile yet: add a lifetime 'a tying the inputs and the return together\n    if x.len() > y.len() { x } else { y }\n}\n\nfn main() {\n    let _ = longest(\"aa\", \"b\");\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Lanternkeeper waits — missing required: a lifetime parameter `<'a>`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "lifetimes",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Lanternkeeper waits — missing required: a lifetime parameter `<'a>`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_1",
+    "id": "lifetimes",
+    "input": "fn  &'a str, y: &'a str) -> &'a str {\n    if x.len() > y.len() { x } else { y }\n}\nfn main() {\n    let _ = longest(\"aa\", \"b\");\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Lanternkeeper waits — missing required: a lifetime parameter `<'a>`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "assoc_type",
+    "input": "trait Producer {\n    type Output;\n    fn make(&self) -> Self::Output;\n}\nstruct Coiner;\nimpl Producer for Coiner {\n    type Output = i32;\n    fn make(&self) -> Self::Output { 7 }\n}\nfn main() {\n    let c = Coiner;\n    let _ = c.make();\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Loremaster turns the page. \"each producer names its own yield — the type follows the trait.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "assoc_type",
+    "input": "trait Producer {\n    fn make(&self) -> i32;\n}\n\nfn main() {\n    // change Producer so each implementor names its own output type (an associated type),\n    // then implement it for a Coiner that makes an i32\n    let _ = ();\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Loremaster turns the page — missing required: `type Output`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "assoc_type",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Loremaster turns the page — missing required: `type Output`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "result_match",
+    "input": "fn describe(r: Result<i32, String>) -> i32 {\n    match r {\n        Ok(v) => v,\n        Err(_e) => -1,\n    }\n}\nfn main() {\n    let _ = describe(Ok(5));\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Barkeep nods. \"poured or spilled — you accounted for both.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "result_match",
+    "input": "fn describe(r: Result<i32, String>) -> i32 {\n    // handle both outcomes: the value on success, -1 on failure\n    let _ = r;\n    0\n}\n\nfn main() {\n    let _ = describe(Ok(5));\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Barkeep waits — missing required: `match `",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "result_match",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Barkeep waits — missing required: `match `",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_7",
+    "id": "result_match",
+    "input": "fn describe(r: Result<i32, String>) -> i32 {\n     r {\n        Ok(v) => v,\n        Err(_e) => -1,\n    }\n}\nfn main() {\n    let _ = describe(Ok(5));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Barkeep waits — missing required: `match `",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_13",
+    "id": "result_match",
+    "input": "fn describe(r: Result<i32, String>) -> i32 {\n    match r {\n        Ok(v) => v,\n         => -1,\n    }\n}\nfn main() {\n    let _ = describe(Ok(5));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Barkeep waits — handle the failure arm `Err(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "custom_error",
+    "input": "enum BrewError {\n    TooHot,\n    TooCold,\n}\nfn check(temp: i32) -> Result<i32, BrewError> {\n    if temp > 100 {\n        Err(BrewError::TooHot)\n    } else if temp < 0 {\n        Err(BrewError::TooCold)\n    } else {\n        Ok(temp)\n    }\n}\nfn main() {\n    let _ = check(50);\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Bouncer grunts. \"every kind of trouble, named and on the list.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "custom_error",
+    "input": "fn check(temp: i32) -> i32 {\n    // define an error type with named failure kinds, change this to return a Result,\n    // and produce a failure when temp is out of range\n    temp\n}\n\nfn main() {\n    let _ = check(50);\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Bouncer crosses his arms — missing required: an error `enum `",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "custom_error",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Bouncer crosses his arms — missing required: an error `enum `",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_0",
+    "id": "custom_error",
+    "input": " BrewError {\n    TooHot,\n    TooCold,\n}\nfn check(temp: i32) -> Result<i32, BrewError> {\n    if temp > 100 {\n        Err(BrewError::TooHot)\n    } else if temp < 0 {\n        Err(BrewError::TooCold)\n    } else {\n        Ok(temp)\n    }\n}\nfn main() {\n    let _ = check(50);\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Bouncer crosses his arms — missing required: an error `enum `",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_10",
+    "id": "custom_error",
+    "input": "enum BrewError {\n    TooHot,\n    TooCold,\n}\nfn check(temp: i32) ->  BrewError> {\n    if temp > 100 {\n        Err(BrewError::TooHot)\n    } else if temp < 0 {\n        Err(BrewError::TooCold)\n    } else {\n        Ok(temp)\n    }\n}\nfn main() {\n    let _ = check(50);\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Bouncer crosses his arms — return a `Result<...>` from check",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "from_error",
+    "input": "struct ParseFail;\nenum AppError {\n    Parse,\n}\nimpl From<ParseFail> for AppError {\n    fn from(_e: ParseFail) -> Self {\n        AppError::Parse\n    }\n}\nfn main() {\n    let _e: AppError = ParseFail.into();\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Interpreter inclines her head. \"one tongue's failure, spoken in another.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "from_error",
+    "input": "struct ParseFail;\nenum AppError {\n    Parse,\n}\n\nfn main() {\n    // make AppError convertible from ParseFail: implement the standard conversion\n    // trait so that `ParseFail.into()` yields an AppError\n    let _ = ParseFail;\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Interpreter pauses — missing required: `impl From<...>`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "from_error",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Interpreter pauses — missing required: `impl From<...>`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_7",
+    "id": "from_error",
+    "input": "struct ParseFail;\nenum AppError {\n    Parse,\n}\n From<ParseFail> for AppError {\n    fn from(_e: ParseFail) -> Self {\n        AppError::Parse\n    }\n}\nfn main() {\n    let _e: AppError = ParseFail.into();\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Interpreter pauses — missing required: `impl From<...>`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_9",
+    "id": "from_error",
+    "input": "struct ParseFail;\nenum AppError {\n    Parse,\n}\nimpl From<ParseFail>  AppError {\n    fn from(_e: ParseFail) -> Self {\n        AppError::Parse\n    }\n}\nfn main() {\n    let _e: AppError = ParseFail.into();\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Interpreter pauses — implement it `for` your error type",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_12",
+    "id": "from_error",
+    "input": "struct ParseFail;\nenum AppError {\n    Parse,\n}\nimpl From<ParseFail> for AppError {\n     from(_e: ParseFail) -> Self {\n        AppError::Parse\n    }\n}\nfn main() {\n    let _e: AppError = ParseFail.into();\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Interpreter pauses — the conversion is a `fn from` method",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "option_map",
+    "input": "fn add_one(o: Option<i32>) -> Option<i32> {\n    o.map(|x| x + 1)\n}\nfn main() {\n    let _ = add_one(Some(3));\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Mixologist swirls the glass. \"changed within — if there was anything to change.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "option_map",
+    "input": "fn add_one(o: Option<i32>) -> Option<i32> {\n    // if there's a value, return it plus one — still wrapped — without unwrapping\n    o\n}\n\nfn main() {\n    let _ = add_one(Some(3));\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Mixologist waits — transform the inside with `.map(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "option_map",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Mixologist waits — keep it an `Option<...>`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_6",
+    "id": "option_map",
+    "input": "fn add_one(o: Option<i32>) -> Option<i32> {\n     x + 1)\n}\nfn main() {\n    let _ = add_one(Some(3));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Mixologist waits — transform the inside with `.map(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "and_then",
+    "input": "fn half(n: i32) -> Option<i32> {\n    if n % 2 == 0 { Some(n / 2) } else { None }\n}\nfn main() {\n    let _ = Some(8).and_then(half).and_then(half);\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Tabkeeper closes the ledger. \"one failed round and the tab is cut.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "and_then",
+    "input": "fn half(n: i32) -> Option<i32> {\n    if n % 2 == 0 { Some(n / 2) } else { None }\n}\n\nfn main() {\n    // chain `half` on Some(8) so the first failure short-circuits to None\n    let _ = half(8);\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Tabkeeper waits — chain the fallible steps with `.and_then(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "and_then",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Tabkeeper waits — the steps should yield an `Option`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_4",
+    "id": "and_then",
+    "input": "fn half(n: i32) ->  {\n    if n % 2 == 0 { Some(n / 2) } else { None }\n}\nfn main() {\n    let _ = Some(8).and_then(half).and_then(half);\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Tabkeeper waits — the steps should yield an `Option`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_28",
+    "id": "and_then",
+    "input": "fn half(n: i32) -> Option<i32> {\n    if n % 2 == 0 { Some(n / 2) } else { None }\n}\nfn main() {\n    let _ = \n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Tabkeeper waits — chain the fallible steps with `.and_then(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "unwrap_or_else",
+    "input": "fn value(o: Option<i32>) -> i32 {\n    o.unwrap_or_else(|| 0)\n}\nfn main() {\n    let _ = value(None);\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Cellarer taps the cask. \"a fresh draught — drawn only when the old runs dry.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "unwrap_or_else",
+    "input": "fn value(o: Option<i32>) -> i32 {\n    // unwrap the option, computing the fallback lazily with a closure (only if needed)\n    let _ = o;\n    0\n}\n\nfn main() {\n    let _ = value(None);\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Cellarer waits — missing required: `.unwrap_or_else(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "unwrap_or_else",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Cellarer waits — missing required: `.unwrap_or_else(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_6",
+    "id": "unwrap_or_else",
+    "input": "fn value(o: Option<i32>) -> i32 {\n     0)\n}\nfn main() {\n    let _ = value(None);\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Cellarer waits — missing required: `.unwrap_or_else(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "hashmap_basic",
+    "input": "use std::collections::HashMap;\nfn main() {\n    let mut scores = HashMap::new();\n    scores.insert(\"ace\", 1);\n    let _ = scores.get(\"ace\");\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Keymaster turns the ring. \"every store under its own key.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "hashmap_basic",
+    "input": "fn main() {\n    // store a value under a string key in a map, then look it up by that key\n    let _ = ();\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Keymaster waits — missing required: `HashMap`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "hashmap_basic",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Keymaster waits — missing required: `HashMap`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_10",
+    "id": "hashmap_basic",
+    "input": "use std::collections::HashMap;\nfn main() {\n    let mut scores = HashMap::new();\n     1);\n    let _ = scores.get(\"ace\");\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Keymaster waits — store a value with `.insert(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_15",
+    "id": "hashmap_basic",
+    "input": "use std::collections::HashMap;\nfn main() {\n    let mut scores = HashMap::new();\n    scores.insert(\"ace\", 1);\n    let _ = \n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Keymaster waits — look it up with `.get(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "iter_filter",
+    "input": "fn main() {\n    let v = vec![1, 2, 3, 4];\n    let evens: Vec<&i32> = v.iter().filter(|x| **x % 2 == 0).collect();\n    let _ = evens;\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Sifter shakes the screen. \"only what fits the mesh falls through.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "iter_filter",
+    "input": "fn main() {\n    let v = vec![1, 2, 3, 4];\n    // keep only the even numbers, gathering the survivors into a new collection\n    let _ = &v;\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Sifter shakes the screen — missing required: `.filter(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "iter_filter",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Sifter shakes the screen — missing required: `.filter(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_14",
+    "id": "iter_filter",
+    "input": "fn main() {\n    let v = vec![1, 2, 3, 4];\n    let evens: Vec<&i32> =  **x % 2 == 0).collect();\n    let _ = evens;\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Sifter shakes the screen — missing required: `.filter(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_19",
+    "id": "iter_filter",
+    "input": "fn main() {\n    let v = vec![1, 2, 3, 4];\n    let evens: Vec<&i32> = v.iter().filter(|x| **x % 2 == \n    let _ = evens;\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Sifter shakes the screen — gather the survivors with `.collect`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "iter_fold",
+    "input": "fn main() {\n    let v = vec![1, 2, 3];\n    let total = v.iter().fold(0, |acc, x| acc + x);\n    let _ = total;\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Smelter tips the crucible. \"many ores, one ingot.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "iter_fold",
+    "input": "fn main() {\n    let v = vec![1, 2, 3];\n    // reduce the vec to a single total by accumulating across it (don't use .sum())\n    let _ = &v;\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Smelter waits — missing required: `.fold(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "iter_fold",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Smelter waits — missing required: `.fold(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_12",
+    "id": "iter_fold",
+    "input": "fn main() {\n    let v = vec![1, 2, 3];\n    let total =  |acc, x| acc + x);\n    let _ = total;\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Smelter waits — missing required: `.fold(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "iter_enumerate",
+    "input": "fn main() {\n    let v = vec![10, 20, 30];\n    for (i, x) in v.iter().enumerate() {\n        let _ = (i, x);\n    }\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Tallywright stamps the row. \"each item numbered as it passes.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "iter_enumerate",
+    "input": "fn main() {\n    let v = vec![10, 20, 30];\n    // walk the vec so each step gives you both the position and the value\n    let _ = &v;\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Tallywright waits — missing required: `.enumerate(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "iter_enumerate",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Tallywright waits — missing required: `.enumerate(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_13",
+    "id": "iter_enumerate",
+    "input": "fn main() {\n    let v = vec![10, 20, 30];\n    for (i, x) in  {\n        let _ = (i, x);\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Tallywright waits — missing required: `.enumerate(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "iter_zip",
+    "input": "fn main() {\n    let a = vec![1, 2];\n    let b = vec![3, 4];\n    for (x, y) in a.iter().zip(b.iter()) {\n        let _ = (x, y);\n    }\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Riveter drives the rivet. \"two plates, aligned pair by pair.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "iter_zip",
+    "input": "fn main() {\n    let a = vec![1, 2];\n    let b = vec![3, 4];\n    // walk both vecs together, pairing the nth of one with the nth of the other\n    let _ = (&a, &b);\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Riveter waits — missing required: `.zip(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "iter_zip",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Riveter waits — missing required: `.zip(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_17",
+    "id": "iter_zip",
+    "input": "fn main() {\n    let a = vec![1, 2];\n    let b = vec![3, 4];\n    for (x, y) in  {\n        let _ = (x, y);\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Riveter waits — missing required: `.zip(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "closure_move",
+    "input": "fn main() {\n    let name = String::from(\"Garin\");\n    let greet = move || println!(\"hail, {name}\");\n    greet();\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Bondsmith seals the charge. \"owned, and carried where I go.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "closure_move",
+    "input": "fn main() {\n    let name = String::from(\"Garin\");\n    // capture `name` BY VALUE into a closure (so the closure owns it), then call it\n    let _ = &name;\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Bondsmith waits — missing required: a `move` closure (`move |...|`)",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "closure_move",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Bondsmith waits — missing required: a `move` closure (`move |...|`)",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_10",
+    "id": "closure_move",
+    "input": "fn main() {\n    let name = String::from(\"Garin\");\n    let greet =  || println!(\"hail, {name}\");\n    greet();\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Bondsmith waits — missing required: a `move` closure (`move |...|`)",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "thread_spawn",
+    "input": "use std::thread;\nfn main() {\n    let handle = thread::spawn(|| 21 * 2);\n    let _ = handle.join();\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Dockmaster waves them off. \"sent to work — and met again at the gate.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "thread_spawn",
+    "input": "fn main() {\n    // run a small computation on another thread, then wait for it to finish\n    let _ = ();\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Dockmaster waits — missing required: `thread::spawn`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "thread_spawn",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Dockmaster waits — missing required: `thread::spawn`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_8",
+    "id": "thread_spawn",
+    "input": "use std::thread;\nfn main() {\n    let handle =  21 * 2);\n    let _ = handle.join();\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Dockmaster waits — missing required: `thread::spawn`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_15",
+    "id": "thread_spawn",
+    "input": "use std::thread;\nfn main() {\n    let handle = thread::spawn(|| 21 * 2);\n    let _ = \n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Dockmaster waits — wait for the worker with `.join(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "arc_mutex",
+    "input": "use std::sync::{Arc, Mutex};\nfn main() {\n    let shared = Arc::new(Mutex::new(0));\n    {\n        let mut guard = shared.lock().unwrap();\n        *guard += 1;\n    }\n    let _ = shared;\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Lighthouse Keeper turns the key. \"one hand on the lamp at a time.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "arc_mutex",
+    "input": "fn main() {\n    // wrap a number so it can be shared across threads and mutated one-at-a-time behind a guard\n    let _ = 0;\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Lighthouse Keeper waits — share ownership with `Arc`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "arc_mutex",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Lighthouse Keeper waits — share ownership with `Arc`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_15",
+    "id": "arc_mutex",
+    "input": "use std::sync::{Arc, Mutex};\nfn main() {\n    let shared = Arc::new(Mutex::new(0));\n    {\n        let mut guard = \n        *guard += 1;\n    }\n    let _ = shared;\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Lighthouse Keeper waits — take exclusive access with `.lock(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "mpsc_channel",
+    "input": "use std::sync::mpsc;\nfn main() {\n    let (tx, rx) = mpsc::channel();\n    tx.send(7).unwrap();\n    let _ = rx.recv();\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Signaler flashes the lamp. \"sent down the coast, read at the next tower.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "mpsc_channel",
+    "input": "fn main() {\n    // open a channel, push a value in at one end, and pull it out at the other\n    let _ = ();\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Signaler waits — missing required: `mpsc::channel`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "mpsc_channel",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Signaler waits — missing required: `mpsc::channel`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_9",
+    "id": "mpsc_channel",
+    "input": "use std::sync::mpsc;\nfn main() {\n    let (tx, rx) = \n    tx.send(7).unwrap();\n    let _ = rx.recv();\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Signaler waits — missing required: `mpsc::channel`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_10",
+    "id": "mpsc_channel",
+    "input": "use std::sync::mpsc;\nfn main() {\n    let (tx, rx) = mpsc::channel();\n    \n    let _ = rx.recv();\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Signaler waits — push a value in with `.send(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_14",
+    "id": "mpsc_channel",
+    "input": "use std::sync::mpsc;\nfn main() {\n    let (tx, rx) = mpsc::channel();\n    tx.send(7).unwrap();\n    let _ = \n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Signaler waits — read it at the far end with `.recv(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "atomic",
+    "input": "use std::sync::atomic::{AtomicUsize, Ordering};\nfn main() {\n    let counter = AtomicUsize::new(0);\n    counter.fetch_add(1, Ordering::SeqCst);\n    let _ = counter;\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Tidewatch clicks the gauge. \"one notch up — no gatekeeper.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "atomic",
+    "input": "fn main() {\n    // make a shared counter that can be incremented without a lock, then bump it by one\n    let _ = 0;\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Tidewatch waits — use an `Atomic` type",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "atomic",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Tidewatch waits — use an `Atomic` type",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_10",
+    "id": "atomic",
+    "input": "use std::sync::atomic::{AtomicUsize, Ordering};\nfn main() {\n    let counter = AtomicUsize::new(0);\n     Ordering::SeqCst);\n    let _ = counter;\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Tidewatch waits — bump it atomically with `.fetch_add(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "thread_scope",
+    "input": "use std::thread;\nfn main() {\n    let data = vec![1, 2, 3];\n    thread::scope(|s| {\n        s.spawn(|| {\n            let _ = &data;\n        });\n    });\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Harbormaster rings the bell. \"every boat in before the harbor closes.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "thread_scope",
+    "input": "fn main() {\n    let data = vec![1, 2, 3];\n    // run threads that borrow `data` and are guaranteed to finish before this function returns\n    let _ = &data;\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Harbormaster waits — missing required: `thread::scope`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "thread_scope",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Harbormaster waits — missing required: `thread::scope`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_11",
+    "id": "thread_scope",
+    "input": "use std::thread;\nfn main() {\n    let data = vec![1, 2, 3];\n     {\n        s.spawn(|| {\n            let _ = &data;\n        });\n    });\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Harbormaster waits — missing required: `thread::scope`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_13",
+    "id": "thread_scope",
+    "input": "use std::thread;\nfn main() {\n    let data = vec![1, 2, 3];\n    thread::scope(|s| {\n         {\n            let _ = &data;\n        });\n    });\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Harbormaster waits — launch a scoped thread with `.spawn(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "async_fn",
+    "input": "async fn double(x: i32) -> i32 {\n    x * 2\n}\nasync fn run() -> i32 {\n    double(21).await\n}\nfn main() {\n    let _future = run();\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Tideforecaster lowers the glass. \"the tide will come — awaited, not forced.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "async_fn",
+    "input": "fn main() {\n    // define an async function that doubles a number, and another that calls it and waits on the result\n    // (it won't actually run here without a runtime like tokio - that's expected)\n    let _ = ();\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Tideforecaster waits — missing required: `async fn`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "async_fn",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Tideforecaster waits — missing required: `async fn`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_17",
+    "id": "async_fn",
+    "input": "async fn double(x: i32) -> i32 {\n    x * 2\n}\nasync fn run() -> i32 {\n    \n}\nfn main() {\n    let _future = run();\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Tideforecaster waits — drive the future with `.await`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "box_basic",
+    "input": "struct Node {\n    value: i32,\n    next: Option<Box<Node>>,\n}\nfn main() {\n    let list = Node {\n        value: 1,\n        next: Some(Box::new(Node { value: 2, next: None })),\n    };\n    let _ = list;\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Vaultwright seals the box. \"on the heap it holds what the stack cannot.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "box_basic",
+    "input": "struct Node {\n    value: i32,\n    next: Option<i32>,\n}\n\nfn main() {\n    // make `next` able to hold another Node on the heap behind a pointer, then build a 2-node list\n    let _ = Node { value: 1, next: None };\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Vaultwright waits — missing required: `Box<...>`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "box_basic",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Vaultwright waits — missing required: `Box<...>`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_6",
+    "id": "box_basic",
+    "input": "struct Node {\n    value: i32,\n    next: \n}\nfn main() {\n    let list = Node {\n        value: 1,\n        next: Some(Box::new(Node { value: 2, next: None })),\n    };\n    let _ = list;\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Vaultwright waits — missing required: `Box<...>`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_19",
+    "id": "box_basic",
+    "input": "struct Node {\n    value: i32,\n    next: Option<Box<Node>>,\n}\nfn main() {\n    let list = Node {\n        value: 1,\n        next:  { value: 2, next: None })),\n    };\n    let _ = list;\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Vaultwright waits — put the value on the heap with `Box::new`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "rc_basic",
+    "input": "use std::rc::Rc;\nfn main() {\n    let original = Rc::new(String::from(\"hoard\"));\n    let shared = Rc::clone(&original);\n    let _ = (original, shared);\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Sharekeeper tallies the claims. \"one hoard, many holders.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "rc_basic",
+    "input": "fn main() {\n    // give two owners a shared, reference-counted handle to the same value (single-threaded)\n    let _ = String::from(\"hoard\");\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Sharekeeper waits — missing required: `Rc::new`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "rc_basic",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Sharekeeper waits — missing required: `Rc::new`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_8",
+    "id": "rc_basic",
+    "input": "use std::rc::Rc;\nfn main() {\n    let original = \n    let shared = Rc::clone(&original);\n    let _ = (original, shared);\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Sharekeeper waits — missing required: `Rc::new`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_12",
+    "id": "rc_basic",
+    "input": "use std::rc::Rc;\nfn main() {\n    let original = Rc::new(String::from(\"hoard\"));\n    let shared = \n    let _ = (original, shared);\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Sharekeeper waits — hand out a second handle with `Rc::clone`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "refcell",
+    "input": "use std::cell::RefCell;\nfn main() {\n    let guarded = RefCell::new(0);\n    *guarded.borrow_mut() += 1;\n    let _ = guarded.borrow();\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Warden checks the ledger. \"changed within — by the runtime's leave.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "refcell",
+    "input": "fn main() {\n    // hold a value you can mutate through a shared reference, with the borrow rules checked at runtime\n    let _ = 0;\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Warden waits — missing required: `RefCell`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "refcell",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Warden waits — missing required: `RefCell`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_9",
+    "id": "refcell",
+    "input": "use std::cell::RefCell;\nfn main() {\n    let guarded = RefCell::new(0);\n     += 1;\n    let _ = guarded.borrow();\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Warden waits — mutate the inner value with `.borrow_mut(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "cell",
+    "input": "use std::cell::Cell;\nfn main() {\n    let slot = Cell::new(1);\n    slot.set(5);\n    let _ = slot.get();\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Swapwarden trades the coin. \"the whole value, swapped clean.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "cell",
+    "input": "fn main() {\n    // hold a single Copy value you can swap out through a shared reference (no borrow guard)\n    let _ = 1;\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Swapwarden waits — missing required: `Cell::new`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "cell",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Swapwarden waits — missing required: `Cell::new`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_8",
+    "id": "cell",
+    "input": "use std::cell::Cell;\nfn main() {\n    let slot = \n    slot.set(5);\n    let _ = slot.get();\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Swapwarden waits — missing required: `Cell::new`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_9",
+    "id": "cell",
+    "input": "use std::cell::Cell;\nfn main() {\n    let slot = Cell::new(1);\n    \n    let _ = slot.get();\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Swapwarden waits — swap the whole value with `.set(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "rc_refcell",
+    "input": "use std::cell::RefCell;\nuse std::rc::Rc;\nfn main() {\n    let shared = Rc::new(RefCell::new(0));\n    let clone = Rc::clone(&shared);\n    *clone.borrow_mut() += 1;\n    let _ = shared.borrow();\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Strongbox turns the keys. \"many owners, and the box still opens.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "rc_refcell",
+    "input": "fn main() {\n    // make a value that several owners share AND can mutate (the single-threaded shared-mutable pattern)\n    let _ = 0;\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Strongbox waits — share ownership with `Rc::new`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "rc_refcell",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Strongbox waits — share ownership with `Rc::new`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_10",
+    "id": "rc_refcell",
+    "input": "use std::cell::RefCell;\nuse std::rc::Rc;\nfn main() {\n    let shared = \n    let clone = Rc::clone(&shared);\n    *clone.borrow_mut() += 1;\n    let _ = shared.borrow();\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Strongbox waits — share ownership with `Rc::new`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_15",
+    "id": "rc_refcell",
+    "input": "use std::cell::RefCell;\nuse std::rc::Rc;\nfn main() {\n    let shared = Rc::new(RefCell::new(0));\n    let clone = Rc::clone(&shared);\n     += 1;\n    let _ = shared.borrow();\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Strongbox waits — open and change it via `.borrow_mut(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "weak_ref",
+    "input": "use std::rc::{Rc, Weak};\nfn main() {\n    let strong = Rc::new(5);\n    let weak: Weak<i32> = Rc::downgrade(&strong);\n    let _ = weak.upgrade();\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Ghostkeeper tugs the tether. \"a hold that holds nothing alive.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "weak_ref",
+    "input": "fn main() {\n    // make a non-owning handle to an Rc value (one that won't keep it alive, and might find it gone), then try to access it\n    let _ = ();\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Ghostkeeper waits — missing required: a `Weak` reference",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "weak_ref",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Ghostkeeper waits — missing required: a `Weak` reference",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_14",
+    "id": "weak_ref",
+    "input": "use std::rc::{Rc, Weak};\nfn main() {\n    let strong = Rc::new(5);\n    let weak: Weak<i32> = \n    let _ = weak.upgrade();\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Ghostkeeper waits — make the weak handle with `Rc::downgrade`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_18",
+    "id": "weak_ref",
+    "input": "use std::rc::{Rc, Weak};\nfn main() {\n    let strong = Rc::new(5);\n    let weak: Weak<i32> = Rc::downgrade(&strong);\n    let _ = \n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Ghostkeeper waits — reclaim it (or not) with `.upgrade(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "not_a_real_mission",
+    "input": "",
+    "verdict": null
+  },
+  {
+    "case": "garbage",
+    "id": "not_a_real_mission",
+    "input": "fn main() { /* ? */ }",
+    "verdict": null
+  }
+]

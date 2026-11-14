@@ -612,6 +612,168 @@ fn every_canonical_solution_passes_cargo_check() {
     }
 }
 
+// ── Grader characterisation snapshots ───────────────────────────────
+//
+// Both graders were refactored from hand-written per-mission `if` chains
+// into a rule table. These snapshots pin the exact observable output
+// (ok flag + stdout + stderr) for every mission against:
+//
+//   * the canonical solution above,
+//   * the mission's starter code,
+//   * an empty string,
+//   * near-misses: the canonical solution with one whitespace-delimited
+//     token removed, one near-miss per distinct server failure message.
+//
+// Inputs are stored in the snapshot files themselves, so the replay
+// tests (`stub_grader_matches_snapshot` here, and
+// `compile-api/tests/grader_snapshot.rs`) are pure replays. To
+// regenerate (only when grader output is meant to change):
+//
+//   PNC_UPDATE_GRADER_SNAPSHOTS=1 cargo test -p pledge_and_crown --test contract
+
+const STUB_SNAPSHOT: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/snapshots/stub_grader.json"
+);
+const SERVER_SNAPSHOT: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../compile-api/tests/snapshots/grader.json"
+);
+
+/// Each near-miss is the canonical source with exactly one
+/// whitespace-delimited token cut out.
+fn single_token_removals(src: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut start: Option<usize> = None;
+    let bytes: Vec<(usize, char)> = src.char_indices().collect();
+    for (i, c) in bytes
+        .iter()
+        .copied()
+        .chain(std::iter::once((src.len(), ' ')))
+    {
+        match (c.is_whitespace(), start) {
+            (false, None) => start = Some(i),
+            (true, Some(s)) => {
+                out.push(format!("{}{}", &src[..s], &src[i..]));
+                start = None;
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// (encounter_id, case label, source) for every snapshot case.
+fn snapshot_cases() -> Vec<(String, String, String)> {
+    let reg = MissionRegistry::default();
+    let mut cases = Vec::new();
+    for m in &reg.missions {
+        let canonical = canonical_solution(m.id).expect("checked elsewhere");
+        cases.push((m.id.to_string(), "canonical".into(), canonical.to_string()));
+        cases.push((
+            m.id.to_string(),
+            "starter".into(),
+            m.starter_code.to_string(),
+        ));
+        cases.push((m.id.to_string(), "empty".into(), String::new()));
+        let mut seen = std::collections::BTreeSet::new();
+        for (n, src) in single_token_removals(canonical).into_iter().enumerate() {
+            let v = grade(m.id, &src);
+            if !v.ok && seen.insert(v.stderr.clone()) {
+                cases.push((m.id.to_string(), format!("near_miss_{n}"), src));
+            }
+        }
+    }
+    // Unknown id: server falls back to freeform, stub returns None.
+    for (label, src) in [("empty", ""), ("garbage", "fn main() { /* ? */ }")] {
+        cases.push(("not_a_real_mission".into(), label.into(), src.into()));
+    }
+    cases
+}
+
+fn load_snapshot(path: &str) -> Vec<serde_json::Value> {
+    let text = std::fs::read_to_string(path)
+        .unwrap_or_else(|e| panic!("read snapshot {path}: {e} (regenerate, see comment)"));
+    let v: serde_json::Value = serde_json::from_str(&text).expect("snapshot is valid JSON");
+    v.as_array().expect("snapshot is a JSON array").clone()
+}
+
+#[test]
+fn stub_grader_matches_snapshot() {
+    if std::env::var_os("PNC_UPDATE_GRADER_SNAPSHOTS").is_some() {
+        let mut stub_rows = Vec::new();
+        let mut server_rows = Vec::new();
+        for (id, case, src) in snapshot_cases() {
+            let stub = stub_verdict(&id, &src)
+                .map(|s| serde_json::json!({ "ok": s.ok, "stdout": s.stdout, "stderr": s.stderr }));
+            stub_rows.push(serde_json::json!({
+                "id": id, "case": case, "input": src, "verdict": stub,
+            }));
+            let g = grade(&id, &src);
+            server_rows.push(serde_json::json!({
+                "id": id, "case": case, "input": src,
+                "verdict": { "ok": g.ok, "stdout": g.stdout, "stderr": g.stderr },
+            }));
+        }
+        for (path, rows) in [(STUB_SNAPSHOT, stub_rows), (SERVER_SNAPSHOT, server_rows)] {
+            let dir = std::path::Path::new(path).parent().expect("has parent");
+            std::fs::create_dir_all(dir).expect("create snapshot dir");
+            let body = serde_json::to_string_pretty(&rows).expect("serialize") + "\n";
+            std::fs::write(path, body).expect("write snapshot");
+        }
+    }
+
+    let rows = load_snapshot(STUB_SNAPSHOT);
+    assert!(rows.len() > 4 * 57, "snapshot suspiciously small");
+    for row in &rows {
+        let id = row["id"].as_str().expect("id");
+        let case = row["case"].as_str().expect("case");
+        let input = row["input"].as_str().expect("input");
+        let actual = stub_verdict(id, input)
+            .map(|s| serde_json::json!({ "ok": s.ok, "stdout": s.stdout, "stderr": s.stderr }));
+        let actual = actual.unwrap_or(serde_json::Value::Null);
+        assert_eq!(
+            actual, row["verdict"],
+            "stub grader drift on `{id}` case `{case}`"
+        );
+    }
+}
+
+/// The two crates cannot share code (MIT vs AGPL), so the rule tables are
+/// duplicated. Keep them textually identical so a one-sided edit can't
+/// hide behind inputs the snapshot happens not to cover.
+#[test]
+fn server_and_stub_rule_tables_are_textually_identical() {
+    fn table_body(path: &str) -> String {
+        let text = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("read {path}: {e}"));
+        let text = text.replace("\r\n", "\n");
+        let start = text
+            .find("// BEGIN MISSION TABLE")
+            .unwrap_or_else(|| panic!("{path}: no BEGIN MISSION TABLE marker"));
+        let body_start = start + text[start..].find('\n').expect("marker line ends") + 1;
+        let end = text
+            .find("// END MISSION TABLE")
+            .unwrap_or_else(|| panic!("{path}: no END MISSION TABLE marker"));
+        text[body_start..end].to_string()
+    }
+    let stub = table_body(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/src/plugins/stub_grader.rs"
+    ));
+    let server = table_body(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../compile-api/src/grader.rs"
+    ));
+    for (n, (a, b)) in stub.lines().zip(server.lines()).enumerate() {
+        assert_eq!(a, b, "rule tables diverge at table line {}", n + 1);
+    }
+    assert_eq!(
+        stub.lines().count(),
+        server.lines().count(),
+        "rule tables differ in length"
+    );
+}
+
 #[test]
 fn no_mission_falls_through_to_freeform() {
     // The freeform fallthrough path always returns ok=true with a
