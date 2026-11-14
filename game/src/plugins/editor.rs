@@ -1,23 +1,29 @@
 // SPDX-License-Identifier: MIT
-//! In-game code editor — toggled with `E`. Hand-rolled Rust syntax
-//! highlighter on top of `egui::TextEdit::multiline`. Built this way
-//! because `egui_code_editor` 0.2 pins egui 0.34 while `bevy_egui` 0.39
-//! ships egui 0.33; the diamond is unfixable upstream as of 2026-05-02.
+//! In-game Cast Editor (`design/02-mechanics.md` §The Cast Editor).
 //!
-//! Color roles match `design/03-art-style-bible.md` §UI Style — keyword
-//! Wineflesh, type Main teal, string Forest, comment Stone grey, number
-//! Old gold, error Alarm scarlet, cursor Abyssal.
+//! Layout: toolbar (Compile / Reset to starter / Show solution) on top,
+//! code page with a line-number gutter in the centre, and a right-hand
+//! column holding the scrollable goal pane above the result pane.
+//!
+//! Keys: `E` opens the editor when a mission is active, `Esc` closes it,
+//! `Ctrl+Enter` compiles. Other plugins read `EditorState::open` (audio,
+//! player movement, pause handling); that field's meaning is unchanged.
+//!
+//! Colours come only from [`palette`] (bible §UI Style). Pure logic
+//! lives in the submodules so it can be unit-tested without a renderer.
 
-use crate::plugins::mission::ActiveMission;
+pub mod diagnostics;
+pub mod highlight;
+pub mod palette;
+pub mod session;
+pub mod solutions;
+
+use crate::plugins::mission::{ActiveMission, Mission};
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass, egui};
-
-const STARTER_CODE: &str = r#"// Day-6 stub. Real curriculum modules land in Acts 1+.
-fn main() {
-    let greeting = "hello, world";
-    println!("{greeting}");
-}
-"#;
+use diagnostics::{ParsedResult, ResultKind, SERVER_PREAMBLE_LINES};
+use session::{FailureTracker, SolutionGate};
+use std::collections::BTreeSet;
 
 #[derive(Resource)]
 pub struct EditorState {
@@ -36,13 +42,44 @@ pub struct EditorState {
 
 impl Default for EditorState {
     fn default() -> Self {
+        // No starter text: the buffer is only ever filled from a
+        // mission's `starter_code` (mission.rs F-press, or `E` below).
         Self {
             open: false,
-            source: STARTER_CODE.to_string(),
+            source: String::new(),
             last_compile_result: None,
             compile_pending: false,
             encounter_id: "freeform".to_string(),
         }
+    }
+}
+
+impl EditorState {
+    /// True while the editor window is showing. Stable accessor for
+    /// other plugins (pause handling); equivalent to reading `open`.
+    pub fn is_open(&self) -> bool {
+        self.open
+    }
+}
+
+/// Editor-private session state: failure counts, the in-flight compile
+/// being watched, and transient UI toggles.
+#[derive(Resource, Default)]
+pub struct EditorSession {
+    tracker: FailureTracker,
+    /// Mission id of the compile we're waiting on, if any. Captured at
+    /// request time so a late result is attributed to the right mission.
+    awaiting_result_for: Option<String>,
+    confirm_reset: bool,
+    show_solution: bool,
+    /// Encounter the transient toggles belong to; a change clears them.
+    ui_encounter: String,
+}
+
+impl EditorSession {
+    /// Failed compiles recorded for `mission_id` this session.
+    pub fn failures(&self, mission_id: &str) -> u32 {
+        self.tracker.failures(mission_id)
     }
 }
 
@@ -64,107 +101,385 @@ impl Plugin for EditorPlugin {
             ..EguiPlugin::default()
         })
         .init_resource::<EditorState>()
-        .add_systems(Update, toggle_editor)
+        .init_resource::<EditorSession>()
+        .add_systems(Update, (toggle_editor, track_compile_results))
         .add_systems(EguiPrimaryContextPass, draw_editor);
     }
 }
 
-fn toggle_editor(keys: Res<ButtonInput<KeyCode>>, mut state: ResMut<EditorState>) {
+fn toggle_editor(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut state: ResMut<EditorState>,
+    active: Res<ActiveMission>,
+) {
     // E opens the editor, Esc closes it. The previous E-toggles-both
     // behaviour meant typing the letter `e` in your code closed the
     // window mid-edit (Matt caught this on day-N). Now the close path
     // is Esc-only and the open path doesn't fire while the editor is
     // already open, so player typing can't accidentally toggle.
     if !state.open && keys.just_pressed(KeyCode::KeyE) {
+        let Some(mission) = active.current.as_ref() else {
+            tracing::debug!("E pressed with no active mission; editor stays closed");
+            return;
+        };
+        if state.encounter_id != mission.id {
+            // Active mission changed while the editor was closed (e.g.
+            // the completion recap): load its starter so the code and
+            // the goal pane agree.
+            tracing::debug!(
+                "editor buffer belonged to `{}`; loading starter for `{}`",
+                state.encounter_id,
+                mission.id
+            );
+            state.source = mission.starter_code.to_string();
+            state.encounter_id = mission.id.to_string();
+            state.last_compile_result = None;
+        }
         state.open = true;
-        tracing::info!("editor opened");
+        tracing::info!("editor opened for mission {}", mission.id);
     } else if state.open && keys.just_pressed(KeyCode::Escape) {
         state.open = false;
         tracing::info!("editor closed via Escape");
     }
 }
 
+/// Watch for the result of a compile the editor requested and feed its
+/// verdict into the failure counter.
+fn track_compile_results(state: Res<EditorState>, mut session: ResMut<EditorSession>) {
+    let Some(mission_id) = session.awaiting_result_for.clone() else {
+        return;
+    };
+    let Some(raw) = state.last_compile_result.as_deref() else {
+        return;
+    };
+    let kind = diagnostics::parse_result(raw).kind;
+    if kind == ResultKind::Pending {
+        return;
+    }
+    let failures = session.tracker.record(&mission_id, kind);
+    session.awaiting_result_for = None;
+    tracing::debug!(
+        "compile verdict for {mission_id}: {kind:?} (failures this session: {failures})"
+    );
+}
+
+/// Shared by the Compile button and Ctrl+Enter.
+fn request_compile(state: &mut EditorState, session: &mut EditorSession) {
+    tracing::info!(
+        "compile requested for {} ({} source bytes)",
+        state.encounter_id,
+        state.source.len()
+    );
+    state.compile_pending = true;
+    // Clear the previous verdict so `track_compile_results` can't mistake
+    // it for the new one (the wasm path never shows `compiling…`).
+    state.last_compile_result = None;
+    session.awaiting_result_for = Some(state.encounter_id.clone());
+}
+
 fn draw_editor(
     mut contexts: EguiContexts,
     mut state: ResMut<EditorState>,
+    mut session: ResMut<EditorSession>,
     active: Res<ActiveMission>,
 ) {
     if !state.open {
         return;
     }
     let Ok(ctx) = contexts.ctx_mut() else {
+        tracing::debug!("draw_editor: no egui context this frame");
         return;
     };
+    let state = &mut *state;
+    let session = &mut *session;
 
+    if session.ui_encounter != state.encounter_id {
+        tracing::debug!(
+            "editor encounter changed {} -> {}; clearing reset/solution toggles",
+            session.ui_encounter,
+            state.encounter_id
+        );
+        session.ui_encounter = state.encounter_id.clone();
+        session.confirm_reset = false;
+        session.show_solution = false;
+    }
+
+    let mission = active
+        .current
+        .as_ref()
+        .filter(|m| m.id == state.encounter_id);
+
+    let frame =
+        egui::Frame::window(&ctx.style()).stroke(egui::Stroke::new(2.0_f32, palette::FRAME));
     egui::Window::new("Code Editor")
-        .default_width(960.0)
-        .default_height(540.0)
+        .frame(frame)
+        .default_width(1040.0)
+        .default_height(600.0)
         .show(ctx, |ui| {
-            ui.label("press E to close, Compile to evaluate");
-            ui.separator();
+            let Some(mission) = mission else {
+                draw_empty_state(ui);
+                return;
+            };
+            // Consume Ctrl+Enter before the TextEdit sees it, so it
+            // compiles instead of inserting a newline.
+            let mut compile_now = ui
+                .ctx()
+                .input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::Enter));
+            if compile_now {
+                tracing::debug!("Ctrl+Enter pressed");
+            }
 
-            egui::SidePanel::left("tutorial_panel")
-                .resizable(true)
-                .default_width(360.0)
-                .show_inside(ui, |ui| {
-                    if let Some(mission) = active.current.as_ref() {
-                        ui.heading(mission.npc_name);
-                        ui.label(mission.prompt);
-                        ui.separator();
-                        egui::ScrollArea::vertical()
-                            .auto_shrink([false; 2])
-                            .show(ui, |ui| draw_tutorial(ui, mission.tutorial));
-                    } else {
-                        ui.heading("Freeform sandbox");
-                        ui.label(
-                            "Walk up to an NPC and press F to load a mission. \
-                             Anything you submit here goes through the freeform \
-                             grader, which only echoes byte counts.",
-                        );
+            let solution = solutions::canonical_solution(mission.id);
+            let gate = session::solution_gate(session.failures(mission.id), solution);
+            if !matches!(gate, SolutionGate::Available(_)) {
+                session.show_solution = false;
+            }
+
+            egui::TopBottomPanel::top("editor_toolbar").show_inside(ui, |ui| {
+                ui.horizontal(|ui| {
+                    if ui.button("Compile").on_hover_text("Ctrl+Enter").clicked() {
+                        compile_now = true;
                     }
+                    draw_reset_controls(ui, state, session, mission.starter_code);
+                    draw_solution_button(ui, session, gate);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.weak("Esc closes  ·  Ctrl+Enter compiles");
+                    });
+                });
+            });
+
+            let parsed = state
+                .last_compile_result
+                .as_deref()
+                .map(diagnostics::parse_result);
+            let error_lines: BTreeSet<usize> = match parsed.as_ref() {
+                Some(p) if p.kind != ResultKind::Pass => {
+                    diagnostics::error_lines(p.body, SERVER_PREAMBLE_LINES)
+                        .into_iter()
+                        .collect()
+                }
+                _ => BTreeSet::new(),
+            };
+
+            egui::SidePanel::right("goal_panel")
+                .resizable(true)
+                .default_width(380.0)
+                .show_inside(ui, |ui| {
+                    egui::TopBottomPanel::bottom("result_panel")
+                        .resizable(true)
+                        .default_height(180.0)
+                        .show_inside(ui, |ui| draw_result(ui, parsed.as_ref()));
+                    egui::CentralPanel::default().show_inside(ui, |ui| {
+                        let revealed = match gate {
+                            SolutionGate::Available(s) if session.show_solution => Some(s),
+                            _ => None,
+                        };
+                        draw_goal(ui, mission, revealed);
+                    });
                 });
 
             egui::CentralPanel::default().show_inside(ui, |ui| {
-                // Parchment code page (bible REF-06). The syntax palette — esp.
-                // Abyssal (#062123) for plain identifiers like `main` — was
-                // chosen for a cream page, so it's unreadable on egui's default
-                // near-black TextEdit fill. Paint the code area cream and the
-                // dark tokens read as designed.
-                ui.visuals_mut().extreme_bg_color = CODE_PAGE_BG;
-                let style = ui.style().clone();
-                let ctx_clone = ui.ctx().clone();
-                let mut layouter =
-                    move |_ui: &egui::Ui, text: &dyn egui::TextBuffer, wrap_width: f32| {
-                        let mut job = highlight_rust(text.as_str(), &style);
-                        job.wrap.max_width = wrap_width;
-                        ctx_clone.fonts_mut(|f| f.layout_job(job))
-                    };
+                draw_code(ui, &mut state.source, &error_lines);
+            });
 
-                egui::ScrollArea::vertical()
-                    .id_salt("source_scroll")
-                    .show(ui, |ui| {
+            if compile_now {
+                request_compile(state, session);
+            }
+        });
+}
+
+fn draw_empty_state(ui: &mut egui::Ui) {
+    ui.heading("No mission loaded");
+    ui.label("Walk up to an NPC and press F to start a mission. Esc closes this window.");
+}
+
+fn draw_reset_controls(
+    ui: &mut egui::Ui,
+    state: &mut EditorState,
+    session: &mut EditorSession,
+    starter: &str,
+) {
+    if session.confirm_reset {
+        ui.colored_label(palette::ERROR, "Discard your changes?");
+        if ui.button("Yes, reset").clicked() {
+            tracing::info!("reset to starter confirmed for {}", state.encounter_id);
+            state.source = starter.to_string();
+            session.confirm_reset = false;
+        }
+        if ui.button("Cancel").clicked() {
+            tracing::debug!("reset to starter cancelled");
+            session.confirm_reset = false;
+        }
+    } else if ui.button("Reset to starter").clicked() {
+        if session::reset_needs_confirm(&state.source, starter) {
+            tracing::debug!("reset requested on edited buffer; asking to confirm");
+            session.confirm_reset = true;
+        } else {
+            tracing::debug!("reset requested but buffer already matches starter");
+        }
+    }
+}
+
+fn draw_solution_button(ui: &mut egui::Ui, session: &mut EditorSession, gate: SolutionGate<'_>) {
+    match gate {
+        SolutionGate::Available(_) => {
+            let label = if session.show_solution {
+                "Hide solution"
+            } else {
+                "Show solution"
+            };
+            if ui.button(label).clicked() {
+                session.show_solution = !session.show_solution;
+                tracing::info!("solution visibility toggled to {}", session.show_solution);
+            }
+        }
+        SolutionGate::Unauthored => {
+            ui.add_enabled(false, egui::Button::new("Show solution"))
+                .on_disabled_hover_text(
+                    "No reference solution has been written for this mission yet.",
+                );
+        }
+        SolutionGate::Locked { remaining } => {
+            ui.add_enabled(false, egui::Button::new("Show solution"))
+                .on_disabled_hover_text(format!(
+                    "Unlocks after {} failed compiles on this mission ({remaining} to go).",
+                    session::SOLUTION_UNLOCK_FAILURES
+                ));
+        }
+    }
+}
+
+fn draw_goal(ui: &mut egui::Ui, mission: &Mission, solution: Option<&str>) {
+    egui::ScrollArea::vertical()
+        .id_salt("goal_scroll")
+        .auto_shrink([false; 2])
+        .show(ui, |ui| {
+            ui.heading(mission.npc_name);
+            ui.strong("GOAL");
+            ui.label(mission.prompt);
+            ui.separator();
+            draw_tutorial(ui, mission.tutorial);
+            if let Some(code) = solution {
+                ui.separator();
+                ui.strong("REFERENCE SOLUTION");
+                ui.add(
+                    egui::TextEdit::multiline(&mut code.to_string())
+                        .font(egui::TextStyle::Monospace)
+                        .desired_width(f32::INFINITY)
+                        .interactive(false),
+                );
+            }
+        });
+}
+
+fn draw_result(ui: &mut egui::Ui, parsed: Option<&ParsedResult<'_>>) {
+    ui.strong("COMPILER OUTPUT");
+    let Some(p) = parsed else {
+        ui.weak("(no output yet: press Compile or Ctrl+Enter)");
+        return;
+    };
+    let (heading, color) = match p.kind {
+        ResultKind::Pass => ("PASS", palette::PASS),
+        ResultKind::Fail => ("FAIL", palette::ERROR),
+        ResultKind::Pending => ("COMPILING…", palette::COMMENT),
+        ResultKind::Error => ("ERROR", palette::ERROR),
+    };
+    ui.horizontal(|ui| {
+        ui.colored_label(color, egui::RichText::new(heading).strong());
+        if p.offline {
+            ui.weak("offline grader (server unreachable)");
+        }
+    });
+    if p.kind != ResultKind::Pending {
+        egui::ScrollArea::vertical()
+            .id_salt("result_scroll")
+            .auto_shrink([false; 2])
+            .show(ui, |ui| {
+                ui.add(egui::Label::new(egui::RichText::new(p.body).monospace()).wrap());
+            });
+    }
+}
+
+/// Code page: Parchment fill, Basalt frame, line-number gutter with
+/// error lines in Alarm scarlet, and the highlighted TextEdit. Wrapping
+/// is off so each gutter row lines up with exactly one source line.
+fn draw_code(ui: &mut egui::Ui, source: &mut String, error_lines: &BTreeSet<usize>) {
+    {
+        let visuals = ui.visuals_mut();
+        visuals.extreme_bg_color = palette::PAGE_BG;
+        visuals.text_cursor.stroke.color = palette::PLAIN;
+    }
+    let font_id = egui::TextStyle::Monospace.resolve(ui.style());
+    let gutter = gutter_job(source, &font_id, error_lines);
+
+    egui::Frame::new()
+        .fill(palette::PAGE_BG)
+        .stroke(egui::Stroke::new(1.0_f32, palette::FRAME))
+        .show(ui, |ui| {
+            egui::ScrollArea::both()
+                .id_salt("source_scroll")
+                .auto_shrink([false; 2])
+                .show(ui, |ui| {
+                    ui.horizontal_top(|ui| {
+                        ui.vertical(|ui| {
+                            // Match the TextEdit's top margin (2 px).
+                            ui.add_space(2.0);
+                            ui.add(egui::Label::new(gutter).selectable(false));
+                        });
+                        let layout_font = font_id.clone();
+                        let errs = error_lines.clone();
+                        let mut layouter =
+                            move |ui: &egui::Ui, text: &dyn egui::TextBuffer, _wrap_width: f32| {
+                                let job = highlight::layout_job(
+                                    text.as_str(),
+                                    layout_font.clone(),
+                                    &errs,
+                                );
+                                ui.ctx().fonts_mut(|f| f.layout_job(job))
+                            };
                         ui.add(
-                            egui::TextEdit::multiline(&mut state.source)
-                                .font(egui::TextStyle::Monospace)
+                            egui::TextEdit::multiline(source)
                                 .code_editor()
+                                .margin(egui::Margin::symmetric(4, 2))
                                 .desired_rows(18)
-                                .desired_width(f32::INFINITY)
+                                .desired_width(ui.available_width().max(200.0))
                                 .layouter(&mut layouter),
                         );
                     });
-
-                ui.separator();
-                ui.horizontal(|ui| {
-                    if ui.button("Compile").clicked() {
-                        tracing::info!("compile clicked ({} source bytes)", state.source.len());
-                        state.compile_pending = true;
-                    }
-                    if let Some(msg) = &state.last_compile_result {
-                        ui.label(msg);
-                    }
                 });
-            });
         });
+}
+
+fn gutter_job(
+    source: &str,
+    font_id: &egui::FontId,
+    error_lines: &BTreeSet<usize>,
+) -> egui::text::LayoutJob {
+    let line_count = source.matches('\n').count() + 1;
+    let width = line_count.to_string().len();
+    let mut job = egui::text::LayoutJob::default();
+    for n in 1..=line_count {
+        let is_err = error_lines.contains(&n);
+        let text = if n == line_count {
+            format!("{n:>width$}")
+        } else {
+            format!("{n:>width$}\n")
+        };
+        job.append(
+            &text,
+            0.0,
+            egui::TextFormat {
+                font_id: font_id.clone(),
+                color: if is_err {
+                    palette::ERROR
+                } else {
+                    palette::GUTTER
+                },
+                ..Default::default()
+            },
+        );
+    }
+    job
 }
 
 /// Lightweight tutorial renderer. Recognises `## Heading` lines and
@@ -202,120 +517,4 @@ fn draw_tutorial(ui: &mut egui::Ui, body: &str) {
             ui.label(line);
         }
     }
-}
-
-// === Hand-rolled Rust syntax highlighter ============================
-// Tokenises the source into runs and emits one egui LayoutSection per run
-// with palette colours sourced from Heraldic Code v2.0.
-
-const KW_COLOR: egui::Color32 = egui::Color32::from_rgb(0x98, 0x2D, 0x52); // Wineflesh
-const TYPE_COLOR: egui::Color32 = egui::Color32::from_rgb(0x2A, 0x84, 0x82); // Main teal
-const STRING_COLOR: egui::Color32 = egui::Color32::from_rgb(0x48, 0x7E, 0x40); // Forest
-const COMMENT_COLOR: egui::Color32 = egui::Color32::from_rgb(0x7A, 0x70, 0x64); // Stone grey
-const NUMBER_COLOR: egui::Color32 = egui::Color32::from_rgb(0xD2, 0xA5, 0x3F); // Old gold
-const PLAIN_COLOR: egui::Color32 = egui::Color32::from_rgb(0x06, 0x21, 0x23); // Abyssal
-// Code-page background: a warm aged parchment (warmer than Parchment cream
-// #FCEFC8, which read too close to white). Tweak this one value to taste.
-const CODE_PAGE_BG: egui::Color32 = egui::Color32::from_rgb(0xEE, 0xDF, 0xA8);
-
-const KEYWORDS: &[&str] = &[
-    "as", "async", "await", "break", "const", "continue", "crate", "dyn", "else", "enum", "extern",
-    "false", "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub",
-    "ref", "return", "self", "Self", "static", "struct", "super", "trait", "true", "type",
-    "unsafe", "use", "where", "while",
-];
-
-fn highlight_rust(src: &str, style: &egui::Style) -> egui::text::LayoutJob {
-    let font_id = egui::TextStyle::Monospace.resolve(style);
-    let mut job = egui::text::LayoutJob::default();
-    let bytes = src.as_bytes();
-    let mut i = 0;
-    let n = bytes.len();
-
-    while i < n {
-        let b = bytes[i];
-
-        // Line comment: //... to EOL
-        if b == b'/' && i + 1 < n && bytes[i + 1] == b'/' {
-            let start = i;
-            while i < n && bytes[i] != b'\n' {
-                i += 1;
-            }
-            push(&mut job, src, start..i, font_id.clone(), COMMENT_COLOR);
-            continue;
-        }
-
-        // String literal: "..." with simple escape skipping
-        if b == b'"' {
-            let start = i;
-            i += 1;
-            while i < n && bytes[i] != b'"' {
-                if bytes[i] == b'\\' && i + 1 < n {
-                    i += 2;
-                } else {
-                    i += 1;
-                }
-            }
-            if i < n {
-                i += 1;
-            }
-            push(&mut job, src, start..i, font_id.clone(), STRING_COLOR);
-            continue;
-        }
-
-        // Number literal: leading digit, then digits/underscore/dot/letter
-        if b.is_ascii_digit() {
-            let start = i;
-            while i < n
-                && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_' || bytes[i] == b'.')
-            {
-                i += 1;
-            }
-            push(&mut job, src, start..i, font_id.clone(), NUMBER_COLOR);
-            continue;
-        }
-
-        // Identifier / keyword / type
-        if b == b'_' || b.is_ascii_alphabetic() {
-            let start = i;
-            while i < n && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
-                i += 1;
-            }
-            let word = &src[start..i];
-            let color = if KEYWORDS.contains(&word) {
-                KW_COLOR
-            } else if word.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
-                TYPE_COLOR
-            } else {
-                PLAIN_COLOR
-            };
-            push(&mut job, src, start..i, font_id.clone(), color);
-            continue;
-        }
-
-        // Anything else (whitespace, punctuation): one byte at a time as plain.
-        let start = i;
-        i += 1;
-        push(&mut job, src, start..i, font_id.clone(), PLAIN_COLOR);
-    }
-
-    job
-}
-
-fn push(
-    job: &mut egui::text::LayoutJob,
-    src: &str,
-    range: std::ops::Range<usize>,
-    font_id: egui::FontId,
-    color: egui::Color32,
-) {
-    job.append(
-        &src[range],
-        0.0,
-        egui::TextFormat {
-            font_id,
-            color,
-            ..Default::default()
-        },
-    );
 }
