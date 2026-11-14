@@ -24,6 +24,7 @@ use bevy_ecs_tilemap::prelude::{TileStorage, TilemapId};
 
 use crate::plugins::npc::Npc;
 use crate::plugins::player::Player;
+use crate::plugins::prop::Prop;
 
 #[derive(States, Default, Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum GameState {
@@ -139,7 +140,16 @@ fn thaw_virtual_time(mut time: ResMut<Time<Virtual>>) {
 #[allow(clippy::type_complexity)]
 fn despawn_session_entities(
     mut commands: Commands,
-    q: Query<Entity, Or<(With<Player>, With<Npc>, With<TileStorage>, With<TilemapId>)>>,
+    q: Query<
+        Entity,
+        Or<(
+            With<Player>,
+            With<Npc>,
+            With<Prop>,
+            With<TileStorage>,
+            With<TilemapId>,
+        )>,
+    >,
 ) {
     let mut n = 0usize;
     for e in q.iter() {

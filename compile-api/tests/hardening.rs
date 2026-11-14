@@ -441,7 +441,7 @@ async fn chunked_oversized_body_is_capped_while_streaming() {
         "{{\"source\":\"{}\",\"encounter_id\":\"x\"}}",
         "y".repeat(MAX_BODY_BYTES * 2)
     );
-    let mut stream = tokio::net::TcpStream::connect(addr).await.unwrap();
+    let stream = tokio::net::TcpStream::connect(addr).await.unwrap();
     const CRLF: &str = "\r\n";
     let head = [
         "POST /compile HTTP/1.1".to_string(),
@@ -453,21 +453,47 @@ async fn chunked_oversized_body_is_capped_while_streaming() {
         String::new(),
     ]
     .join(CRLF);
-    stream.write_all(head.as_bytes()).await.unwrap();
-    // The server may stop reading (and answer) before we finish sending;
-    // a write error after that point is expected, not a failure.
+    let (mut rd, mut wr) = stream.into_split();
+    // Read concurrently with the upload. The server answers 413 and closes
+    // while we are still sending; if we only read afterwards, our late
+    // writes draw a TCP reset and Windows discards the unread response,
+    // which made this test flaky under load.
+    let answered = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let answered_rd = answered.clone();
+    let reader = tokio::spawn(async move {
+        let mut resp = Vec::new();
+        let mut buf = [0u8; 4096];
+        loop {
+            match rd.read(&mut buf).await {
+                Ok(0) | Err(_) => break,
+                Ok(n) => {
+                    resp.extend_from_slice(&buf[..n]);
+                    answered_rd.store(true, std::sync::atomic::Ordering::SeqCst);
+                }
+            }
+        }
+        resp
+    });
+    wr.write_all(head.as_bytes()).await.unwrap();
+    // Stop sending as soon as the server has answered; a write error after
+    // that point is expected, not a failure.
     for chunk in payload.as_bytes().chunks(8 * 1024) {
+        if answered.load(std::sync::atomic::Ordering::SeqCst) {
+            break;
+        }
         let frame = format!("{:x}{CRLF}", chunk.len());
-        if stream.write_all(frame.as_bytes()).await.is_err()
-            || stream.write_all(chunk).await.is_err()
-            || stream.write_all(CRLF.as_bytes()).await.is_err()
+        if wr.write_all(frame.as_bytes()).await.is_err()
+            || wr.write_all(chunk).await.is_err()
+            || wr.write_all(CRLF.as_bytes()).await.is_err()
         {
             break;
         }
+        // Pace the upload: on loopback the whole body would otherwise be
+        // sent before the server has processed the first chunk, and the
+        // server closing with unread input resets the connection.
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
     }
-    let _ = stream.write_all(format!("0{CRLF}{CRLF}").as_bytes()).await;
-    let mut resp = Vec::new();
-    let _ = stream.read_to_end(&mut resp).await;
+    let resp = reader.await.unwrap();
     let text = String::from_utf8_lossy(&resp);
     assert!(
         text.starts_with("HTTP/1.1 413"),
