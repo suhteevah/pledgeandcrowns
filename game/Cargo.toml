@@ -44,18 +44,32 @@ thiserror.workspace = true
 serde.workspace = true
 bincode.workspace = true
 
-# Editor -> compile-API HTTP client. Async via Bevy's IoTaskPool.
+# Editor -> compile-API HTTP client. Native: hyper backend on a
+# per-request current-thread Tokio runtime (compile_client/transport.rs).
+# Web: the same reqwest API compiles to the browser's fetch.
 reqwest.workspace = true
 serde_json = "1"
 crossbeam-channel = "0.5"
 
+# Native-only: the runtime reqwest's hyper backend needs (it panics with
+# "no reactor running" on a Bevy task pool). Tokio is already in the tree
+# via reqwest (net, time); this only adds the `rt` feature.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { version = "1", default-features = false, features = ["rt", "net", "time"] }
+
 # Wasm-only: localStorage save persistence. base64 wraps the bincode
-# bytes so they survive the JS string round-trip.
+# bytes so they survive the JS string round-trip. js-sys + wasm-bindgen
+# (already in the tree via web-sys/reqwest) read window.PLEDGE_CONFIG.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { version = "0.3", features = ["Window", "Storage"] }
 base64 = "0.22"
+js-sys = "0.3"
+wasm-bindgen = "0.2"
 
 [dev-dependencies]
 # Cross-crate contract harness: tests in game/tests/ assert that every
-# mission's canonical solution passes the live grader.
+# mission's canonical solution passes the live grader. Dev-only: never
+# part of the shipped (MIT) game binary.
 pledge_compile_api = { path = "../compile-api" }
+# Drives the in-process compile-API server in tests/compile_api_client.rs.
+tokio.workspace = true
