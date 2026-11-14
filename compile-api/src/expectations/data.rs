@@ -14,20 +14,34 @@
 //!
 //! Classification (see `expectations.rs` for the mechanisms):
 //! A = `Stdout` (pinned output of the player's own `main`),
-//! A-unpinned = `RunOnly` (the mission lets the player choose the values),
 //! B = `Harness` (the mission asks for an item; the checker calls it),
 //! C = `CompileOnly` (cannot be run meaningfully on wasm32-wasip1).
+//! No entry is `RunOnly`: every runnable mission's text pins its output.
+//! Entries built with `mu` also carry construct tokens (`uses`) checked
+//! after the behaviour matched.
 
-use super::Check::{CompileOnly, Harness as H, RunOnly, Stdout};
+use super::Check::{CompileOnly, Harness as H, Stdout};
 use super::Matcher::*;
 use super::{Harness, MissionCheck};
 
 const fn m(id: &'static str, check: super::Check) -> MissionCheck {
-    MissionCheck { id, check }
+    MissionCheck {
+        id,
+        check,
+        uses: &[],
+    }
 }
 
-const PLAYER_CHOOSES: &str =
-    "this mission lets you choose the values, so there is no fixed output to compare";
+/// A behaviour check plus the construct tokens that must also appear
+/// ([`MissionCheck::uses`]), for missions whose short pinned output could
+/// otherwise be printed as literals.
+const fn mu(
+    id: &'static str,
+    check: super::Check,
+    uses: &'static [&'static [&'static str]],
+) -> MissionCheck {
+    MissionCheck { id, check, uses }
+}
 
 const NO_THREADS: &str = "wasm32-wasip1 has no threads (std::thread::spawn panics there), \
      so this program is compiled and statically checked but never run";
@@ -123,11 +137,12 @@ pub(super) const CHECKS: &[MissionCheck] = &[
             main_matchers: &[],
         }),
     ),
-    m(
+    mu(
         "vec_iter",
-        RunOnly {
-            reason: PLAYER_CHOOSES,
+        Stdout {
+            matchers: &[HasLine("60")],
         },
+        &[&[".iter()"], &[".sum"]],
     ),
     m(
         "tuple_destructure",
@@ -184,11 +199,12 @@ pub(super) const CHECKS: &[MissionCheck] = &[
             matchers: &[Exact("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")],
         },
     ),
-    m(
+    mu(
         "closure_basic",
-        RunOnly {
-            reason: PLAYER_CHOOSES,
+        Stdout {
+            matchers: &[HasLine("42")],
         },
+        &[&["let add"], &["|"]],
     ),
     m(
         "slice_basic",
@@ -246,11 +262,25 @@ pub(super) const CHECKS: &[MissionCheck] = &[
             matchers: &[LineContains("[2, 4, 6]")],
         },
     ),
-    m(
+    mu(
         "enum_match",
-        RunOnly {
-            reason: PLAYER_CHOOSES,
-        },
+        H(Harness {
+            contract: "`enum Direction { North, East, South, West }` and                        `fn degrees(d: Direction) -> i32`",
+            run_main: true,
+            body: "    let _sig: fn(super::Direction) -> i32 = super::degrees;
+    emit(\"degrees(North)\", super::degrees(super::Direction::North));
+    emit(\"degrees(East)\", super::degrees(super::Direction::East));
+    emit(\"degrees(South)\", super::degrees(super::Direction::South));
+    emit(\"degrees(West)\", super::degrees(super::Direction::West));",
+            expected: &[
+                "degrees(North) = 0",
+                "degrees(East) = 90",
+                "degrees(South) = 180",
+                "degrees(West) = 270",
+            ],
+            main_matchers: &[InOrder(&["0", "90", "180", "270"])],
+        }),
+        &[&["match"]],
     ),
     m(
         "while_loop",
@@ -463,11 +493,12 @@ pub(super) const CHECKS: &[MissionCheck] = &[
             main_matchers: &[],
         }),
     ),
-    m(
+    mu(
         "and_then",
-        RunOnly {
-            reason: PLAYER_CHOOSES,
+        Stdout {
+            matchers: &[InOrder(&["Some(2)", "None"])],
         },
+        &[&[".and_then("]],
     ),
     m(
         "unwrap_or_else",
@@ -482,11 +513,12 @@ pub(super) const CHECKS: &[MissionCheck] = &[
         }),
     ),
     // ── Act 6: The Iterator Forge ────────────────────────────────────
-    m(
+    mu(
         "hashmap_basic",
-        RunOnly {
-            reason: PLAYER_CHOOSES,
+        Stdout {
+            matchers: &[InOrder(&["Some(7)", "None"])],
         },
+        &[&[".insert("], &[".get("]],
     ),
     m(
         "iter_filter",
@@ -530,23 +562,26 @@ pub(super) const CHECKS: &[MissionCheck] = &[
             required: &[&["spawn("], &[".join("]],
         },
     ),
-    m(
+    mu(
         "arc_mutex",
-        RunOnly {
-            reason: PLAYER_CHOOSES,
+        Stdout {
+            matchers: &[HasLine("5")],
         },
+        &[&["Arc::clone", ".clone()"], &[".lock("]],
     ),
-    m(
+    mu(
         "mpsc_channel",
-        RunOnly {
-            reason: PLAYER_CHOOSES,
+        Stdout {
+            matchers: &[InOrder(&["7", "11"])],
         },
+        &[&[".send("], &[".recv("]],
     ),
-    m(
+    mu(
         "atomic",
-        RunOnly {
-            reason: PLAYER_CHOOSES,
+        Stdout {
+            matchers: &[InOrder(&["10", "11"])],
         },
+        &[&[".fetch_add("], &[".load("]],
     ),
     m(
         "thread_scope",
@@ -580,34 +615,39 @@ pub(super) const CHECKS: &[MissionCheck] = &[
             main_matchers: &[],
         }),
     ),
-    m(
+    mu(
         "rc_basic",
-        RunOnly {
-            reason: PLAYER_CHOOSES,
+        Stdout {
+            matchers: &[InOrder(&["1", "2", "1"])],
         },
+        &[&["Rc::clone"], &["strong_count"]],
     ),
-    m(
+    mu(
         "refcell",
-        RunOnly {
-            reason: PLAYER_CHOOSES,
+        Stdout {
+            matchers: &[InOrder(&["10", "15"])],
         },
+        &[&[".borrow_mut("]],
     ),
-    m(
+    mu(
         "cell",
-        RunOnly {
-            reason: PLAYER_CHOOSES,
+        Stdout {
+            matchers: &[InOrder(&["1", "5"])],
         },
+        &[&[".set("], &[".get("]],
     ),
-    m(
+    mu(
         "rc_refcell",
-        RunOnly {
-            reason: PLAYER_CHOOSES,
+        Stdout {
+            matchers: &[HasLine("15")],
         },
+        &[&["Rc::clone", ".clone()"], &[".borrow_mut("]],
     ),
-    m(
+    mu(
         "weak_ref",
-        RunOnly {
-            reason: PLAYER_CHOOSES,
+        Stdout {
+            matchers: &[InOrder(&["Some(5)", "None"])],
         },
+        &[&["downgrade"], &[".upgrade("]],
     ),
 ];

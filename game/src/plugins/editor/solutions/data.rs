@@ -129,7 +129,7 @@ fn main() {
     (
         "vec_iter",
         r#"fn main() {
-    let v = vec![1, 2, 3];
+    let v = vec![10, 20, 30];
     // The `: i32` annotation tells `sum` what type to add into.
     let total: i32 = v.iter().sum();
     println!("{total}");
@@ -203,7 +203,7 @@ fn main() {
     // A closure is an anonymous function stored in a variable.
     // The parameter types are inferred from the call below.
     let add = |a, b| a + b;
-    println!("{}", add(2, 3));
+    println!("{}", add(19, 23));
 }
 "#,
     ),
@@ -269,25 +269,25 @@ fn main() {
         r#"// A value of an enum is exactly one of its variants.
 enum Direction {
     North,
-    South,
     East,
+    South,
     West,
 }
 
-fn heading(d: Direction) -> &'static str {
+fn degrees(d: Direction) -> i32 {
     // One arm per variant. Add a variant later and this match stops compiling
     // until you handle it.
     match d {
-        Direction::North => "up",
-        Direction::South => "down",
-        Direction::East => "right",
-        Direction::West => "left",
+        Direction::North => 0,
+        Direction::East => 90,
+        Direction::South => 180,
+        Direction::West => 270,
     }
 }
 
 fn main() {
-    for d in [Direction::North, Direction::South, Direction::East, Direction::West] {
-        println!("{}", heading(d));
+    for d in [Direction::North, Direction::East, Direction::South, Direction::West] {
+        println!("{}", degrees(d));
     }
 }
 "#,
@@ -611,13 +611,14 @@ fn main() {
 fn main() {
     // Each step runs only if the previous one returned `Some`.
     let two = Some(8).and_then(half).and_then(half); // 8 -> 4 -> 2
+    println!("{two:?}");
     // 8 -> 4 -> 2 -> 1, then 1 is odd: the chain stops with `None`.
     let gone = Some(8)
         .and_then(half)
         .and_then(half)
         .and_then(half)
         .and_then(half);
-    println!("{two:?} {gone:?}");
+    println!("{gone:?}");
 }
 "#,
     ),
@@ -644,13 +645,11 @@ fn main() {
         r#"use std::collections::HashMap;
 
 fn main() {
-    let mut scores = HashMap::new();
-    scores.insert("ace", 1);
+    let mut stores = HashMap::new();
+    stores.insert("vault", 7);
     // `get` returns an Option: the key might not be there.
-    match scores.get("ace") {
-        Some(score) => println!("ace: {score}"),
-        None => println!("no ace on file"),
-    }
+    println!("{:?}", stores.get("vault"));
+    println!("{:?}", stores.get("cellar"));
 }
 "#,
     ),
@@ -734,8 +733,9 @@ fn main() {
     {
         // `lock` is an `Err` only if a thread panicked while holding the lock.
         let mut guard = other_owner.lock().expect("lock poisoned");
-        *guard += 1;
+        *guard += 5;
     } // the guard is dropped here, which releases the lock
+    // Both handles reach the same value, so the first one sees the change.
     println!("{}", shared.lock().expect("lock poisoned"));
 }
 "#,
@@ -748,8 +748,10 @@ fn main() {
     let (tx, rx) = mpsc::channel();
     // `send` fails only if the receiver is gone; `recv` only if every sender is.
     tx.send(7).expect("receiver dropped");
-    let got = rx.recv().expect("all senders dropped");
-    println!("{got}");
+    tx.send(11).expect("receiver dropped");
+    // Values come out in the order they went in.
+    println!("{}", rx.recv().expect("all senders dropped"));
+    println!("{}", rx.recv().expect("all senders dropped"));
 }
 "#,
     ),
@@ -758,9 +760,11 @@ fn main() {
         r#"use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn main() {
-    let counter = AtomicUsize::new(0);
+    let counter = AtomicUsize::new(10);
     // One indivisible read-add-write. No lock, no guard.
-    counter.fetch_add(1, Ordering::SeqCst);
+    // `fetch_add` returns the value from BEFORE the add.
+    let before = counter.fetch_add(1, Ordering::SeqCst);
+    println!("{before}");
     println!("{}", counter.load(Ordering::SeqCst));
 }
 "#,
@@ -827,9 +831,13 @@ fn main() {
 
 fn main() {
     let original = Rc::new(String::from("hoard"));
+    println!("{}", Rc::strong_count(&original));
     // `Rc::clone` bumps the count. Both handles point at the same String.
     let shared = Rc::clone(&original);
-    println!("{shared} has {} owners", Rc::strong_count(&original));
+    println!("{}", Rc::strong_count(&original));
+    // Dropping a handle lowers the count; the String lives while any remain.
+    drop(shared);
+    println!("{}", Rc::strong_count(&original));
 }
 "#,
     ),
@@ -838,11 +846,12 @@ fn main() {
         r#"use std::cell::RefCell;
 
 fn main() {
-    let guarded = RefCell::new(0);
+    let guarded = RefCell::new(10);
     let shared_ref = &guarded; // only a shared `&`...
+    println!("{}", shared_ref.borrow());
     // ...yet we can mutate. The borrow rules are checked at runtime instead.
-    *shared_ref.borrow_mut() += 1;
-    println!("{}", guarded.borrow());
+    *shared_ref.borrow_mut() += 5;
+    println!("{}", shared_ref.borrow());
 }
 "#,
     ),
@@ -853,9 +862,10 @@ fn main() {
 fn main() {
     let slot = Cell::new(1);
     let shared_ref = &slot;
+    println!("{}", shared_ref.get());
     // `set` swaps in a whole new value through a shared `&`. No borrow guard.
     shared_ref.set(5);
-    println!("{}", slot.get());
+    println!("{}", shared_ref.get());
 }
 "#,
     ),
@@ -868,8 +878,9 @@ fn main() {
     // `Rc` shares ownership; `RefCell` allows mutation behind that sharing.
     let shared = Rc::new(RefCell::new(0));
     let clone = Rc::clone(&shared);
-    *clone.borrow_mut() += 1;
-    // The change is visible through every handle.
+    *clone.borrow_mut() += 10;
+    *shared.borrow_mut() += 5;
+    // Both handles open the same box, so it holds both changes.
     println!("{}", shared.borrow());
 }
 "#,
@@ -882,12 +893,9 @@ fn main() {
     let strong = Rc::new(5);
     // A `Weak` handle does not keep the value alive.
     let weak: Weak<i32> = Rc::downgrade(&strong);
-    match weak.upgrade() {
-        Some(rc) => println!("still here: {rc}"),
-        None => println!("gone"),
-    }
+    println!("{:?}", weak.upgrade());
     drop(strong); // the last strong owner is gone, so the value is freed
-    println!("after drop: {:?}", weak.upgrade());
+    println!("{:?}", weak.upgrade());
 }
 "#,
     ),
