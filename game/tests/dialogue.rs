@@ -41,7 +41,7 @@ fn offer_and_in_progress_open_the_mission_others_just_close() {
         (MissionStatus::NotYetAvailable, Finish::Close),
         (MissionStatus::Offer, Finish::OpenMission),
         (MissionStatus::InProgress, Finish::OpenMission),
-        (MissionStatus::Cleared, Finish::Close),
+        (MissionStatus::Cleared, Finish::OpenMission),
     ] {
         let c = select_conversation(id, status, Some("Ferris"));
         assert_eq!(c.finish, finish, "{status:?}");

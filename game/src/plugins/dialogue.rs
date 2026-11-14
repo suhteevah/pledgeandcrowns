@@ -170,8 +170,12 @@ pub fn select_conversation(
         .map(|t| render_line(t, next_npc))
         .collect();
     let finish = match status {
-        MissionStatus::Offer | MissionStatus::InProgress => Finish::OpenMission,
-        MissionStatus::NotYetAvailable | MissionStatus::Cleared => Finish::Close,
+        // Cleared hands off too: the mission panel shows the recap, which is
+        // how a player re-reads a lesson (the epilogue tells them to).
+        MissionStatus::Offer | MissionStatus::InProgress | MissionStatus::Cleared => {
+            Finish::OpenMission
+        }
+        MissionStatus::NotYetAvailable => Finish::Close,
     };
     Conversation { lines, finish }
 }
