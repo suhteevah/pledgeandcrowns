@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MIT
-//! Hand-rolled Rust syntax highlighter. Split into a pure tokenizer
-//! (`tokenize`, unit-tested) and an egui `LayoutJob` builder that maps
-//! each token role to a colour from [`super::palette`] and underlines
-//! error lines in Alarm scarlet.
+//! Hand-rolled Rust syntax highlighter, shared by the editor's code page,
+//! the revealed solution and fenced code blocks in tutorials. Split into a
+//! pure tokenizer (`tokenize`, unit-tested) and an egui `LayoutJob` builder
+//! that maps each token role to a `SYNTAX_*` role of [`super`] (bible v2.1)
+//! and underlines error lines with [`super::ERROR_MARK`].
 //!
 //! Hand-rolled because `egui_code_editor` 0.2 pins egui 0.34 while
 //! `bevy_egui` 0.39 ships egui 0.33 (unfixable diamond as of 2026-05-02).
 
-use super::palette;
+use super as theme;
 use bevy_egui::egui;
 use std::collections::BTreeSet;
 use std::ops::Range;
@@ -26,12 +27,12 @@ pub enum TokenRole {
 impl TokenRole {
     pub fn color(self) -> egui::Color32 {
         match self {
-            TokenRole::Keyword => palette::KEYWORD,
-            TokenRole::Type => palette::TYPE,
-            TokenRole::Str => palette::STRING,
-            TokenRole::Comment => palette::COMMENT,
-            TokenRole::Number => palette::NUMBER,
-            TokenRole::Plain => palette::PLAIN,
+            TokenRole::Keyword => theme::SYNTAX_KEYWORD,
+            TokenRole::Type => theme::SYNTAX_TYPE,
+            TokenRole::Str => theme::SYNTAX_STRING,
+            TokenRole::Comment => theme::SYNTAX_COMMENT,
+            TokenRole::Number => theme::SYNTAX_NUMBER,
+            TokenRole::Plain => theme::SYNTAX_PLAIN,
         }
     }
 }
@@ -164,7 +165,7 @@ fn append(
     error_line: bool,
 ) {
     let underline = if error_line {
-        egui::Stroke::new(1.5_f32, palette::ERROR)
+        egui::Stroke::new(1.5_f32, theme::ERROR_MARK)
     } else {
         egui::Stroke::NONE
     };
@@ -180,9 +181,96 @@ fn append(
     );
 }
 
+/// Display-only copy of `src` for a narrow, read-only code view (the
+/// revealed solution): every comment-only line longer than `max_cols`
+/// chars is re-flowed onto several comment lines with the same indent and
+/// comment marker. Lines with code on them (including code followed by a
+/// trailing comment) are never touched, so the code a player reads is the
+/// code they would copy. Copy actions must still use the ORIGINAL text.
+pub fn wrap_comment_lines(src: &str, max_cols: usize) -> String {
+    let mut out = String::with_capacity(src.len() + 16);
+    for (i, line) in src.split('\n').enumerate() {
+        if i > 0 {
+            out.push('\n');
+        }
+        let trimmed = line.trim_start();
+        let indent = &line[..line.len() - trimmed.len()];
+        let body = match trimmed.strip_prefix("//") {
+            Some(body) if line.chars().count() > max_cols => body,
+            _ => {
+                out.push_str(line);
+                continue;
+            }
+        };
+        let (marker, text) = if let Some(t) = body.strip_prefix('/') {
+            ("///", t)
+        } else if let Some(t) = body.strip_prefix('!') {
+            ("//!", t)
+        } else {
+            ("//", body)
+        };
+        let prefix = format!("{indent}{marker} ");
+        let width = max_cols.saturating_sub(prefix.chars().count()).max(16);
+        let mut rows: Vec<String> = Vec::new();
+        let mut cur = String::new();
+        for word in text.split_whitespace() {
+            if !cur.is_empty() && cur.chars().count() + 1 + word.chars().count() > width {
+                rows.push(std::mem::take(&mut cur));
+            }
+            if !cur.is_empty() {
+                cur.push(' ');
+            }
+            cur.push_str(word);
+        }
+        rows.push(cur);
+        let joined: Vec<String> = rows.iter().map(|r| format!("{prefix}{r}")).collect();
+        out.push_str(&joined.join("\n"));
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wrap_comment_lines_reflows_only_long_comment_lines() {
+        let src = "fn main() {\n    // `let` gives a value a name. The binding is immutable by default, always.\n    let answer = 42; // a trailing comment that is also rather long, but sits on code\n    println!(\"{answer}\");\n}\n";
+        let shown = wrap_comment_lines(src, 40);
+        // Code lines, including the one with a trailing comment, unchanged.
+        for code_line in src.lines().filter(|l| !l.trim_start().starts_with("//")) {
+            assert!(shown.lines().any(|l| l == code_line), "lost {code_line:?}");
+        }
+        // The long comment is now several `    // ` lines, each within width.
+        let comment_rows: Vec<&str> = shown
+            .lines()
+            .filter(|l| l.trim_start().starts_with("//"))
+            .collect();
+        assert!(comment_rows.len() >= 2, "{shown}");
+        for row in &comment_rows {
+            assert!(row.starts_with("    // "), "{row:?}");
+            assert!(row.chars().count() <= 40, "{row:?} too wide");
+        }
+        // Same words, same order.
+        let words = |s: &str| -> Vec<String> {
+            s.split_whitespace()
+                .filter(|w| *w != "//")
+                .map(str::to_string)
+                .collect()
+        };
+        assert_eq!(words(&shown), words(src));
+        // Trailing newline kept.
+        assert!(shown.ends_with("}\n"));
+    }
+
+    #[test]
+    fn wrap_comment_lines_is_identity_when_everything_fits() {
+        let src = "// short\nfn main() {}\n";
+        assert_eq!(wrap_comment_lines(src, 80), src);
+        let doc = "/// a doc comment long enough to wrap at twenty columns";
+        let shown = wrap_comment_lines(doc, 24);
+        assert!(shown.lines().all(|l| l.starts_with("/// ")), "{shown}");
+    }
 
     fn roles(src: &str) -> Vec<(&str, TokenRole)> {
         tokenize(src)

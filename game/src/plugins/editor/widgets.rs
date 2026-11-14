@@ -1,24 +1,25 @@
 // SPDX-License-Identifier: MIT
 //! egui drawing helpers for the Cast Editor, all in the bible's UI
 //! language: Parchment surfaces, Basalt frames, Coalblack text, Oxblood
-//! accents, Aged-paper chips. Colours come only from [`palette`]; the
-//! decisions about WHAT to show live in the pure modules
-//! ([`diagnostics`], [`markdown`], [`layout`](super::layout)).
+//! accents, Aged-paper chips. Colours come only from [`palette`] (aliases
+//! of the shared `ui_theme`); tutorial text is drawn by the shared
+//! renderer (`ui_theme::markdown`), not here. The decisions about WHAT to
+//! show live in the pure modules ([`diagnostics`],
+//! [`layout`](super::layout)).
 
 use bevy_egui::egui::{self, Color32, FontFamily, FontId, Rect, RichText, Stroke, text::LayoutJob};
 
 use super::diagnostics::{self, Banner, BannerStyle, LineRole};
-use super::markdown::{self, Block, Span};
 use super::palette;
+use crate::plugins::ui_theme;
 
-/// Body text size inside the editor (points).
-pub const BODY_SIZE: f32 = 13.5;
-/// Monospace size for code chips and compiler output.
-pub const MONO_SIZE: f32 = 13.0;
-
-fn body_font() -> FontId {
-    FontId::new(BODY_SIZE, FontFamily::Proportional)
-}
+/// Body text size inside the editor (points): the theme's small size, so
+/// the dense editor still never drops under the theme minimum.
+pub const BODY_SIZE: f32 = ui_theme::SMALL_SIZE;
+/// Monospace size for code and compiler output.
+pub const MONO_SIZE: f32 = ui_theme::MIN_TEXT_SIZE;
+/// Captions and key hints.
+pub const CAPTION_SIZE: f32 = ui_theme::MIN_TEXT_SIZE;
 
 pub fn mono_font() -> FontId {
     FontId::new(MONO_SIZE, FontFamily::Monospace)
@@ -44,7 +45,7 @@ pub fn apply_parchment_style(style: &mut egui::Style) {
     v.selection.bg_fill = palette::HOVER_BG;
     v.selection.stroke = Stroke::new(1.0_f32, palette::TEXT);
     v.hyperlink_color = palette::ACCENT;
-    v.text_cursor.stroke = Stroke::new(2.0_f32, palette::PLAIN);
+    v.text_cursor.stroke = Stroke::new(2.0_f32, palette::CURSOR);
     // Disabled widgets keep full opacity; they are styled explicitly.
     v.disabled_alpha = 1.0;
     let w = &mut v.widgets;
@@ -61,6 +62,19 @@ pub fn apply_parchment_style(style: &mut egui::Style) {
         wv.fg_stroke = Stroke::new(1.0_f32, palette::TEXT);
         wv.corner_radius = egui::CornerRadius::ZERO;
         wv.expansion = 0.0;
+    }
+    // The global theme's text styles are sized for panels; the editor is
+    // denser. Body/button text drops to the editor body size (still at or
+    // above the theme minimum).
+    for (ts, size) in [
+        (egui::TextStyle::Body, BODY_SIZE),
+        (egui::TextStyle::Button, BODY_SIZE),
+        (egui::TextStyle::Small, CAPTION_SIZE),
+        (egui::TextStyle::Monospace, MONO_SIZE),
+    ] {
+        if let Some(font) = style.text_styles.get_mut(&ts) {
+            font.size = size;
+        }
     }
     style.spacing.button_padding = egui::vec2(8.0, 3.0);
     style.spacing.item_spacing = egui::vec2(8.0, 5.0);
@@ -111,7 +125,11 @@ pub fn title_bar(ui: &mut egui::Ui, title: &str, hint: &str) {
         );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.add_space(8.0);
-            ui.label(RichText::new(hint).color(palette::TEXT_ON_DARK).size(12.0));
+            ui.label(
+                RichText::new(hint)
+                    .color(palette::TEXT_ON_DARK)
+                    .size(CAPTION_SIZE),
+            );
         });
     });
 }
@@ -122,7 +140,16 @@ pub fn caption(ui: &mut egui::Ui, text: &str) {
         RichText::new(text)
             .color(palette::ACCENT)
             .strong()
-            .size(12.0),
+            .size(CAPTION_SIZE),
+    );
+}
+
+/// Muted one-line note (button hints, copy feedback).
+pub fn note(ui: &mut egui::Ui, text: impl Into<String>) {
+    ui.label(
+        RichText::new(text.into())
+            .color(palette::TEXT_MUTED)
+            .size(CAPTION_SIZE),
     );
 }
 
@@ -137,7 +164,7 @@ pub fn disabled_button(ui: &mut egui::Ui, text: &str) {
     );
 }
 
-/// Aged-paper inset chip with monospace text, wrapped to the pane.
+/// Aged-paper inset chip with plain monospace text, wrapped to the pane.
 pub fn code_chip(ui: &mut egui::Ui, text: &str) {
     egui::Frame::new()
         .fill(palette::CHIP_BG)
@@ -149,80 +176,6 @@ pub fn code_chip(ui: &mut egui::Ui, text: &str) {
                 egui::Label::new(RichText::new(text).font(mono_font()).color(palette::TEXT)).wrap(),
             );
         });
-}
-
-/// Render a tutorial (markdown subset) into the goal pane.
-pub fn draw_markdown(ui: &mut egui::Ui, src: &str) {
-    for block in markdown::parse(src) {
-        match block {
-            Block::Heading { level, text } => {
-                ui.add_space(6.0);
-                let size = match level {
-                    1 => 18.0,
-                    2 => 16.0,
-                    _ => 14.5,
-                };
-                ui.label(
-                    RichText::new(text)
-                        .color(palette::ACCENT)
-                        .strong()
-                        .size(size),
-                );
-            }
-            Block::Paragraph(spans) => inline(ui, "", &spans),
-            Block::Bullet(spans) => inline(ui, "•  ", &spans),
-            Block::Code(code) => {
-                ui.add_space(2.0);
-                code_chip(ui, &code);
-                ui.add_space(2.0);
-            }
-        }
-    }
-}
-
-fn inline(ui: &mut egui::Ui, prefix: &str, spans: &[Span]) {
-    let mut job = LayoutJob::default();
-    let text = egui::TextFormat {
-        font_id: body_font(),
-        color: palette::TEXT,
-        ..Default::default()
-    };
-    if !prefix.is_empty() {
-        job.append(prefix, 0.0, text.clone());
-    }
-    for span in spans {
-        match span {
-            Span::Text(s) => job.append(s, 0.0, text.clone()),
-            Span::Code(s) => job.append(
-                s,
-                0.0,
-                egui::TextFormat {
-                    font_id: mono_font(),
-                    color: palette::TEXT,
-                    background: palette::CHIP_BG,
-                    ..Default::default()
-                },
-            ),
-            Span::Emph(s) => job.append(
-                s,
-                0.0,
-                egui::TextFormat {
-                    italics: true,
-                    ..text.clone()
-                },
-            ),
-            Span::Strong(s) => job.append(
-                s,
-                0.0,
-                egui::TextFormat {
-                    color: palette::ACCENT,
-                    ..text.clone()
-                },
-            ),
-        }
-    }
-    job.wrap.max_width = ui.available_width();
-    ui.add(egui::Label::new(job).wrap());
 }
 
 /// The verdict banner: a coloured strip with the title, then the plain
@@ -241,31 +194,77 @@ pub fn draw_banner(ui: &mut egui::Ui, b: &Banner) {
         .inner_margin(egui::Margin::symmetric(8, 4))
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
-            ui.label(RichText::new(b.title).color(fg).strong().size(14.0));
+            ui.label(RichText::new(b.title).color(fg).strong().size(BODY_SIZE));
         });
     ui.add(
         egui::Label::new(
             RichText::new(&b.reason)
                 .color(palette::TEXT)
-                .size(BODY_SIZE - 0.5),
+                .size(BODY_SIZE),
         )
         .wrap(),
     );
 }
 
-/// Compiler / grader output. rustc-shaped text is monospace with error
-/// headers (and their `E0xxx` code) in Oxblood; prose is body text.
-pub fn draw_output(ui: &mut egui::Ui, cleaned: &str) {
-    if cleaned.is_empty() {
-        return;
-    }
-    let rustc_like = cleaned.lines().any(|l| {
+/// Is `cleaned` rustc-shaped (headers, `-->` locations, ASCII art)?
+pub fn is_rustc_like(cleaned: &str) -> bool {
+    cleaned.lines().any(|l| {
         matches!(
             diagnostics::line_role(l),
             LineRole::ErrorHeader | LineRole::WarningHeader | LineRole::Location
         )
-    });
-    if !rustc_like {
+    })
+}
+
+/// The first rustc error line, wrapped, in error text. Drawn ABOVE the
+/// scrolling output so it stays readable however the block is scrolled.
+pub fn first_error(ui: &mut egui::Ui, line: &str) {
+    ui.add(
+        egui::Label::new(
+            RichText::new(line)
+                .font(mono_font())
+                .color(palette::ERROR_TEXT)
+                .strong(),
+        )
+        .wrap(),
+    );
+}
+
+/// The rustc output as one non-wrapping monospace block. rustc's ASCII
+/// art (`|`, `^^^`, `-->`) assumes no wrapping, so lines are never broken;
+/// the caller puts this inside a two-way `ScrollArea`. Error headers are
+/// error text (Oxblood), warnings Bronze, locations muted.
+pub fn rustc_job(cleaned: &str) -> LayoutJob {
+    let mut job = LayoutJob::default();
+    for (i, line) in cleaned.lines().enumerate() {
+        if i > 0 {
+            job.append(
+                "\n",
+                0.0,
+                egui::TextFormat::simple(mono_font(), palette::TEXT),
+            );
+        }
+        let color = match diagnostics::line_role(line) {
+            LineRole::ErrorHeader => palette::ERROR_TEXT,
+            LineRole::WarningHeader => palette::WARNING_TEXT,
+            LineRole::Location => palette::TEXT_MUTED,
+            LineRole::Hint | LineRole::Plain => palette::TEXT,
+        };
+        job.append(line, 0.0, egui::TextFormat::simple(mono_font(), color));
+    }
+    job.wrap.max_width = f32::INFINITY;
+    job
+}
+
+/// Compiler / grader output. rustc-shaped text is a non-wrapping block
+/// ([`rustc_job`]); anything else is wrapped monospace prose.
+pub fn draw_output(ui: &mut egui::Ui, cleaned: &str) {
+    if cleaned.is_empty() {
+        return;
+    }
+    if is_rustc_like(cleaned) {
+        ui.add(egui::Label::new(rustc_job(cleaned)).extend());
+    } else {
         ui.add(
             egui::Label::new(
                 RichText::new(cleaned)
@@ -274,29 +273,7 @@ pub fn draw_output(ui: &mut egui::Ui, cleaned: &str) {
             )
             .wrap(),
         );
-        return;
     }
-    let mut job = LayoutJob::default();
-    let mut first = true;
-    for line in cleaned.lines() {
-        if !first {
-            job.append(
-                "\n",
-                0.0,
-                egui::TextFormat::simple(mono_font(), palette::TEXT),
-            );
-        }
-        first = false;
-        let color = match diagnostics::line_role(line) {
-            LineRole::ErrorHeader => palette::ACCENT,
-            LineRole::WarningHeader => palette::GUTTER,
-            LineRole::Location => palette::TEXT_MUTED,
-            LineRole::Hint | LineRole::Plain => palette::TEXT,
-        };
-        job.append(line, 0.0, egui::TextFormat::simple(mono_font(), color));
-    }
-    job.wrap.max_width = ui.available_width();
-    ui.add(egui::Label::new(job).wrap());
 }
 
 /// Expected vs actual, stacked (the result column is narrow).
@@ -308,5 +285,28 @@ pub fn draw_expected_actual(ui: &mut egui::Ui, expected: Option<&str>, actual: O
     if let Some(a) = actual {
         caption(ui, "YOUR PROGRAM GAVE");
         code_chip(ui, if a.is_empty() { "(nothing)" } else { a });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rustc_job_never_wraps_and_keeps_every_line() {
+        let out = "error[E0384]: cannot assign twice\n --> src/main.rs:3:5\n  |\n3 |     answer = 43;\n  |     ^^^^^^^^^^^ cannot assign twice to immutable variable";
+        let job = rustc_job(out);
+        assert_eq!(job.text, out);
+        assert!(job.wrap.max_width.is_infinite());
+        assert_eq!(job.sections[0].format.color, palette::ERROR_TEXT);
+        assert!(is_rustc_like(out));
+        assert!(!is_rustc_like("Ferris clicks approvingly."));
+    }
+
+    #[test]
+    fn editor_sizes_respect_the_theme_minimum() {
+        for s in [BODY_SIZE, MONO_SIZE, CAPTION_SIZE] {
+            assert!(s >= ui_theme::MIN_TEXT_SIZE);
+        }
     }
 }

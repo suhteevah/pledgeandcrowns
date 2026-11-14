@@ -168,14 +168,20 @@ Bosses get more animation states (intro, phase-2 transformation, defeat). Docume
 
 - **Font:** Pixel-perfect. Use [m6x11plus](https://managore.itch.io/m6x11) or equivalent open-source pixel font. **No web fonts**, **no system fonts**.
 - **Window frames:** Hand-drawn pixel borders, 2-pixel double-line with corner ornaments. Corners are rusty/iron-bound, never plastic-looking.
+- **Text contrast rule:** Text must meet 4.5:1 against the surface it is drawn on; a locked colour that cannot is used for non-text marks only. (Non-text marks such as underlines, gutter bars and status ticks need 3:1.)
 - **Code editor frame:** Inset bevel, **Parchment cream** (`#FCEFC8`) background, **Basalt** (`#3E3833`) frame, syntax highlighting drawn from palette role names only. The keyword/type pairing is deliberately the anchor + split-complementary teal — the two highest-frequency token classes form the same harmonic conversation as the rest of the game:
   - Keywords (`fn`, `let`, `mut`): **Wineflesh** `#982D52`
-  - Types (`String`, `&mut T`): **Main teal** `#2A8482` — the Borrow Checker's signature color, on purpose
-  - Strings: **Forest** `#487E40`
-  - Comments: **Stone grey** `#7A7064`
-  - Numbers / literals: **Old gold** `#D2A53F`
-  - Errors / underline squiggles: **Alarm scarlet** `#E63946`
+  - Types (`String`, `&mut T`): **Deep teal** `#154548` — the Borrow Checker's ramp, on purpose
+  - Strings: **Pine** `#27502E`
+  - Comments: **Bronze** `#5E4116`
+  - Numbers / literals: **Cobalt deep** `#0E2E54`
+  - Error text (compiler error headers, an error line's number): **Oxblood** `#6B1F35`
+  - Error marks (underline squiggle, error-line gutter bar): **Alarm scarlet** `#E63946`
+  - Plain code text: **Coalblack** `#161313`
+  - Line-number gutter: **Bronze** `#5E4116`
   - Cursor: **Abyssal** `#062123`
+
+  *Why these (v2.1):* the v2.0 picks did not have readable contrast on the Parchment cream page (numbers in Old gold about 2:1, Alarm scarlet text 3.6:1, Main teal 3.9:1, Stone grey and Forest 4.2:1). Each role steps to a darker member of its own ramp, so the harmonic structure and the burgundy-vs-teal keyword/type pairing are unchanged. Comments stay visibly quieter than code by hue (warm bronze among cool and red tokens), not by low contrast. Gold cannot reach 4.5:1 on cream at any ramp step that still reads as gold, so literals take the cool counterweight instead. Alarm scarlet keeps its job as the error signal, but only as a mark. Syntax colours are drawn on Parchment cream only: inline code chips (**Aged paper** `#BFB2A0`) carry plain Coalblack code, and fenced code blocks are Parchment cream with a 1px **Basalt** frame, because Wineflesh, Pine and Bronze fall just under 4.5:1 on Aged paper.
 - **Buttons:** Two states — idle (slight bevel up) and pressed (bevel down + 1px offset).
 - **Icons:** 16×16 or 24×24 with the same outline rule as characters.
 
@@ -211,5 +217,9 @@ This document is versioned. Any change to the palette, the resolution table, or 
 
 ---
 
-**Bible version:** 2.0 — palette swapped from EDG32-RUST to "Heraldic Code" (split-complementary @ 350° anchor + 140°/178° pair, +42° gold accent, +270° magic flicker). Per-zone roles, editor syntax colors, and reference-image titles updated to match.
-**Last updated:** 2026-04-25
+**Bible version:** 2.1 — editor syntax colours stepped to darker members of their ramps for 4.5:1 text contrast on Parchment cream; text-contrast rule added to UI style.
+**Last updated:** 2026-11-14
+
+**Changelog**
+- 2.0 (2026-04-25) — palette swapped from EDG32-RUST to "Heraldic Code" (split-complementary @ 350° anchor + 140°/178° pair, +42° gold accent, +270° magic flicker). Per-zone roles, editor syntax colors, and reference-image titles updated to match.
+- 2.1 (2026-11-14) — syntax colours: types Main teal → Deep teal, strings Forest → Pine, comments Stone grey → Bronze, numbers Old gold → Cobalt deep, error text Alarm scarlet → Oxblood (scarlet kept for squiggles and the gutter bar), gutter recorded as Bronze; fenced code blocks drawn on Parchment cream with a Basalt frame instead of Aged paper; rule "text must meet 4.5:1 against its surface" added. Palette itself unchanged. Approved by the designer under the owner's delegation.
