@@ -1,6 +1,63 @@
 # HANDOFF.md
 
 ## Last Updated
+2026-11-14 — **Orchestrated build-out: waves 1-3 merged, wave 4 in flight.**
+
+Branch **`finish/integration`** (not pushed, `main` untouched). Fable
+orchestrates Opus agents in git worktrees, reviews each branch, merges, and
+runs `scripts/ci.ps1` on the merged result as the sign-off gate.
+
+### Signed off (CI green on the merged branch)
+- **Wave 1** (`83f5daf`): terrain v2 + grass-edge overlay layer, cottage/oak
+  props with y-sort and collision, title/pause/settings menus, save v2 with v1
+  migration, rebuilt editor, compile-api auth/rate-limit/queue/metrics, web
+  build 49.9 -> 22.5 MB, ogg audio, itch zip script, render-refs hygiene.
+- **Wave 2** (`ffd62c1`): dialogue box (authored lines for the first 9 NPCs),
+  configurable authenticated client on native and wasm, 57/57 player-facing
+  solutions proven to compile, table-driven graders, compile-api sandbox fixes,
+  art docs for the new pipeline.
+- **Wave 3** (`bc9becf`): scripted capture scenes (`scripts/capture-scenes.ps1`,
+  29 scenes), tutorial corrections (104 snippets run through rustc), `demo`
+  cargo feature (21 free missions, ends at `while_loop`), comment-aware token
+  grader, per-mission behaviour checks on `/compile-real` (41 of 57), Act 9 and
+  10 specs with proven solutions.
+
+### In flight (wave 4)
+UI theme for menus/title/panels; editor layout + honest "verified / not
+verified" grades; dialogue fixes + player occlusion fade; compile-api security
+round 2 (split API and builder units); `fn main` rule + edition 2024 alignment.
+
+### Known-open, in priority order
+1. **compile-api is NOT safe to deploy publicly.** Two reviews filed in
+   `.claude/reviews/security-2026-11-14-*.md`. The bwrap sandbox has never run
+   (Windows box); it must be proven on Linux with `deploy/verify-sandbox.sh`.
+2. **Nobody has played the build.** UI is checked only through capture scenes.
+   No human has confirmed audio is audible (wav never decoded; now ogg).
+3. **UI is default-dark egui** outside the dialogue box (wave 4 fixes).
+4. **16 missions cannot be behaviour-checked by the server:** 13 where the
+   mission text never fixes the output, 3 that cannot run on wasm (two thread
+   missions, `async_fn`). The 13 need their text tightened.
+5. **Art still owed by the designer:** tranche 2 (34 kit villagers, player and
+   Ferris walk cycles), UI kit and pixel font, Act 9/10 casts and landmarks,
+   title redraw, a larger lower-contrast flagstone for the big plazas.
+6. **Acts 9-10 are specified, not implemented** (blocked on art and on one NPC
+   owning three missions for boss trials).
+7. Owner actions: TESS + RF check; domain; Android keystore;
+   export the old claude.ai/design artboard before 2026-12-14; install
+   `wasm-opt`, `butler`, Miri; decide the `repository` URL.
+
+### How to work in this repo now
+- Run cargo from Git Bash, not the PowerShell tool (C build scripts fail there).
+- Never merge into the checkout while a build is running in it.
+- Two tests are wall-clock sensitive under load (being fixed in wave 4):
+  `compile_api_client::full_build_queue_is_busy`,
+  `dialogue::f_opens_dialogue_then_last_line_opens_the_mission`.
+- Look at the game only via `scripts/capture-scenes.ps1` (unfocused,
+  self-driving). Never inject input or steal focus.
+
+---
+
+## Session 2026-11-13
 2026-11-13 — **Full repo review, finish plan, art tranche 1 designed.**
 
 **Read `docs/FINISH-PLAN.md` first.** It replaces the "What's Next" list below

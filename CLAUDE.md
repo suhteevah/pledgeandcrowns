@@ -3,7 +3,7 @@
 
 ## Project identity
 
-You are working on **Pledge & Crown**, a pixel-art RPG that teaches Rust. The owner is Matt Gates (Ridge Cell Repair LLC, Chico CA). The project is Rust-first by mandate — the game eats its own dog food.
+You are working on **Pledge & Crown**, a pixel-art RPG that teaches Rust. The owner is Matt Gates (Chico Cell Repair LLC, Chico CA). The project is Rust-first by mandate — the game eats its own dog food.
 
 ## The team (lean roster, locked 2026-05-02)
 

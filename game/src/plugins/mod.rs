@@ -37,7 +37,7 @@ impl Plugin for CorePlugin {
             .add_plugins((
                 state::StatePlugin,
                 title::TitlePlugin,
-                progress::ProgressPlugin,
+                progress::ProgressPlugin::on_disk(),
                 world::WorldPlugin,
                 prop::PropPlugin,
                 player::PlayerPlugin,

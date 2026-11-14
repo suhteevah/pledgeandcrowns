@@ -664,21 +664,63 @@ pub struct SaveRequest;
 #[derive(Resource)]
 struct AutosaveTimer(Timer);
 
-pub struct ProgressPlugin;
+/// Where a session's save lives. There is deliberately no `Default`: every
+/// caller has to say which it wants, because the wrong answer in a test reads
+/// and overwrites the player's real save file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SaveStorage {
+    /// The real save under the user's data directory. The game binary only.
+    Disk,
+    /// Fresh progress, nothing read, nothing written. Tests and tools.
+    Memory,
+}
+
+pub struct ProgressPlugin {
+    storage: SaveStorage,
+}
+
+impl ProgressPlugin {
+    /// Load and persist the player's real save. Only the shipped app should
+    /// call this.
+    pub fn on_disk() -> Self {
+        Self {
+            storage: SaveStorage::Disk,
+        }
+    }
+
+    /// Start from an empty save and never touch the filesystem. Use this in
+    /// every test: tests that used the disk plugin were reading the
+    /// developer's real save (so results depended on what was in it and on
+    /// test order) and writing test progress back over it.
+    pub fn in_memory() -> Self {
+        Self {
+            storage: SaveStorage::Memory,
+        }
+    }
+}
 
 impl Plugin for ProgressPlugin {
     fn build(&self, app: &mut App) {
-        tracing::debug!("ProgressPlugin::build");
-        let path = default_save_path();
-        let outcome = SaveData::load_or_recover(&path);
+        tracing::debug!(storage = ?self.storage, "ProgressPlugin::build");
+        let (path, data, loaded_writes_enabled) = match self.storage {
+            SaveStorage::Disk => {
+                let path = default_save_path();
+                let outcome = SaveData::load_or_recover(&path);
+                (path, outcome.data, outcome.writes_enabled)
+            }
+            SaveStorage::Memory => {
+                tracing::info!("in-memory save: nothing is read from or written to disk");
+                (PathBuf::new(), SaveData::default(), false)
+            }
+        };
         let shot_mode = std::env::var("PNC_SHOTS").is_ok();
-        let writes_enabled = outcome.writes_enabled && !shot_mode;
+        let writes_enabled = loaded_writes_enabled && !shot_mode;
         if shot_mode {
             tracing::info!("screenshot mode: save writes disabled");
         }
-        app.insert_resource(outcome.data.progress)
-            .insert_resource(outcome.data.settings)
-            .insert_resource(SavedPlayerPosition(outcome.data.player_position))
+        app.insert_resource(data.progress)
+            .insert_resource(data.settings)
+            .insert_resource(SavedPlayerPosition(data.player_position))
             .insert_resource(SavePath(path))
             .insert_resource(SavePolicy { writes_enabled })
             .insert_resource(AutosaveTimer(Timer::new(

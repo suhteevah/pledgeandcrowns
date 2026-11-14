@@ -413,7 +413,7 @@ fn app_with_nearby(name: &'static str, mission_id: &'static str) -> App {
         .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::ZERO))
         .add_plugins(StatesPlugin)
         .add_plugins(StatePlugin)
-        .add_plugins(ProgressPlugin)
+        .add_plugins(ProgressPlugin::in_memory())
         .add_plugins(MissionPlugin)
         .add_plugins(DialoguePlugin)
         .init_resource::<EditorState>()

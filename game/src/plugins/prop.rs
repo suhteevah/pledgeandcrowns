@@ -329,8 +329,10 @@ pub fn ysort_z(ground_y: f32) -> f32 {
     YSORT_Z_MIN + t * YSORT_Z_SPAN
 }
 
-/// Alpha a prop fades to while it hides a character.
-pub const OCCLUDER_ALPHA: f32 = 0.45;
+/// Alpha a prop fades to while it hides a character. 0.45 left an oak canopy
+/// nearly invisible against grass in captures; 0.62 keeps the prop readable
+/// while the character still shows through.
+pub const OCCLUDER_ALPHA: f32 = 0.62;
 /// Time a full fade (opaque <-> [`OCCLUDER_ALPHA`]) takes.
 pub const FADE_SECS: f32 = 0.15;
 

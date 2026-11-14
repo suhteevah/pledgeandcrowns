@@ -162,7 +162,7 @@ The rules below (1-4) describe the original contractor-era flow. The palette and
 
 ## 6. IP and licensing
 
-- **Default:** all art is **work-for-hire**. Contractor assigns full copyright to Ridge Cell Repair LLC at delivery. Standard agreement language; no carve-outs for portfolio use without prior written approval.
+- **Default:** all art is **work-for-hire**. Contractor assigns full copyright to Chico Cell Repair LLC at delivery. Standard agreement language; no carve-outs for portfolio use without prior written approval.
 - **Portfolio rights:** contractor may display delivered art in a personal portfolio after the game's public launch (currently scheduled day 30 of MVP), with attribution to "Pledge & Crown" and a link to the project page.
 - **Game licensing context:** the game binary + assets ship under a proprietary license (or MIT, pending HANDOFF open Q3). The compile-API server is dual-licensed AGPL+CLA. Art assets are distributed *with* the game binary; the contractor's work-for-hire assignment is what makes that distribution legal regardless of which game-binary license Matt picks.
 - **No third-party assets without explicit clearance.** No traced reference, no Photoshopped stock, no AI-upscaled CC0 sprites unless the source license is added to `THIRD_PARTY_LICENSES.md` and the contractor has confirmed the license is compatible with proprietary distribution.

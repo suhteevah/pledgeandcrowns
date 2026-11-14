@@ -20,7 +20,8 @@ use pledge_and_crown::plugins::state::{GameState, StatePlugin};
 #[test]
 fn progress_plugin_publishes_resource() {
     let mut app = App::new();
-    app.add_plugins(MinimalPlugins).add_plugins(ProgressPlugin);
+    app.add_plugins(MinimalPlugins)
+        .add_plugins(ProgressPlugin::in_memory());
     app.update();
     let progress = app.world().resource::<MissionProgress>();
     assert_eq!(progress.cleared_count(), 0);
@@ -69,7 +70,7 @@ fn ingame_app_with_nearby(name: &'static str, mission_id: &'static str) -> App {
     app.add_plugins(MinimalPlugins)
         .add_plugins(StatesPlugin)
         .add_plugins(StatePlugin)
-        .add_plugins(ProgressPlugin)
+        .add_plugins(ProgressPlugin::in_memory())
         .add_plugins(MissionPlugin)
         .init_resource::<EditorState>()
         .init_resource::<ButtonInput<KeyCode>>()

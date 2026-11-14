@@ -18,7 +18,7 @@ The AGPL only governs the **server**, not the player's submitted code. Anything 
 
 ## Contributing
 
-By submitting a pull request, you agree that your contribution is licensed under both MIT and AGPL-3.0-or-later, matching the dual-license structure of the repository. A formal Contributor License Agreement (CLA) will be added before the project accepts external contributions; until then, all contributions come from Ridge Cell Repair LLC.
+By submitting a pull request, you agree that your contribution is licensed under both MIT and AGPL-3.0-or-later, matching the dual-license structure of the repository. A formal Contributor License Agreement (CLA) will be added before the project accepts external contributions; until then, all contributions come from Chico Cell Repair LLC.
 
 ## Third-party dependencies
 
