@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! Pledge & Crown compile API binary. Routes + handlers live in
 //! `lib.rs` so the integration test harness can mount the same router.
+//!
+//! Configuration comes from `PNC_*` environment variables, parsed once
+//! into [`pledge_compile_api::Config`] (see `config.rs` for the table and
+//! `deploy/env.example` for a commented template).
 
-use std::net::SocketAddr;
-use tower_http::cors::CorsLayer;
-use tower_http::trace::TraceLayer;
+use pledge_compile_api::{AppState, Config, build_router, serve};
 use tracing_subscriber::{EnvFilter, fmt};
-
-const BIND_ADDR: &str = "127.0.0.1:7878";
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -16,17 +16,36 @@ async fn main() -> anyhow::Result<()> {
     });
     fmt().with_env_filter(filter).with_target(true).init();
 
-    let app = pledge_compile_api::make_router()
-        .layer(TraceLayer::new_for_http())
-        .layer(CorsLayer::permissive());
+    let config = match Config::from_env() {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::error!("invalid configuration: {e}");
+            return Err(e.into());
+        }
+    };
+    // `Config`'s Debug impl redacts the bearer tokens.
+    tracing::info!("config: {config:?}");
+    if config.auth_enabled() {
+        tracing::info!(
+            "auth: bearer token required on /compile, /compile-real, /metrics ({} token(s))",
+            config.auth_tokens.len()
+        );
+    } else {
+        tracing::warn!("auth: DISABLED (no PNC_AUTH_TOKENS); loopback bind enforced");
+    }
+    if config.trust_proxy && !config.bind_addr.ip().is_loopback() {
+        tracing::warn!(
+            "PNC_TRUST_PROXY is on but the bind address {} is not loopback: clients that can \
+             reach the socket directly can spoof X-Forwarded-For and dodge the rate limit",
+            config.bind_addr
+        );
+    }
 
-    let addr: SocketAddr = BIND_ADDR.parse()?;
-    tracing::info!("pledge compile api listening on http://{addr}");
-    tracing::warn!(
-        "v0 grader is pattern-based. real cargo build + wasmtime sandbox per design/05 sec 2 pending."
-    );
+    let addr = config.bind_addr;
+    let app = build_router(AppState::new(config));
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
+    tracing::info!("pledge compile api listening on http://{addr}");
+    serve(listener, app).await?;
     Ok(())
 }
