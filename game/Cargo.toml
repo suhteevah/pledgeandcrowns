@@ -12,6 +12,9 @@ description = "Pledge & Crown - the Rust-teaching pixel-art RPG."
 # `dev` enables hot-reload, debug overlays, verbose tracing.
 default = []
 dev = ["bevy/dynamic_linking"]
+# `demo` builds the free demo: Acts 1-2 only (missions up to
+# `mission::DEMO_LAST_MISSION_ID`), then an end-of-demo panel.
+demo = []
 
 [dependencies]
 bevy = { workspace = true, features = [

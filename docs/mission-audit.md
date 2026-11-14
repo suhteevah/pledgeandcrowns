@@ -37,7 +37,7 @@ in the server sandbox.
 | struct_basic | structs, field access | Y | Y | Y | Y | |
 | vec_iter | `Vec`, `.iter().sum()` | Y | Y | Y | Y | |
 | tuple_destructure | tuple patterns in `let` | Y | Y | Y | Y | |
-| borrow_mut | `&mut`, deref write | Y | Y | Y | Y | G3: parameter must be named `x`. T2 |
+| borrow_mut | `&mut`, deref write | Y | Y | Y | Y | G3: parameter must be named `x`. T2 (resolved) |
 | string_vs_str | `String` vs `&str` | Y | Y | Y | Y | G4: `"you".to_string()` rejected |
 | option_unwrap_or | `.unwrap_or` | Y | Y | Y | Y | |
 | for_in_range | `for` over a range | Y | Y | Y | Y | `0..=9` rejected (fair: the task names `0..10`) |
@@ -45,7 +45,7 @@ in the server sandbox.
 | slice_basic | slices `&[T]` | Y | Y | Y | Y | |
 | result_question_mark | `Result` + `?` | Y | Y | Y | Y | G5: `Ok(expr?)` rejected |
 | derive_debug | `#[derive(Debug)]` | Y | Y | Y | Y | G6: `derive(Debug, Clone)` and `{:#?}` rejected, though the tutorial shows both |
-| iter_map_collect | `map` / `collect` | Y | Y | Y | Y | G3: closure parameter must be named `x`. T1 |
+| iter_map_collect | `map` / `collect` | Y | Y | Y | Y | G3: closure parameter must be named `x`. T1 (resolved) |
 | enum_match | enums, `match` | Y | Y | Y | Y | |
 | while_loop | `while` | Y | Y | Y | Y | `while n != 0` rejected |
 | impl_method | methods, `&self` | Y | Y | Y | Y | |
@@ -57,14 +57,14 @@ in the server sandbox.
 | trait_def | traits, `impl Trait for` | Y | Y | Y | Y | G9: inherent `impl` plus a `for` loop passes |
 | generic_fn | generic fn + bound | Y | Y | Y | Y | |
 | generic_struct | generic struct | Y | Y | Y | Y | G10: `struct Pair<T>(T, T)` and `Pair<U>` rejected |
-| dyn_trait | `Box<dyn Trait>` | Y | Y | Y | Y | H1: hint names the wrong needles. T3 |
+| dyn_trait | `Box<dyn Trait>` | Y | Y | Y | Y | H1, T3 (both resolved) |
 | lifetimes | lifetime parameters | Y | Y | Y | Y | G10: a lifetime named `'s` rejected |
 | assoc_type | associated types | Y | Y | Y | Y | |
 | result_match | `match` on `Result` | Y | Y | Y | Y | |
 | custom_error | custom error enum | Y | Y | Y | Y | |
 | from_error | `From` + `?` conversion | Y | Y | Y | Y | |
 | option_map | `Option::map` | Y | Y | Y | Y | |
-| and_then | `and_then` chaining | Y | Y | Y | Y | **T4 (wrong output in tutorial)** |
+| and_then | `and_then` chaining | Y | Y | Y | Y | T4 (resolved) |
 | unwrap_or_else | lazy default | Y | Y | Y | Y | contract fixture `\|\| 0` trips clippy `unnecessary_lazy_evaluations`; the player solution uses a side-effecting closure instead |
 | hashmap_basic | `HashMap` | Y | Y | Y | Y | |
 | iter_filter | `filter` | Y | Y | Y | Y | |
@@ -81,7 +81,7 @@ in the server sandbox.
 | box_basic | `Box`, recursive types | Y | Y | Y | Y | |
 | rc_basic | `Rc` | Y | Y | Y | Y | |
 | refcell | `RefCell` | Y | Y | Y | Y | |
-| cell | `Cell` | Y | Y | Y | Y | `.replace(5)` rejected (fair: the task says `.set`). T5 |
+| cell | `Cell` | Y | Y | Y | Y | `.replace(5)` rejected (fair: the task says `.set`). T5 (resolved) |
 | rc_refcell | `Rc<RefCell<T>>` | Y | Y | Y | Y | |
 | weak_ref | `Weak`, `downgrade` / `upgrade` | Y | Y | Y | Y | |
 
@@ -138,12 +138,35 @@ result from each.
   `mut_binding` `x = x + 1`, `while_loop` `while n != 0`, `for_in_range`
   `0..=9`, `cell` `.replace(5)`, `closure_move` `move||` (no space; rustfmt
   would add one), `unwrap_or_else(Default::default)`.
-- **H1 `dyn_trait` hint drift:** the hint says "The grader needs `Box<dyn`
+- **H1 `dyn_trait` hint drift (RESOLVED: the hint now names `Box<dyn` and `Box::new`):** the hint says "The grader needs `Box<dyn`
   and `dyn `". The grader actually checks `Box<dyn` and `Box::new`.
 
 ## Tutorial text (hard rule 3)
 
 Each item was checked by compiling the snippet.
+
+**Status: T1-T8 are all RESOLVED in `mission.rs`** (second pass, rustc
+1.99.0, edition 2021). That pass compiled or ran 104 snippets covering
+every tutorial code block and every claimed output, error or rule; only
+the T4 snippet disagreed with its text. Every starter compiles except
+`lifetimes`, which fails with exactly `E0106` as intended; the ignored
+test `every_starter_compiles_or_fails_for_its_intended_reason`
+(`game/tests/mission_text.rs`) keeps it that way. The fixes:
+T4 now chains four `half` calls (`Some(1)`, then `None (1 is odd)`), and
+its Task says four. T1, T2, T3 and T5 use the corrections quoted below,
+with T2 naming E0308.
+
+- **T6 `struct_basic` (invalid syntax shown as code).** "Construction uses
+  the `TypeName { field: value, .. }` literal". A bare `..` is not legal in
+  a struct expression: `error[E0797]: base expression required after ..`
+  (confirmed). Now reads `TypeName { field: value }`, one `field: value`
+  per field.
+- **T7 `generic_struct` (same).** "annotate `Pair::<i32> { .. }`" gives
+  the same E0797. Now reads `Pair::<i32> { a: 1, b: 2 }` (compiles).
+- **T8 `assoc_new` (conflated two shorthands).** "`Self { level }` is
+  shorthand for `Hero { level }`" mixed `Self` with field-init shorthand.
+  Now reads "shorthand for `Hero { level: level }`: `Self` names the type,
+  and the field name can stand alone when the local shares it."
 
 - **T4 `and_then` (incorrect output, P0 under hard rule 3).** The Syntax
   block reads
@@ -182,5 +205,14 @@ Each item was checked by compiling the snippet.
   types; through a shared `&Cell` you can only move whole values in and
   out."
 
-Nothing else in the 57 tutorials was found to be technically wrong. The
-Borrow Checker NPC's lines are in `npc.rs` and were not part of this pass.
+Nothing else in the 57 tutorials, goals, hints or starters was found to be
+technically wrong. Every "The grader needs ..." hint was compared with the
+`stub_grader.rs` rule table as of `ffd62c1`; only H1 differed. The Borrow
+Checker NPC's lines are in `npc.rs` and were not part of either pass.
+
+## Progression
+
+Gating is real and strict-linear. The `prereq: None` in every literal is
+a placeholder: `MissionRegistry::default` then sets each prereq to the
+previous mission. `game/tests/mission_text.rs::progression_is_strict_linear`
+proves mission N+1 stays locked until N is cleared, for every N.
