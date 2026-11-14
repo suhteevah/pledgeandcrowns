@@ -117,12 +117,12 @@ pub const SPRITE_GHOSTKEEPER: &str = "sprites/npc/ghostkeeper_idle_0.png";
 // Generation is a Matt-action: `powershell -ExecutionPolicy Bypass
 // -File scripts/synthwave-gen.ps1`. Files may be absent during early
 // development; AudioPlugin treats missing assets as silently inert.
-pub const AUDIO_TITLE: &str = "audio/title.wav";
-pub const AUDIO_VILLAGE: &str = "audio/village.wav";
-pub const AUDIO_MISSION_CLEAR: &str = "audio/mission_clear.wav";
-pub const AUDIO_MISSION_LOCKED: &str = "audio/mission_locked.wav";
-pub const AUDIO_EDITOR_OPEN: &str = "audio/editor_open.wav";
-pub const AUDIO_EPILOGUE: &str = "audio/epilogue.wav";
+pub const AUDIO_TITLE: &str = "audio/title.ogg";
+pub const AUDIO_VILLAGE: &str = "audio/village.ogg";
+pub const AUDIO_MISSION_CLEAR: &str = "audio/mission_clear.ogg";
+pub const AUDIO_MISSION_LOCKED: &str = "audio/mission_locked.ogg";
+pub const AUDIO_EDITOR_OPEN: &str = "audio/editor_open.ogg";
+pub const AUDIO_EPILOGUE: &str = "audio/epilogue.ogg";
 
 /// Every audio asset path. Used by AudioPlugin to bulk-load handles
 /// at startup AND by the optional asset-existence test (skipped when
