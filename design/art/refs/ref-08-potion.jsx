@@ -8,7 +8,7 @@ const REF08_GRID = [
   '.....XZNZNX.....',
   '.....XZNZNX.....',  //  cork
   '....XX....XX....',  //  neck
-  '....XCCXX#C....',  // glass neck (C cream label hint, X outline, # specular)
+  '....XCCXX#C.....',  // glass neck (C cream label hint, X outline, # specular)
   '...X........X...',
   '..X##........X..',  // glass body — top hi
   '..X#!!!!!!!!X...',  // liquid begins

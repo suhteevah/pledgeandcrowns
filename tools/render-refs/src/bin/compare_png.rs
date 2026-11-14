@@ -1,9 +1,14 @@
+// SPDX-License-Identifier: MIT
 // Tiny standalone helper: compare two PNGs byte-decoded as RGBA8 and
 // report whether every pixel matches. Used for the legacy-pipeline
-// parity check; not part of the main render binary.
+// parity check; not part of the main render binary. Exits non-zero when
+// dimensions or any pixel differ, so it can gate a script.
 
 use anyhow::{Context, Result, bail};
 use image::GenericImageView;
+
+/// How many differing pixels to list before summarising.
+const MAX_LISTED: usize = 10;
 
 fn main() -> Result<()> {
     let mut args = std::env::args().skip(1);
@@ -24,8 +29,11 @@ fn main() -> Result<()> {
     let rgba_a = img_a.to_rgba8();
     let rgba_b = img_b.to_rgba8();
     let mut diffs = 0usize;
-    for (pa, pb) in rgba_a.pixels().zip(rgba_b.pixels()) {
+    for ((x, y, pa), pb) in rgba_a.enumerate_pixels().zip(rgba_b.pixels()) {
         if pa.0 != pb.0 {
+            if diffs < MAX_LISTED {
+                println!("  ({x},{y}): {:?} vs {:?}", pa.0, pb.0);
+            }
             diffs += 1;
         }
     }
@@ -38,5 +46,8 @@ fn main() -> Result<()> {
         total,
         100.0 * diffs as f64 / total as f64
     );
+    if diffs > 0 {
+        bail!("{diffs} pixel(s) differ");
+    }
     Ok(())
 }

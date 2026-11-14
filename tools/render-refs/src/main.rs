@@ -52,50 +52,106 @@ fn main() -> Result<()> {
     tracing::info!("palette: {} entries", palette.count());
 
     let out_dir = resolve_out_dir()?;
-    std::fs::create_dir_all(&out_dir)?;
+    std::fs::create_dir_all(&out_dir).with_context(|| format!("creating {}", out_dir.display()))?;
 
-    let mut rendered = 0usize;
-    let mut skipped = 0usize;
-    for (name, src) in REF_FILES.iter() {
-        let png_name = png_name_for(name)?;
-        // Tile sheets (`const REF<NN>_TILES = { name: [...], ... };`) pack
-        // into an atlas; everything else is a single literal grid.
-        let result = if src.contains("_TILES = {") {
-            Ok(render_tiles(src, &palette).with_context(|| format!("tile sheet {name}"))?)
-        } else {
-            render_grid(src, &palette)
-        };
-        match result {
-            Ok(img) => {
-                let dst = out_dir.join(&png_name);
-                img.save(&dst)
-                    .with_context(|| format!("writing {}", dst.display()))?;
-                rendered += 1;
-                tracing::info!(
-                    "rendered {} -> {} ({}x{})",
-                    name,
-                    png_name,
-                    img.width(),
-                    img.height()
-                );
-            }
-            Err(e) => {
-                // Some refs (artboard-frame, palette-legend, scaffolding)
-                // are not pixel-grid components — they're React layout
-                // helpers without a `const REF<NN>_GRID = [...]` literal.
-                // Skip with debug log rather than failing the run.
-                skipped += 1;
-                tracing::debug!("skipping {}: {:#}", name, e);
-            }
+    // Render everything in memory first so a malformed ref fails the run
+    // before any PNG on disk is touched.
+    let outcome = render_all(REF_FILES, &palette)?;
+    if !outcome.failures.is_empty() {
+        for (name, reason) in &outcome.failures {
+            tracing::error!("failed to render {name}: {reason}");
         }
+        let list = outcome
+            .failures
+            .iter()
+            .map(|(name, reason)| format!("  {name}: {reason}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        bail!(
+            "{} ref(s) failed to render and are not in SKIP_ALLOWED:\n{list}",
+            outcome.failures.len()
+        );
+    }
+
+    for (png_name, img) in &outcome.rendered {
+        let dst = out_dir.join(png_name);
+        img.save(&dst)
+            .with_context(|| format!("writing {}", dst.display()))?;
+        tracing::debug!("wrote {}", dst.display());
     }
     tracing::info!(
-        "done — {} refs rendered ({} skipped) to {}",
-        rendered,
-        skipped,
+        "done — {} refs rendered ({} allow-listed skips) to {}",
+        outcome.rendered.len(),
+        outcome.skipped.len(),
         out_dir.display()
     );
     Ok(())
+}
+
+/// Legacy refs that compose their pixels in JS (no literal grid the Rust
+/// renderer can read). These, and only these, may fail to render. Any
+/// other `ref-*.jsx` that fails is a hard error. `artboard-frame.jsx` and
+/// `palette-legend.jsx` are not `ref-*` so build.rs never embeds them.
+const SKIP_ALLOWED: &[&str] = &[
+    "ref-04-tiles-village.jsx",
+    "ref-05-tiles-tower.jsx",
+    "ref-06-editor.jsx",
+    "ref-09-worldmap.jsx",
+    "ref-09-worldmap-v2.jsx",
+    "ref-10-title.jsx",
+];
+
+/// Result of rendering a set of refs: successes keyed by PNG name,
+/// allow-listed skips, and unexpected failures (`(jsx_name, reason)`).
+#[derive(Debug, Default)]
+struct RenderOutcome {
+    rendered: Vec<(String, RgbaImage)>,
+    skipped: Vec<String>,
+    failures: Vec<(String, String)>,
+}
+
+/// Render every `(jsx_name, source)` pair, sorting each into rendered,
+/// allow-listed skip, or failure. Only a bad filename is an `Err` here —
+/// per-ref render errors are collected so the caller can report them all.
+fn render_all(files: &[(&str, &str)], palette: &Palette) -> Result<RenderOutcome> {
+    let mut outcome = RenderOutcome::default();
+    for (name, src) in files {
+        let png_name = png_name_for(name)?;
+        match render_ref(src, palette) {
+            Ok(img) => {
+                if SKIP_ALLOWED.contains(name) {
+                    tracing::warn!(
+                        "{name} is in SKIP_ALLOWED but rendered fine; remove it from the list"
+                    );
+                }
+                tracing::info!(
+                    "rendered {name} -> {png_name} ({}x{})",
+                    img.width(),
+                    img.height()
+                );
+                outcome.rendered.push((png_name, img));
+            }
+            Err(e) if SKIP_ALLOWED.contains(name) => {
+                tracing::debug!("skipping allow-listed {name}: {e:#}");
+                outcome.skipped.push((*name).to_owned());
+            }
+            Err(e) => outcome
+                .failures
+                .push(((*name).to_owned(), format!("{e:#}"))),
+        }
+    }
+    Ok(outcome)
+}
+
+/// Dispatch one ref source to the right renderer. Tile sheets
+/// (`const REF<NN>_TILES = { name: [...], ... };`) pack into an atlas;
+/// everything else is a single literal grid.
+fn render_ref(src: &str, palette: &Palette) -> Result<RgbaImage> {
+    if src.contains("_TILES = {") {
+        render_tiles(src, palette).context("tile sheet")
+    } else {
+        render_grid(src, palette)
+    }
 }
 
 /// Resolve the PNG output directory. `RENDER_REFS_OUT` env wins; else
@@ -233,7 +289,7 @@ fn render_grid(jsx_src: &str, palette: &Palette) -> Result<RgbaImage> {
     let line_re = Regex::new(r"'([^']*)'")?;
     let rows: Vec<&str> = line_re
         .captures_iter(body)
-        .map(|c| c.get(1).unwrap().as_str())
+        .filter_map(|c| c.get(1).map(|m| m.as_str()))
         .collect();
 
     if rows.is_empty() {
@@ -408,5 +464,132 @@ const REF99_GRID = [
         // (10 reference batch + 2 art-lead batches × 5). Scaffolding
         // refs (artboard-frame, palette-legend, etc.) are filtered out.
         assert!(grid_count >= 15, "got {grid_count} renderable refs");
+    }
+
+    /// Every baked ref outside SKIP_ALLOWED must render; this is the gate
+    /// that keeps a malformed grid from silently dropping out of the run.
+    #[test]
+    fn every_non_allowlisted_ref_renders() {
+        let p = Palette::parse(PALETTE_SRC).unwrap();
+        let outcome = render_all(REF_FILES, &p).unwrap();
+        assert!(
+            outcome.failures.is_empty(),
+            "refs failed to render: {:#?}",
+            outcome.failures
+        );
+        let mut skipped = outcome.skipped.clone();
+        skipped.sort();
+        let mut allowed: Vec<String> = SKIP_ALLOWED.iter().map(|s| (*s).to_owned()).collect();
+        allowed.sort();
+        assert_eq!(skipped, allowed, "skip set drifted from SKIP_ALLOWED");
+    }
+
+    #[test]
+    fn skip_allowlist_entries_exist() {
+        for allowed in SKIP_ALLOWED {
+            assert!(
+                REF_FILES.iter().any(|(name, _)| name == allowed),
+                "SKIP_ALLOWED names {allowed}, which is not a baked ref"
+            );
+        }
+    }
+
+    #[test]
+    fn render_all_reports_unlisted_failure_by_name() {
+        let p = Palette::parse(MINI_PALETTE).unwrap();
+        let files = [
+            ("ref-98-broken.jsx", "const REF98_GRID = ['XX', 'X'];"),
+            ("ref-06-editor.jsx", "no grid here"),
+            ("ref-99-ok.jsx", MINI_REF),
+        ];
+        let outcome = render_all(&files, &p).unwrap();
+        assert_eq!(outcome.rendered.len(), 1);
+        assert_eq!(outcome.rendered[0].0, "REF99.png");
+        assert_eq!(outcome.skipped, vec!["ref-06-editor.jsx".to_owned()]);
+        assert_eq!(outcome.failures.len(), 1);
+        assert_eq!(outcome.failures[0].0, "ref-98-broken.jsx");
+        assert!(
+            outcome.failures[0].1.contains("row 1 is 1 wide"),
+            "{}",
+            outcome.failures[0].1
+        );
+    }
+
+    const MINI_TILES: &str = r#"
+const REF97_COLS = 2;
+const REF97_TILES = {
+  grass: [
+    'XW',
+    'WX',
+  ],
+  stone: [
+    'WW',
+    '..',
+  ],
+};
+"#;
+
+    #[test]
+    fn render_tiles_packs_atlas_row_major() {
+        let p = Palette::parse(MINI_PALETTE).unwrap();
+        let img = render_tiles(MINI_TILES, &p).unwrap();
+        assert_eq!((img.width(), img.height()), (4, 2));
+        // grass at (0,0)
+        assert_eq!(img.get_pixel(0, 0).0, [0, 0, 0, 0xFF]);
+        assert_eq!(img.get_pixel(1, 0).0, [0xFF, 0xFF, 0xFF, 0xFF]);
+        assert_eq!(img.get_pixel(1, 1).0, [0, 0, 0, 0xFF]);
+        // stone at (2,0)
+        assert_eq!(img.get_pixel(2, 0).0, [0xFF, 0xFF, 0xFF, 0xFF]);
+        assert_eq!(img.get_pixel(3, 1).0, [0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn render_tiles_partial_last_row_is_transparent() {
+        let p = Palette::parse(MINI_PALETTE).unwrap();
+        let src = MINI_TILES.replace("REF97_COLS = 2", "REF97_COLS = 1");
+        let img = render_tiles(&src, &p).unwrap();
+        assert_eq!((img.width(), img.height()), (2, 4));
+        assert_eq!(img.get_pixel(0, 2).0, [0xFF, 0xFF, 0xFF, 0xFF]);
+    }
+
+    #[test]
+    fn render_tiles_rejects_wrong_row_width_naming_tile() {
+        let p = Palette::parse(MINI_PALETTE).unwrap();
+        let src = MINI_TILES.replace("'..',", "'...',");
+        let err = format!("{:#}", render_tiles(&src, &p).unwrap_err());
+        assert!(err.contains("tile `stone`"), "{err}");
+        assert!(err.contains("row 1 is 3 wide, expected 2"), "{err}");
+    }
+
+    #[test]
+    fn render_tiles_rejects_wrong_row_count_naming_tile() {
+        let p = Palette::parse(MINI_PALETTE).unwrap();
+        let src = MINI_TILES.replace("'WW',\n    '..',", "'WW',");
+        let err = format!("{:#}", render_tiles(&src, &p).unwrap_err());
+        assert!(err.contains("tile `stone` has 1 rows, expected 2"), "{err}");
+    }
+
+    #[test]
+    fn render_tiles_rejects_missing_cols() {
+        let p = Palette::parse(MINI_PALETTE).unwrap();
+        let src = MINI_TILES.replace("const REF97_COLS = 2;", "");
+        let err = format!("{:#}", render_tiles(&src, &p).unwrap_err());
+        assert!(err.contains("COLS"), "{err}");
+    }
+
+    #[test]
+    fn render_tiles_rejects_zero_cols() {
+        let p = Palette::parse(MINI_PALETTE).unwrap();
+        let src = MINI_TILES.replace("REF97_COLS = 2", "REF97_COLS = 0");
+        assert!(render_tiles(&src, &p).is_err());
+    }
+
+    #[test]
+    fn render_tiles_rejects_unknown_palette_char_naming_tile() {
+        let p = Palette::parse(MINI_PALETTE).unwrap();
+        let src = MINI_TILES.replace("'WX',", "'W?',");
+        let err = format!("{:#}", render_tiles(&src, &p).unwrap_err());
+        assert!(err.contains("tile `grass` row 1"), "{err}");
+        assert!(err.contains("'?'"), "{err}");
     }
 }
