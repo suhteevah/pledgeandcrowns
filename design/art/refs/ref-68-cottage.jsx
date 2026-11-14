@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-68 - Hearthstone cottage, 64x64 prop sprite, transparent bg.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-13 (tranche 1); wired as sprites/props/cottage.png.
 //
 // The first piece of real architecture: burgundy shingle roof (the brand
 // anchor, so the village reads as Pledge and Crown from a wide shot), cream

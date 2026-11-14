@@ -146,6 +146,15 @@ Rules:
 
 ## 5. Approval workflow
 
+**Current flow (since 2026-11-13).** Standalone claude.ai/design closes by 2026-12-14, so new art no longer starts there. The orchestrating model (Fable) designs art as draft ASCII-grid refs; Matt is the sole approver; implementers (including the `art-lead` agent) wire art only after approval.
+
+1. **Draft.** Write `design/art/refs/ref-NN-<slug>.jsx` with a `DRAFT` header line. A slug must not contain `-v` (render-refs parses it as a version suffix). Tile sheets use `const REF<NN>_TILES = { name: ['row', ...], ... };` plus `const REF<NN>_COLS = n;` and are packed row-major into an atlas.
+2. **Preview.** `cargo run -p render-refs --release --bin render-refs` with `RENDER_REFS_OUT=<scratch dir>`, so unapproved PNGs stay out of `design/art/refs/png/`. Any ref that fails to render (outside a six-file legacy allow-list) makes the binary exit non-zero.
+3. **Review.** Upload the preview PNGs to the design canvas, https://claude.ai/artifact/G67kHCdEaPS6KpYnD3jA1k. Matt approves or rejects on the board.
+4. **Land.** On approval: replace the `DRAFT` header with an approved status line, render into `design/art/refs/png/`, copy into `game/assets/`, wire it in, and run CI.
+
+The rules below (1-4) describe the original contractor-era flow. The palette and naming checks in rule 4 still apply; the contractor batch mechanics do not.
+
 1. **Reference pass first.** The 10 reference images in `04-art-handoff-prompts.md` §"Reference Image Set" must ship before any §1 asset begins. Matt is the sole approver. Two-round limit: round 1 = first delivery, round 2 = revisions per Matt's notes. If round 2 fails, the bible is amended and the contractor restarts from a new reference brief.
 2. **Bulk gen in batches of 20.** Each batch is reviewed against the approved reference set. Reject rate >25% triggers a style-bible review meeting before the next batch.
 3. **Per-asset feedback** is given inline in a shared sheet (one row per asset, columns: ID, status, notes, revision count). Three revisions max per asset; further iteration kicks the asset back to the bible-amend path.
@@ -173,7 +182,7 @@ Refs landed against the bible. Source `.jsx` lives at `design/art/refs/ref-NN-<s
 | 01 | Player character | 32×32 | ref-01-player.jsx | (bible §Reference set) | `sprites/player/player_idle_0.png` |
 | 02 | Ferris guide | 32×32 | ref-02-ferris.jsx | (bible §Reference set) | `sprites/npc/ferris_idle_0.png` |
 | 03 | Borrow Checker NPC | 64×64 | ref-03-borrow-checker.jsx | (bible §Reference set) | `sprites/npc/borrow_checker_idle_0.png` |
-| 04 | Hearthstone Village tiles | 16×16 ×16 | ref-04-tiles-village.jsx | (bible §Reference set) | `sprites/tiles_village.png` |
+| 04 | Hearthstone Village tiles | 16×16 ×16 | ref-04-tiles-village.jsx | (bible §Reference set) | `sprites/tiles_village.png` (superseded by REF-66; file kept, unused) |
 | 05 | Trait Mage's Tower tiles | 16×16 ×16 | ref-05-tiles-tower.jsx | (bible §Reference set) | (Act 4, not yet loaded) |
 | 06 | Code editor frame | 640×360 | ref-06-editor.jsx | (bible §Reference set) | (egui, not bevy sprite) |
 | 07 | Goblin enemy | 32×32 | ref-07-goblin.jsx | (bible §Reference set) | (Act 1 enemy, not yet loaded) |
@@ -235,6 +244,17 @@ Refs landed against the bible. Source `.jsx` lives at `design/art/refs/ref-NN-<s
 | 63 | The Swapwarden | 32×32 | ref-63-swapwarden.jsx | specs/swapwarden.md | `sprites/npc/swapwarden_idle_0.png` |
 | 64 | The Strongbox | 32×32 | ref-64-strongbox.jsx | specs/strongbox.md | `sprites/npc/strongbox_idle_0.png` |
 | 65 | The Ghostkeeper | 32×32 | ref-65-ghostkeeper.jsx | specs/ghostkeeper.md | `sprites/npc/ghostkeeper_idle_0.png` |
+| 66 | Hearthstone Village terrain v2 | 16×16 ×22 (8-col atlas, 128×48) | ref-66-terrain.jsx | (header) | `sprites/tiles_village_v2.png` (replaces REF-04 in the world) |
+| 67 | Village oak (prop sprite) | 32×48 | ref-67-oak.jsx | (header) | `sprites/props/oak.png` |
+| 68 | Hearthstone cottage (prop sprite) | 64×64 | ref-68-cottage.jsx | (header) | `sprites/props/cottage.png` |
+| 69 | Costume kit, Act 3 Guildhall (Guildmaster) | 32×32 | ref-69-guildkit.jsx | (header) | (kit exemplar, not wired) |
+| 70 | Costume kit, Act 4 Tower (Conjurer) | 32×32 | ref-70-towerkit.jsx | (header) | (kit exemplar, not wired) |
+| 71 | Costume kit, Act 5 Tavern (Barkeep) | 32×32 | ref-71-tavernkit.jsx | (header) | (kit exemplar, not wired) |
+| 72 | Costume kit, Act 6 Forge (Smelter) | 32×32 | ref-72-forgekit.jsx | (header) | (kit exemplar, not wired) |
+| 73 | Costume kit, Act 7 Coast (Dockmaster) | 32×32 | ref-73-coastkit.jsx | (header) | (kit exemplar, not wired) |
+| 74 | Costume kit, Act 8 Vault (Warden) | 32×32 | ref-74-vaultkit.jsx | (header) | (kit exemplar, not wired) |
+
+Props (REF-67, REF-68) are sprites, not tiles: y-sorted, anchored bottom-centre. Terrain (REF-66) uses an opaque base layer plus a transparent grass-edge overlay layer.
 
 **NPC batches landed:**
 - Batch 1 (2026-05-02) — REF-11..15: Smith, Cartographer, Trait Mage, Bellringer, Cooper. Specs in `design/art/specs/`. Replaces SPRITE_PLAYER placeholders for the corresponding entries in `NPC_ROSTER`.
@@ -248,7 +268,13 @@ Refs landed against the bible. Source `.jsx` lives at `design/art/refs/ref-NN-<s
 - Batch 9 (2026-06-18) — REF-54..59: Dockmaster, Lighthouse Keeper, Signaler, Tidewatch, Harbormaster, Tideforecaster. The Act 7 Concurrent Coast cast (missions `thread_spawn`/`arc_mutex`/`mpsc_channel`/`atomic`/`thread_scope`/`async_fn`). Maritime folk — teal/cobalt sea accents encouraged (the one zone where the cool ramp is on-theme), no magic violet. First-pass. Pending art review.
 - Batch 10 (2026-06-19) — REF-60..65: Vaultwright, Sharekeeper, Warden, Swapwarden, Strongbox, Ghostkeeper. The Act 8 Vault of Pointers cast (missions `box_basic`/`rc_basic`/`refcell`/`cell`/`rc_refcell`/`weak_ref`). Vault/treasury folk — gold-ramp chests/locks/keys; the Ghostkeeper (weak ref) uses a faded/cobalt translucent treatment to read as non-owning. First-pass. Pending art review.
 
-**Remaining placeholders:** none — all 57 NPCs (Acts 1–8 cast) carry distinct art. See `game/src/plugins/npc.rs` for live truth.
+**Tranches (canvas flow):**
+- Tranche 1 (approved by Matt 2026-11-13) — REF-66 terrain v2, REF-67 oak, REF-68 cottage, REF-69..74 costume-kit exemplars for Acts 3-8. REF-66/67/68 are wired into the game. REF-69..74 are approved kits only and are not wired to any NPC.
+- Tranche 2 (planned) — redraw the 40 Act 3-8 villagers on the REF-69..74 kits.
+
+**Remaining placeholders:** no `SPRITE_PLAYER` placeholders remain; all 57 NPCs (Acts 1-8) carry distinct art. That art is not final: the 40 Act 3-8 villagers still use their first-pass sprites (batches 5-10) until tranche 2 redraws them. See `game/src/plugins/npc.rs` for live truth.
+
+**Owner action, due before 2026-12-14:** six of the "rough nine" NPC conversions (REF-29 Alchemist, REF-32 Locksmith, REF-33 Porter, REF-35 Armorer, REF-40 Lanternkeeper, REF-41 Loremaster) depend on an approved artboard in the old claude.ai/design project. Matt must export that artboard before standalone claude.ai/design closes.
 
 ## 10. Revision history
 
@@ -256,3 +282,4 @@ Refs landed against the bible. Source `.jsx` lives at `design/art/refs/ref-NN-<s
 - **1.1 (2026-05-02)** — added §9 Rendered REF manifest; logged NPC batch 1 (Smith, Cartographer, Trait Mage, Bellringer, Cooper).
 - **1.2 (2026-05-02)** — logged NPC batch 2 (Oracle, Herald, Twin, Tinker, Heraldic Sage). 5 of 9 P2 placeholders remain.
 - **1.3 (2026-05-02)** — logged NPC batch 3 (Forgewright, Linguist, Pilgrim, Drillmaster, Reckoner). 4 of 9 Act-2 P2 placeholders remain.
+- **1.4 (2026-11-14)** — §5 rewritten for the canvas flow (Fable drafts, Matt approves on the design canvas, render-refs preview to scratch). §9: added REF-66..74 and the tranche 1 log; corrected the placeholder line (Acts 3-8 await the kit redraw); logged the pre-2026-12-14 artboard export as an owner action.

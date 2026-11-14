@@ -24,7 +24,7 @@ pub const SPRITE_PROP_OAK: &str = "sprites/props/oak.png";
 pub const SPRITE_PROP_COTTAGE: &str = "sprites/props/cottage.png";
 
 // NPC batch 1 (2026-05-02) — Smith, Cartographer, Trait Mage, Bellringer, Cooper.
-// Sources: design/art/refs/ref-11..15-*.jsx, rendered via scripts/render-refs.py.
+// Sources: design/art/refs/ref-11..15-*.jsx, originally rendered by a since-removed Python helper; now rendered via `cargo run -p render-refs`.
 pub const SPRITE_SMITH: &str = "sprites/npc/smith_idle_0.png";
 pub const SPRITE_CARTOGRAPHER: &str = "sprites/npc/cartographer_idle_0.png";
 pub const SPRITE_TRAIT_MAGE: &str = "sprites/npc/trait_mage_idle_0.png";
@@ -32,7 +32,7 @@ pub const SPRITE_BELLRINGER: &str = "sprites/npc/bellringer_idle_0.png";
 pub const SPRITE_COOPER: &str = "sprites/npc/cooper_idle_0.png";
 
 // NPC batch 2 (2026-05-02) — Oracle, Herald, Twin, Tinker, Heraldic Sage.
-// Sources: design/art/refs/ref-16..20-*.jsx, rendered via scripts/render-refs.py.
+// Sources: design/art/refs/ref-16..20-*.jsx, originally rendered by a since-removed Python helper; now rendered via `cargo run -p render-refs`.
 pub const SPRITE_ORACLE: &str = "sprites/npc/oracle_idle_0.png";
 pub const SPRITE_HERALD: &str = "sprites/npc/herald_idle_0.png";
 pub const SPRITE_TWIN: &str = "sprites/npc/twin_idle_0.png";

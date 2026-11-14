@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-66 - Hearthstone Village terrain v2, 16x16 tiles, 8-column atlas.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-13 (tranche 1); wired as sprites/tiles_village_v2.png.
 //
 // Replaces the REF-04 ground tiles. Fixes: cobble was per-pixel noise (read as
 // TV static at 3x), the dirt tile had grass baked into both sides (2-wide roads

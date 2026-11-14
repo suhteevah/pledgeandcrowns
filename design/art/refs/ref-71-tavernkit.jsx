@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-71 - Costume kit exemplar, Act 5 Tavern of Tribulations (Barkeep), 32x32.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-13 (tranche 1) as a kit exemplar. NOT wired to any NPC; tranche 2 redraws this Act's cast on it.
 //
 // Kit rule for the Tavern cast: shirtsleeves in parchment cream, a bronze
 // apron, bare forearms, no robe. Silhouette = stout and wide, bald or capped.

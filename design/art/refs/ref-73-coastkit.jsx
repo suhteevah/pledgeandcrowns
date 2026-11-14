@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-73 - Costume kit exemplar, Act 7 Concurrent Coast (Dockmaster), 32x32.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-13 (tranche 1) as a kit exemplar. NOT wired to any NPC; tranche 2 redraws this Act's cast on it.
 //
 // Kit rule for the Coast cast: teal knit cap, hayfield scarf, hip-length cobalt
 // peacoat with gold buttons, basalt trousers. Silhouette = cap + boxy coat,

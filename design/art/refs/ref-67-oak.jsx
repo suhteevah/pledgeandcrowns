@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-67 - Village oak, 32x48 prop sprite, transparent bg.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-13 (tranche 1); wired as sprites/props/oak.png.
 //
 // A PROP SPRITE, not a tile: spawn as a y-sorted Sprite so the player walks
 // behind the canopy. Anchor bottom-centre at the trunk base. Replaces the
