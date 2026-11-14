@@ -21,9 +21,13 @@ use crate::plugins::editor::EditorState;
 use crate::plugins::mission::{CompletionView, EpilogueView, MissionRegistry};
 use crate::plugins::progress::{MissionProgress, SaveRequest, SettingKind, Settings};
 use crate::plugins::state::{EscAction, EscContext, GameState, PauseState, esc_action};
+use crate::plugins::ui_theme;
 
 /// How far one Left/Right press moves a volume slider.
 pub const SLIDER_STEP: u8 = 5;
+/// Settings grid: label column (a menu row) and value column widths.
+const SETTINGS_LABEL_WIDTH: f32 = 170.0;
+const SETTINGS_VALUE_WIDTH: f32 = 48.0;
 
 /// Which screen of the current menu (title or pause) is showing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -131,15 +135,8 @@ pub fn menu_list(
     *selected = step_selection(*selected, labels.len(), nav.vertical);
     let mut activated = None;
     for (i, label) in labels.iter().enumerate() {
-        let text = if i == *selected {
-            format!("> {label} <")
-        } else {
-            (*label).to_string()
-        };
-        let resp = ui.add_sized(
-            [220.0, 28.0],
-            egui::Button::selectable(i == *selected, egui::RichText::new(text).size(18.0)),
-        );
+        // Selection is the Oxblood bar + gold markers (ui_theme), not text.
+        let resp = ui_theme::menu_item(ui, label, i == *selected, ui_theme::MENU_ITEM_WIDTH);
         if resp.hovered() {
             *selected = i;
         }
@@ -178,43 +175,76 @@ pub fn settings_panel(
     let back_idx = rows - 1;
     menu.selected = step_selection(menu.selected, rows, nav.vertical);
     let mut edited = current;
-    ui.heading("Settings");
-    ui.separator();
-    for (i, kind) in SettingKind::ALL.into_iter().enumerate() {
-        let mut value = edited.get(kind);
-        if i == menu.selected && nav.horizontal != 0 {
-            value = nudge_volume(value, nav.horizontal);
-        }
-        let marker = if i == menu.selected { ">" } else { " " };
-        let resp = ui
-            .horizontal(|ui| {
-                ui.label(format!("{marker} {}", kind.label()));
-                ui.add(egui::Slider::new(&mut value, 0..=Settings::VOLUME_MAX).suffix("%"))
-            })
-            .inner;
-        if resp.hovered() || resp.dragged() {
-            menu.selected = i;
-        }
-        if resp.has_focus() {
-            resp.surrender_focus();
-        }
-        if value != edited.get(kind) {
-            tracing::debug!(
-                ?kind,
-                from = edited.get(kind),
-                to = value,
-                "setting changed"
-            );
-            edited.set(kind, value);
-        }
-    }
-    ui.separator();
+    ui.vertical_centered(|ui| {
+        ui_theme::heading(ui, "Settings");
+    });
+    ui_theme::rule(ui);
+    // Three aligned columns: label (a menu row, so the highlight reads the
+    // same as every other menu), slider, value.
+    egui::Grid::new("settings_grid")
+        .num_columns(3)
+        .spacing([12.0, 8.0])
+        .min_row_height(ui_theme::MENU_ITEM_HEIGHT)
+        .show(ui, |ui| {
+            for (i, kind) in SettingKind::ALL.into_iter().enumerate() {
+                let mut value = edited.get(kind);
+                if i == menu.selected && nav.horizontal != 0 {
+                    value = nudge_volume(value, nav.horizontal);
+                }
+                let label =
+                    ui_theme::menu_item(ui, kind.label(), i == menu.selected, SETTINGS_LABEL_WIDTH);
+                let resp = ui
+                    .scope(|ui| {
+                        // Filled part of the rail in the anchor mid-tone.
+                        ui.visuals_mut().selection.bg_fill = ui_theme::WINEFLESH;
+                        ui.add(
+                            egui::Slider::new(&mut value, 0..=Settings::VOLUME_MAX)
+                                .show_value(false),
+                        )
+                    })
+                    .inner;
+                ui.add_sized(
+                    [SETTINGS_VALUE_WIDTH, ui_theme::MENU_ITEM_HEIGHT],
+                    egui::Label::new(
+                        egui::RichText::new(format!("{value}%"))
+                            .size(ui_theme::BODY_SIZE)
+                            .color(ui_theme::TEXT),
+                    ),
+                );
+                ui.end_row();
+                if label.hovered() || resp.hovered() || resp.dragged() {
+                    menu.selected = i;
+                }
+                if resp.has_focus() {
+                    resp.surrender_focus();
+                }
+                if value != edited.get(kind) {
+                    tracing::debug!(
+                        ?kind,
+                        from = edited.get(kind),
+                        to = value,
+                        "setting changed"
+                    );
+                    edited.set(kind, value);
+                }
+            }
+        });
+    ui_theme::rule(ui);
     let back_selected = menu.selected == back_idx;
-    let label = if back_selected { "> Back <" } else { "Back" };
-    let resp = ui.add_sized(
-        [220.0, 28.0],
-        egui::Button::selectable(back_selected, egui::RichText::new(label).size(18.0)),
-    );
+    let resp = ui
+        .vertical_centered(|ui| {
+            let resp = ui_theme::menu_item(ui, "Back", back_selected, ui_theme::MENU_ITEM_WIDTH);
+            ui_theme::key_hint(
+                ui,
+                &[
+                    ("Up/Down", "choose"),
+                    ("Left/Right", "adjust"),
+                    ("Esc", "back"),
+                ],
+            );
+            resp
+        })
+        .inner;
     if resp.hovered() {
         menu.selected = back_idx;
     }
@@ -351,12 +381,14 @@ fn draw_pause_menu(
         return;
     };
     let nav = read_nav(ctx);
-    egui::Window::new("pause_menu")
-        .title_bar(false)
-        .resizable(false)
-        .collapsible(false)
-        .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
-        .show(ctx, |ui| match menu.screen {
+    ui_theme::panel_area(
+        "pause_menu",
+        egui::Align2::CENTER_CENTER,
+        egui::Vec2::ZERO,
+        egui::Order::Foreground,
+    )
+    .show(ctx, |ui| {
+        ui_theme::framed_panel(ui, |ui| match menu.screen {
             MenuScreen::Settings => {
                 let (outcome, edited) = settings_panel(ui, *settings, &mut menu, nav);
                 if edited != *settings {
@@ -369,9 +401,10 @@ fn draw_pause_menu(
             }
             // ConfirmNewGame is title-only; fall back to the main list.
             MenuScreen::Main | MenuScreen::ConfirmNewGame => {
+                ui.set_width(ui_theme::MENU_ITEM_WIDTH + 40.0);
                 ui.vertical_centered(|ui| {
-                    ui.heading("Paused");
-                    ui.separator();
+                    ui_theme::heading(ui, "Paused");
+                    ui_theme::rule(ui);
                     let labels: Vec<&str> = PauseItem::ALL.iter().map(|i| i.label()).collect();
                     let mut sel = menu.selected;
                     let activated = menu_list(ui, &labels, &mut sel, nav);
@@ -389,8 +422,9 @@ fn draw_pause_menu(
                         None => {}
                     }
                     ui.add_space(4.0);
-                    ui.small("[Esc] resume");
+                    ui_theme::key_hint(ui, &[("Enter", "choose"), ("Esc", "resume")]);
                 });
             }
         });
+    });
 }

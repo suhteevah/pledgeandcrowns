@@ -235,6 +235,29 @@ fn title_scenes(v: &mut Vec<Scene>) {
         0.8,
         boxed(fresh_progress),
     ));
+    // New Game over a save: the confirmation screen.
+    v.push(scene(
+        "title-confirm",
+        vec![act(|w| {
+            clear_missions(w, CONTINUE_CLEARED);
+            w.resource_mut::<MenuUi>().open(MenuScreen::ConfirmNewGame);
+        })],
+        0.6,
+        boxed(|w| {
+            w.resource_mut::<MenuUi>().open(MenuScreen::Main);
+            fresh_progress(w);
+        }),
+    ));
+    v.push(scene(
+        "title-settings",
+        vec![act(|w| {
+            w.resource_mut::<MenuUi>().open(MenuScreen::Settings);
+        })],
+        0.6,
+        boxed(|w| {
+            w.resource_mut::<MenuUi>().open(MenuScreen::Main);
+        }),
+    ));
 }
 
 fn world_scenes(v: &mut Vec<Scene>) {
@@ -533,5 +556,52 @@ fn overlay_scenes(v: &mut Vec<Scene>) {
             w.resource_mut::<NextState<PauseState>>()
                 .set(PauseState::Running);
         }),
+    ));
+    // NPC prompt panel with the mission brief (an opened, uncleared
+    // mission), plus the "next:" HUD pin.
+    v.push(scene(
+        "prompt",
+        vec![
+            enter(),
+            act(|w| {
+                fresh_progress(w);
+                let mission = w.resource::<MissionRegistry>().find(FIRST_MISSION).cloned();
+                w.resource_mut::<ActiveMission>().current = mission;
+            }),
+            beside_npc(FIRST_MISSION),
+            Action::Wait(0.3),
+        ],
+        0.4,
+        boxed(|w| {
+            w.resource_mut::<ActiveMission>().current = None;
+        }),
+    ));
+    // Every mission in this build cleared: the epilogue (full game) or the
+    // end-of-demo panel (`demo` feature).
+    let end_name = if cfg!(feature = "demo") {
+        "demo-end"
+    } else {
+        "epilogue"
+    };
+    v.push(scene(
+        end_name,
+        vec![
+            enter(),
+            act(|w| {
+                fresh_progress(w);
+                let ids: Vec<&'static str> = w
+                    .resource::<MissionRegistry>()
+                    .missions
+                    .iter()
+                    .filter(|m| m.available)
+                    .map(|m| m.id)
+                    .collect();
+                clear_missions(w, &ids);
+            }),
+            teleport_to(Vec2::new(0.0, -470.0)),
+            Action::Wait(0.2),
+        ],
+        0.4,
+        boxed(fresh_progress),
     ));
 }

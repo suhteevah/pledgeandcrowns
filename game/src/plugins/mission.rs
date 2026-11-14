@@ -11,7 +11,8 @@
 use crate::plugins::editor::EditorState;
 use crate::plugins::npc::NearbyNpc;
 use crate::plugins::progress::MissionProgress;
-use crate::plugins::state::GameState;
+use crate::plugins::state::{GameState, PauseState};
+use crate::plugins::ui_theme;
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, EguiPrimaryContextPass, egui};
 
@@ -1613,6 +1614,7 @@ impl Plugin for MissionPlugin {
                 EguiPrimaryContextPass,
                 (
                     draw_interaction_prompt,
+                    draw_next_pin,
                     draw_completion_panel,
                     draw_epilogue_panel,
                 )
@@ -1810,6 +1812,7 @@ fn dismiss_epilogue_on_escape(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw_interaction_prompt(
     mut contexts: EguiContexts,
     nearby: Res<NearbyNpc>,
@@ -1818,10 +1821,11 @@ fn draw_interaction_prompt(
     progress: Res<MissionProgress>,
     completion: Res<CompletionView>,
     registry: Res<MissionRegistry>,
+    dialogue: Option<Res<crate::plugins::dialogue::Dialogue>>,
 ) {
-    // Don't double up — the completion panel and editor each own the
-    // screen real estate for their own flows.
-    if editor.open || completion.mission_id.is_some() {
+    // Don't double up — the completion panel, editor and dialogue box
+    // each own the screen real estate for their own flows.
+    if editor.open || completion.mission_id.is_some() || dialogue.is_some_and(|d| d.is_open()) {
         return;
     }
     let Some(entry) = nearby.current.as_ref() else {
@@ -1840,39 +1844,147 @@ fn draw_interaction_prompt(
         .and_then(|pid| registry.find(pid))
         .map(|m| m.npc_name);
 
-    egui::Window::new("interact")
-        .title_bar(false)
-        .resizable(false)
-        .anchor(egui::Align2::CENTER_BOTTOM, egui::Vec2::new(0.0, -24.0))
-        .show(ctx, |ui| {
-            if !available {
-                ui.label(format!("[full game] {} waits beyond the demo", entry.name));
-            } else if cleared {
-                ui.label(format!("[done] [F] talk to {}", entry.name));
-            } else if !unlocked {
-                let hint = prereq_npc_name.unwrap_or("the previous mission");
-                ui.label(format!("[locked — clear {hint} first]"));
-            } else {
-                ui.label(format!("[F] talk to {}", entry.name));
-            }
-            if let Some(m) = active.current.as_ref().filter(|m| m.id == entry.mission_id) {
-                ui.small(m.prompt);
-            }
-            ui.small(format!("missions cleared: {}", progress.cleared_count()));
-        });
-
-    // Persistent "next mission" HUD pin — visible regardless of which
-    // NPC the player is standing next to, so they always know where to
-    // head if they wander off the path.
-    if let Some(next) = registry.next_locked(&progress) {
-        egui::Window::new("next_mission")
-            .title_bar(false)
-            .resizable(false)
-            .anchor(egui::Align2::LEFT_TOP, egui::Vec2::new(8.0, 8.0))
-            .show(ctx, |ui| {
-                ui.small(format!("next: {} · find {}", next.id, next.npc_name));
+    let body = egui::FontId::proportional(ui_theme::BODY_SIZE);
+    ui_theme::panel_area(
+        "interact",
+        egui::Align2::CENTER_BOTTOM,
+        egui::Vec2::new(0.0, -24.0),
+        egui::Order::Middle,
+    )
+    .show(ctx, |ui| {
+        ui_theme::framed_panel(ui, |ui| {
+            ui.set_max_width(PROMPT_MAX_WIDTH);
+            ui.horizontal(|ui| {
+                let (status, line) = if !available {
+                    (
+                        ui_theme::Status::Locked,
+                        format!("{} waits beyond the demo (full game)", entry.name),
+                    )
+                } else if cleared {
+                    (ui_theme::Status::Cleared, format!("talk to {}", entry.name))
+                } else if !unlocked {
+                    let hint = prereq_npc_name.unwrap_or("the previous mission");
+                    (
+                        ui_theme::Status::Locked,
+                        format!("locked: clear {hint} first"),
+                    )
+                } else {
+                    (ui_theme::Status::Next, format!("talk to {}", entry.name))
+                };
+                ui_theme::status_mark(ui, status, ui_theme::BODY_SIZE);
+                if available && (cleared || unlocked) {
+                    ui.label(
+                        egui::RichText::new("[F]")
+                            .font(body.clone())
+                            .color(ui_theme::OXBLOOD)
+                            .strong(),
+                    );
+                }
+                ui.label(
+                    egui::RichText::new(line)
+                        .font(body.clone())
+                        .color(ui_theme::TEXT),
+                );
             });
+            if let Some(m) = active.current.as_ref().filter(|m| m.id == entry.mission_id) {
+                ui_theme::markdown::show_inline(ui, m.prompt, ui_theme::BODY_SIZE);
+            }
+            ui_theme::caption(
+                ui,
+                format!("missions cleared: {}", progress.cleared_count()),
+            );
+        });
+    });
+}
+
+/// Widest the NPC prompt panel grows before wrapping.
+const PROMPT_MAX_WIDTH: f32 = 520.0;
+
+/// When the "next mission" HUD pin shows: always while walking around in
+/// game, hidden while anything that owns the screen is open (pause menu,
+/// editor, dialogue, recap). A new player needs the pointer most when
+/// they have wandered away from every NPC, which is exactly when the old
+/// "only near an NPC" behaviour hid it.
+pub fn next_pin_visible(
+    paused: bool,
+    editor_open: bool,
+    dialogue_open: bool,
+    recap_open: bool,
+) -> bool {
+    !(paused || editor_open || dialogue_open || recap_open)
+}
+
+/// Persistent "next mission" HUD pin, top-left. Visibility rule:
+/// [`next_pin_visible`]. Disappears once every mission in the build is
+/// cleared (the epilogue / end-of-demo panel takes over).
+#[allow(clippy::too_many_arguments)]
+fn draw_next_pin(
+    mut contexts: EguiContexts,
+    pause: Option<Res<State<PauseState>>>,
+    editor: Res<EditorState>,
+    dialogue: Option<Res<crate::plugins::dialogue::Dialogue>>,
+    completion: Res<CompletionView>,
+    progress: Res<MissionProgress>,
+    registry: Res<MissionRegistry>,
+) {
+    let visible = next_pin_visible(
+        pause.is_some_and(|p| *p.get() == PauseState::Paused),
+        editor.open,
+        dialogue.is_some_and(|d| d.is_open()),
+        completion.mission_id.is_some(),
+    );
+    if !visible {
+        return;
     }
+    let Some(next) = registry.next_locked(&progress) else {
+        return;
+    };
+    let Ok(ctx) = contexts.ctx_mut() else {
+        return;
+    };
+    ui_theme::panel_area(
+        "next_mission",
+        egui::Align2::LEFT_TOP,
+        egui::Vec2::new(10.0, 10.0),
+        egui::Order::Middle,
+    )
+    .show(ctx, |ui| {
+        ui_theme::framed_panel(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui_theme::status_mark(ui, ui_theme::Status::Next, ui_theme::BODY_SIZE);
+                ui.label(
+                    egui::RichText::new("Next:")
+                        .size(ui_theme::BODY_SIZE)
+                        .color(ui_theme::OXBLOOD)
+                        .strong(),
+                );
+                ui.label(
+                    egui::RichText::new(format!("find {}", next.npc_name))
+                        .size(ui_theme::BODY_SIZE)
+                        .color(ui_theme::TEXT),
+                );
+            });
+            ui_theme::caption(ui, format!("encounter: {}", next.id));
+        });
+    });
+}
+
+/// A centred modal panel: framed, at least `min_width` wide.
+fn modal_panel(ctx: &egui::Context, id: &str, min_width: f32, add: impl FnOnce(&mut egui::Ui)) {
+    let max_width = (ctx.content_rect().width() - 48.0).max(min_width);
+    ui_theme::panel_area(
+        id,
+        egui::Align2::CENTER_CENTER,
+        egui::Vec2::ZERO,
+        egui::Order::Foreground,
+    )
+    .show(ctx, |ui| {
+        ui_theme::framed_panel(ui, |ui| {
+            ui.set_min_width(min_width);
+            ui.set_max_width(max_width.min(min_width.max(560.0)));
+            add(ui);
+        });
+    });
 }
 
 fn draw_completion_panel(
@@ -1890,26 +2002,23 @@ fn draw_completion_panel(
         return;
     };
 
-    egui::Window::new("mission complete")
-        .title_bar(false)
-        .resizable(false)
-        .collapsible(false)
-        .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
-        .min_width(420.0)
-        .show(ctx, |ui| {
-            ui.heading(format!("✓ {}", mission.npc_name));
-            ui.small(format!("encounter: {}", mission.id));
-            ui.separator();
-            ui.label(mission.prompt);
-            ui.separator();
-            // Show the Concept section of the tutorial as a recap. It's
-            // the section players most often want to re-read; the others
-            // (Syntax/Task/Hint) are revealed again when they reopen the
-            // editor.
-            ui.small(extract_section(mission.tutorial, "## Concept"));
-            ui.separator();
-            ui.label("[F] revisit  ·  [Esc] close");
+    modal_panel(ctx, "mission complete", 520.0, |ui| {
+        ui.horizontal(|ui| {
+            ui_theme::status_mark(ui, ui_theme::Status::Cleared, ui_theme::HEADING_SIZE);
+            ui_theme::heading(ui, mission.npc_name);
         });
+        ui_theme::caption(ui, format!("encounter cleared: {}", mission.id));
+        ui_theme::rule(ui);
+        ui_theme::markdown::show_inline(ui, mission.prompt, ui_theme::BODY_SIZE);
+        ui_theme::rule(ui);
+        // Show the Concept section of the tutorial as a recap. It's
+        // the section players most often want to re-read; the others
+        // (Syntax/Task/Hint) are revealed again when they reopen the
+        // editor.
+        ui_theme::markdown::show(ui, &extract_section(mission.tutorial, "## Concept"));
+        ui_theme::rule(ui);
+        ui_theme::key_hint(ui, &[("F", "revisit"), ("Esc", "close")]);
+    });
 }
 
 /// Win-condition epilogue. Auto-shows when the player has cleared every
@@ -1939,34 +2048,32 @@ fn draw_epilogue_panel(
         return;
     };
 
-    egui::Window::new("epilogue")
-        .title_bar(false)
-        .resizable(false)
-        .collapsible(false)
-        .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
-        .min_width(520.0)
-        .show(ctx, |ui| {
-            ui.heading("The realm pledges its crown.");
-            ui.separator();
-            ui.label(
-                "You have walked every road of the village and answered every \
-                 sworn question. The compiler bows. The Borrow Checker stands \
-                 down. The banners come in.",
-            );
-            ui.add_space(6.0);
+    modal_panel(ctx, "epilogue", 520.0, |ui| {
+        ui_theme::heading(ui, "The realm pledges its crown.");
+        ui_theme::rule(ui);
+        ui.label(
+            "You have walked every road of the village and answered every \
+             sworn question. The compiler bows. The Borrow Checker stands \
+             down. The banners come in.",
+        );
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            ui_theme::status_mark(ui, ui_theme::Status::Cleared, ui_theme::BODY_SIZE);
             ui.label(format!(
                 "{} of {} encounters cleared.",
                 progress.cleared_count(),
                 registry.missions.len()
             ));
-            ui.add_space(6.0);
-            ui.small(
-                "More acts are being forged. For now: revisit any NPC with [F] \
-                 to re-read a lesson, or wander the village.",
-            );
-            ui.separator();
-            ui.label("[Esc] close");
         });
+        ui.add_space(6.0);
+        ui_theme::caption(
+            ui,
+            "More acts are being forged. For now: revisit any NPC with [F] \
+             to re-read a lesson, or wander the village.",
+        );
+        ui_theme::rule(ui);
+        ui_theme::key_hint(ui, &[("Esc", "close")]);
+    });
 }
 
 /// What the full game adds after the demo, one line per act. Only acts
@@ -2070,31 +2177,35 @@ fn draw_demo_end_panel(
     let free = registry.missions.iter().filter(|m| m.available).count();
     let more = registry.missions.len() - free;
 
-    egui::Window::new("demo end")
-        .title_bar(false)
-        .resizable(false)
-        .collapsible(false)
-        .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
-        .min_width(520.0)
-        .show(ctx, |ui| {
-            ui.heading("The demo ends here.");
-            ui.separator();
-            ui.label(format!(
-                "You have cleared all {free} encounters of Acts 1 and 2. The road out \
-                 of the village continues in the full game."
-            ));
-            ui.add_space(6.0);
-            ui.label(format!(
-                "The full game has {more} more encounters across Acts 3 to 8:"
-            ));
-            for (act, topics) in FULL_GAME_ACTS {
-                ui.small(format!("{act}: {topics}"));
-            }
-            ui.add_space(6.0);
-            ui.small("Revisit any NPC with [F] to re-read a lesson, or wander the village.");
-            ui.separator();
-            ui.label("[Esc] close");
-        });
+    modal_panel(ctx, "demo end", 560.0, |ui| {
+        ui_theme::heading(ui, "The demo ends here.");
+        ui_theme::rule(ui);
+        ui.label(format!(
+            "You have cleared all {free} encounters of Acts 1 and 2. The road out \
+             of the village continues in the full game."
+        ));
+        ui.add_space(6.0);
+        ui.label(format!(
+            "The full game has {more} more encounters across Acts 3 to 8:"
+        ));
+        ui.add_space(2.0);
+        for (act, topics) in FULL_GAME_ACTS {
+            ui.label(
+                egui::RichText::new(*act)
+                    .size(ui_theme::BODY_SIZE)
+                    .color(ui_theme::OXBLOOD)
+                    .strong(),
+            );
+            ui_theme::caption(ui, *topics);
+        }
+        ui.add_space(6.0);
+        ui_theme::caption(
+            ui,
+            "Revisit any NPC with [F] to re-read a lesson, or wander the village.",
+        );
+        ui_theme::rule(ui);
+        ui_theme::key_hint(ui, &[("Esc", "close")]);
+    });
 }
 
 /// Pull the body of a `## Heading` section out of a tutorial string —
@@ -2116,6 +2227,15 @@ fn extract_section(tutorial: &str, heading: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn next_pin_shows_while_walking_and_hides_under_screens() {
+        assert!(next_pin_visible(false, false, false, false));
+        assert!(!next_pin_visible(true, false, false, false));
+        assert!(!next_pin_visible(false, true, false, false));
+        assert!(!next_pin_visible(false, false, true, false));
+        assert!(!next_pin_visible(false, false, false, true));
+    }
 
     #[test]
     fn extract_section_pulls_only_the_named_section() {

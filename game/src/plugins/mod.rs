@@ -21,6 +21,7 @@ pub mod screenshot;
 pub mod state;
 pub mod stub_grader;
 pub mod title;
+pub mod ui_theme;
 pub mod world;
 
 /// Bootstrap plugin. Spawns the camera and mounts the day-6 subsystems
@@ -31,23 +32,25 @@ pub struct CorePlugin;
 impl Plugin for CorePlugin {
     fn build(&self, app: &mut App) {
         tracing::debug!("CorePlugin::build");
-        app.add_systems(Startup, setup_camera).add_plugins((
-            state::StatePlugin,
-            title::TitlePlugin,
-            progress::ProgressPlugin,
-            world::WorldPlugin,
-            prop::PropPlugin,
-            player::PlayerPlugin,
-            npc::NpcPlugin,
-            quest_marker::QuestMarkerPlugin,
-            screenshot::ShotPlugin,
-            editor::EditorPlugin,
-            menu::MenuPlugin,
-            dialogue::DialoguePlugin,
-            mission::MissionPlugin,
-            compile_client::CompileClientPlugin,
-            audio::GameAudioPlugin,
-        ));
+        app.add_systems(Startup, setup_camera)
+            .add_plugins(ui_theme::UiThemePlugin)
+            .add_plugins((
+                state::StatePlugin,
+                title::TitlePlugin,
+                progress::ProgressPlugin,
+                world::WorldPlugin,
+                prop::PropPlugin,
+                player::PlayerPlugin,
+                npc::NpcPlugin,
+                quest_marker::QuestMarkerPlugin,
+                screenshot::ShotPlugin,
+                editor::EditorPlugin,
+                menu::MenuPlugin,
+                dialogue::DialoguePlugin,
+                mission::MissionPlugin,
+                compile_client::CompileClientPlugin,
+                audio::GameAudioPlugin,
+            ));
     }
 }
 

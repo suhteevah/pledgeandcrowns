@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: MIT
-//! Title screen. REF-10 painted backdrop scaled to fill the window, with
-//! an egui menu: Continue / New Game / Settings / Quit.
+//! Title screen. REF-10 painted backdrop at the largest whole-number scale
+//! that fits the window, centred, on a backdrop of the art's own colours
+//! (Oxblood sky above the horizon, Inkblood below), with an egui menu:
+//! Continue / New Game / Settings / Quit.
+//!
+//! The menu panel sits over the lower third of the art. That band of the
+//! current title PNG is blank (a redraw is pending), so the panel covers
+//! it on purpose rather than floating over the painted scene.
 //!
 //! Space or Enter activates the highlighted item, and the highlight starts
 //! on the first entry — Continue when a save with progress exists, New
@@ -12,29 +18,36 @@
 //! so nothing here stands in its way.
 
 use crate::assets::SPRITE_TITLE;
+use crate::plugins::VIEW_HEIGHT;
 use crate::plugins::menu::{
     MenuScreen, MenuUi, SettingsOutcome, menu_list, read_nav, settings_panel,
 };
 use crate::plugins::mission::MissionRegistry;
 use crate::plugins::progress::{MissionProgress, SaveRequest, SavedPlayerPosition, Settings};
 use crate::plugins::state::GameState;
+use crate::plugins::ui_theme;
 use bevy::prelude::*;
+use bevy::window::PrimaryWindow;
 use bevy_egui::{EguiContexts, EguiPrimaryContextPass, egui};
 
-const TITLE_NATIVE_W: f32 = 640.0;
-const TITLE_NATIVE_H: f32 = 360.0;
-// Camera is FixedVertical at 180 world units; the title art is 360
-// pixels tall natively, so 0.5 maps it 1:1 to the visible area without
-// crop. (Was 2.0, which made the title 4x the viewport — only the
-// center parchment bg showed, which is why the wasm screen looked
-// "empty" until this was caught.)
-const TITLE_SCALE: f32 = 0.5;
+/// Native size of the title art in pixels.
+pub const TITLE_NATIVE_W: f32 = 640.0;
+pub const TITLE_NATIVE_H: f32 = 360.0;
+/// Edge length of each backdrop half, in world units: far larger than any
+/// view, so the letterbox is always covered.
+const BACKDROP_EXTENT: f32 = 100_000.0;
+/// Gap between the menu panel and the art's bottom edge, in points.
+const MENU_BOTTOM_GAP: f32 = 14.0;
 
 /// Quitting is a native-only concept; a browser tab has no "exit".
 const QUIT_AVAILABLE: bool = !cfg!(target_arch = "wasm32");
 
 #[derive(Component)]
 struct TitleArt;
+
+/// The art sprite itself (resized every frame to stay pixel-exact).
+#[derive(Component)]
+struct TitleArtImage;
 
 /// Title menu entries, in display order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,6 +84,26 @@ pub fn title_items(has_progress: bool, quit_available: bool) -> Vec<TitleItem> {
     items
 }
 
+/// Largest whole-number scale at which the 640x360 art fits a window of
+/// `phys_w` x `phys_h` physical pixels. Never below 1 (a tiny window
+/// crops instead of blurring).
+pub fn title_integer_scale(phys_w: f32, phys_h: f32) -> f32 {
+    (phys_w / TITLE_NATIVE_W)
+        .min(phys_h / TITLE_NATIVE_H)
+        .floor()
+        .max(1.0)
+}
+
+/// Sprite size in world units that shows the art at `scale` physical
+/// pixels per art pixel, given the camera's fixed vertical view.
+pub fn title_world_size(scale: f32, phys_h: f32, view_height: f32) -> Vec2 {
+    if phys_h <= 0.0 {
+        return Vec2::new(TITLE_NATIVE_W, TITLE_NATIVE_H);
+    }
+    let units_per_px = view_height / phys_h;
+    Vec2::new(TITLE_NATIVE_W, TITLE_NATIVE_H) * scale * units_per_px
+}
+
 /// Rows of the New Game confirmation. Cancel is first so a reflexive
 /// Enter never erases a save.
 const CONFIRM_ITEMS: [&str; 2] = ["Cancel", "Erase progress and start"];
@@ -82,6 +115,7 @@ impl Plugin for TitlePlugin {
         tracing::debug!("TitlePlugin::build");
         app.add_systems(OnEnter(GameState::Title), (center_camera, spawn_title_art))
             .add_systems(OnExit(GameState::Title), despawn_title_art)
+            .add_systems(Update, fit_title_art.run_if(in_state(GameState::Title)))
             .add_systems(
                 EguiPrimaryContextPass,
                 draw_title_menu.run_if(in_state(GameState::Title)),
@@ -89,9 +123,26 @@ impl Plugin for TitlePlugin {
     }
 }
 
+/// Art rectangle inset from the window edges, in egui points:
+/// (horizontal letterbox, vertical letterbox). Zero when the art fills
+/// the window (1280x720 at 2x, 1920x1080 at 3x).
+fn letterbox_points(window: Option<&Window>, pixels_per_point: f32) -> egui::Vec2 {
+    let Some(w) = window else {
+        return egui::Vec2::ZERO;
+    };
+    let (pw, ph) = (w.physical_width() as f32, w.physical_height() as f32);
+    let k = title_integer_scale(pw, ph);
+    let ppp = pixels_per_point.max(0.01);
+    egui::vec2(
+        ((pw - TITLE_NATIVE_W * k) * 0.5).max(0.0) / ppp,
+        ((ph - TITLE_NATIVE_H * k) * 0.5).max(0.0) / ppp,
+    )
+}
+
 #[allow(clippy::too_many_arguments)]
 fn draw_title_menu(
     mut contexts: EguiContexts,
+    windows: Query<&Window, With<PrimaryWindow>>,
     mut progress: ResMut<MissionProgress>,
     mut saved_pos: ResMut<SavedPlayerPosition>,
     mut settings: ResMut<Settings>,
@@ -108,27 +159,28 @@ fn draw_title_menu(
     let cleared = progress.cleared_count();
     let total = registry.missions.len();
     let has_progress = cleared > 0 || saved_pos.0.is_some();
+    let inset = letterbox_points(windows.single().ok(), ctx.pixels_per_point());
 
-    egui::Window::new("title_menu")
-        .title_bar(false)
-        .resizable(false)
-        .collapsible(false)
-        .anchor(egui::Align2::CENTER_BOTTOM, egui::Vec2::new(0.0, -32.0))
-        .show(ctx, |ui| match menu.screen {
+    ui_theme::panel_area(
+        "title_menu",
+        egui::Align2::CENTER_BOTTOM,
+        egui::vec2(0.0, -(inset.y + MENU_BOTTOM_GAP)),
+        egui::Order::Foreground,
+    )
+    .show(ctx, |ui| {
+        ui_theme::framed_panel(ui, |ui| match menu.screen {
             MenuScreen::Main => {
+                ui.set_width(ui_theme::MENU_ITEM_WIDTH + 60.0);
                 ui.vertical_centered(|ui| {
-                    if cleared == 0 {
-                        ui.small("a Rust kingdom awaits its pledge");
+                    let tagline = if cleared == 0 {
+                        "a Rust kingdom awaits its pledge".to_string()
                     } else if cleared < total {
-                        ui.small(format!(
-                            "your pledge so far: {cleared} / {total} encounters cleared"
-                        ));
+                        format!("your pledge so far: {cleared} / {total} encounters cleared")
                     } else {
-                        ui.small(format!(
-                            "the realm has crowned you - {cleared} / {total} cleared"
-                        ));
-                    }
-                    ui.separator();
+                        format!("the realm has crowned you - {cleared} / {total} cleared")
+                    };
+                    ui_theme::caption(ui, tagline);
+                    ui_theme::rule(ui);
                     let items = title_items(has_progress, QUIT_AVAILABLE);
                     let labels: Vec<&str> = items.iter().map(|i| i.label()).collect();
                     let mut sel = menu.selected;
@@ -157,12 +209,13 @@ fn draw_title_menu(
                 });
             }
             MenuScreen::ConfirmNewGame => {
+                ui.set_width(ui_theme::MENU_ITEM_WIDTH + 140.0);
                 ui.vertical_centered(|ui| {
-                    ui.heading("Start a new game?");
+                    ui_theme::heading(ui, "Start a new game?");
                     ui.label(format!(
                         "This erases your saved progress ({cleared} / {total} encounters cleared)."
                     ));
-                    ui.separator();
+                    ui_theme::rule(ui);
                     let mut sel = menu.selected;
                     let activated = menu_list(ui, &CONFIRM_ITEMS, &mut sel, nav);
                     menu.selected = sel;
@@ -177,7 +230,7 @@ fn draw_title_menu(
                         }
                         None => {}
                     }
-                    ui.small("[Esc] back");
+                    ui_theme::key_hint(ui, &[("Esc", "back")]);
                 });
             }
             MenuScreen::Settings => {
@@ -191,38 +244,106 @@ fn draw_title_menu(
                 }
             }
         });
+    });
 
-    // Controls panel pinned to the bottom-right. Discoverable without
-    // cluttering in-game UI.
-    egui::Window::new("title_controls")
-        .title_bar(false)
-        .resizable(false)
-        .collapsible(false)
-        .anchor(egui::Align2::RIGHT_BOTTOM, egui::Vec2::new(-12.0, -12.0))
-        .show(ctx, |ui| {
-            ui.small("controls");
-            ui.separator();
-            ui.small("[WASD]  walk");
-            ui.small("[F]     talk to NPC");
-            ui.small("[E]     open code sandbox");
-            ui.small("[Esc]   close panel / pause");
+    // Controls card pinned to the art's bottom-right corner.
+    ui_theme::panel_area(
+        "title_controls",
+        egui::Align2::RIGHT_BOTTOM,
+        egui::vec2(-(inset.x + 12.0), -(inset.y + MENU_BOTTOM_GAP)),
+        egui::Order::Middle,
+    )
+    .show(ctx, |ui| {
+        ui_theme::framed_panel(ui, controls_card);
+    });
+}
+
+/// The controls reference: key column in Oxblood, action column in body
+/// text.
+pub fn controls_card(ui: &mut egui::Ui) {
+    ui.label(
+        egui::RichText::new("Controls")
+            .size(ui_theme::SUBHEADING_SIZE)
+            .color(ui_theme::TEXT_HEADING)
+            .strong(),
+    );
+    egui::Grid::new("controls_grid")
+        .num_columns(2)
+        .spacing([12.0, 2.0])
+        .show(ui, |ui| {
+            for (key, action) in [
+                ("WASD", "walk"),
+                ("F", "talk to NPC"),
+                ("E", "open code sandbox"),
+                ("Esc", "close panel / pause"),
+            ] {
+                ui.label(
+                    egui::RichText::new(key)
+                        .size(ui_theme::SMALL_SIZE)
+                        .color(ui_theme::OXBLOOD)
+                        .strong(),
+                );
+                ui.label(
+                    egui::RichText::new(action)
+                        .size(ui_theme::SMALL_SIZE)
+                        .color(ui_theme::TEXT),
+                );
+                ui.end_row();
+            }
         });
 }
 
+fn bevy_color(c: egui::Color32) -> Color {
+    Color::srgb_u8(c.r(), c.g(), c.b())
+}
+
 fn spawn_title_art(mut commands: Commands, asset_server: Res<AssetServer>) {
-    tracing::info!("spawning title art (REF-10)");
+    tracing::info!("spawning title art (REF-10) on an Oxblood / Inkblood backdrop");
     commands.spawn((
         Sprite {
             image: asset_server.load(SPRITE_TITLE),
-            custom_size: Some(Vec2::new(
-                TITLE_NATIVE_W * TITLE_SCALE,
-                TITLE_NATIVE_H * TITLE_SCALE,
-            )),
+            // Corrected to the pixel-exact size by `fit_title_art`.
+            custom_size: Some(title_world_size(2.0, 720.0, VIEW_HEIGHT)),
             ..default()
         },
         Transform::from_xyz(0.0, 0.0, 100.0),
         TitleArt,
+        TitleArtImage,
     ));
+    // Backdrop halves split at the art's horizontal centre line: the sky
+    // colour of the art's top edge above, the horizon's Inkblood below
+    // (it shows through the art's transparent lower bands too).
+    for (color, y) in [
+        (ui_theme::OXBLOOD, BACKDROP_EXTENT * 0.5),
+        (ui_theme::INKBLOOD, -BACKDROP_EXTENT * 0.5),
+    ] {
+        commands.spawn((
+            Sprite::from_color(bevy_color(color), Vec2::splat(BACKDROP_EXTENT)),
+            Transform::from_xyz(0.0, y, 99.0),
+            TitleArt,
+        ));
+    }
+}
+
+/// Keep the art at a whole-number pixel scale for the current window.
+fn fit_title_art(
+    windows: Query<&Window, With<PrimaryWindow>>,
+    mut art: Query<&mut Sprite, With<TitleArtImage>>,
+) {
+    let Ok(window) = windows.single() else {
+        return;
+    };
+    let (pw, ph) = (
+        window.physical_width() as f32,
+        window.physical_height() as f32,
+    );
+    let size = title_world_size(title_integer_scale(pw, ph), ph, VIEW_HEIGHT);
+    for mut sprite in art.iter_mut() {
+        if sprite.custom_size != Some(size) {
+            tracing::debug!(pw, ph, ?size, "title art resized to integer scale");
+            sprite.custom_size = Some(size);
+        }
+    }
 }
 
 /// The title art sits at the world origin; after Quit to Title the camera
@@ -238,5 +359,30 @@ fn center_camera(mut cam_q: Query<&mut Transform, With<Camera2d>>) {
 fn despawn_title_art(mut commands: Commands, query: Query<Entity, With<TitleArt>>) {
     for e in query.iter() {
         commands.entity(e).despawn();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn integer_scale_is_the_largest_that_fits() {
+        assert_eq!(title_integer_scale(1280.0, 720.0), 2.0);
+        assert_eq!(title_integer_scale(1920.0, 1080.0), 3.0);
+        assert_eq!(title_integer_scale(1366.0, 768.0), 2.0);
+        assert_eq!(title_integer_scale(2560.0, 1080.0), 3.0);
+        // Never below 1.
+        assert_eq!(title_integer_scale(320.0, 200.0), 1.0);
+    }
+
+    #[test]
+    fn world_size_maps_to_exact_physical_pixels() {
+        // 720 px tall window, 280-unit view: 2x art is 720 px = 280 units.
+        let s = title_world_size(2.0, 720.0, 280.0);
+        assert!((s.y - 280.0).abs() < 1e-3);
+        assert!((s.x - 280.0 * 16.0 / 9.0).abs() < 1e-3);
+        // Degenerate window height falls back to native size.
+        assert_eq!(title_world_size(2.0, 0.0, 280.0), Vec2::new(640.0, 360.0));
     }
 }
