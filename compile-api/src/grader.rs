@@ -5,6 +5,38 @@
 //! real `cargo build --offline` + wasmtime invocation per
 //! `design/05-tech-architecture.md` §2 — the test suite below stays
 //! valid because it only exercises the public contract.
+//!
+//! The rule table is duplicated on purpose in the MIT-licensed game crate
+//! (`game/src/plugins/stub_grader.rs`, the offline / wasm grader); the two
+//! crates must not share code. Keep the region between the
+//! `BEGIN MISSION TABLE` / `END MISSION TABLE` markers TEXTUALLY
+//! IDENTICAL in both files — `game/tests/contract.rs` enforces textual
+//! parity and byte-for-byte output parity.
+//!
+//! # Adding a mission
+//!
+//! Add ONE [`MissionRule`] entry to [`MISSION_RULES`] here, and the
+//! identical entry to `MISSION_RULES` in `game/src/plugins/stub_grader.rs`:
+//!
+//! ```text
+//! MissionRule {
+//!     id: "mut_binding",                  // MissionRegistry encounter id
+//!     npc: "the Smith eyes you",          // fail = "{npc} — {hint}"
+//!     checks: &[
+//!         // Checked in order; the first check whose `any_of` tokens are
+//!         // ALL absent from the source fails with its hint.
+//!         check(&["let mut"], "missing required: `let mut`"),
+//!         check(&["+= 1", "+=1"], "missing required: `+= 1`"),
+//!     ],
+//!     pass: "the Smith strikes the work. \"good — that one bends.\"",
+//! },
+//! ```
+//!
+//! Every check is a plain substring test: a check passes when the source
+//! contains at least one of its `any_of` alternatives (one alternative =
+//! a required token; several = whitespace variants like `*= 2` / `*=2`).
+//! If a future mission genuinely needs logic the table cannot express,
+//! give it a named custom fn rather than contorting the table.
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Verdict {
@@ -30,722 +62,644 @@ impl Verdict {
     }
 }
 
-fn requires_all(source: &str, needles: &[&str]) -> Result<(), String> {
-    for n in needles {
-        if !source.contains(n) {
-            return Err(format!("missing required: `{n}`"));
-        }
-    }
-    Ok(())
+/// One ordered grading step: satisfied when the source contains ANY of
+/// `any_of`; otherwise the mission fails with `"{npc} — {hint}"`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Check {
+    pub any_of: &'static [&'static str],
+    pub hint: &'static str,
 }
 
-pub fn grade(encounter_id: &str, source: &str) -> Verdict {
-    match encounter_id {
-        "intro_let_binding" => match requires_all(source, &["let answer", "42"]) {
-            Ok(()) => Verdict::pass("answer bound. Ferris nods approvingly."),
-            Err(e) => Verdict::fail(format!("not yet — {e}")),
-        },
-        "double_function" => match requires_all(source, &["fn double", "i32", "* 2"])
-            .or_else(|_| requires_all(source, &["fn double", "i32", "*2"]))
+/// Shorthand constructor so table entries stay on one line each.
+pub const fn check(any_of: &'static [&'static str], hint: &'static str) -> Check {
+    Check { any_of, hint }
+}
+
+/// The full grading rule for one mission. See the module docs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MissionRule {
+    pub id: &'static str,
+    pub npc: &'static str,
+    pub checks: &'static [Check],
+    pub pass: &'static str,
+}
+
+impl MissionRule {
+    /// Run the checks in order. `Ok(pass message)` or `Err(fail message)`.
+    pub fn evaluate(&self, source: &str) -> Result<&'static str, String> {
+        match self
+            .checks
+            .iter()
+            .find(|c| !c.any_of.iter().any(|tok| source.contains(tok)))
         {
-            Ok(()) => {
-                Verdict::pass("the Trait Mage's staff hums. \"named once, doubled twice over.\"")
-            }
-            Err(e) => Verdict::fail(format!("not yet — {e}")),
-        },
-        "borrow_preview" => match requires_all(source, &["&value", "println!"]) {
-            Ok(()) => Verdict::pass("the Borrow Checker stirs. \"...acceptable. for now.\""),
-            Err(e) => Verdict::fail(format!("the Borrow Checker is silent — {e}")),
-        },
-        // ── Mission 4: declare a mutable binding and increment it.
-        "mut_binding" => {
-            if !source.contains("let mut") {
-                Verdict::fail("the Smith eyes you — missing required: `let mut`")
-            } else if !source.contains("+= 1") && !source.contains("+=1") {
-                Verdict::fail("the Smith eyes you — missing required: `+= 1`")
-            } else {
-                Verdict::pass("the Smith strikes the work. \"good — that one bends.\"")
-            }
+            Some(failed) => Err(format!("{} — {}", self.npc, failed.hint)),
+            None => Ok(self.pass),
         }
-        // ── Mission 5: branch on i32 sign with if/else.
-        "if_else_sign" => {
-            if !source.contains("if ") {
-                Verdict::fail("the Cartographer frowns — missing required: `if `")
-            } else if !source.contains("else") {
-                Verdict::fail("the Cartographer frowns — missing required: `else`")
-            } else if !source.contains("< 0") && !source.contains("<0") {
-                Verdict::fail("the Cartographer frowns — missing required: `< 0`")
-            } else {
-                Verdict::pass("the Cartographer nods. \"three roads diverge — well chosen.\"")
-            }
-        }
-        // ── Mission 6: `loop` with `break value;` to return from a loop.
-        "loop_break" => {
-            if !source.contains("loop") {
-                Verdict::fail("the Bellringer waits — missing required: `loop`")
-            } else if !source.contains("break") {
-                Verdict::fail("the Bellringer waits — missing required: `break`")
-            } else if !source.contains("*= 2") && !source.contains("*=2") {
-                Verdict::fail(
-                    "the Bellringer waits — the value should double each iteration: `*= 2`",
-                )
-            } else {
-                Verdict::pass(
-                    "the Bellringer pulls the rope — the bell sounds. \"the loop returned its number.\"",
-                )
-            }
-        }
-        // ── Mission 7: match on Option<i32>, handle Some/None.
-        "match_option" => {
-            if !source.contains("match") {
-                Verdict::fail("the Oracle's eyes are closed — missing required: `match`")
-            } else if !source.contains("Some(") {
-                Verdict::fail("the Oracle's eyes are closed — missing required: `Some(`")
-            } else if !source.contains("None") {
-                Verdict::fail("the Oracle's eyes are closed — missing required: `None`")
-            } else {
-                Verdict::pass("the Oracle exhales. \"both paths walked. nothing slips through.\"")
-            }
-        }
-        // ── Mission 9: iterate a Vec and reduce. Teaches `iter`, `sum`.
-        "vec_iter" => {
-            if !source.contains("vec!") {
-                Verdict::fail("the Cooper waits — missing required: `vec!`")
-            } else if !source.contains(".iter()") {
-                Verdict::fail("the Cooper waits — call `.iter()` on the vector")
-            } else if !source.contains(".sum") {
-                Verdict::fail("the Cooper waits — finish with `.sum()` to reduce")
-            } else {
-                Verdict::pass("the Cooper hoops the barrel. \"every stave counted, sum sealed.\"")
-            }
-        }
-        // ── Mission 10: destructure a tuple in a let binding.
-        "tuple_destructure" => {
-            if !source.contains("let (") {
-                Verdict::fail("the Twin waits — missing required: `let (`")
-            } else if !source.contains(",") {
-                Verdict::fail("the Twin waits — a tuple needs a comma between its parts")
-            } else if !source.contains(") =") && !source.contains(")=") {
-                Verdict::fail("the Twin waits — close the pattern with `) =`")
-            } else {
-                Verdict::pass("the Twin grins. \"two names, one breath. cleanly split.\"")
-            }
-        }
-        // ── Mission 11: `while` loop with a decrementing counter.
-        "while_loop" => {
-            if !source.contains("while ") {
-                Verdict::fail("the Tinker frowns — missing required: `while `")
-            } else if !source.contains("> 0") && !source.contains(">0") {
-                Verdict::fail("the Tinker frowns — the predicate should test `> 0`")
-            } else if !source.contains("-= 1") && !source.contains("-=1") {
-                Verdict::fail("the Tinker frowns — decrement with `-= 1` each iteration")
-            } else {
-                Verdict::pass("the Tinker pockets the spring. \"counted down, gear by gear.\"")
-            }
-        }
-        // ── Mission 12: take `&mut T`, mutate through the deref. Act 2:
-        // exclusive borrow + interior mutation through a reference.
-        "borrow_mut" => {
-            if !source.contains("fn bump") {
-                Verdict::fail("the Forgewright glares — missing required: `fn bump`")
-            } else if !source.contains("&mut i32") {
-                Verdict::fail(
-                    "the Forgewright glares — the parameter must be `&mut i32` (exclusive borrow)",
-                )
-            } else if !source.contains("*x") {
-                Verdict::fail(
-                    "the Forgewright glares — write through the reference with a `*x` deref",
-                )
-            } else {
-                Verdict::pass(
-                    "the Forgewright nods. \"one writer at the forge — the borrow holds.\"",
-                )
-            }
-        }
-        // ── Mission 13: function takes `&str`, callable with both
-        // `String` (via `&s`) and a string literal. Act 2: deref coercion
-        // and the `String` vs `&str` distinction.
-        "string_vs_str" => {
-            if !source.contains("fn greet") {
-                Verdict::fail("the Linguist tilts her head — missing required: `fn greet`")
-            } else if !source.contains("&str") {
-                Verdict::fail("the Linguist tilts her head — the parameter type should be `&str`")
-            } else if !source.contains("String::from") {
-                Verdict::fail(
-                    "the Linguist tilts her head — call `greet` once with a `String::from(...)` value",
-                )
-            } else {
-                Verdict::pass(
-                    "the Linguist smiles. \"one tongue, two voices — &str carries both.\"",
-                )
-            }
-        }
-        // ── Mission 14: handle a missing `Option<T>` with `.unwrap_or`.
-        // Act 2: idiomatic non-`match` Option handling.
-        "option_unwrap_or" => {
-            if !source.contains("Option<") {
-                Verdict::fail("the Pilgrim shakes his head — missing required: `Option<`")
-            } else if !source.contains(".unwrap_or(") {
-                Verdict::fail(
-                    "the Pilgrim shakes his head — collapse the absent case with `.unwrap_or(default)`",
-                )
-            } else {
-                Verdict::pass("the Pilgrim raises his lantern. \"the absent path lit a default.\"")
-            }
-        }
-        // ── Mission 15: `for i in 0..N` range iteration. Act 2: the
-        // for-loop is the iterator-protocol entry point.
-        "for_in_range" => {
-            if !source.contains("for ") {
-                Verdict::fail("the Drillmaster barks — missing required: `for `")
-            } else if !source.contains(" in ") {
-                Verdict::fail("the Drillmaster barks — `for` needs a binding `in` an iterable")
-            } else if !source.contains("0..10") && !source.contains("0 .. 10") {
-                Verdict::fail("the Drillmaster barks — iterate the exact range `0..10`")
-            } else {
-                Verdict::pass("the Drillmaster claps once. \"ten paces, exact and ordered.\"")
-            }
-        }
-        // ── Mission 16: bind a two-argument closure to a name and
-        // invoke it. Act 2 entry to closures + `Fn` traits.
-        "closure_basic" => {
-            if !source.contains("let add") {
-                Verdict::fail("the Reckoner's quill hovers — missing required: `let add`")
-            } else if !source.contains("= |") {
-                Verdict::fail("the Reckoner's quill hovers — bind a closure literal with `= |...|`")
-            } else if !source.contains("+ b") && !source.contains("+b") {
-                Verdict::fail("the Reckoner's quill hovers — the body should compute `a + b`")
-            } else {
-                Verdict::pass("the Reckoner inks the ledger. \"summed in a single stroke.\"")
-            }
-        }
-        // ── Mission 8: define a struct with named fields and read one.
-        "struct_basic" => {
-            if !source.contains("struct Knight") {
-                Verdict::fail("the Herald squints — missing required: `struct Knight`")
-            } else if !source.contains("name:") {
-                Verdict::fail("the Herald squints — Knight needs a `name:` field")
-            } else if !source.contains("hp:") {
-                Verdict::fail("the Herald squints — Knight needs an `hp:` field")
-            } else if !source.contains(".name") {
-                Verdict::fail("the Herald squints — read the field with `.name`")
-            } else {
-                Verdict::pass(
-                    "the Herald reads the tabard. \"by name and by number — both fields announced.\"",
-                )
-            }
-        }
-        // ── Mission 17: take a `&[i32]` slice. Act 2: borrowing a
-        // contiguous view without owning the buffer.
-        "slice_basic" => {
-            if !source.contains("fn sum_slice") {
-                Verdict::fail("the Quartermaster squints — missing required: `fn sum_slice`")
-            } else if !source.contains("&[i32]") {
-                Verdict::fail("the Quartermaster squints — the parameter must be a slice `&[i32]`")
-            } else if !source.contains(".iter()") {
-                Verdict::fail("the Quartermaster squints — walk the slice with `.iter()`")
-            } else {
-                Verdict::pass(
-                    "the Quartermaster ticks the manifest. \"a window into the stores — counted, not claimed.\"",
-                )
-            }
-        }
-        // ── Mission 18: propagate a `Result` with the `?` operator.
-        // Act 2: error short-circuiting without `match`.
-        "result_question_mark" => {
-            if !source.contains("Result<") {
-                Verdict::fail("the Auditor's pen taps — missing required: `Result<`")
-            } else if !source.contains(".parse") {
-                Verdict::fail("the Auditor's pen taps — call `.parse` on a string source")
-            } else if !source.contains("?;") && !source.contains("?\n") {
-                Verdict::fail("the Auditor's pen taps — propagate the error with the `?` operator")
-            } else {
-                Verdict::pass(
-                    "the Auditor marks the tally. \"errors travel upward — the books balance.\"",
-                )
-            }
-        }
-        // ── Mission 19: derive Debug on a struct, then `{:?}` print it.
-        "derive_debug" => {
-            if !source.contains("#[derive(Debug)]") {
-                Verdict::fail(
-                    "the Chronicler shakes his head — missing required: `#[derive(Debug)]`",
-                )
-            } else if !source.contains("struct Item") {
-                Verdict::fail("the Chronicler shakes his head — define `struct Item`")
-            } else if !source.contains(":?") {
-                Verdict::fail(
-                    "the Chronicler shakes his head — print with the debug formatter `{:?}`",
-                )
-            } else {
-                Verdict::pass("the Chronicler dips his quill. \"derived, not authored.\"")
-            }
-        }
-        // ── Mission 20: iter().map().collect() into a Vec.
-        "iter_map_collect" => {
-            if !source.contains(".map(") {
-                Verdict::fail("the Alchemist stirs — missing required: `.map(`")
-            } else if !source.contains(".collect") {
-                Verdict::fail("the Alchemist stirs — finish with `.collect` to gather the result")
-            } else if !source.contains("|x|") && !source.contains("|x |") {
-                Verdict::fail("the Alchemist stirs — the closure should bind one element as `|x|`")
-            } else {
-                Verdict::pass("the Alchemist decants the flask. \"every drop transmuted.\"")
-            }
-        }
-        // ── Mission 21: define an enum, match on its variants.
-        "enum_match" => {
-            if !source.contains("enum Direction") {
-                Verdict::fail("the Heraldic Sage frowns — missing required: `enum Direction`")
-            } else if !source.contains("match ") {
-                Verdict::fail(
-                    "the Heraldic Sage frowns — inspect the variant with a `match ` expression",
-                )
-            } else if !source.contains("Direction::") {
-                Verdict::fail(
-                    "the Heraldic Sage frowns — name a variant with the `Direction::` path",
-                )
-            } else {
-                Verdict::pass(
-                    "the Heraldic Sage walks the sash. \"every variant a panel, every arm a blazon read.\"",
-                )
-            }
-        }
-        // ── Act 3 (Guildhall Quarter): methods/impl, associated fns,
-        // if let, while let, tuple structs, enum-with-data match.
-        "impl_method" => {
-            if !source.contains("impl") {
-                Verdict::fail("the Guildmaster waits — missing required: `impl`")
-            } else if !source.contains("&self") {
-                Verdict::fail("the Guildmaster waits — a method borrows the instance with `&self`")
-            } else if !source.contains("self.") {
-                Verdict::fail("the Guildmaster waits — read the instance's data with `self.`")
-            } else {
-                Verdict::pass(
-                    "the Guildmaster nods. \"duties bound to a name — that is a method.\"",
-                )
-            }
-        }
-        "assoc_new" => {
-            if !source.contains("fn new") {
-                Verdict::fail("the Recruiter shakes her head — missing required: `fn new`")
-            } else if !source.contains("Self") {
-                Verdict::fail("the Recruiter shakes her head — a constructor returns `Self`")
-            } else if !source.contains("::new") {
-                Verdict::fail("the Recruiter shakes her head — call it with the `::new` path")
-            } else {
-                Verdict::pass(
-                    "the Recruiter stamps the roll. \"Self::new — a member forged from a name.\"",
-                )
-            }
-        }
-        "if_let" => {
-            if !source.contains("if let") {
-                Verdict::fail("the Locksmith frowns — missing required: `if let`")
-            } else if !source.contains("Some(") {
-                Verdict::fail("the Locksmith frowns — match the present case with `Some(`")
-            } else {
-                Verdict::pass(
-                    "the Locksmith turns the one key that fits. \"Some — and only Some — opens.\"",
-                )
-            }
-        }
-        "while_let" => {
-            if !source.contains("while let") {
-                Verdict::fail("the Porter sets the crate down — missing required: `while let`")
-            } else if !source.contains(".pop(") {
-                Verdict::fail("the Porter sets the crate down — drain the stack with `.pop()`")
-            } else {
-                Verdict::pass(
-                    "the Porter empties the cart, crate by crate. \"while there is a Some, keep unloading.\"",
-                )
-            }
-        }
-        "tuple_struct" => {
-            if !source.contains("struct Meters(") {
-                Verdict::fail(
-                    "the Surveyor squints down the line — missing required: `struct Meters(`",
-                )
-            } else if !source.contains(".0") {
-                Verdict::fail(
-                    "the Surveyor squints down the line — read the wrapped value with `.0`",
-                )
-            } else {
-                Verdict::pass(
-                    "the Surveyor reads the rod. \"a bare number, now named Meters — a newtype.\"",
-                )
-            }
-        }
-        "enum_data_match" => {
-            if !source.contains("enum Item") {
-                Verdict::fail("the Armorer taps the anvil — missing required: `enum Item`")
-            } else if !source.contains("Weapon") {
-                Verdict::fail("the Armorer taps the anvil — give Item a `Weapon` variant")
-            } else if !source.contains("match") {
-                Verdict::fail("the Armorer taps the anvil — inspect the item with `match`")
-            } else if !source.contains("=>") {
-                Verdict::fail("the Armorer taps the anvil — each variant needs a `=>` arm")
-            } else {
-                Verdict::pass(
-                    "the Armorer lays out the rack. \"weapon or potion — name every kind, miss none.\"",
-                )
-            }
-        }
-        // ── Act 4 (Trait Mage's Tower): traits, generics, dyn, lifetimes,
-        // associated types.
-        "trait_def" => {
-            if !source.contains("trait ") {
-                Verdict::fail("Vexis waits — missing required: a `trait ` definition")
-            } else if !source.contains("impl ") {
-                Verdict::fail("Vexis waits — implement it with an `impl ` block")
-            } else if !source.contains(" for ") {
-                Verdict::fail("Vexis waits — bind the trait to a type: `impl Trait for Type`")
-            } else {
-                Verdict::pass(
-                    "Vexis lowers his staff. \"a capability named once, granted to a type — that is a trait.\"",
-                )
-            }
-        }
-        "generic_fn" => {
-            if !source.contains("<T") {
-                Verdict::fail("the Wandwright frowns — missing required: a type parameter `<T`")
-            } else if !source.contains("PartialOrd") {
-                Verdict::fail(
-                    "the Wandwright frowns — bound the parameter so it can be compared: `T: PartialOrd`",
-                )
-            } else {
-                Verdict::pass(
-                    "the Wandwright sights down the blank. \"one wand, any element — bounded by what it can compare.\"",
-                )
-            }
-        }
-        "generic_struct" => {
-            if !source.contains("struct ") {
-                Verdict::fail("the Conjurer waits — missing required: a `struct ` definition")
-            } else if !source.contains("<T>") {
-                Verdict::fail("the Conjurer waits — make it generic with a `<T>` parameter")
-            } else if !source.contains(": T") {
-                Verdict::fail("the Conjurer waits — give it a field of the generic type `: T`")
-            } else {
-                Verdict::pass(
-                    "the Conjurer cups two matching lights. \"a vessel for any type — so long as both halves agree.\"",
-                )
-            }
-        }
-        "dyn_trait" => {
-            if !source.contains("Box<dyn") {
-                Verdict::fail("the Familiar flickers — missing required: `Box<dyn ...>`")
-            } else if !source.contains("Box::new") {
-                Verdict::fail(
-                    "the Familiar flickers — box each value onto the heap with `Box::new`",
-                )
-            } else {
-                Verdict::pass(
-                    "the Familiar shifts through its forms. \"many shapes, one cage — dispatched at a touch.\"",
-                )
-            }
-        }
-        "lifetimes" => {
-            if !source.contains("<'a>") {
-                Verdict::fail(
-                    "the Lanternkeeper waits — missing required: a lifetime parameter `<'a>`",
-                )
-            } else if !source.contains("&'a") {
-                Verdict::fail("the Lanternkeeper waits — annotate the references with `&'a`")
-            } else {
-                Verdict::pass(
-                    "the Lanternkeeper keeps the flame. \"the borrow lives exactly as long as 'a — no shorter.\"",
-                )
-            }
-        }
-        "assoc_type" => {
-            if !source.contains("type Output") {
-                Verdict::fail("the Loremaster turns the page — missing required: `type Output`")
-            } else if !source.contains("Self::Output") {
-                Verdict::fail(
-                    "the Loremaster turns the page — refer to it as `Self::Output` in the method",
-                )
-            } else {
-                Verdict::pass(
-                    "the Loremaster turns the page. \"each producer names its own yield — the type follows the trait.\"",
-                )
-            }
-        }
-        // ── Act 5 (Tavern of Tribulations): Result/Option methods, custom
-        // errors, From conversion.
-        "result_match" => {
-            if !source.contains("match ") {
-                Verdict::fail("the Barkeep waits — missing required: `match `")
-            } else if !source.contains("Ok(") {
-                Verdict::fail("the Barkeep waits — handle the success arm `Ok(`")
-            } else if !source.contains("Err(") {
-                Verdict::fail("the Barkeep waits — handle the failure arm `Err(`")
-            } else {
-                Verdict::pass("the Barkeep nods. \"poured or spilled — you accounted for both.\"")
-            }
-        }
-        "custom_error" => {
-            if !source.contains("enum ") {
-                Verdict::fail("the Bouncer crosses his arms — missing required: an error `enum `")
-            } else if !source.contains("Result<") {
-                Verdict::fail("the Bouncer crosses his arms — return a `Result<...>` from check")
-            } else if !source.contains("Err(") {
-                Verdict::fail("the Bouncer crosses his arms — produce a failure with `Err(...)`")
-            } else {
-                Verdict::pass(
-                    "the Bouncer grunts. \"every kind of trouble, named and on the list.\"",
-                )
-            }
-        }
-        "from_error" => {
-            if !source.contains("impl From<") {
-                Verdict::fail("the Interpreter pauses — missing required: `impl From<...>`")
-            } else if !source.contains(" for ") {
-                Verdict::fail("the Interpreter pauses — implement it `for` your error type")
-            } else if !source.contains("fn from") {
-                Verdict::fail("the Interpreter pauses — the conversion is a `fn from` method")
-            } else {
-                Verdict::pass(
-                    "the Interpreter inclines her head. \"one tongue's failure, spoken in another.\"",
-                )
-            }
-        }
-        "option_map" => {
-            if !source.contains("Option<") {
-                Verdict::fail("the Mixologist waits — keep it an `Option<...>`")
-            } else if !source.contains(".map(") {
-                Verdict::fail("the Mixologist waits — transform the inside with `.map(`")
-            } else {
-                Verdict::pass(
-                    "the Mixologist swirls the glass. \"changed within — if there was anything to change.\"",
-                )
-            }
-        }
-        "and_then" => {
-            if !source.contains("Option") {
-                Verdict::fail("the Tabkeeper waits — the steps should yield an `Option`")
-            } else if !source.contains(".and_then(") {
-                Verdict::fail("the Tabkeeper waits — chain the fallible steps with `.and_then(`")
-            } else {
-                Verdict::pass(
-                    "the Tabkeeper closes the ledger. \"one failed round and the tab is cut.\"",
-                )
-            }
-        }
-        "unwrap_or_else" => {
-            if !source.contains(".unwrap_or_else(") {
-                Verdict::fail("the Cellarer waits — missing required: `.unwrap_or_else(`")
-            } else if !source.contains("||") {
-                Verdict::fail("the Cellarer waits — the lazy default is a closure `|| ...`")
-            } else {
-                Verdict::pass(
-                    "the Cellarer taps the cask. \"a fresh draught — drawn only when the old runs dry.\"",
-                )
-            }
-        }
-        // ── Act 6 (Iterator Forge): collections, iterator adapters,
-        // closure capture.
-        "hashmap_basic" => {
-            if !source.contains("HashMap") {
-                Verdict::fail("the Keymaster waits — missing required: `HashMap`")
-            } else if !source.contains(".insert(") {
-                Verdict::fail("the Keymaster waits — store a value with `.insert(`")
-            } else if !source.contains(".get(") {
-                Verdict::fail("the Keymaster waits — look it up with `.get(`")
-            } else {
-                Verdict::pass("the Keymaster turns the ring. \"every store under its own key.\"")
-            }
-        }
-        "iter_filter" => {
-            if !source.contains(".filter(") {
-                Verdict::fail("the Sifter shakes the screen — missing required: `.filter(`")
-            } else if !source.contains(".collect") {
-                Verdict::fail("the Sifter shakes the screen — gather the survivors with `.collect`")
-            } else {
-                Verdict::pass(
-                    "the Sifter shakes the screen. \"only what fits the mesh falls through.\"",
-                )
-            }
-        }
-        "iter_fold" => {
-            if !source.contains(".fold(") {
-                Verdict::fail("the Smelter waits — missing required: `.fold(`")
-            } else {
-                Verdict::pass("the Smelter tips the crucible. \"many ores, one ingot.\"")
-            }
-        }
-        "iter_enumerate" => {
-            if !source.contains(".enumerate(") {
-                Verdict::fail("the Tallywright waits — missing required: `.enumerate(`")
-            } else {
-                Verdict::pass(
-                    "the Tallywright stamps the row. \"each item numbered as it passes.\"",
-                )
-            }
-        }
-        "iter_zip" => {
-            if !source.contains(".zip(") {
-                Verdict::fail("the Riveter waits — missing required: `.zip(`")
-            } else {
-                Verdict::pass("the Riveter drives the rivet. \"two plates, aligned pair by pair.\"")
-            }
-        }
-        "closure_move" => {
-            if !source.contains("move |") {
-                Verdict::fail(
-                    "the Bondsmith waits — missing required: a `move` closure (`move |...|`)",
-                )
-            } else {
-                Verdict::pass("the Bondsmith seals the charge. \"owned, and carried where I go.\"")
-            }
-        }
-        // ── Act 7 (Concurrent Coast): threads, Arc/Mutex, channels,
-        // atomics, scoped threads, async.
-        "thread_spawn" => {
-            if !source.contains("thread::spawn") {
-                Verdict::fail("the Dockmaster waits — missing required: `thread::spawn`")
-            } else if !source.contains(".join(") {
-                Verdict::fail("the Dockmaster waits — wait for the worker with `.join(`")
-            } else {
-                Verdict::pass(
-                    "the Dockmaster waves them off. \"sent to work — and met again at the gate.\"",
-                )
-            }
-        }
-        "arc_mutex" => {
-            if !source.contains("Arc") {
-                Verdict::fail("the Lighthouse Keeper waits — share ownership with `Arc`")
-            } else if !source.contains("Mutex") {
-                Verdict::fail("the Lighthouse Keeper waits — guard the value with `Mutex`")
-            } else if !source.contains(".lock(") {
-                Verdict::fail("the Lighthouse Keeper waits — take exclusive access with `.lock(`")
-            } else {
-                Verdict::pass(
-                    "the Lighthouse Keeper turns the key. \"one hand on the lamp at a time.\"",
-                )
-            }
-        }
-        "mpsc_channel" => {
-            if !source.contains("mpsc::channel") {
-                Verdict::fail("the Signaler waits — missing required: `mpsc::channel`")
-            } else if !source.contains(".send(") {
-                Verdict::fail("the Signaler waits — push a value in with `.send(`")
-            } else if !source.contains(".recv(") {
-                Verdict::fail("the Signaler waits — read it at the far end with `.recv(`")
-            } else {
-                Verdict::pass(
-                    "the Signaler flashes the lamp. \"sent down the coast, read at the next tower.\"",
-                )
-            }
-        }
-        "atomic" => {
-            if !source.contains("Atomic") {
-                Verdict::fail("the Tidewatch waits — use an `Atomic` type")
-            } else if !source.contains(".fetch_add(") {
-                Verdict::fail("the Tidewatch waits — bump it atomically with `.fetch_add(`")
-            } else {
-                Verdict::pass("the Tidewatch clicks the gauge. \"one notch up — no gatekeeper.\"")
-            }
-        }
-        "thread_scope" => {
-            if !source.contains("thread::scope") {
-                Verdict::fail("the Harbormaster waits — missing required: `thread::scope`")
-            } else if !source.contains(".spawn(") {
-                Verdict::fail("the Harbormaster waits — launch a scoped thread with `.spawn(`")
-            } else {
-                Verdict::pass(
-                    "the Harbormaster rings the bell. \"every boat in before the harbor closes.\"",
-                )
-            }
-        }
-        "async_fn" => {
-            if !source.contains("async fn") {
-                Verdict::fail("the Tideforecaster waits — missing required: `async fn`")
-            } else if !source.contains(".await") {
-                Verdict::fail("the Tideforecaster waits — drive the future with `.await`")
-            } else {
-                Verdict::pass(
-                    "the Tideforecaster lowers the glass. \"the tide will come — awaited, not forced.\"",
-                )
-            }
-        }
-        // ── Act 8 (Vault of Pointers): Box, Rc, RefCell, Cell, Weak.
-        "box_basic" => {
-            if !source.contains("Box<") {
-                Verdict::fail("the Vaultwright waits — missing required: `Box<...>`")
-            } else if !source.contains("Box::new") {
-                Verdict::fail("the Vaultwright waits — put the value on the heap with `Box::new`")
-            } else {
-                Verdict::pass(
-                    "the Vaultwright seals the box. \"on the heap it holds what the stack cannot.\"",
-                )
-            }
-        }
-        "rc_basic" => {
-            if !source.contains("Rc::new") {
-                Verdict::fail("the Sharekeeper waits — missing required: `Rc::new`")
-            } else if !source.contains("Rc::clone") {
-                Verdict::fail("the Sharekeeper waits — hand out a second handle with `Rc::clone`")
-            } else {
-                Verdict::pass("the Sharekeeper tallies the claims. \"one hoard, many holders.\"")
-            }
-        }
-        "refcell" => {
-            if !source.contains("RefCell") {
-                Verdict::fail("the Warden waits — missing required: `RefCell`")
-            } else if !source.contains(".borrow_mut(") {
-                Verdict::fail("the Warden waits — mutate the inner value with `.borrow_mut(`")
-            } else {
-                Verdict::pass(
-                    "the Warden checks the ledger. \"changed within — by the runtime's leave.\"",
-                )
-            }
-        }
-        "cell" => {
-            if !source.contains("Cell::new") {
-                Verdict::fail("the Swapwarden waits — missing required: `Cell::new`")
-            } else if !source.contains(".set(") {
-                Verdict::fail("the Swapwarden waits — swap the whole value with `.set(`")
-            } else {
-                Verdict::pass("the Swapwarden trades the coin. \"the whole value, swapped clean.\"")
-            }
-        }
-        "rc_refcell" => {
-            if !source.contains("Rc::new") {
-                Verdict::fail("the Strongbox waits — share ownership with `Rc::new`")
-            } else if !source.contains("RefCell") {
-                Verdict::fail("the Strongbox waits — make it mutable inside with `RefCell`")
-            } else if !source.contains(".borrow_mut(") {
-                Verdict::fail("the Strongbox waits — open and change it via `.borrow_mut(`")
-            } else {
-                Verdict::pass(
-                    "the Strongbox turns the keys. \"many owners, and the box still opens.\"",
-                )
-            }
-        }
-        "weak_ref" => {
-            if !source.contains("Weak") {
-                Verdict::fail("the Ghostkeeper waits — missing required: a `Weak` reference")
-            } else if !source.contains("downgrade") {
-                Verdict::fail("the Ghostkeeper waits — make the weak handle with `Rc::downgrade`")
-            } else if !source.contains(".upgrade(") {
-                Verdict::fail("the Ghostkeeper waits — reclaim it (or not) with `.upgrade(`")
-            } else {
-                Verdict::pass(
-                    "the Ghostkeeper tugs the tether. \"a hold that holds nothing alive.\"",
-                )
-            }
-        }
-        _ => Verdict::pass(format!(
-            "[freeform] received {} bytes. encounter `{encounter_id}` has no grader yet.",
-            source.len()
-        )),
     }
 }
+
+/// Look up the rule for an encounter id.
+pub fn mission_rule(encounter_id: &str) -> Option<&'static MissionRule> {
+    MISSION_RULES.iter().find(|r| r.id == encounter_id)
+}
+
+/// Grade `source` for `encounter_id`. Unknown ids get a freeform pass so
+/// unshipped encounters stay playable against the server.
+pub fn grade(encounter_id: &str, source: &str) -> Verdict {
+    let Some(rule) = mission_rule(encounter_id) else {
+        tracing::debug!(encounter_id, "grader: unknown encounter id, freeform pass");
+        return Verdict::pass(format!(
+            "[freeform] received {} bytes. encounter `{encounter_id}` has no grader yet.",
+            source.len()
+        ));
+    };
+    let verdict = match rule.evaluate(source) {
+        Ok(msg) => Verdict::pass(msg),
+        Err(msg) => Verdict::fail(msg),
+    };
+    tracing::debug!(
+        encounter_id,
+        ok = verdict.ok,
+        bytes = source.len(),
+        "grader verdict"
+    );
+    verdict
+}
+
+// BEGIN MISSION TABLE — must stay byte-identical to game/src/plugins/stub_grader.rs.
+#[rustfmt::skip]
+pub static MISSION_RULES: &[MissionRule] = &[
+    // ── Act 1 (Ferris's Village).
+    MissionRule {
+        id: "intro_let_binding",
+        npc: "not yet",
+        checks: &[
+            check(&["let answer"], "missing required: `let answer`"),
+            check(&["42"], "missing required: `42`"),
+        ],
+        pass: "answer bound. Ferris nods approvingly.",
+    },
+    MissionRule {
+        id: "double_function",
+        npc: "not yet",
+        checks: &[
+            check(&["fn double"], "missing required: `fn double`"),
+            check(&["i32"], "missing required: `i32`"),
+            check(&["* 2", "*2"], "missing required: `*2`"),
+        ],
+        pass: "the Trait Mage's staff hums. \"named once, doubled twice over.\"",
+    },
+    MissionRule {
+        id: "borrow_preview",
+        npc: "the Borrow Checker is silent",
+        checks: &[
+            check(&["&value"], "missing required: `&value`"),
+            check(&["println!"], "missing required: `println!`"),
+        ],
+        pass: "the Borrow Checker stirs. \"...acceptable. for now.\"",
+    },
+    MissionRule {
+        id: "mut_binding",
+        npc: "the Smith eyes you",
+        checks: &[
+            check(&["let mut"], "missing required: `let mut`"),
+            check(&["+= 1", "+=1"], "missing required: `+= 1`"),
+        ],
+        pass: "the Smith strikes the work. \"good — that one bends.\"",
+    },
+    MissionRule {
+        id: "if_else_sign",
+        npc: "the Cartographer frowns",
+        checks: &[
+            check(&["if "], "missing required: `if `"),
+            check(&["else"], "missing required: `else`"),
+            check(&["< 0", "<0"], "missing required: `< 0`"),
+        ],
+        pass: "the Cartographer nods. \"three roads diverge — well chosen.\"",
+    },
+    MissionRule {
+        id: "loop_break",
+        npc: "the Bellringer waits",
+        checks: &[
+            check(&["loop"], "missing required: `loop`"),
+            check(&["break"], "missing required: `break`"),
+            check(&["*= 2", "*=2"], "the value should double each iteration: `*= 2`"),
+        ],
+        pass: "the Bellringer pulls the rope — the bell sounds. \"the loop returned its number.\"",
+    },
+    MissionRule {
+        id: "match_option",
+        npc: "the Oracle's eyes are closed",
+        checks: &[
+            check(&["match"], "missing required: `match`"),
+            check(&["Some("], "missing required: `Some(`"),
+            check(&["None"], "missing required: `None`"),
+        ],
+        pass: "the Oracle exhales. \"both paths walked. nothing slips through.\"",
+    },
+    MissionRule {
+        id: "vec_iter",
+        npc: "the Cooper waits",
+        checks: &[
+            check(&["vec!"], "missing required: `vec!`"),
+            check(&[".iter()"], "call `.iter()` on the vector"),
+            check(&[".sum"], "finish with `.sum()` to reduce"),
+        ],
+        pass: "the Cooper hoops the barrel. \"every stave counted, sum sealed.\"",
+    },
+    MissionRule {
+        id: "tuple_destructure",
+        npc: "the Twin waits",
+        checks: &[
+            check(&["let ("], "missing required: `let (`"),
+            check(&[","], "a tuple needs a comma between its parts"),
+            check(&[") =", ")="], "close the pattern with `) =`"),
+        ],
+        pass: "the Twin grins. \"two names, one breath. cleanly split.\"",
+    },
+    MissionRule {
+        id: "while_loop",
+        npc: "the Tinker frowns",
+        checks: &[
+            check(&["while "], "missing required: `while `"),
+            check(&["> 0", ">0"], "the predicate should test `> 0`"),
+            check(&["-= 1", "-=1"], "decrement with `-= 1` each iteration"),
+        ],
+        pass: "the Tinker pockets the spring. \"counted down, gear by gear.\"",
+    },
+    MissionRule {
+        id: "struct_basic",
+        npc: "the Herald squints",
+        checks: &[
+            check(&["struct Knight"], "missing required: `struct Knight`"),
+            check(&["name:"], "Knight needs a `name:` field"),
+            check(&["hp:"], "Knight needs an `hp:` field"),
+            check(&[".name"], "read the field with `.name`"),
+        ],
+        pass: "the Herald reads the tabard. \"by name and by number — both fields announced.\"",
+    },
+    // ── Act 2 (Borrow Checker's Bridge).
+    MissionRule {
+        id: "borrow_mut",
+        npc: "the Forgewright glares",
+        checks: &[
+            check(&["fn bump"], "missing required: `fn bump`"),
+            check(&["&mut i32"], "the parameter must be `&mut i32` (exclusive borrow)"),
+            check(&["*x"], "write through the reference with a `*x` deref"),
+        ],
+        pass: "the Forgewright nods. \"one writer at the forge — the borrow holds.\"",
+    },
+    MissionRule {
+        id: "string_vs_str",
+        npc: "the Linguist tilts her head",
+        checks: &[
+            check(&["fn greet"], "missing required: `fn greet`"),
+            check(&["&str"], "the parameter type should be `&str`"),
+            check(&["String::from"], "call `greet` once with a `String::from(...)` value"),
+        ],
+        pass: "the Linguist smiles. \"one tongue, two voices — &str carries both.\"",
+    },
+    MissionRule {
+        id: "option_unwrap_or",
+        npc: "the Pilgrim shakes his head",
+        checks: &[
+            check(&["Option<"], "missing required: `Option<`"),
+            check(&[".unwrap_or("], "collapse the absent case with `.unwrap_or(default)`"),
+        ],
+        pass: "the Pilgrim raises his lantern. \"the absent path lit a default.\"",
+    },
+    MissionRule {
+        id: "for_in_range",
+        npc: "the Drillmaster barks",
+        checks: &[
+            check(&["for "], "missing required: `for `"),
+            check(&[" in "], "`for` needs a binding `in` an iterable"),
+            check(&["0..10", "0 .. 10"], "iterate the exact range `0..10`"),
+        ],
+        pass: "the Drillmaster claps once. \"ten paces, exact and ordered.\"",
+    },
+    MissionRule {
+        id: "closure_basic",
+        npc: "the Reckoner's quill hovers",
+        checks: &[
+            check(&["let add"], "missing required: `let add`"),
+            check(&["= |"], "bind a closure literal with `= |...|`"),
+            check(&["+ b", "+b"], "the body should compute `a + b`"),
+        ],
+        pass: "the Reckoner inks the ledger. \"summed in a single stroke.\"",
+    },
+    MissionRule {
+        id: "slice_basic",
+        npc: "the Quartermaster squints",
+        checks: &[
+            check(&["fn sum_slice"], "missing required: `fn sum_slice`"),
+            check(&["&[i32]"], "the parameter must be a slice `&[i32]`"),
+            check(&[".iter()"], "walk the slice with `.iter()`"),
+        ],
+        pass: "the Quartermaster ticks the manifest. \"a window into the stores — counted, not claimed.\"",
+    },
+    MissionRule {
+        id: "result_question_mark",
+        npc: "the Auditor's pen taps",
+        checks: &[
+            check(&["Result<"], "missing required: `Result<`"),
+            check(&[".parse"], "call `.parse` on a string source"),
+            check(&["?;", "?\n"], "propagate the error with the `?` operator"),
+        ],
+        pass: "the Auditor marks the tally. \"errors travel upward — the books balance.\"",
+    },
+    MissionRule {
+        id: "derive_debug",
+        npc: "the Chronicler shakes his head",
+        checks: &[
+            check(&["#[derive(Debug)]"], "missing required: `#[derive(Debug)]`"),
+            check(&["struct Item"], "define `struct Item`"),
+            check(&[":?"], "print with the debug formatter `{:?}`"),
+        ],
+        pass: "the Chronicler dips his quill. \"derived, not authored.\"",
+    },
+    MissionRule {
+        id: "iter_map_collect",
+        npc: "the Alchemist stirs",
+        checks: &[
+            check(&[".map("], "missing required: `.map(`"),
+            check(&[".collect"], "finish with `.collect` to gather the result"),
+            check(&["|x|", "|x |"], "the closure should bind one element as `|x|`"),
+        ],
+        pass: "the Alchemist decants the flask. \"every drop transmuted.\"",
+    },
+    MissionRule {
+        id: "enum_match",
+        npc: "the Heraldic Sage frowns",
+        checks: &[
+            check(&["enum Direction"], "missing required: `enum Direction`"),
+            check(&["match "], "inspect the variant with a `match ` expression"),
+            check(&["Direction::"], "name a variant with the `Direction::` path"),
+        ],
+        pass: "the Heraldic Sage walks the sash. \"every variant a panel, every arm a blazon read.\"",
+    },
+    // ── Act 3 (Guildhall Quarter).
+    MissionRule {
+        id: "impl_method",
+        npc: "the Guildmaster waits",
+        checks: &[
+            check(&["impl"], "missing required: `impl`"),
+            check(&["&self"], "a method borrows the instance with `&self`"),
+            check(&["self."], "read the instance's data with `self.`"),
+        ],
+        pass: "the Guildmaster nods. \"duties bound to a name — that is a method.\"",
+    },
+    MissionRule {
+        id: "assoc_new",
+        npc: "the Recruiter shakes her head",
+        checks: &[
+            check(&["fn new"], "missing required: `fn new`"),
+            check(&["Self"], "a constructor returns `Self`"),
+            check(&["::new"], "call it with the `::new` path"),
+        ],
+        pass: "the Recruiter stamps the roll. \"Self::new — a member forged from a name.\"",
+    },
+    MissionRule {
+        id: "if_let",
+        npc: "the Locksmith frowns",
+        checks: &[
+            check(&["if let"], "missing required: `if let`"),
+            check(&["Some("], "match the present case with `Some(`"),
+        ],
+        pass: "the Locksmith turns the one key that fits. \"Some — and only Some — opens.\"",
+    },
+    MissionRule {
+        id: "while_let",
+        npc: "the Porter sets the crate down",
+        checks: &[
+            check(&["while let"], "missing required: `while let`"),
+            check(&[".pop("], "drain the stack with `.pop()`"),
+        ],
+        pass: "the Porter empties the cart, crate by crate. \"while there is a Some, keep unloading.\"",
+    },
+    MissionRule {
+        id: "tuple_struct",
+        npc: "the Surveyor squints down the line",
+        checks: &[
+            check(&["struct Meters("], "missing required: `struct Meters(`"),
+            check(&[".0"], "read the wrapped value with `.0`"),
+        ],
+        pass: "the Surveyor reads the rod. \"a bare number, now named Meters — a newtype.\"",
+    },
+    MissionRule {
+        id: "enum_data_match",
+        npc: "the Armorer taps the anvil",
+        checks: &[
+            check(&["enum Item"], "missing required: `enum Item`"),
+            check(&["Weapon"], "give Item a `Weapon` variant"),
+            check(&["match"], "inspect the item with `match`"),
+            check(&["=>"], "each variant needs a `=>` arm"),
+        ],
+        pass: "the Armorer lays out the rack. \"weapon or potion — name every kind, miss none.\"",
+    },
+    // ── Act 4 (Trait Mage's Tower).
+    MissionRule {
+        id: "trait_def",
+        npc: "Vexis waits",
+        checks: &[
+            check(&["trait "], "missing required: a `trait ` definition"),
+            check(&["impl "], "implement it with an `impl ` block"),
+            check(&[" for "], "bind the trait to a type: `impl Trait for Type`"),
+        ],
+        pass: "Vexis lowers his staff. \"a capability named once, granted to a type — that is a trait.\"",
+    },
+    MissionRule {
+        id: "generic_fn",
+        npc: "the Wandwright frowns",
+        checks: &[
+            check(&["<T"], "missing required: a type parameter `<T`"),
+            check(&["PartialOrd"], "bound the parameter so it can be compared: `T: PartialOrd`"),
+        ],
+        pass: "the Wandwright sights down the blank. \"one wand, any element — bounded by what it can compare.\"",
+    },
+    MissionRule {
+        id: "generic_struct",
+        npc: "the Conjurer waits",
+        checks: &[
+            check(&["struct "], "missing required: a `struct ` definition"),
+            check(&["<T>"], "make it generic with a `<T>` parameter"),
+            check(&[": T"], "give it a field of the generic type `: T`"),
+        ],
+        pass: "the Conjurer cups two matching lights. \"a vessel for any type — so long as both halves agree.\"",
+    },
+    MissionRule {
+        id: "dyn_trait",
+        npc: "the Familiar flickers",
+        checks: &[
+            check(&["Box<dyn"], "missing required: `Box<dyn ...>`"),
+            check(&["Box::new"], "box each value onto the heap with `Box::new`"),
+        ],
+        pass: "the Familiar shifts through its forms. \"many shapes, one cage — dispatched at a touch.\"",
+    },
+    MissionRule {
+        id: "lifetimes",
+        npc: "the Lanternkeeper waits",
+        checks: &[
+            check(&["<'a>"], "missing required: a lifetime parameter `<'a>`"),
+            check(&["&'a"], "annotate the references with `&'a`"),
+        ],
+        pass: "the Lanternkeeper keeps the flame. \"the borrow lives exactly as long as 'a — no shorter.\"",
+    },
+    MissionRule {
+        id: "assoc_type",
+        npc: "the Loremaster turns the page",
+        checks: &[
+            check(&["type Output"], "missing required: `type Output`"),
+            check(&["Self::Output"], "refer to it as `Self::Output` in the method"),
+        ],
+        pass: "the Loremaster turns the page. \"each producer names its own yield — the type follows the trait.\"",
+    },
+    // ── Act 5 (Tavern of Tribulations).
+    MissionRule {
+        id: "result_match",
+        npc: "the Barkeep waits",
+        checks: &[
+            check(&["match "], "missing required: `match `"),
+            check(&["Ok("], "handle the success arm `Ok(`"),
+            check(&["Err("], "handle the failure arm `Err(`"),
+        ],
+        pass: "the Barkeep nods. \"poured or spilled — you accounted for both.\"",
+    },
+    MissionRule {
+        id: "custom_error",
+        npc: "the Bouncer crosses his arms",
+        checks: &[
+            check(&["enum "], "missing required: an error `enum `"),
+            check(&["Result<"], "return a `Result<...>` from check"),
+            check(&["Err("], "produce a failure with `Err(...)`"),
+        ],
+        pass: "the Bouncer grunts. \"every kind of trouble, named and on the list.\"",
+    },
+    MissionRule {
+        id: "from_error",
+        npc: "the Interpreter pauses",
+        checks: &[
+            check(&["impl From<"], "missing required: `impl From<...>`"),
+            check(&[" for "], "implement it `for` your error type"),
+            check(&["fn from"], "the conversion is a `fn from` method"),
+        ],
+        pass: "the Interpreter inclines her head. \"one tongue's failure, spoken in another.\"",
+    },
+    MissionRule {
+        id: "option_map",
+        npc: "the Mixologist waits",
+        checks: &[
+            check(&["Option<"], "keep it an `Option<...>`"),
+            check(&[".map("], "transform the inside with `.map(`"),
+        ],
+        pass: "the Mixologist swirls the glass. \"changed within — if there was anything to change.\"",
+    },
+    MissionRule {
+        id: "and_then",
+        npc: "the Tabkeeper waits",
+        checks: &[
+            check(&["Option"], "the steps should yield an `Option`"),
+            check(&[".and_then("], "chain the fallible steps with `.and_then(`"),
+        ],
+        pass: "the Tabkeeper closes the ledger. \"one failed round and the tab is cut.\"",
+    },
+    MissionRule {
+        id: "unwrap_or_else",
+        npc: "the Cellarer waits",
+        checks: &[
+            check(&[".unwrap_or_else("], "missing required: `.unwrap_or_else(`"),
+            check(&["||"], "the lazy default is a closure `|| ...`"),
+        ],
+        pass: "the Cellarer taps the cask. \"a fresh draught — drawn only when the old runs dry.\"",
+    },
+    // ── Act 6 (Iterator Forge).
+    MissionRule {
+        id: "hashmap_basic",
+        npc: "the Keymaster waits",
+        checks: &[
+            check(&["HashMap"], "missing required: `HashMap`"),
+            check(&[".insert("], "store a value with `.insert(`"),
+            check(&[".get("], "look it up with `.get(`"),
+        ],
+        pass: "the Keymaster turns the ring. \"every store under its own key.\"",
+    },
+    MissionRule {
+        id: "iter_filter",
+        npc: "the Sifter shakes the screen",
+        checks: &[
+            check(&[".filter("], "missing required: `.filter(`"),
+            check(&[".collect"], "gather the survivors with `.collect`"),
+        ],
+        pass: "the Sifter shakes the screen. \"only what fits the mesh falls through.\"",
+    },
+    MissionRule {
+        id: "iter_fold",
+        npc: "the Smelter waits",
+        checks: &[
+            check(&[".fold("], "missing required: `.fold(`"),
+        ],
+        pass: "the Smelter tips the crucible. \"many ores, one ingot.\"",
+    },
+    MissionRule {
+        id: "iter_enumerate",
+        npc: "the Tallywright waits",
+        checks: &[
+            check(&[".enumerate("], "missing required: `.enumerate(`"),
+        ],
+        pass: "the Tallywright stamps the row. \"each item numbered as it passes.\"",
+    },
+    MissionRule {
+        id: "iter_zip",
+        npc: "the Riveter waits",
+        checks: &[
+            check(&[".zip("], "missing required: `.zip(`"),
+        ],
+        pass: "the Riveter drives the rivet. \"two plates, aligned pair by pair.\"",
+    },
+    MissionRule {
+        id: "closure_move",
+        npc: "the Bondsmith waits",
+        checks: &[
+            check(&["move |"], "missing required: a `move` closure (`move |...|`)"),
+        ],
+        pass: "the Bondsmith seals the charge. \"owned, and carried where I go.\"",
+    },
+    // ── Act 7 (Concurrent Coast).
+    MissionRule {
+        id: "thread_spawn",
+        npc: "the Dockmaster waits",
+        checks: &[
+            check(&["thread::spawn"], "missing required: `thread::spawn`"),
+            check(&[".join("], "wait for the worker with `.join(`"),
+        ],
+        pass: "the Dockmaster waves them off. \"sent to work — and met again at the gate.\"",
+    },
+    MissionRule {
+        id: "arc_mutex",
+        npc: "the Lighthouse Keeper waits",
+        checks: &[
+            check(&["Arc"], "share ownership with `Arc`"),
+            check(&["Mutex"], "guard the value with `Mutex`"),
+            check(&[".lock("], "take exclusive access with `.lock(`"),
+        ],
+        pass: "the Lighthouse Keeper turns the key. \"one hand on the lamp at a time.\"",
+    },
+    MissionRule {
+        id: "mpsc_channel",
+        npc: "the Signaler waits",
+        checks: &[
+            check(&["mpsc::channel"], "missing required: `mpsc::channel`"),
+            check(&[".send("], "push a value in with `.send(`"),
+            check(&[".recv("], "read it at the far end with `.recv(`"),
+        ],
+        pass: "the Signaler flashes the lamp. \"sent down the coast, read at the next tower.\"",
+    },
+    MissionRule {
+        id: "atomic",
+        npc: "the Tidewatch waits",
+        checks: &[
+            check(&["Atomic"], "use an `Atomic` type"),
+            check(&[".fetch_add("], "bump it atomically with `.fetch_add(`"),
+        ],
+        pass: "the Tidewatch clicks the gauge. \"one notch up — no gatekeeper.\"",
+    },
+    MissionRule {
+        id: "thread_scope",
+        npc: "the Harbormaster waits",
+        checks: &[
+            check(&["thread::scope"], "missing required: `thread::scope`"),
+            check(&[".spawn("], "launch a scoped thread with `.spawn(`"),
+        ],
+        pass: "the Harbormaster rings the bell. \"every boat in before the harbor closes.\"",
+    },
+    MissionRule {
+        id: "async_fn",
+        npc: "the Tideforecaster waits",
+        checks: &[
+            check(&["async fn"], "missing required: `async fn`"),
+            check(&[".await"], "drive the future with `.await`"),
+        ],
+        pass: "the Tideforecaster lowers the glass. \"the tide will come — awaited, not forced.\"",
+    },
+    // ── Act 8 (Vault of Pointers).
+    MissionRule {
+        id: "box_basic",
+        npc: "the Vaultwright waits",
+        checks: &[
+            check(&["Box<"], "missing required: `Box<...>`"),
+            check(&["Box::new"], "put the value on the heap with `Box::new`"),
+        ],
+        pass: "the Vaultwright seals the box. \"on the heap it holds what the stack cannot.\"",
+    },
+    MissionRule {
+        id: "rc_basic",
+        npc: "the Sharekeeper waits",
+        checks: &[
+            check(&["Rc::new"], "missing required: `Rc::new`"),
+            check(&["Rc::clone"], "hand out a second handle with `Rc::clone`"),
+        ],
+        pass: "the Sharekeeper tallies the claims. \"one hoard, many holders.\"",
+    },
+    MissionRule {
+        id: "refcell",
+        npc: "the Warden waits",
+        checks: &[
+            check(&["RefCell"], "missing required: `RefCell`"),
+            check(&[".borrow_mut("], "mutate the inner value with `.borrow_mut(`"),
+        ],
+        pass: "the Warden checks the ledger. \"changed within — by the runtime's leave.\"",
+    },
+    MissionRule {
+        id: "cell",
+        npc: "the Swapwarden waits",
+        checks: &[
+            check(&["Cell::new"], "missing required: `Cell::new`"),
+            check(&[".set("], "swap the whole value with `.set(`"),
+        ],
+        pass: "the Swapwarden trades the coin. \"the whole value, swapped clean.\"",
+    },
+    MissionRule {
+        id: "rc_refcell",
+        npc: "the Strongbox waits",
+        checks: &[
+            check(&["Rc::new"], "share ownership with `Rc::new`"),
+            check(&["RefCell"], "make it mutable inside with `RefCell`"),
+            check(&[".borrow_mut("], "open and change it via `.borrow_mut(`"),
+        ],
+        pass: "the Strongbox turns the keys. \"many owners, and the box still opens.\"",
+    },
+    MissionRule {
+        id: "weak_ref",
+        npc: "the Ghostkeeper waits",
+        checks: &[
+            check(&["Weak"], "missing required: a `Weak` reference"),
+            check(&["downgrade"], "make the weak handle with `Rc::downgrade`"),
+            check(&[".upgrade("], "reclaim it (or not) with `.upgrade(`"),
+        ],
+        pass: "the Ghostkeeper tugs the tether. \"a hold that holds nothing alive.\"",
+    },
+];
+// END MISSION TABLE
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ── rule table shape ───────────────────────────────────────────
+
+    #[test]
+    fn rule_ids_are_unique_and_every_rule_has_checks() {
+        let mut seen = std::collections::BTreeSet::new();
+        for rule in MISSION_RULES {
+            assert!(seen.insert(rule.id), "duplicate rule id `{}`", rule.id);
+            assert!(!rule.checks.is_empty(), "rule `{}` has no checks", rule.id);
+            assert!(
+                rule.checks.iter().all(|c| !c.any_of.is_empty()),
+                "rule `{}` has an empty check",
+                rule.id
+            );
+        }
+    }
 
     // ── intro_let_binding ──────────────────────────────────────────
 

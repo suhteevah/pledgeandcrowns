@@ -575,3 +575,27 @@ fn stub_does_not_cross_grade_solutions() {
     assert!(!stub_verdict("loop_break", match_sol).unwrap().ok);
     assert!(!stub_verdict("struct_basic", match_sol).unwrap().ok);
 }
+
+#[test]
+fn rule_table_is_well_formed_and_matches_the_registry() {
+    use pledge_and_crown::plugins::stub_grader::MISSION_RULES;
+    use std::collections::BTreeSet;
+    let mut ids = BTreeSet::new();
+    for rule in MISSION_RULES {
+        assert!(ids.insert(rule.id), "duplicate rule id `{}`", rule.id);
+        assert!(!rule.checks.is_empty(), "rule `{}` has no checks", rule.id);
+        for c in rule.checks {
+            assert!(
+                !c.any_of.is_empty(),
+                "rule `{}` has an empty check",
+                rule.id
+            );
+        }
+    }
+    let registry: BTreeSet<&str> = MissionRegistry::default()
+        .missions
+        .iter()
+        .map(|m| m.id)
+        .collect();
+    assert_eq!(ids, registry, "rule table and MissionRegistry disagree");
+}
