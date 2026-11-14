@@ -408,6 +408,15 @@ pub fn line_role(line: &str) -> LineRole {
     }
 }
 
+/// The first rustc error header in cleaned output (`error[E0384]: ...`),
+/// pinned above the result pane's scrolling block so it is always visible.
+pub fn first_error_line(cleaned: &str) -> Option<&str> {
+    cleaned
+        .lines()
+        .find(|l| line_role(l) == LineRole::ErrorHeader)
+        .map(str::trim_end)
+}
+
 /// 1-based lines in the PLAYER's buffer that carry a rustc error.
 ///
 /// Only the primary location (the first `-->` after an `error` header)
@@ -481,6 +490,16 @@ fn parse_location_line(loc: &str) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn first_error_line_skips_warnings_and_art() {
+        let out = "warning: unused variable: `n`\n --> src/main.rs:7:9\n  |\nerror[E0425]: cannot find value `y` in this scope  \n  --> src/main.rs:10:28\nerror[E0308]: mismatched types";
+        assert_eq!(
+            first_error_line(out),
+            Some("error[E0425]: cannot find value `y` in this scope")
+        );
+        assert_eq!(first_error_line("all good\n42"), None);
+    }
 
     // Real rustc 1.8x output as captured from `cargo check`
     // (CARGO_TERM_COLOR=never), player source on the left of the gutter.

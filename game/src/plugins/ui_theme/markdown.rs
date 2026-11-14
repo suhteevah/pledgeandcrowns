@@ -1,20 +1,29 @@
 // SPDX-License-Identifier: MIT
-//! Renderer for the markdown subset the mission tutorials and prompts use.
+//! The game's one renderer for the markdown subset the mission tutorials
+//! and prompts use. Every panel that shows tutorial text goes through it:
+//! the NPC prompt, the completion recap, and the Cast Editor's goal pane.
+//! Fenced code here and the editor's revealed solution share
+//! [`code_frame`] and [`super::highlight`], so code looks the same
+//! wherever it appears.
 //!
 //! Surveyed across all 57 missions: `## Heading` lines, fenced code
 //! blocks (bare ```` ``` ````, no language tag), inline `` `code` ``,
 //! `*emphasis*` and `**strong**`. No lists, tables, links or nested
-//! markup. Anything else is shown as plain text, never dropped.
+//! markup. Anything else is shown as plain text, never dropped; an
+//! unmatched marker stays literal.
 //!
-//! [`parse`] is pure and unit-tested on the real tutorial strings;
-//! [`show`] draws the result with the theme: headings in Oxblood, inline
-//! code as monospace on an Aged paper chip, code blocks in an Aged paper
-//! box.
+//! [`parse`] is pure and unit-tested on the real tutorial strings; the
+//! `show*` functions draw the result with the theme: headings in Oxblood,
+//! strong in Wineflesh, inline code as monospace on an Aged paper chip
+//! ([`super::inline_code_format`]), fenced code syntax-coloured on
+//! Parchment inside a 1 px Basalt frame (bible v2.1: the syntax colours
+//! are not all 4.5:1 on Aged paper).
 
 use bevy_egui::egui;
 
 use super::{
-    BASALT, BODY_SIZE, CODE_CHIP, MONO_SIZE, SUBHEADING_SIZE, TEXT, TEXT_HEADING, WINEFLESH,
+    BODY_SIZE, CODE_BLOCK_FRAME, CODE_PAGE, MONO_SIZE, SMALL_SIZE, SUBHEADING_SIZE, TEXT,
+    TEXT_HEADING, WINEFLESH, highlight, inline_code_format,
 };
 
 /// Inline run kinds.
@@ -42,6 +51,30 @@ pub enum Block {
     Code(String),
 }
 
+/// Text sizes one rendering uses. Panels use [`TextScale::PANEL`]; the
+/// Cast Editor's narrow goal pane uses [`TextScale::COMPACT`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TextScale {
+    pub body: f32,
+    pub mono: f32,
+    pub heading: f32,
+}
+
+impl TextScale {
+    /// Modal panels, prompts, the recap.
+    pub const PANEL: TextScale = TextScale {
+        body: BODY_SIZE,
+        mono: MONO_SIZE,
+        heading: SUBHEADING_SIZE,
+    };
+    /// The editor's goal pane: smaller, still never under the minimum.
+    pub const COMPACT: TextScale = TextScale {
+        body: SMALL_SIZE,
+        mono: super::MIN_TEXT_SIZE,
+        heading: BODY_SIZE,
+    };
+}
+
 fn span(kind: SpanKind, text: &str) -> Span {
     Span {
         kind,
@@ -50,7 +83,7 @@ fn span(kind: SpanKind, text: &str) -> Span {
 }
 
 /// Split one paragraph into inline spans. Code spans win over emphasis
-/// (`` `**x` `` is code), an unmatched delimiter is literal text.
+/// (`` `**x` `` is code), an unmatched or empty delimiter is literal text.
 pub fn parse_inline(src: &str) -> Vec<Span> {
     let mut out: Vec<Span> = Vec::new();
     let mut text = String::new();
@@ -63,7 +96,10 @@ pub fn parse_inline(src: &str) -> Vec<Span> {
     };
     while let Some(c) = rest.chars().next() {
         let matched = if c == '`' {
-            rest[1..].find('`').map(|end| (SpanKind::Code, 1, end, 1))
+            rest[1..]
+                .find('`')
+                .filter(|&end| end > 0)
+                .map(|end| (SpanKind::Code, 1, end, 1))
         } else if let Some(after) = rest.strip_prefix("**") {
             after
                 .find("**")
@@ -138,20 +174,14 @@ pub fn parse(src: &str) -> Vec<Block> {
 }
 
 /// Lay out one paragraph's spans as an egui text job.
-pub fn inline_job(spans: &[Span], size: f32, wrap_width: f32) -> egui::text::LayoutJob {
+pub fn inline_job(spans: &[Span], scale: TextScale, wrap_width: f32) -> egui::text::LayoutJob {
     let mut job = egui::text::LayoutJob::default();
     job.wrap.max_width = wrap_width;
-    let body = egui::FontId::proportional(size);
+    let body = egui::FontId::proportional(scale.body);
     for s in spans {
         let format = match s.kind {
             SpanKind::Text => egui::TextFormat::simple(body.clone(), TEXT),
-            SpanKind::Code => egui::TextFormat {
-                font_id: egui::FontId::monospace(MONO_SIZE.min(size)),
-                color: TEXT,
-                background: CODE_CHIP,
-                expand_bg: 1.0,
-                ..Default::default()
-            },
+            SpanKind::Code => inline_code_format(scale.mono.min(scale.body)),
             SpanKind::Emphasis => egui::TextFormat {
                 font_id: body.clone(),
                 color: TEXT,
@@ -165,16 +195,49 @@ pub fn inline_job(spans: &[Span], size: f32, wrap_width: f32) -> egui::text::Lay
     job
 }
 
-/// Draw a single line of inline markdown (prompts).
+/// Draw a single line of inline markdown (prompts) at `size`.
 pub fn show_inline(ui: &mut egui::Ui, src: &str, size: f32) -> egui::Response {
-    let job = inline_job(&parse_inline(src), size, ui.available_width());
+    let scale = TextScale {
+        body: size,
+        ..TextScale::PANEL
+    };
+    let job = inline_job(&parse_inline(src), scale, ui.available_width());
     ui.label(job)
 }
 
-/// Draw parsed blocks at body size.
+/// The frame every block of syntax-coloured code sits in: Parchment with
+/// a 1 px Basalt line (fenced code here, the editor's solution view).
+pub fn code_frame() -> egui::Frame {
+    egui::Frame::new()
+        .fill(CODE_PAGE)
+        .stroke(egui::Stroke::new(1.0_f32, CODE_BLOCK_FRAME))
+        .inner_margin(egui::Margin::symmetric(8, 6))
+}
+
+/// A fenced code block: syntax-coloured, wrapped to the panel (reading
+/// only; tutorials have no copy action).
+pub fn code_block(ui: &mut egui::Ui, code: &str, mono_size: f32) {
+    code_frame().show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        let mut job = highlight::layout_job(
+            code,
+            egui::FontId::monospace(mono_size),
+            &std::collections::BTreeSet::new(),
+        );
+        job.wrap.max_width = ui.available_width();
+        ui.add(egui::Label::new(job).wrap());
+    });
+}
+
+/// Draw tutorial/prompt text at panel size.
 pub fn show(ui: &mut egui::Ui, src: &str) {
+    show_scaled(ui, src, TextScale::PANEL);
+}
+
+/// Draw tutorial/prompt text at `scale`.
+pub fn show_scaled(ui: &mut egui::Ui, src: &str, scale: TextScale) {
     let blocks = parse(src);
-    tracing::trace!(blocks = blocks.len(), "markdown::show");
+    tracing::trace!(blocks = blocks.len(), body = scale.body, "markdown::show");
     for (i, block) in blocks.iter().enumerate() {
         if i > 0 {
             ui.add_space(4.0);
@@ -183,29 +246,15 @@ pub fn show(ui: &mut egui::Ui, src: &str) {
             Block::Heading(h) => {
                 ui.label(
                     egui::RichText::new(h)
-                        .size(SUBHEADING_SIZE)
+                        .size(scale.heading)
                         .color(TEXT_HEADING)
                         .strong(),
                 );
             }
             Block::Paragraph(spans) => {
-                ui.label(inline_job(spans, BODY_SIZE, ui.available_width()));
+                ui.add(egui::Label::new(inline_job(spans, scale, ui.available_width())).wrap());
             }
-            Block::Code(code) => {
-                egui::Frame::new()
-                    .fill(CODE_CHIP)
-                    .stroke(egui::Stroke::new(1.0_f32, BASALT))
-                    .inner_margin(egui::Margin::symmetric(8, 6))
-                    .show(ui, |ui| {
-                        ui.set_width(ui.available_width());
-                        ui.label(
-                            egui::RichText::new(code)
-                                .monospace()
-                                .size(MONO_SIZE)
-                                .color(TEXT),
-                        );
-                    });
-            }
+            Block::Code(code) => code_block(ui, code, scale.mono),
         }
     }
 }
@@ -250,9 +299,63 @@ mod tests {
     }
 
     #[test]
-    fn unmatched_backtick_is_literal() {
-        let got = parse_inline("a ` b");
-        assert_eq!(kinds(&got), vec![(SpanKind::Text, "a ` b")]);
+    fn unmatched_or_empty_markers_stay_literal() {
+        assert_eq!(
+            kinds(&parse_inline("a ` b")),
+            vec![(SpanKind::Text, "a ` b")]
+        );
+        assert_eq!(
+            kinds(&parse_inline("2 * 3 * 4")),
+            vec![(SpanKind::Text, "2 * 3 * 4")]
+        );
+        assert_eq!(kinds(&parse_inline("``")), vec![(SpanKind::Text, "``")]);
+        assert_eq!(kinds(&parse_inline("`*`")), vec![(SpanKind::Code, "*")]);
+        assert_eq!(
+            kinds(&parse_inline("é `ü`")),
+            vec![(SpanKind::Text, "é "), (SpanKind::Code, "ü")]
+        );
+    }
+
+    #[test]
+    fn paragraphs_join_lines_and_fences_keep_markup_literal() {
+        assert_eq!(
+            parse("one\ntwo\n\nthree"),
+            vec![
+                Block::Paragraph(vec![span(SpanKind::Text, "one two")]),
+                Block::Paragraph(vec![span(SpanKind::Text, "three")]),
+            ]
+        );
+        assert_eq!(
+            parse("```\n    ## not a heading `x`\n```"),
+            vec![Block::Code("    ## not a heading `x`".into())]
+        );
+        // An unterminated fence still shows as code.
+        assert_eq!(
+            parse("```\nlet x = 1;"),
+            vec![Block::Code("let x = 1;".into())]
+        );
+        assert_eq!(
+            parse("#tag"),
+            vec![Block::Paragraph(vec![span(SpanKind::Text, "#tag")])]
+        );
+    }
+
+    #[test]
+    fn inline_code_uses_the_shared_chip_format() {
+        let job = inline_job(&parse_inline("a `b`"), TextScale::PANEL, f32::INFINITY);
+        let chip = inline_code_format(MONO_SIZE);
+        let code = &job.sections[1].format;
+        assert_eq!(code.background, chip.background);
+        assert_eq!(code.color, chip.color);
+    }
+
+    #[test]
+    fn compact_scale_respects_the_minimum_text_size() {
+        for s in [TextScale::COMPACT, TextScale::PANEL] {
+            assert!(s.body >= super::super::MIN_TEXT_SIZE);
+            assert!(s.mono >= super::super::MIN_TEXT_SIZE);
+            assert!(s.heading >= s.body);
+        }
     }
 
     #[test]
@@ -311,7 +414,9 @@ mod tests {
 
     /// No markup leaks into rendered text for any tutorial or prompt:
     /// every heading is recognised, every fence closes, no stray `##`,
-    /// fence or backtick survives in a text span.
+    /// fence, backtick or `**` survives in a text span, and no tutorial
+    /// uses markup this renderer does not support (lists, deeper headings,
+    /// language-tagged fences).
     #[test]
     fn every_tutorial_and_prompt_renders_without_raw_markup() {
         let reg = MissionRegistry::default();
@@ -323,6 +428,27 @@ mod tests {
                 .filter(|l| l.trim().starts_with("```"))
                 .count();
             assert_eq!(fences % 2, 0, "{}: unbalanced fences", m.id);
+            let mut in_fence = false;
+            for line in m.tutorial.lines() {
+                let t = line.trim();
+                if t.starts_with("```") {
+                    assert!(
+                        in_fence || t == "```",
+                        "{}: language-tagged fence {t:?}",
+                        m.id
+                    );
+                    in_fence = !in_fence;
+                    continue;
+                }
+                if in_fence {
+                    continue;
+                }
+                assert!(
+                    !t.starts_with('#') || t.starts_with("## "),
+                    "{}: unsupported heading {t:?}",
+                    m.id
+                );
+            }
             let blocks = parse(m.tutorial);
             let headings = blocks
                 .iter()
@@ -332,21 +458,12 @@ mod tests {
             for b in &blocks {
                 if let Block::Paragraph(spans) = b {
                     for s in spans.iter().filter(|s| s.kind == SpanKind::Text) {
+                        for raw in ["`", "##", "**"] {
+                            assert!(!s.text.contains(raw), "{}: raw {raw} in {:?}", m.id, s.text);
+                        }
                         assert!(
-                            !s.text.contains('`'),
-                            "{}: raw backtick in {:?}",
-                            m.id,
-                            s.text
-                        );
-                        assert!(
-                            !s.text.contains("##"),
-                            "{}: raw heading in {:?}",
-                            m.id,
-                            s.text
-                        );
-                        assert!(
-                            !s.text.contains("**"),
-                            "{}: raw strong in {:?}",
+                            !s.text.starts_with("- ") && !s.text.contains(" - [ ]"),
+                            "{}: list markup in {:?}",
                             m.id,
                             s.text
                         );
@@ -358,8 +475,8 @@ mod tests {
                 .filter(|s| s.kind == SpanKind::Text)
             {
                 assert!(
-                    !s.text.contains('`'),
-                    "{}: raw backtick in prompt {:?}",
+                    !s.text.contains('`') && !s.text.contains("**"),
+                    "{}: raw markup in prompt {:?}",
                     m.id,
                     s.text
                 );

@@ -42,18 +42,10 @@ use crate::plugins::state::{GameState, PauseState};
 
 use lines::{AUTHORED, GENERIC, NOT_YET_ELSEWHERE, NOT_YET_NOTHING, StatusLines};
 
-// --- Bible role colours (design/03-art-style-bible.md, UI style) ---------
-/// Primary UI surface.
-pub const PARCHMENT_CREAM: egui::Color32 = egui::Color32::from_rgb(0xFC, 0xEF, 0xC8);
-/// Frame colour (shared with the code-editor frame).
-pub const BASALT: egui::Color32 = egui::Color32::from_rgb(0x3E, 0x38, 0x33);
-/// Primary brand: the speaker's name plate.
-pub const OXBLOOD: egui::Color32 = egui::Color32::from_rgb(0x6B, 0x1F, 0x35);
-/// Body text (universal outline colour, never pure black).
-pub const COALBLACK: egui::Color32 = egui::Color32::from_rgb(0x16, 0x13, 0x13);
-/// Inline-code chip behind Coalblack monospace text (contrast ~9:1; Main
-/// teal text on Parchment is only ~3.9:1, below the 4.5:1 floor).
-pub const AGED_PAPER: egui::Color32 = egui::Color32::from_rgb(0xBF, 0xB2, 0xA0);
+// Colours are the shared theme's roles (design/03-art-style-bible.md, UI
+// style); `ui_theme` is the only place a colour is defined. Inline code
+// uses the same chip as tutorial text (`ui_theme::inline_code_format`).
+use crate::plugins::ui_theme;
 
 /// Longest line (in chars, after `{next}` substitution) the box shows.
 /// The box is at most [`BOX_MAX_WIDTH`] points wide; minus the portrait
@@ -614,23 +606,18 @@ fn reset_dialogue(mut dialogue: ResMut<Dialogue>, mut handoff: ResMut<DialogueHa
     handoff.take();
 }
 
-/// Lay out revealed spans: Coalblack proportional prose, inline code as
-/// Coalblack monospace on an Aged-paper chip.
+/// Lay out revealed spans: Coalblack proportional prose, inline code on
+/// the theme's shared code chip (the same look as tutorial text).
 fn spans_job(spans: &[Span], wrap_width: f32) -> egui::text::LayoutJob {
     let mut job = egui::text::LayoutJob::default();
     job.wrap.max_width = wrap_width;
     for s in spans {
         let format = if s.code {
-            egui::TextFormat {
-                font_id: egui::FontId::monospace(CODE_TEXT_SIZE),
-                color: COALBLACK,
-                background: AGED_PAPER,
-                ..Default::default()
-            }
+            ui_theme::inline_code_format(CODE_TEXT_SIZE)
         } else {
             egui::TextFormat {
                 font_id: egui::FontId::proportional(BODY_TEXT_SIZE),
-                color: COALBLACK,
+                color: ui_theme::TEXT,
                 ..Default::default()
             }
         };
@@ -669,8 +656,8 @@ fn draw_dialogue(mut contexts: EguiContexts, dialogue: Res<Dialogue>) {
     };
     let frame = |margin: i8| {
         egui::Frame::new()
-            .fill(PARCHMENT_CREAM)
-            .stroke(egui::Stroke::new(2.0_f32, BASALT))
+            .fill(ui_theme::SURFACE)
+            .stroke(egui::Stroke::new(2.0_f32, ui_theme::FRAME))
             .inner_margin(egui::Margin::same(margin))
     };
 
@@ -694,12 +681,12 @@ fn draw_dialogue(mut contexts: EguiContexts, dialogue: Res<Dialogue>) {
                         ui.add_space(10.0);
                         ui.vertical(|ui| {
                             egui::Frame::new()
-                                .fill(OXBLOOD)
+                                .fill(ui_theme::SELECT_FILL)
                                 .inner_margin(egui::Margin::symmetric(8, 3))
                                 .show(ui, |ui| {
                                     ui.label(
                                         egui::RichText::new(active.speaker)
-                                            .color(PARCHMENT_CREAM)
+                                            .color(ui_theme::SELECT_TEXT)
                                             .strong(),
                                     );
                                 });
@@ -712,7 +699,7 @@ fn draw_dialogue(mut contexts: EguiContexts, dialogue: Res<Dialogue>) {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
                         ui.label(
                             egui::RichText::new(hint)
-                                .color(BASALT)
+                                .color(ui_theme::TEXT_MUTED)
                                 .size(HINT_TEXT_SIZE)
                                 .strong(),
                         );

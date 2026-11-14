@@ -16,7 +16,13 @@
 //!   [`framed_panel`] inside any `Ui`), then [`heading`], [`menu_item`],
 //!   [`key_hint`] and [`status_mark`] inside it.
 //! - Tutorial text goes through [`markdown::show`], which renders the
-//!   small markdown subset the curriculum uses.
+//!   small markdown subset the curriculum uses. It is the game's ONLY
+//!   markdown renderer (mission prompt, recap, editor goal pane); fenced
+//!   code and the editor's solution view share [`markdown::code_block`]
+//!   and the syntax colouring in [`highlight`].
+//! - Colours: every colour literal in `game/src/plugins` lives in this
+//!   file (a test enforces it). Use a role (`TEXT`, `SURFACE`,
+//!   `SYNTAX_KEYWORD`, ...) or, failing that, a swatch by bible name.
 //! - Text sizes: never below [`MIN_TEXT_SIZE`]; use [`BODY_SIZE`] for
 //!   reading text. Every text/surface pair this module uses is listed in
 //!   [`TEXT_PAIRS`] and unit-tested for at least 4.5:1 contrast.
@@ -24,12 +30,16 @@
 //! The font is still egui's default (Ubuntu-Light / Hack): the bible's
 //! pixel font is an owner decision; no licensed pixel font is in the repo.
 
+pub mod highlight;
 pub mod markdown;
 
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, EguiPrimaryContextPass, egui};
 
-// --- Palette: every swatch the UI uses, by bible name ---------------------
+// --- Palette: the bible's 32 swatches, by bible name ------------------------
+// This file is the ONLY place in `game/src/plugins` where a colour is written
+// as a literal (enforced by `tests::no_colour_literals_outside_ui_theme`).
+// Every other plugin imports a role below (or a swatch by name).
 // Burgundy ramp (anchor).
 /// `#1B0810` outline / deepest shadow on red surfaces.
 pub const INKBLOOD: egui::Color32 = egui::Color32::from_rgb(0x1B, 0x08, 0x10);
@@ -44,7 +54,9 @@ pub const DUSTY_ROSE: egui::Color32 = egui::Color32::from_rgb(0xC5, 0x68, 0x83);
 /// `#EBC2CC` pale rim light; text-selection background.
 pub const PINK_QUARTZ: egui::Color32 = egui::Color32::from_rgb(0xEB, 0xC2, 0xCC);
 // Gold ramp.
-/// `#5E4116` antique metal mid-shadow.
+/// `#2D1F0A` gold deepest shadow.
+pub const BOG_UMBER: egui::Color32 = egui::Color32::from_rgb(0x2D, 0x1F, 0x0A);
+/// `#5E4116` antique metal mid-shadow; code comments, line-number gutter.
 pub const BRONZE: egui::Color32 = egui::Color32::from_rgb(0x5E, 0x41, 0x16);
 /// `#9C7026` gold mid-tone.
 pub const ANTIQUE_BRASS: egui::Color32 = egui::Color32::from_rgb(0x9C, 0x70, 0x26);
@@ -57,28 +69,45 @@ pub const PARCHMENT_CREAM: egui::Color32 = egui::Color32::from_rgb(0xFC, 0xEF, 0
 // Teal ramp.
 /// `#062123` code-editor cursor.
 pub const ABYSSAL: egui::Color32 = egui::Color32::from_rgb(0x06, 0x21, 0x23);
-/// `#2A8482` Borrow Checker signature; types in code.
+/// `#154548` borrow-checker robe shadow; types in code (bible v2.1).
+pub const DEEP_TEAL: egui::Color32 = egui::Color32::from_rgb(0x15, 0x45, 0x48);
+/// `#2A8482` Borrow Checker signature (not text-safe on parchment: 3.9:1).
 pub const MAIN_TEAL: egui::Color32 = egui::Color32::from_rgb(0x2A, 0x84, 0x82);
+/// `#5BB8AF` magic emission, ice highlights.
+pub const BRIGHT_TEAL: egui::Color32 = egui::Color32::from_rgb(0x5B, 0xB8, 0xAF);
+/// `#A4DED4` magic glow rim, fog.
+pub const MIST_TEAL: egui::Color32 = egui::Color32::from_rgb(0xA4, 0xDE, 0xD4);
 // Greens.
-/// `#27502E` dark grass.
+/// `#142A19` foliage shadow.
+pub const MOSSBED: egui::Color32 = egui::Color32::from_rgb(0x14, 0x2A, 0x19);
+/// `#27502E` dark grass; strings in code (bible v2.1); pass banner.
 pub const PINE: egui::Color32 = egui::Color32::from_rgb(0x27, 0x50, 0x2E);
-/// `#487E40` primary grass; strings in code; the "cleared" tick.
+/// `#487E40` primary grass; the "cleared" tick (a mark, not text).
 pub const FOREST: egui::Color32 = egui::Color32::from_rgb(0x48, 0x7E, 0x40);
+/// `#82B450` fresh growth, lit grass.
+pub const SPRING_MEADOW: egui::Color32 = egui::Color32::from_rgb(0x82, 0xB4, 0x50);
+/// `#C9DC97` pale grass, wheat.
+pub const HAYFIELD: egui::Color32 = egui::Color32::from_rgb(0xC9, 0xDC, 0x97);
 // Neutrals.
 /// `#161313` universal outline and body text (never pure black).
 pub const COALBLACK: egui::Color32 = egui::Color32::from_rgb(0x16, 0x13, 0x13);
 /// `#3E3833` frames; secondary text.
 pub const BASALT: egui::Color32 = egui::Color32::from_rgb(0x3E, 0x38, 0x33);
-/// `#7A7064` comments; separators (never body text: 4.3:1 on parchment).
+/// `#7A7064` separators only (never text: 4.2:1 on parchment).
 pub const STONE_GREY: egui::Color32 = egui::Color32::from_rgb(0x7A, 0x70, 0x64);
-/// `#BFB2A0` old documents: code chips, slider rails, idle bevel shadow.
+/// `#BFB2A0` old documents: inline code chips, slider rails, idle bevel shadow.
 pub const AGED_PAPER: egui::Color32 = egui::Color32::from_rgb(0xBF, 0xB2, 0xA0);
+// Tetradic violet (magic only).
+/// `#3A1559` magic shadow, corruption.
+pub const ROYAL_ARCANE: egui::Color32 = egui::Color32::from_rgb(0x3A, 0x15, 0x59);
+/// `#9D6FE0` spell emission, runes.
+pub const MAGE_GLOW: egui::Color32 = egui::Color32::from_rgb(0x9D, 0x6F, 0xE0);
 // Cool accents.
-/// `#0E2E54` night sky.
+/// `#0E2E54` night sky; number literals in code (bible v2.1).
 pub const COBALT_DEEP: egui::Color32 = egui::Color32::from_rgb(0x0E, 0x2E, 0x54);
 /// `#377AB8` daytime water.
 pub const COBALT: egui::Color32 = egui::Color32::from_rgb(0x37, 0x7A, 0xB8);
-/// `#E63946` errors, panic UI.
+/// `#E63946` error MARKS only (squiggles, gutter bar): 3.6:1 is not text-safe.
 pub const ALARM_SCARLET: egui::Color32 = egui::Color32::from_rgb(0xE6, 0x39, 0x46);
 /// `#FFFFFF` pure highlights only.
 pub const SPECULAR_WHITE: egui::Color32 = egui::Color32::from_rgb(0xFF, 0xFF, 0xFF);
@@ -100,10 +129,71 @@ pub const SELECT_FILL: egui::Color32 = OXBLOOD;
 pub const SELECT_TEXT: egui::Color32 = PARCHMENT_CREAM;
 /// The selection marker and corner rivets.
 pub const MARKER: egui::Color32 = OLD_GOLD;
-/// Inline code / code-block background.
+/// Inline code chip background (plain Coalblack code text only: the
+/// syntax colours are not all 4.5:1 on Aged paper, see [`SYNTAX_TEXT`]).
 pub const CODE_CHIP: egui::Color32 = AGED_PAPER;
+/// Text on [`CODE_CHIP`].
+pub const CODE_CHIP_TEXT: egui::Color32 = COALBLACK;
 /// Thin rules between panel sections.
 pub const RULE: egui::Color32 = STONE_GREY;
+
+// --- Code roles (bible v2.1, "Code editor frame") ---------------------------
+/// Every surface syntax-coloured code is drawn on: the editor's code page,
+/// the revealed solution and fenced code blocks in tutorials. All three are
+/// Parchment cream; fenced blocks get a 1 px [`CODE_BLOCK_FRAME`] instead
+/// of an Aged paper chip (bible v2.1).
+pub const CODE_PAGE: egui::Color32 = PARCHMENT_CREAM;
+/// 1 px frame around a fenced code block / the solution view.
+pub const CODE_BLOCK_FRAME: egui::Color32 = BASALT;
+/// Keywords (`fn`, `let`, `mut`).
+pub const SYNTAX_KEYWORD: egui::Color32 = WINEFLESH;
+/// Types (capitalised identifiers).
+pub const SYNTAX_TYPE: egui::Color32 = DEEP_TEAL;
+/// String literals.
+pub const SYNTAX_STRING: egui::Color32 = PINE;
+/// Comments: quieter than code by hue, not by low contrast.
+pub const SYNTAX_COMMENT: egui::Color32 = BRONZE;
+/// Number literals (gold cannot reach 4.5:1 on cream and still read gold).
+pub const SYNTAX_NUMBER: egui::Color32 = COBALT_DEEP;
+/// Identifiers and punctuation.
+pub const SYNTAX_PLAIN: egui::Color32 = COALBLACK;
+/// Error text (rustc error headers, an error line's gutter number).
+pub const SYNTAX_ERROR_TEXT: egui::Color32 = OXBLOOD;
+/// Error marks that are not text: the underline squiggle and the gutter
+/// bar on an error line (non-text needs 3:1; scarlet is 3.6:1).
+pub const ERROR_MARK: egui::Color32 = ALARM_SCARLET;
+/// Text cursor in code.
+pub const CODE_CURSOR: egui::Color32 = ABYSSAL;
+/// Line numbers in the code page's gutter.
+pub const GUTTER: egui::Color32 = BRONZE;
+/// Line number of a line rustc flagged (drawn on a [`CODE_CHIP`] band).
+pub const GUTTER_ERROR: egui::Color32 = SYNTAX_ERROR_TEXT;
+
+/// Every syntax text colour, for the contrast test.
+pub const SYNTAX_TEXT: &[(&str, egui::Color32)] = &[
+    ("keyword", SYNTAX_KEYWORD),
+    ("type", SYNTAX_TYPE),
+    ("string", SYNTAX_STRING),
+    ("comment", SYNTAX_COMMENT),
+    ("number", SYNTAX_NUMBER),
+    ("plain", SYNTAX_PLAIN),
+    ("error text", SYNTAX_ERROR_TEXT),
+    ("gutter", GUTTER),
+];
+/// Every surface syntax text is drawn on.
+pub const SYNTAX_SURFACES: &[(&str, egui::Color32)] = &[("code page / code block", CODE_PAGE)];
+
+/// The one inline-code look (markdown and dialogue): monospace
+/// [`CODE_CHIP_TEXT`] on a [`CODE_CHIP`] band.
+pub fn inline_code_format(size: f32) -> egui::TextFormat {
+    egui::TextFormat {
+        font_id: egui::FontId::monospace(size),
+        color: CODE_CHIP_TEXT,
+        background: CODE_CHIP,
+        expand_bg: 1.0,
+        ..Default::default()
+    }
+}
 
 // --- Sizes (points at 1x) --------------------------------------------------
 /// No text anywhere is smaller than this.
@@ -132,7 +222,13 @@ pub const TEXT_PAIRS: &[(&str, egui::Color32, egui::Color32)] = &[
     ("strong (wineflesh) on parchment", WINEFLESH, SURFACE),
     ("selected row text", SELECT_TEXT, SELECT_FILL),
     ("code on aged paper", TEXT, CODE_CHIP),
+    ("inline code chip", CODE_CHIP_TEXT, CODE_CHIP),
     ("muted on aged paper", TEXT_MUTED, CODE_CHIP),
+    (
+        "error-line gutter number on its band",
+        GUTTER_ERROR,
+        CODE_CHIP,
+    ),
     ("body on text selection", TEXT, PINK_QUARTZ),
     (
         "error on parchment (scarlet is not text-safe; use oxblood)",
@@ -233,7 +329,7 @@ pub fn apply_style(style: &mut egui::Style) {
     v.slider_trailing_fill = true;
     v.handle_shape = egui::style::HandleShape::Rect { aspect_ratio: 0.6 };
     v.striped = false;
-    v.text_cursor.stroke = egui::Stroke::new(2.0_f32, ABYSSAL);
+    v.text_cursor.stroke = egui::Stroke::new(2.0_f32, CODE_CURSOR);
 
     // Idle widgets: parchment with a Basalt edge (the bevel is drawn by
     // `menu_item`; plain egui buttons get the edge only). Hover: Oxblood
@@ -558,8 +654,222 @@ mod tests {
 
     #[test]
     fn stone_grey_is_not_safe_for_body_text() {
-        // Documents why RULE / comments never carry reading text.
+        // Documents why RULE never carries reading text and why comments
+        // moved to Bronze in bible v2.1.
         assert!(contrast_ratio(STONE_GREY, SURFACE) < 4.5);
+    }
+
+    /// Bible v2.1: every syntax text colour is at least 4.5:1 on every
+    /// surface it is drawn on.
+    #[test]
+    fn syntax_text_meets_4_5_on_every_code_surface() {
+        for (surface_name, surface) in SYNTAX_SURFACES {
+            for (name, fg) in SYNTAX_TEXT {
+                let ratio = contrast_ratio(*fg, *surface);
+                println!("{name} on {surface_name}: {ratio:.2}:1");
+                assert!(
+                    ratio >= 4.5,
+                    "{name} on {surface_name} is only {ratio:.2}:1"
+                );
+            }
+        }
+    }
+
+    /// Why fenced code blocks are Parchment with a Basalt frame rather than
+    /// an Aged paper chip (bible v2.1): three of the syntax colours fall
+    /// under 4.5:1 on Aged paper. If this ever stops failing, chips could
+    /// carry syntax colour again; until then only plain code text may.
+    #[test]
+    fn syntax_colours_are_not_chip_safe_so_chips_stay_plain() {
+        let failing: Vec<&str> = SYNTAX_TEXT
+            .iter()
+            .filter(|(_, fg)| contrast_ratio(*fg, CODE_CHIP) < 4.5)
+            .map(|(n, _)| *n)
+            .collect();
+        assert_eq!(failing, vec!["keyword", "string", "comment", "gutter"]);
+        assert_ne!(CODE_PAGE, CODE_CHIP);
+        assert!(contrast_ratio(CODE_CHIP_TEXT, CODE_CHIP) >= 4.5);
+    }
+
+    /// Error marks are non-text: 3:1 (WCAG 1.4.11) on the code page.
+    #[test]
+    fn error_mark_meets_non_text_contrast() {
+        assert!(contrast_ratio(ERROR_MARK, CODE_PAGE) >= 3.0);
+        // ...and is not text-safe, which is why error TEXT is Oxblood.
+        assert!(contrast_ratio(ERROR_MARK, CODE_PAGE) < 4.5);
+    }
+
+    /// Syntax roles must stay distinguishable from each other: no two
+    /// token classes share a colour.
+    #[test]
+    fn syntax_roles_are_distinct() {
+        let roles = [
+            SYNTAX_KEYWORD,
+            SYNTAX_TYPE,
+            SYNTAX_STRING,
+            SYNTAX_COMMENT,
+            SYNTAX_NUMBER,
+            SYNTAX_PLAIN,
+            SYNTAX_ERROR_TEXT,
+        ];
+        for (i, a) in roles.iter().enumerate() {
+            for b in &roles[i + 1..] {
+                assert_ne!(a, b);
+            }
+        }
+    }
+
+    /// Files under `game/src/plugins` that may contain a colour literal,
+    /// and why. Everything else must import from this module.
+    const COLOUR_LITERAL_ALLOW: &[(&str, &str)] = &[(
+        "quest_marker.rs",
+        "deliberately off-palette neon gold so the marker pops against grass \
+         and cobble alike; baked into a generated RGBA image, not egui",
+    )];
+
+    /// Does `line` contain a colour literal? Catches egui/Bevy colour
+    /// constructors called with literal arguments, named colour constants,
+    /// `#RRGGBB` hex strings and runs of three hex bytes.
+    fn colour_literal(line: &str) -> Option<&'static str> {
+        let code = line.trim_start();
+        if code.starts_with("//") {
+            return None;
+        }
+        const CTORS: &[&str] = &[
+            "from_rgb(",
+            "from_rgba_unmultiplied(",
+            "from_rgba_premultiplied(",
+            "from_gray(",
+            "srgb(",
+            "srgba(",
+            "srgb_u8(",
+            "srgba_u8(",
+            "srgb_from_array(",
+            "linear_rgb(",
+            "hex(",
+        ];
+        for ctor in CTORS {
+            let mut rest = code;
+            while let Some(i) = rest.find(ctor) {
+                let after = rest[i + ctor.len()..].trim_start();
+                if after.starts_with(|c: char| c.is_ascii_digit() || c == '"' || c == '[') {
+                    return Some(ctor);
+                }
+                rest = &rest[i + ctor.len()..];
+            }
+        }
+        for named in [
+            "Color32::BLACK",
+            "Color32::WHITE",
+            "Color32::RED",
+            "Color32::GREEN",
+            "Color32::BLUE",
+            "Color32::YELLOW",
+            "Color32::GOLD",
+            "Color32::GRAY",
+            "Color32::DARK_",
+            "Color32::LIGHT_",
+            "Color32::KHAKI",
+            "Color32::BROWN",
+            "Color32::ORANGE",
+            "Color::BLACK",
+            "Color::WHITE",
+            "palettes::",
+        ] {
+            if code.contains(named) {
+                return Some("named colour constant");
+            }
+        }
+        let b = code.as_bytes();
+        let is_hex = |c: u8| c.is_ascii_hexdigit();
+        for (i, &c) in b.iter().enumerate() {
+            // "#RRGGBB" (or #RRGGBBAA) not followed by more hex.
+            if c == b'#' && i + 7 <= b.len() && b[i + 1..i + 7].iter().all(|c| is_hex(*c)) {
+                let end = b[i + 7..].iter().take_while(|c| is_hex(**c)).count();
+                if end == 0 || end == 2 {
+                    return Some("#hex");
+                }
+            }
+        }
+        // Three `0xNN` bytes in a row: an RGB(A) array.
+        let mut run = 0;
+        let mut rest = code;
+        while let Some(i) = rest.find("0x") {
+            let digits = rest[i + 2..].bytes().take_while(|c| is_hex(*c)).count();
+            let tail = rest[i + 2 + digits..].trim_start();
+            if digits == 2 && (tail.starts_with(',') || tail.starts_with(']')) {
+                run += 1;
+                if run >= 3 {
+                    return Some("hex byte triple");
+                }
+            } else {
+                run = 0;
+            }
+            rest = &rest[i + 2 + digits..];
+        }
+        None
+    }
+
+    #[test]
+    fn colour_literal_detector_catches_the_usual_shapes() {
+        assert!(colour_literal("let c = egui::Color32::from_rgb(0x98, 0x2D, 0x52);").is_some());
+        assert!(colour_literal("Color::srgb(0.5, 0.2, 0.1)").is_some());
+        assert!(colour_literal("const G: [u8; 4] = [0xFF, 0xDE, 0x2A, 0xFF];").is_some());
+        assert!(colour_literal("let s = \"#982D52\";").is_some());
+        assert!(colour_literal("x.color(egui::Color32::WHITE)").is_some());
+        // Not literals: conversions, transparency, comments, ids.
+        assert!(colour_literal("Color::srgb_u8(c.r(), c.g(), c.b())").is_none());
+        assert!(colour_literal("background: egui::Color32::TRANSPARENT,").is_none());
+        assert!(colour_literal("/// Wineflesh #982D52").is_none());
+        assert!(colour_literal("let id = 0x1234;").is_none());
+        assert!(colour_literal("format!(\"#{n}\")").is_none());
+    }
+
+    fn rust_files(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            panic!("cannot read {}", dir.display());
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                rust_files(&path, out);
+            } else if path.extension().is_some_and(|e| e == "rs") {
+                out.push(path);
+            }
+        }
+    }
+
+    /// One theme: no colour literal anywhere in `game/src/plugins` outside
+    /// this file (and its allow-list).
+    #[test]
+    fn no_colour_literals_outside_ui_theme() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/plugins");
+        let mut files = Vec::new();
+        rust_files(&root, &mut files);
+        assert!(files.len() > 10, "found only {} files", files.len());
+        let mut hits = Vec::new();
+        for path in &files {
+            let rel = path
+                .strip_prefix(&root)
+                .map(|p| p.to_string_lossy().replace('\\', "/"))
+                .unwrap_or_default();
+            if rel == "ui_theme.rs" || COLOUR_LITERAL_ALLOW.iter().any(|(f, _)| *f == rel) {
+                continue;
+            }
+            let Ok(text) = std::fs::read_to_string(path) else {
+                panic!("cannot read {}", path.display());
+            };
+            for (n, line) in text.lines().enumerate() {
+                if let Some(kind) = colour_literal(line) {
+                    hits.push(format!("{rel}:{}: {kind}: {}", n + 1, line.trim()));
+                }
+            }
+        }
+        assert!(
+            hits.is_empty(),
+            "colour literals outside ui_theme.rs (import a role instead):\n{}",
+            hits.join("\n")
+        );
     }
 
     #[test]
@@ -631,5 +941,30 @@ mod tests {
         assert_eq!(hex(STONE_GREY), "#7A7064");
         assert_eq!(hex(INKBLOOD), "#1B0810");
         assert_eq!(hex(COBALT_DEEP), "#0E2E54");
+        assert_eq!(hex(DEEP_TEAL), "#154548");
+        assert_eq!(hex(PINE), "#27502E");
+        assert_eq!(hex(BRONZE), "#5E4116");
+        assert_eq!(hex(ABYSSAL), "#062123");
+        assert_eq!(hex(BOG_UMBER), "#2D1F0A");
+        assert_eq!(hex(MOSSBED), "#142A19");
+        assert_eq!(hex(ROYAL_ARCANE), "#3A1559");
+        assert_eq!(hex(MAGE_GLOW), "#9D6FE0");
+    }
+
+    /// The v2.1 syntax table, by role, exactly as the bible lists it.
+    #[test]
+    fn syntax_roles_match_bible_v2_1() {
+        assert_eq!(SYNTAX_KEYWORD, WINEFLESH);
+        assert_eq!(SYNTAX_TYPE, DEEP_TEAL);
+        assert_eq!(SYNTAX_STRING, PINE);
+        assert_eq!(SYNTAX_COMMENT, BRONZE);
+        assert_eq!(SYNTAX_NUMBER, COBALT_DEEP);
+        assert_eq!(SYNTAX_ERROR_TEXT, OXBLOOD);
+        assert_eq!(ERROR_MARK, ALARM_SCARLET);
+        assert_eq!(SYNTAX_PLAIN, COALBLACK);
+        assert_eq!(CODE_CURSOR, ABYSSAL);
+        assert_eq!(GUTTER, BRONZE);
+        assert_eq!(CODE_PAGE, PARCHMENT_CREAM);
+        assert_eq!(CODE_BLOCK_FRAME, BASALT);
     }
 }

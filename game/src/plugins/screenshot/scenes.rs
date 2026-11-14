@@ -71,6 +71,11 @@ const LONG_SOURCE: &str = "fn take(v: String) {}\n\nfn main() {\n    let answer 
 /// as the server sends it (cargo progress lines included).
 const LONG_FAIL_JSON: &str = r#"{"ok":false,"stdout":"[real]","stderr":"   Compiling player_submission v0.0.0 (/build)\nerror[E0425]: cannot find value `y` in this scope\n  --> src/main.rs:10:28\n   |\n10 |     println!(\"{} {}\", s, y);\n   |                            ^ help: a local variable with a similar name exists: `s`\n\nwarning: unused variable: `n`\n --> src/main.rs:7:9\n  |\n7 |     let n: i32 = \"five\";\n  |         ^ help: if this is intentional, prefix it with an underscore: `_n`\n  |\n  = note: `#[warn(unused_variables)]` on by default\n\nerror[E0308]: mismatched types\n --> src/main.rs:7:18\n  |\n7 |     let n: i32 = \"five\";\n  |            ---   ^^^^^^ expected `i32`, found `&str`\n  |            |\n  |            expected due to this\n\nerror[E0384]: cannot assign twice to immutable variable `answer`\n --> src/main.rs:6:5\n  |\n5 |     let answer = 42;\n  |         ------ first assignment to `answer`\n6 |     answer = 43;\n  |     ^^^^^^^^^^^ cannot assign twice to immutable variable\n  |\nhelp: consider making this binding mutable\n  |\n5 |     let mut answer = 42;\n  |         +++\n\nerror[E0382]: borrow of moved value: `s`\n  --> src/main.rs:10:23\n   |\n8  |     let s = String::from(\"hi\");\n   |         - move occurs because `s` has type `String`, which does not implement the `Copy` trait\n9  |     take(s);\n   |          - value moved here\n10 |     println!(\"{} {}\", s, y);\n   |                       ^ value borrowed here after move\n   |\nnote: consider changing this parameter type in function `take` to borrow instead if owning the value isn't necessary\n  --> src/main.rs:2:12\n   |\n2  | fn take(v: String) {}\n   |    ----    ^^^^^^ this parameter takes ownership of the value\n\nSome errors have detailed explanations: E0308, E0382, E0384, E0425.\nFor more information about an error, try `rustc --explain E0308`.\nwarning: `player_submission` (bin \"player_submission\") generated 1 warning\nerror: could not compile `player_submission` (bin \"player_submission\") due to 4 previous errors; 1 warning emitted","grade":"compile_error","behaviour_checked":false,"note":"did not build"}"#;
 
+/// [`LONG_SOURCE`] with a comment, a constant and a float added WITHOUT
+/// moving any line, so [`LONG_FAIL_JSON`]'s locations still match: every
+/// token class (keyword, type, string, comment, number, plain) on screen.
+const SYNTAX_SOURCE: &str = "fn take(v: String) {} // takes ownership of `v`\nconst LIMIT: u32 = 3_000; const RATIO: f64 = 0.75;\nfn main() {\n    let answer = 42;\n    answer = 43;\n    let n: i32 = \"five\";\n    let s = String::from(\"hi\");\n    take(s);\n    println!(\"{} {}\", s, y);\n}\n";
+
 const WRONG_SOURCE: &str = "fn main() {\n    let answer = 41;\n    println!(\"{answer}\");\n}\n";
 /// `/compile-real` wrong-output reply, verbatim server shape.
 const WRONG_OUTPUT_JSON: &str = r#"{"ok":false,"stdout":"[real] 41","stderr":"Your program ran, but did not do what this mission asks.\nExpected a line reading `42`\nGot:\n41","grade":"wrong_output","behaviour_checked":true,"expected":"a line reading `42`","actual":"41","note":"output checked against the mission"}"#;
@@ -796,6 +801,23 @@ fn editor_result_scenes(v: &mut Vec<Scene>) {
             PATTERN_JSON,
         ),
     ];
+    // Every syntax colour (bible v2.1) on the code page at 1280x720, with
+    // the long failure's error marks. Same line numbers as LONG_SOURCE so
+    // the canned rustc locations still land on the right lines.
+    v.push(scene(
+        "editor-syntax",
+        vec![
+            enter(),
+            act(|w| {
+                w.resource_mut::<EditorSession>().reset_view();
+                open_editor(w, FIRST_MISSION, SYNTAX_SOURCE);
+                show_server_reply(w, CompileMode::Real, LONG_FAIL_JSON);
+            }),
+            Action::Wait(0.2),
+        ],
+        0.5,
+        boxed(close_editor),
+    ));
     for (name, source, mode, json) in cases {
         v.push(scene(
             name,

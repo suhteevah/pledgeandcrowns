@@ -12,20 +12,21 @@
 //! `Ctrl+Enter` compiles. Other plugins read `EditorState::open` (audio,
 //! player movement, pause handling); that field's meaning is unchanged.
 //!
-//! Colours come only from [`palette`] (bible §UI Style). Pure logic
-//! lives in the submodules so it can be unit-tested without a renderer;
-//! egui drawing helpers are in [`widgets`].
+//! Colours come only from [`palette`], aliases of the shared `ui_theme`
+//! (bible §UI Style, v2.1). Tutorial text, fenced code and the revealed
+//! solution are drawn by the shared `ui_theme::markdown` /
+//! `ui_theme::highlight`. Pure logic lives in the submodules so it can be
+//! unit-tested without a renderer; egui drawing helpers are in [`widgets`].
 
 pub mod diagnostics;
-pub mod highlight;
 pub mod layout;
-pub mod markdown;
 pub mod palette;
 pub mod session;
 pub mod solutions;
 pub mod widgets;
 
 use crate::plugins::mission::{ActiveMission, Mission};
+use crate::plugins::ui_theme::{highlight, markdown};
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass, egui};
 use diagnostics::{ParsedResult, ResultDetail, ResultKind, ResultTag, SERVER_PREAMBLE_LINES};
@@ -446,21 +447,14 @@ fn draw_solution_button(ui: &mut egui::Ui, session: &mut EditorSession, gate: So
         }
         SolutionGate::Unauthored => {
             widgets::disabled_button(ui, "Show solution");
-            ui.label(
-                egui::RichText::new("No reference solution for this mission yet.")
-                    .color(palette::TEXT_MUTED)
-                    .size(12.0),
-            );
+            widgets::note(ui, "No reference solution for this mission yet.");
         }
         SolutionGate::Locked { remaining } => {
             widgets::disabled_button(ui, "Show solution");
             let plural = if remaining == 1 { "" } else { "s" };
-            ui.label(
-                egui::RichText::new(format!(
-                    "Unlocks after {remaining} more failed compile{plural}."
-                ))
-                .color(palette::TEXT_MUTED)
-                .size(12.0),
+            widgets::note(
+                ui,
+                format!("Unlocks after {remaining} more failed compile{plural}."),
             );
         }
     }
@@ -473,10 +467,10 @@ fn draw_goal(ui: &mut egui::Ui, mission: &Mission) {
         .auto_shrink([false; 2])
         .show(ui, |ui| {
             widgets::caption(ui, "GOAL");
-            widgets::draw_markdown(ui, mission.prompt);
+            markdown::show_scaled(ui, mission.prompt, markdown::TextScale::COMPACT);
             ui.add_space(4.0);
             ui.separator();
-            widgets::draw_markdown(ui, mission.tutorial);
+            markdown::show_scaled(ui, mission.tutorial, markdown::TextScale::COMPACT);
         });
 }
 
@@ -526,28 +520,39 @@ fn draw_solution(
         }
     });
     if let Some(note) = session.copy_note {
-        ui.label(
-            egui::RichText::new(note)
-                .color(palette::TEXT_MUTED)
-                .size(12.0),
-        );
+        widgets::note(ui, note);
     }
     ui.add_space(4.0);
     let font = widgets::mono_font();
-    egui::Frame::new()
-        .fill(palette::PAGE_BG)
-        .stroke(egui::Stroke::new(1.0_f32, palette::FRAME))
-        .inner_margin(egui::Margin::same(6))
-        .show(ui, |ui| {
-            egui::ScrollArea::both()
-                .id_salt("solution_scroll")
-                .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
-                .auto_shrink([false; 2])
-                .show(ui, |ui| {
-                    let job = highlight::layout_job(code, font, &BTreeSet::new());
-                    ui.add(egui::Label::new(job).extend());
-                });
-        });
+    markdown::code_frame().show(ui, |ui| {
+        egui::ScrollArea::both()
+            .id_salt("solution_scroll")
+            .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
+            .auto_shrink([false; 2])
+            .show(ui, |ui| {
+                // Long prose comments are re-flowed to the pane for
+                // reading; code lines are untouched (they still scroll
+                // sideways). The copy button above copies `code`, the
+                // original text, never this display copy.
+                let glyph = ui.fonts_mut(|f| f.glyph_width(&font, 'M')).max(1.0);
+                let cols = solution_view_columns(ui.available_width(), glyph);
+                let shown = highlight::wrap_comment_lines(code, cols);
+                let job = highlight::layout_job(&shown, font.clone(), &BTreeSet::new());
+                ui.add(egui::Label::new(job).extend());
+            });
+    });
+}
+
+/// Monospace columns that fit `width` points of solution view (never so
+/// few that a comment re-flows one word per line).
+fn solution_view_columns(width: f32, glyph_width: f32) -> usize {
+    let cols = (width / glyph_width).floor();
+    if cols.is_finite() && cols > 0.0 {
+        // Truncation is the intent: whole columns only.
+        (cols as usize).max(24)
+    } else {
+        24
+    }
 }
 
 fn draw_result(
@@ -570,17 +575,30 @@ fn draw_result(
     }
     ui.add_space(2.0);
     let cleaned = diagnostics::clean_for_display(p.body);
-    // A fresh scroll state per result, so a new verdict starts at its top.
+    let wrong = p.tag == ResultTag::WrongOutput;
+    let expected = detail.and_then(|d| d.expected.as_deref());
+    let actual = detail.and_then(|d| d.actual.as_deref());
+    let show_expected = wrong && (expected.is_some() || actual.is_some());
+    // rustc output scrolls as a non-wrapping block; pin its first error
+    // line above it (wrapped) so the headline is always readable.
+    let pinned = if !show_expected && widgets::is_rustc_like(&cleaned) {
+        diagnostics::first_error_line(&cleaned)
+    } else {
+        None
+    };
+    if let Some(first) = pinned {
+        widgets::first_error(ui, first);
+        ui.add_space(2.0);
+    }
+    // A fresh scroll state per result, so a new verdict starts at its top
+    // left. Both directions: rustc's ASCII art must not wrap.
     let salt = ("result_scroll", p.body.len(), p.body.lines().count());
-    egui::ScrollArea::vertical()
+    egui::ScrollArea::both()
         .id_salt(salt)
         .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
         .auto_shrink([false; 2])
         .show(ui, |ui| {
-            let wrong = p.tag == ResultTag::WrongOutput;
-            let expected = detail.and_then(|d| d.expected.as_deref());
-            let actual = detail.and_then(|d| d.actual.as_deref());
-            if wrong && (expected.is_some() || actual.is_some()) {
+            if show_expected {
                 widgets::draw_expected_actual(ui, expected, actual);
                 if let Some(extra) = diagnostics::wrong_output_extra(&cleaned) {
                     ui.add_space(4.0);
@@ -612,7 +630,7 @@ fn draw_code(ui: &mut egui::Ui, source: &mut String, error_lines: &BTreeSet<usiz
                 ui.vertical(|ui| {
                     // Match the TextEdit's top margin.
                     ui.add_space(4.0);
-                    ui.add(egui::Label::new(gutter).selectable(false));
+                    paint_gutter(ui, gutter, error_lines);
                 });
                 let layout_font = font_id.clone();
                 let errs = error_lines.clone();
@@ -634,6 +652,37 @@ fn draw_code(ui: &mut egui::Ui, source: &mut String, error_lines: &BTreeSet<usiz
                 );
             });
         });
+}
+
+/// Width of the Alarm scarlet bar beside an error line's number.
+const ERROR_BAR_WIDTH: f32 = 3.0;
+
+/// Draw the gutter numbers, with an Alarm scarlet bar (a mark, not text)
+/// left of every line rustc flagged. The number itself stays Oxblood on an
+/// Aged paper band: scarlet text would be 3.6:1 (bible v2.1).
+fn paint_gutter(ui: &mut egui::Ui, job: egui::text::LayoutJob, error_lines: &BTreeSet<usize>) {
+    let galley = ui.fonts_mut(|f| f.layout_job(job));
+    let size = galley.size() + egui::vec2(ERROR_BAR_WIDTH, 0.0);
+    let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
+    let rows = galley.rows.len().max(1);
+    // One row per source line: the gutter job never wraps.
+    let row_h = galley.size().y / rows as f32;
+    for &line in error_lines {
+        if line == 0 || line > rows {
+            continue;
+        }
+        let top = rect.top() + row_h * (line - 1) as f32;
+        let bar = egui::Rect::from_min_size(
+            egui::pos2(rect.left(), top),
+            egui::vec2(ERROR_BAR_WIDTH, row_h),
+        );
+        ui.painter().rect_filled(bar, 0.0, palette::ERROR_MARK);
+    }
+    ui.painter().galley(
+        rect.min + egui::vec2(ERROR_BAR_WIDTH, 0.0),
+        galley,
+        palette::TEXT,
+    );
 }
 
 fn gutter_job(
