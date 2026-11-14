@@ -19,8 +19,22 @@ path = "src/main.rs"
 [dependencies]
 tokio.workspace = true
 axum.workspace = true
-tower.workspace = true
+# `util` for `ServiceExt::map_request` in `serve_with` (axum already
+# enables it; named here so this crate does not rely on unification).
+tower = { workspace = true, features = ["util"] }
 tower-http.workspace = true
+
+# Own accept loop in `serve_with` so the HTTP/1 header-read timeout can be
+# set (axum::serve configures no timer, so hyper never enforces it). Both
+# crates are already in the lock tree as axum's own dependencies, with the
+# same features axum enables: zero new crates.
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio", "server", "service", "http1"] }
+
+# Strict JSON for the API <-> builder IPC and the job-process envelope.
+# Already in the lock tree (axum's `json` feature, and a dev-dependency
+# here): zero new crates.
+serde_json = "1"
 
 tracing.workspace = true
 tracing-subscriber.workspace = true
@@ -47,15 +61,15 @@ wasmtime-wasi = { version = "44", features = ["p1"] }
 # Already in the lock tree as an axum/hyper dependency: zero new crates.
 http-body-util = "0.1"
 
-# Unix only: safe wrappers for kill(-pgid, SIGKILL), kill(-pgid, 0) and
+# Unix only: safe wrappers for kill(-pgid, SIGKILL), kill(-pgid, 0),
 # geteuid (process-tree kill in `proc_tree`, build-root owner check in
-# `build_root`). Already in the lock tree via wasmtime/cap-std/tempfile,
+# `build_root`) and open(O_NOFOLLOW) (`wasm_builder::read_artifact`, the
+# `fs` feature). Already in the lock tree via wasmtime/cap-std/tempfile,
 # so this adds zero new crates; it lets us avoid writing any `unsafe`
 # libc FFI ourselves. Not compiled on Windows.
 [target.'cfg(unix)'.dependencies]
-rustix = { version = "1.1", features = ["process", "std"] }
+rustix = { version = "1.1", features = ["process", "fs", "std"] }
 
 [dev-dependencies]
 reqwest = { workspace = true }
-serde_json = "1"
 wat = "1"

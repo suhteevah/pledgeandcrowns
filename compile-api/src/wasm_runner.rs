@@ -32,22 +32,44 @@
 //!   parsed, and Cranelift compilation is single-threaded
 //!   (`parallel_compilation(false)`) so one module cannot occupy every
 //!   core.
-//! - Module compilation is bounded in *wall time* by
-//!   [`MODULE_COMPILE_TIMEOUT`]: it runs on a helper thread and the run
-//!   is failed if it does not finish in time. Honest limit: wasmtime
-//!   cannot cancel a compile, so on timeout the helper thread is detached
-//!   and finishes in the background (its work is bounded by the size
-//!   cap), outside the build semaphore. The end state that removes this
-//!   gap is running the module in the sandboxed, killable build worker
-//!   instead of in the server process; that is not done yet.
+//! - Module compilation has a *verdict* deadline,
+//!   [`MODULE_COMPILE_TIMEOUT`]: it runs on a helper thread and the run is
+//!   failed if it does not finish in time. wasmtime cannot cancel a
+//!   compile, so what happens to the still-running compile depends on the
+//!   process (security re-review P1-C: work must never outlive its
+//!   accounting):
+//!   - in a long-lived process (the in-process dev executor, tests) the
+//!     caller waits for the helper to finish before returning, so the
+//!     build slot the caller holds covers the whole compile. The verdict is
+//!     still "compile exceeded the limit"; only the response is late.
+//!   - in a one-shot job process (`pledge_compile_api job`, see
+//!     [`crate::jobs`]) the helper is abandoned and the process exits right
+//!     after writing its reply, which ends the thread; the supervising
+//!     builder also kills the job's whole process tree at its deadline.
+//!     The job entry point opts in with [`set_process_exits_after_job`].
 //! - Instance/table/memory counts and table growth are capped through the
 //!   store's resource limiter, in addition to linear memory.
+//! - Copy-on-write memory images are off (`memory_init_cow(false)`), so
+//!   wasmtime does not need `memfd_create` (smaller syscall surface under
+//!   the builder unit's seccomp filter).
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
-use std::thread;
 use std::time::Duration;
 
 use anyhow::{Result, bail};
+
+use crate::helper_threads;
+
+/// Set once by the one-shot job process; see the module docs.
+static EXITS_AFTER_JOB: AtomicBool = AtomicBool::new(false);
+
+/// Declare that this process exits as soon as its single job is answered,
+/// so a timed-out module compile may be abandoned instead of awaited.
+/// Only `pledge_compile_api job` calls this.
+pub fn set_process_exits_after_job() {
+    EXITS_AFTER_JOB.store(true, Ordering::SeqCst);
+}
 use wasmtime::{Config, Engine, Linker, Module, Store, StoreLimits, StoreLimitsBuilder};
 use wasmtime_wasi::WasiCtxBuilder;
 use wasmtime_wasi::p1::WasiP1Ctx;
@@ -220,6 +242,8 @@ pub fn run_wasm_with_compile_timeout(
     config.wasm_threads(false);
     // One core per compile: a large module must not starve the server.
     config.parallel_compilation(false);
+    // No CoW memory images: avoids memfd_create (see module docs).
+    config.memory_init_cow(false);
 
     let engine = Engine::new(&config)?;
     let module = match compile_bounded(&engine, bytes, compile_timeout)? {
@@ -278,13 +302,13 @@ pub fn run_wasm_with_compile_timeout(
     // so the tick can never interrupt another submission.
     let (cancel_tx, cancel_rx) = mpsc::channel::<()>();
     let watchdog_engine = engine.clone();
-    let watchdog = thread::spawn(move || {
+    let watchdog = helper_threads::spawn("wasm-watchdog", move || {
         if let Err(mpsc::RecvTimeoutError::Timeout) =
             cancel_rx.recv_timeout(Duration::from_millis(timeout_ms))
         {
             watchdog_engine.increment_epoch();
         }
-    });
+    })?;
 
     // ---- Instantiate + invoke ------------------------------------------
     let outcome = (|| -> Result<()> {
@@ -322,24 +346,43 @@ pub fn run_wasm_with_compile_timeout(
     }
 }
 
-/// Compile `bytes` on a helper thread, waiting at most `timeout`.
-/// `Ok(None)` on timeout (the helper is detached; see module docs),
-/// `Err` if compilation itself failed (invalid module, disabled feature).
+/// Compile `bytes` on a helper thread, waiting at most `timeout` for the
+/// verdict. `Ok(None)` on timeout, `Err` if compilation itself failed
+/// (invalid module, disabled feature). On timeout the helper is awaited
+/// (long-lived process) or abandoned (one-shot job process); see module
+/// docs.
 fn compile_bounded(engine: &Engine, bytes: &[u8], timeout: Duration) -> Result<Option<Module>> {
     let (tx, rx) = mpsc::channel();
     let engine = engine.clone();
     let owned = bytes.to_vec();
-    thread::spawn(move || {
+    let helper = helper_threads::spawn("wasm-compile", move || {
         let _ = tx.send(Module::new(&engine, &owned));
-    });
+    })?;
     match rx.recv_timeout(timeout) {
-        Ok(result) => Ok(Some(result?)),
+        Ok(result) => {
+            if helper.join().is_err() {
+                tracing::warn!("wasm_runner: compile helper panicked after sending");
+            }
+            Ok(Some(result?))
+        }
         Err(mpsc::RecvTimeoutError::Timeout) => {
-            tracing::warn!(
-                ?timeout,
-                bytes = bytes.len(),
-                "wasm_runner: module compile timed out; detaching compile thread"
-            );
+            if EXITS_AFTER_JOB.load(Ordering::SeqCst) {
+                tracing::warn!(
+                    ?timeout,
+                    bytes = bytes.len(),
+                    "wasm_runner: module compile timed out; abandoning it (job process exits next)"
+                );
+            } else {
+                tracing::warn!(
+                    ?timeout,
+                    bytes = bytes.len(),
+                    "wasm_runner: module compile timed out; waiting for it to finish so no work \
+                     outlives the caller's build slot"
+                );
+                if helper.join().is_err() {
+                    tracing::warn!("wasm_runner: compile helper panicked");
+                }
+            }
             Ok(None)
         }
         Err(mpsc::RecvTimeoutError::Disconnected) => {

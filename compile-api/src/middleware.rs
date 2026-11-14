@@ -7,16 +7,19 @@
 //! ```text
 //! TraceLayer -> record_metrics -> CORS
 //!   -> /health                         (never rate limited)
-//!   -> global_rate_limit
+//!   -> request_deadline -> global_rate_limit
 //!        -> /compile, /compile-real:   limit_body -> require_bearer
 //!             -> [/compile-real only] real_rate_limit -> handler
-//!        -> /metrics:                  require_metrics_access -> handler
+//!
+//! metrics listener (PNC_METRICS_BIND, loopback only, separate router):
+//!   TraceLayer -> /metrics: require_metrics_access -> handler
 //! ```
 //!
 //! CORS sits outside the limiter so a browser can read a 429. The global
 //! limiter sits outside auth so token guessing is throttled too. `/health`
 //! is mounted outside the limiter so it can never be rate limited into
 //! unavailability (it does no work and touches no shared state).
+//! `/metrics` is not on the public router at all (re-review P2).
 
 use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;
@@ -240,14 +243,39 @@ pub async fn require_metrics_access(
     Rejection::Forbidden("metrics are only served to loopback clients".to_string()).into_response()
 }
 
-/// Read the whole request body with a hard cap of [`MAX_BODY_BYTES`].
+/// Whole-request deadline (`PNC_REQUEST_DEADLINE_SECS`) for the player
+/// routes: queue wait, build and run included. On expiry the handler
+/// future is dropped and the client gets 503 `deadline_exceeded`; a build
+/// already running on the blocking pool keeps its build slot until it
+/// really ends (see `compile_real`), so this frees the connection, never
+/// the capacity.
+pub async fn request_deadline(State(state): State<AppState>, req: Request, next: Next) -> Response {
+    let limit = state.config().request_deadline;
+    let path = req.uri().path().to_string();
+    match tokio::time::timeout(limit, next.run(req)).await {
+        Ok(resp) => resp,
+        Err(_) => {
+            tracing::warn!(path, ?limit, "rejected: request deadline exceeded");
+            state.metrics().record_rejection(RejectReason::Timeout);
+            Rejection::DeadlineExceeded {
+                secs: limit.as_secs(),
+            }
+            .into_response()
+        }
+    }
+}
+
+/// Read the whole request body with a hard cap of [`MAX_BODY_BYTES`] and a
+/// time limit of `PNC_BODY_READ_TIMEOUT_SECS` for the whole body.
 ///
 /// - A declared `Content-Length` over the cap is refused without
 ///   buffering anything.
 /// - A body that turns out to be over the cap while streaming (chunked,
 ///   or a lying `Content-Length`) is refused as soon as it crosses it.
+/// - A body that does not arrive in time (slow upload) gets 408 with
+///   `Connection: close`.
 ///
-/// In both cases we then *drain* (read and discard) up to
+/// In the size cases we then *drain* (read and discard) up to
 /// [`BODY_DRAIN_MAX_BYTES`] / [`BODY_DRAIN_MAX_TIME`] more before sending
 /// the 413 with `Connection: close`, so a client that is still uploading
 /// reliably receives it. Draining is bounded, so it cannot be used to
@@ -255,6 +283,25 @@ pub async fn require_metrics_access(
 ///
 /// An accepted body is passed on fully buffered (at most 68 KiB).
 pub async fn limit_body(State(state): State<AppState>, req: Request, next: Next) -> Response {
+    let limit = state.config().body_read_timeout;
+    let path = req.uri().path().to_string();
+    let read = tokio::time::timeout(limit, read_limited_body(&state, req)).await;
+    match read {
+        Ok(Ok(req)) => next.run(req).await,
+        Ok(Err(resp)) => *resp,
+        Err(_) => {
+            tracing::warn!(path, ?limit, "rejected: request body not received in time");
+            state.metrics().record_rejection(RejectReason::Timeout);
+            Rejection::RequestTimeout {
+                secs: limit.as_secs(),
+            }
+            .into_response()
+        }
+    }
+}
+
+/// Buffer the body under the size cap; `Err` is the refusal response.
+async fn read_limited_body(state: &AppState, req: Request) -> Result<Request, Box<Response>> {
     let declared = req
         .headers()
         .get(header::CONTENT_LENGTH)
@@ -276,7 +323,7 @@ pub async fn limit_body(State(state): State<AppState>, req: Request, next: Next)
         if len <= (MAX_BODY_BYTES + BODY_DRAIN_MAX_BYTES) as u64 {
             drain(&mut body, BODY_DRAIN_MAX_BYTES + MAX_BODY_BYTES).await;
         }
-        return body_too_large();
+        return Err(Box::new(body_too_large()));
     }
 
     let mut buf: Vec<u8> = Vec::with_capacity(declared.map_or(8 * 1024, |l| l as usize));
@@ -295,22 +342,23 @@ pub async fn limit_body(State(state): State<AppState>, req: Request, next: Next)
                     );
                     state.metrics().record_rejection(RejectReason::Body);
                     drain(&mut body, BODY_DRAIN_MAX_BYTES).await;
-                    return body_too_large();
+                    return Err(Box::new(body_too_large()));
                 }
                 buf.extend_from_slice(&data);
             }
             Some(Err(e)) => {
                 tracing::warn!(path, "rejected: error reading request body: {e}");
-                return Rejection::BadRequest {
-                    status: axum::http::StatusCode::BAD_REQUEST,
-                    message: "could not read request body".to_string(),
-                }
-                .into_response();
+                return Err(Box::new(
+                    Rejection::BadRequest {
+                        status: axum::http::StatusCode::BAD_REQUEST,
+                        message: "could not read request body".to_string(),
+                    }
+                    .into_response(),
+                ));
             }
         }
     }
-    let req = Request::from_parts(parts, Body::from(Bytes::from(buf)));
-    next.run(req).await
+    Ok(Request::from_parts(parts, Body::from(Bytes::from(buf))))
 }
 
 /// Read and discard up to `max_bytes` of `body`, for at most

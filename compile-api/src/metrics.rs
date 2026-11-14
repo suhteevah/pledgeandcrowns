@@ -28,16 +28,19 @@ pub enum RejectReason {
     SourcePolicy,
     /// Malformed request field (e.g. `encounter_id`).
     Input,
+    /// Body read timeout or whole-request deadline.
+    Timeout,
 }
 
 impl RejectReason {
-    const ALL: [RejectReason; 6] = [
+    const ALL: [RejectReason; 7] = [
         Self::Auth,
         Self::Rate,
         Self::Queue,
         Self::Body,
         Self::SourcePolicy,
         Self::Input,
+        Self::Timeout,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -48,6 +51,7 @@ impl RejectReason {
             Self::Body => "body",
             Self::SourcePolicy => "source_policy",
             Self::Input => "input",
+            Self::Timeout => "timeout",
         }
     }
 
@@ -121,7 +125,7 @@ pub struct Metrics {
     run_duration: Histogram,
     builds_in_flight: AtomicI64,
     builds_queued: AtomicI64,
-    rejections: [AtomicU64; 6],
+    rejections: [AtomicU64; RejectReason::ALL.len()],
     rate_fail_opens: AtomicU64,
 }
 

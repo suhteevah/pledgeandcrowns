@@ -1,0 +1,92 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Pledge & Crown compile API - the HTTP server. Holds the bearer tokens.
+# Install: see compile-api/deploy/README.md. Change it here and re-copy.
+#
+# Topology:
+#   internet --TLS--> Caddy (same host) --> 127.0.0.1:7878  (this unit)
+#   Prometheus (same host)            --> 127.0.0.1:9878  (this unit, /metrics; never proxied)
+#   this unit --> /run/pnc-builder/builder.sock --> pnc-builder.service
+#
+# This process NEVER builds or runs player code (PNC_BUILDER_SOCKET is set,
+# and the config refuses in-process builds on an exposed Linux server), so
+# it keeps full hardening: no namespaces, no mount syscalls, no netlink,
+# proc protections on, W^X memory. That is the point of the split
+# (security re-review P1-A): a wasmtime or rustc escape lands in the
+# builder, which holds no secrets.
+
+[Unit]
+Description=Pledge & Crown compile API (HTTP; player code runs in pnc-builder.service)
+Documentation=file:///opt/pnc-compile/README.md
+After=network.target pnc-builder.service
+Wants=pnc-builder.service
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=simple
+User=pnc-api
+Group=pnc-api
+# Membership of pnc-ipc is what lets this unit connect to the builder
+# socket (/run/pnc-builder is pnc-builder:pnc-ipc 0750, the socket 0660).
+SupplementaryGroups=pnc-ipc
+# The ONLY unit that reads the secrets. 0600 root:root: systemd reads it as
+# root before dropping privileges; pnc-api itself cannot read the file.
+EnvironmentFile=/etc/pnc-compile/env
+Environment=PNC_BUILDER_SOCKET=/run/pnc-builder/builder.sock
+ExecStart=/usr/local/bin/pledge_compile_api serve
+Restart=on-failure
+RestartSec=5s
+
+# ---- Writable paths --------------------------------------------------------
+# Nothing: no builds here. connect() to the builder socket works on a
+# read-only mount (the kernel's read-only check skips socket inodes).
+PrivateTmp=yes
+UMask=0077
+
+# ---- Filesystem / kernel isolation (full) ----------------------------------
+ProtectSystem=strict
+ProtectHome=yes
+PrivateDevices=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+# No JIT in this process any more (wasmtime runs in the builder's job
+# processes), so W^X can be enforced.
+MemoryDenyWriteExecute=yes
+
+# ---- Privilege ----------------------------------------------------------------
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+RemoveIPC=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @mount @debug @reboot @swap @obsolete @cpu-emulation @clock @module @raw-io
+SystemCallErrorNumber=EPERM
+
+# ---- Network ----------------------------------------------------------------
+# No AF_NETLINK. AF_UNIX for the builder socket.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# Loopback only (Caddy and Prometheus are on this host).
+IPAddressDeny=any
+IPAddressAllow=localhost
+
+# ---- Resources ----------------------------------------------------------------
+MemoryMax=512M
+MemorySwapMax=0
+TasksMax=128
+LimitNOFILE=4096
+LimitCORE=0
+CPUQuota=100%
+
+[Install]
+WantedBy=multi-user.target

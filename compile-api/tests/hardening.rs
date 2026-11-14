@@ -14,22 +14,37 @@ use std::time::Duration;
 use pledge_compile_api::config::{ConfigError, vars};
 use pledge_compile_api::wasm_builder::{RealOutcome, RunLimits};
 use pledge_compile_api::{
-    AppState, CompileResponse, Config, MAX_BODY_BYTES, RealGrader, RejectionBody, build_router,
-    serve,
+    AppState, CompileResponse, Config, MAX_BODY_BYTES, RealGrader, RejectionBody,
+    build_metrics_router, build_router, serve, serve_with,
 };
 use reqwest::StatusCode;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 const TOKEN: &str = "test-token-0123456789abcdef0123456789";
 
+/// Config for an in-process test server (loopback, stub grader). Tokens or
+/// trust-proxy make a config "exposed", which refuses in-process builds;
+/// the loopback-only dev override is what local dev uses for that shape.
 fn config_with(pairs: &[(&str, &str)]) -> Config {
-    try_config(pairs).expect("test config must validate")
+    let mut all = pairs.to_vec();
+    if !pairs
+        .iter()
+        .any(|(k, _)| *k == vars::DEV_UNSAFE_LOCAL_BUILDS)
+    {
+        all.push((vars::DEV_UNSAFE_LOCAL_BUILDS, "true"));
+    }
+    try_config(&all).expect("test config must validate")
 }
 
+/// Parse as a local dev box: `PNC_BUILD_SANDBOX=none` unless set (the env
+/// default is `bwrap` on Linux). No override added.
 fn try_config(pairs: &[(&str, &str)]) -> Result<Config, ConfigError> {
-    let map: HashMap<String, String> = pairs
+    let mut map: HashMap<String, String> = pairs
         .iter()
         .map(|(k, v)| (k.to_string(), v.to_string()))
         .collect();
+    map.entry(vars::BUILD_SANDBOX.to_string())
+        .or_insert_with(|| "none".to_string());
     Config::from_lookup(|k| map.get(k).cloned())
 }
 
@@ -65,6 +80,18 @@ async fn spawn_cfg(cfg: Config) -> SocketAddr {
         stub_grader(Duration::from_millis(1)),
     ))
     .await
+}
+
+/// API listener + the separate metrics listener for the same state.
+async fn spawn_with_metrics(cfg: Config) -> (SocketAddr, SocketAddr) {
+    let state = AppState::with_real_grader(cfg, stub_grader(Duration::from_millis(1)));
+    let metrics = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let maddr = metrics.local_addr().unwrap();
+    let mrouter = build_metrics_router(state.clone());
+    tokio::spawn(async move {
+        serve(metrics, mrouter).await.unwrap();
+    });
+    (spawn(state).await, maddr)
 }
 
 fn compile_body() -> serde_json::Value {
@@ -166,37 +193,49 @@ fn public_bind_without_token_is_refused() {
 fn loopback_bind_without_token_and_public_bind_with_token_are_allowed() {
     assert!(try_config(&[(vars::BIND, "127.0.0.1:9000")]).is_ok());
     assert!(try_config(&[(vars::BIND, "[::1]:9000")]).is_ok());
-    // A public bind with a token additionally needs a build sandbox. On
-    // Linux that means bwrap (no override exists); elsewhere (dev only)
-    // the unsandboxed build must be explicitly acknowledged.
+    // A public bind with a token must hand builds to the builder service.
+    // Building in this process is refused (unsandboxed everywhere; at all
+    // on Linux), and the dev override is refused on a public bind.
     let public = [(vars::BIND, "0.0.0.0:7878"), (vars::AUTH_TOKENS, TOKEN)];
-    assert!(matches!(
-        try_config(&public),
-        Err(ConfigError::UnsandboxedExposure { .. })
-    ));
-    let bwrap = [
+    let r = try_config(&public);
+    assert!(
+        matches!(
+            r,
+            Err(ConfigError::UnsandboxedExposure { .. } | ConfigError::InProcessExposure { .. })
+        ),
+        "{r:?}"
+    );
+    let bwrap_in_process = [
         (vars::BIND, "0.0.0.0:7878"),
         (vars::AUTH_TOKENS, TOKEN),
         (vars::BUILD_SANDBOX, "bwrap"),
         (
             vars::TOOLCHAIN_DIR,
-            "/opt/rust/rustup/toolchains/stable-x86_64-unknown-linux-gnu",
+            "/opt/rust/rustup/toolchains/1.99.0-x86_64-unknown-linux-gnu",
         ),
     ];
-    let acknowledged = [
+    assert!(try_config(&bwrap_in_process).is_err());
+    let with_builder = [
         (vars::BIND, "0.0.0.0:7878"),
         (vars::AUTH_TOKENS, TOKEN),
-        (vars::ALLOW_UNSANDBOXED_BUILDS, "true"),
+        (vars::BUILDER_SOCKET, "/run/pnc-builder/builder.sock"),
     ];
+    let overridden = [
+        (vars::BIND, "0.0.0.0:7878"),
+        (vars::AUTH_TOKENS, TOKEN),
+        (vars::DEV_UNSAFE_LOCAL_BUILDS, "true"),
+    ];
+    assert!(matches!(
+        try_config(&overridden),
+        Err(ConfigError::DevOverrideOnPublicBind { .. })
+    ));
     if cfg!(target_os = "linux") {
-        assert!(try_config(&bwrap).is_ok());
-        assert!(try_config(&acknowledged).is_err());
+        assert!(try_config(&with_builder).is_ok());
     } else {
         assert!(matches!(
-            try_config(&bwrap),
-            Err(ConfigError::SandboxUnsupported)
+            try_config(&with_builder),
+            Err(ConfigError::BuilderUnsupported)
         ));
-        assert!(try_config(&acknowledged).is_ok());
     }
 }
 
@@ -285,8 +324,6 @@ async fn x_forwarded_for_rightmost_entry_keys_the_limit_with_trust_proxy() {
     let addr = spawn_cfg(config_with(&[
         (vars::RATE_LIMIT_PER_MIN, "1"),
         (vars::TRUST_PROXY, "true"),
-        // Linux refuses TRUST_PROXY + unsandboxed builds without this.
-        (vars::ALLOW_UNSANDBOXED_BUILDS, "true"),
     ]))
     .await;
     let a = post(
@@ -543,7 +580,7 @@ const METRICS_TOKEN: &str = "metrics-token-0123456789abcdef01234567";
 
 #[tokio::test]
 async fn metrics_endpoint_exposes_prometheus_text() {
-    let addr = spawn_cfg(config_with(&[
+    let (addr, maddr) = spawn_with_metrics(config_with(&[
         (vars::AUTH_TOKENS, TOKEN),
         (vars::METRICS_TOKENS, METRICS_TOKEN),
         (vars::REAL_RATE_LIMIT_PER_MIN, "1"),
@@ -556,7 +593,7 @@ async fn metrics_endpoint_exposes_prometheus_text() {
     let _ = post(addr, "/compile-real", Some(TOKEN), &[]).await; // rate rejection
 
     let resp = reqwest::Client::new()
-        .get(format!("http://{addr}/metrics"))
+        .get(format!("http://{maddr}/metrics"))
         .bearer_auth(METRICS_TOKEN)
         .send()
         .await
@@ -625,22 +662,22 @@ async fn get_metrics(
 
 #[tokio::test]
 async fn metrics_does_not_accept_the_player_token() {
-    let addr = spawn_cfg(config_with(&[
+    let (addr, maddr) = spawn_with_metrics(config_with(&[
         (vars::AUTH_TOKENS, TOKEN),
         (vars::METRICS_TOKENS, METRICS_TOKEN),
     ]))
     .await;
     assert_eq!(
-        get_metrics(addr, Some(TOKEN), &[]).await.status(),
+        get_metrics(maddr, Some(TOKEN), &[]).await.status(),
         StatusCode::UNAUTHORIZED,
         "player token must not open /metrics"
     );
     assert_eq!(
-        get_metrics(addr, None, &[]).await.status(),
+        get_metrics(maddr, None, &[]).await.status(),
         StatusCode::UNAUTHORIZED
     );
     assert_eq!(
-        get_metrics(addr, Some(METRICS_TOKEN), &[]).await.status(),
+        get_metrics(maddr, Some(METRICS_TOKEN), &[]).await.status(),
         StatusCode::OK
     );
     // And the metrics token does not open the player routes.
@@ -652,22 +689,50 @@ async fn metrics_does_not_accept_the_player_token() {
     );
 }
 
+/// Re-review P2: `/metrics` must not be reachable through the reverse
+/// proxy. It is not mounted on the API router at all, whatever the
+/// token or proxy settings.
+#[tokio::test]
+async fn metrics_is_not_served_on_the_api_listener() {
+    for cfg in [
+        config_with(&[]),
+        config_with(&[(vars::TRUST_PROXY, "true")]),
+        config_with(&[
+            (vars::AUTH_TOKENS, TOKEN),
+            (vars::METRICS_TOKENS, METRICS_TOKEN),
+        ]),
+    ] {
+        let (addr, maddr) = spawn_with_metrics(cfg).await;
+        for token in [None, Some(TOKEN), Some(METRICS_TOKEN)] {
+            let resp = get_metrics(addr, token, &[("x-forwarded-for", "203.0.113.9")]).await;
+            assert_eq!(resp.status(), StatusCode::NOT_FOUND, "token {token:?}");
+            let resp = get_metrics(addr, token, &[]).await;
+            assert_eq!(resp.status(), StatusCode::NOT_FOUND, "token {token:?}");
+        }
+        // The metrics listener serves nothing but /metrics.
+        let resp = reqwest::get(format!("http://{maddr}/health"))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+}
+
 #[tokio::test]
 async fn metrics_without_token_is_direct_loopback_only() {
-    // Behind a proxy every request has a loopback peer; the proxy's
-    // X-Forwarded-For marks it external, so it is refused.
-    let addr = spawn_cfg(config_with(&[
+    // A request that carries the proxy's X-Forwarded-For is refused even
+    // on the loopback metrics listener (defence in depth: the proxy
+    // never forwards there anyway).
+    let (_addr, maddr) = spawn_with_metrics(config_with(&[
         (vars::AUTH_TOKENS, TOKEN),
         (vars::TRUST_PROXY, "true"),
-        (vars::ALLOW_UNSANDBOXED_BUILDS, "true"),
     ]))
     .await;
     assert_eq!(
-        get_metrics(addr, None, &[]).await.status(),
+        get_metrics(maddr, None, &[]).await.status(),
         StatusCode::OK,
         "direct loopback scrape"
     );
-    let proxied = get_metrics(addr, Some(TOKEN), &[("x-forwarded-for", "203.0.113.9")]).await;
+    let proxied = get_metrics(maddr, Some(TOKEN), &[("x-forwarded-for", "203.0.113.9")]).await;
     assert_eq!(proxied.status(), StatusCode::FORBIDDEN);
     let body: RejectionBody = proxied.json().await.unwrap();
     assert_eq!(body.error, "forbidden");
@@ -692,11 +757,10 @@ async fn health_is_never_rate_limited() {
 
 #[tokio::test]
 async fn full_limiter_table_fails_open_for_new_clients_and_counts_it() {
-    let addr = spawn_cfg(config_with(&[
+    let (addr, maddr) = spawn_with_metrics(config_with(&[
         (vars::RATE_LIMIT_PER_MIN, "1"),
         (vars::RATE_LIMIT_MAX_CLIENTS, "2"),
         (vars::TRUST_PROXY, "true"),
-        (vars::ALLOW_UNSANDBOXED_BUILDS, "true"),
     ]))
     .await;
     let from = |ip: &'static str| [("x-forwarded-for", ip)];
@@ -728,8 +792,8 @@ async fn full_limiter_table_fails_open_for_new_clients_and_counts_it() {
             .status(),
         StatusCode::OK
     );
-    // Direct loopback scrape (no XFF): itself a new client -> fail-open.
-    let text = get_metrics(addr, None, &[]).await.text().await.unwrap();
+    // The third client above was let through untracked: counted.
+    let text = get_metrics(maddr, None, &[]).await.text().await.unwrap();
     let fail_opens: u64 = text
         .lines()
         .find_map(|l| l.strip_prefix("pnc_rate_limit_fail_open_total "))
@@ -740,7 +804,7 @@ async fn full_limiter_table_fails_open_for_new_clients_and_counts_it() {
 
 #[tokio::test]
 async fn deny_listed_source_is_refused_before_build_and_counted() {
-    let addr = spawn_cfg(config_with(&[])).await;
+    let (addr, maddr) = spawn_with_metrics(config_with(&[])).await;
     let send = |source: &'static str| async move {
         reqwest::Client::new()
             .post(format!("http://{addr}/compile-real"))
@@ -774,7 +838,7 @@ async fn deny_listed_source_is_refused_before_build_and_counted() {
     )
     .await;
     assert_eq!(benign.status(), StatusCode::OK);
-    let text = get_metrics(addr, None, &[]).await.text().await.unwrap();
+    let text = get_metrics(maddr, None, &[]).await.text().await.unwrap();
     assert!(
         text.contains("pnc_rejections_total{reason=\"source_policy\"} 4"),
         "{text}"
@@ -783,6 +847,12 @@ async fn deny_listed_source_is_refused_before_build_and_counted() {
 
 #[tokio::test]
 async fn deny_list_can_be_disabled_only_explicitly() {
+    // Never on an exposed config (tokens), even with the dev override's
+    // absence spelled out.
+    assert!(matches!(
+        try_config(&[(vars::SOURCE_DENYLIST, "false"), (vars::AUTH_TOKENS, TOKEN)]),
+        Err(ConfigError::DenylistOffExposed { .. })
+    ));
     let addr = spawn_cfg(config_with(&[(vars::SOURCE_DENYLIST, "false")])).await;
     let resp = reqwest::Client::new()
         .post(format!("http://{addr}/compile-real"))
@@ -832,11 +902,11 @@ async fn encounter_id_is_capped_and_charset_restricted() {
 
 #[tokio::test]
 async fn metrics_route_label_never_contains_raw_paths() {
-    let addr = spawn_cfg(config_with(&[])).await;
+    let (addr, maddr) = spawn_with_metrics(config_with(&[])).await;
     let _ = reqwest::get(format!("http://{addr}/some/random/scanner/path"))
         .await
         .unwrap();
-    let text = reqwest::get(format!("http://{addr}/metrics"))
+    let text = reqwest::get(format!("http://{maddr}/metrics"))
         .await
         .unwrap()
         .text()
@@ -846,5 +916,103 @@ async fn metrics_route_label_never_contains_raw_paths() {
     assert!(
         text.contains("route=\"unmatched\",status=\"404\""),
         "{text}"
+    );
+}
+
+// ---- slow clients (re-review P2) -------------------------------------------
+
+/// Serve `state` with an explicit header-read timeout.
+async fn spawn_with_header_timeout(state: AppState, header: Duration) -> SocketAddr {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let app = build_router(state);
+    tokio::spawn(async move {
+        serve_with(listener, app, header).await.unwrap();
+    });
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    addr
+}
+
+/// Read until EOF or `limit`; returns (bytes, saw_eof).
+async fn read_until_close(stream: &mut tokio::net::TcpStream, limit: Duration) -> (Vec<u8>, bool) {
+    let mut out = Vec::new();
+    let mut buf = [0u8; 4096];
+    let res = tokio::time::timeout(limit, async {
+        loop {
+            match stream.read(&mut buf).await {
+                Ok(0) | Err(_) => return,
+                Ok(n) => out.extend_from_slice(&buf[..n]),
+            }
+        }
+    })
+    .await;
+    (out, res.is_ok())
+}
+
+#[tokio::test]
+async fn slow_headers_are_cut_off_by_the_header_read_timeout() {
+    let state = AppState::with_real_grader(config_with(&[]), stub_grader(Duration::ZERO));
+    let addr = spawn_with_header_timeout(state, Duration::from_secs(1)).await;
+    let mut s = tokio::net::TcpStream::connect(addr).await.unwrap();
+    // Start a request and never finish the header block.
+    s.write_all(b"POST /compile HTTP/1.1\r\nHost: x\r\n")
+        .await
+        .unwrap();
+    let started = std::time::Instant::now();
+    let (_bytes, closed) = read_until_close(&mut s, Duration::from_secs(5)).await;
+    assert!(
+        closed,
+        "server must drop a connection whose headers never end"
+    );
+    let waited = started.elapsed();
+    assert!(
+        waited >= Duration::from_millis(800) && waited < Duration::from_secs(4),
+        "closed after {waited:?}"
+    );
+}
+
+#[tokio::test]
+async fn slow_body_upload_gets_408_within_the_body_timeout() {
+    let mut cfg = config_with(&[]);
+    cfg.body_read_timeout = Duration::from_secs(1);
+    let addr = spawn_cfg(cfg).await;
+    let mut s = tokio::net::TcpStream::connect(addr).await.unwrap();
+    let head = "POST /compile HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\n\
+                Content-Length: 1000\r\n\r\n{\"source\":\"";
+    s.write_all(head.as_bytes()).await.unwrap();
+    // ...then stall with 960+ bytes still owed.
+    let started = std::time::Instant::now();
+    let (bytes, _) = read_until_close(&mut s, Duration::from_secs(5)).await;
+    let text = String::from_utf8_lossy(&bytes);
+    assert!(text.starts_with("HTTP/1.1 408"), "{text}");
+    assert!(text.contains("request_timeout"), "{text}");
+    assert!(
+        text.to_ascii_lowercase().contains("connection: close"),
+        "{text}"
+    );
+    assert!(started.elapsed() < Duration::from_secs(4));
+}
+
+#[tokio::test]
+async fn whole_request_deadline_answers_503_but_keeps_the_slot_until_work_ends() {
+    let mut cfg = config_with(&[
+        (vars::MAX_CONCURRENT_BUILDS, "1"),
+        (vars::MAX_QUEUED_BUILDS, "0"),
+    ]);
+    cfg.request_deadline = Duration::from_millis(500);
+    let state = AppState::with_real_grader(cfg, stub_grader(Duration::from_secs(2)));
+    let probe = state.clone();
+    let addr = spawn(state).await;
+    let resp = post(addr, "/compile-real", None, &[]).await;
+    assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+    let body: RejectionBody = resp.json().await.unwrap();
+    assert_eq!(body.error, "deadline_exceeded");
+    // The stub build is still running: its slot is still held.
+    assert_eq!(probe.available_build_slots(), 0);
+    tokio::time::sleep(Duration::from_millis(2_000)).await;
+    assert_eq!(
+        probe.available_build_slots(),
+        1,
+        "slot back once work ended"
     );
 }
