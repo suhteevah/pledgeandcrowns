@@ -3,29 +3,46 @@
 //! rule for which passes are saved as clears. Shared by native and web;
 //! no I/O here, so every branch is unit-tested.
 //!
+//! # Honest grades
+//!
+//! `/compile-real` says how it graded (`grade`, `behaviour_checked`,
+//! `note`, and `expected` / `actual` on a wrong answer). A pass is only
+//! [`Grade::Passed`] (verified) when the server says `grade: "passed"`
+//! AND `behaviour_checked: true`. Every other pass is
+//! [`Grade::PassedUnverified`]: the pattern route (`/compile`, which never
+//! sends those fields), an old server that omits them, or a mission the
+//! server cannot check (`compiled_not_checked` / `ran_not_checked`).
+//! Absent fields are never read as "verified".
+//!
 //! # Fallback and clear policy
 //!
 //! | Situation                                   | Feedback shown            | Pass saved? |
 //! |---------------------------------------------|---------------------------|-------------|
-//! | Server graded the code (200, or 400 body)   | server verdict            | yes         |
+//! | Server graded: verified pass                | PASS (verified)           | yes         |
+//! | Server graded: unverified / pattern pass    | PASS, NOT VERIFIED        | yes (policy)|
+//! | Server graded: any failure                  | FAIL + reason             | no          |
 //! | Server configured but unreachable / errored | offline stub grader       | **no**      |
 //! | 429 rate limited / 503 build queue full     | "wait N seconds" message  | no          |
 //! | 401 unauthorized / 413 too large            | plain explanation         | no          |
-//! | No server configured on purpose (demo mode) | stub grader, no banner    | yes         |
+//! | No server configured on purpose (demo mode) | stub grader (pattern only)| yes         |
 //!
-//! "Configured but misconfigured" (bad URL/token in the config) is handled
-//! by the caller as `Offline`, i.e. stub feedback that is not saved.
+//! An unverified pass still counts as a clear so the player is never
+//! blocked by a mission the server cannot check; the editor labels it
+//! NOT VERIFIED instead.
 //!
 //! The strings produced keep the editor's contract
-//! (`editor/diagnostics.rs::parse_result`): `[ok] ...` / `[fail] ...` for
-//! verdicts, an optional leading `[offline mode ...]` banner line for stub
-//! fallback, and any other leading tag for "not the player's fault"
-//! errors, which never count as failed attempts. Server text is passed
-//! through unchanged so rustc line numbers still map via
-//! `SERVER_PREAMBLE_LINES`.
+//! (`editor/diagnostics.rs::parse_result`): a `[ok...]` / `[fail...]`
+//! verdict tag (see [`Grade::tag`]), an optional leading `[offline mode
+//! ...]` banner line for stub fallback, and any other leading tag for
+//! "not the player's fault" errors, which never count as failed attempts.
+//! Server text is passed through unchanged so rustc line numbers still
+//! map via `SERVER_PREAMBLE_LINES`; the editor strips transport noise
+//! only at display time.
 
 use serde::Deserialize;
 
+use super::config::CompileMode;
+use crate::plugins::editor::diagnostics::ResultDetail;
 use crate::plugins::stub_grader::StubVerdict;
 
 /// Cap on a server-supplied retry delay, so a bogus header can't tell the
@@ -56,11 +73,107 @@ pub enum TransportError {
     Other(String),
 }
 
+/// Why a pass was not verified.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Unverified {
+    /// Pattern grader (`/compile` route, or the offline stub): looked for
+    /// the right pieces in the source; nothing was compiled or run.
+    PatternOnly,
+    /// `compiled_not_checked`: built (and passed static checks), not run.
+    CompiledNotChecked,
+    /// `ran_not_checked`: built and ran cleanly, output not checked.
+    RanNotChecked,
+    /// `ok: true` but the server did not say how it graded (old server,
+    /// unknown `grade` value, or contradictory fields).
+    Unknown,
+}
+
+/// How the server graded one submission.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Grade {
+    /// Built, ran, and its behaviour was checked and matched.
+    Passed,
+    /// Accepted, but behaviour was not checked. Still a clear (policy).
+    PassedUnverified(Unverified),
+    /// Built and ran, but did not do what the mission asks.
+    WrongOutput,
+    /// Did not build.
+    CompileError,
+    /// Built, then crashed / timed out / exited non-zero.
+    RuntimeError,
+    /// Built, but does not use what a compile-only mission teaches.
+    StaticCheckFailed,
+    /// Rejected without a grade (pattern grader, or an old server).
+    Failed,
+}
+
+impl Grade {
+    pub fn is_pass(self) -> bool {
+        matches!(self, Self::Passed | Self::PassedUnverified(_))
+    }
+
+    /// The leading tag of the editor string (`editor/diagnostics.rs`).
+    pub fn tag(self) -> &'static str {
+        match self {
+            Self::Passed => "[ok]",
+            Self::PassedUnverified(Unverified::PatternOnly) => "[ok:pattern]",
+            Self::PassedUnverified(_) => "[ok:unverified]",
+            Self::WrongOutput => "[fail:output]",
+            Self::CompileError => "[fail:compile]",
+            Self::RuntimeError => "[fail:runtime]",
+            Self::StaticCheckFailed => "[fail:static]",
+            Self::Failed => "[fail]",
+        }
+    }
+
+    /// Map the server's fields. `ok` is already `ok && status == 200`.
+    /// Only `passed` + `behaviour_checked: true` is verified.
+    pub fn from_server(
+        mode: CompileMode,
+        ok: bool,
+        grade: Option<&str>,
+        behaviour_checked: Option<bool>,
+    ) -> Self {
+        if ok {
+            return match (grade, behaviour_checked) {
+                (Some("passed"), Some(true)) => Self::Passed,
+                (Some("compiled_not_checked"), _) => {
+                    Self::PassedUnverified(Unverified::CompiledNotChecked)
+                }
+                (Some("ran_not_checked"), _) => Self::PassedUnverified(Unverified::RanNotChecked),
+                (None, None) if mode == CompileMode::Pattern => {
+                    Self::PassedUnverified(Unverified::PatternOnly)
+                }
+                _ => Self::PassedUnverified(Unverified::Unknown),
+            };
+        }
+        match grade {
+            Some("wrong_output") => Self::WrongOutput,
+            Some("compile_error") => Self::CompileError,
+            Some("runtime_error") => Self::RuntimeError,
+            Some("static_check_failed") => Self::StaticCheckFailed,
+            _ => Self::Failed,
+        }
+    }
+}
+
+/// A graded reply: the outcome class plus everything the editor shows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GradedReply {
+    pub grade: Grade,
+    /// Editor-ready string (tag + server text verbatim).
+    pub message: String,
+    /// Server's one-line note on how it graded, if sent.
+    pub note: Option<String>,
+    pub expected: Option<String>,
+    pub actual: Option<String>,
+}
+
 /// Classified result of one compile request.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ApiOutcome {
-    /// The server graded the code. `message` is the editor-ready string.
-    Graded { ok: bool, message: String },
+    /// The server graded the code.
+    Graded(GradedReply),
     /// 429. Seconds to wait, when the server said.
     RateLimited { retry_after_secs: Option<u64> },
     /// 503: build queue full.
@@ -74,8 +187,21 @@ pub enum ApiOutcome {
     Offline { reason: String },
 }
 
-/// The server's `{ok, stdout, stderr}` body (also the base of its
-/// rejection bodies, which add `error` / `retry_after_seconds`).
+impl ApiOutcome {
+    /// The grade, when the server graded the code.
+    pub fn grade(&self) -> Option<Grade> {
+        match self {
+            Self::Graded(g) => Some(g.grade),
+            _ => None,
+        }
+    }
+}
+
+/// The server's body. `ok`, `stdout`, `stderr` are the original contract;
+/// the rest is optional (absent on `/compile` and on older servers). Its
+/// rejection bodies add `error` / `retry_after_seconds`. `grade` is read
+/// as a plain string so an unknown future value degrades to "unverified"
+/// instead of making the body unreadable.
 #[derive(Deserialize, Debug)]
 struct CompileResponse {
     ok: bool,
@@ -83,13 +209,23 @@ struct CompileResponse {
     stderr: String,
     #[serde(default)]
     retry_after_seconds: Option<u64>,
+    #[serde(default)]
+    grade: Option<String>,
+    #[serde(default)]
+    behaviour_checked: Option<bool>,
+    #[serde(default)]
+    expected: Option<String>,
+    #[serde(default)]
+    actual: Option<String>,
+    #[serde(default)]
+    note: Option<String>,
 }
 
-/// Editor-ready text for a server verdict. Unchanged from the original
-/// client so the editor's parsing and line mapping still hold.
-pub fn format_server_verdict(ok: bool, stdout: &str, stderr: &str) -> String {
-    let tag = if ok { "ok" } else { "fail" };
-    let mut out = format!("[{tag}] {stdout}");
+/// Editor-ready text for a server verdict: the grade tag, then the
+/// server's stdout and stderr verbatim (the editor's error-line parser
+/// reads this text, so it is never rewritten here).
+pub fn format_server_verdict(grade: Grade, stdout: &str, stderr: &str) -> String {
+    let mut out = format!("{} {stdout}", grade.tag());
     if !stderr.is_empty() {
         out.push_str("\n--stderr--\n");
         out.push_str(stderr);
@@ -104,8 +240,14 @@ fn parse_retry_after(header: Option<&str>, body: Option<u64>) -> Option<u64> {
         .map(|s| s.min(MAX_RETRY_AFTER_SECS))
 }
 
-/// Map a transport result to an [`ApiOutcome`]. Pure.
-pub fn classify(result: Result<HttpReply, TransportError>) -> ApiOutcome {
+fn non_empty(s: Option<String>) -> Option<String> {
+    s.filter(|v| !v.trim().is_empty())
+}
+
+/// Map a transport result to an [`ApiOutcome`]. Pure. `mode` is the
+/// route the request went to (a grade-less pass from `/compile` is
+/// "pattern check only").
+pub fn classify(mode: CompileMode, result: Result<HttpReply, TransportError>) -> ApiOutcome {
     let reply = match result {
         Ok(r) => r,
         Err(e) => {
@@ -124,10 +266,25 @@ pub fn classify(result: Result<HttpReply, TransportError>) -> ApiOutcome {
     match reply.status {
         200 | 400 => match parsed {
             // 400 carries a real verdict body ("empty source").
-            Some(p) => ApiOutcome::Graded {
-                ok: p.ok && reply.status == 200,
-                message: format_server_verdict(p.ok && reply.status == 200, &p.stdout, &p.stderr),
-            },
+            Some(p) => {
+                let ok = p.ok && reply.status == 200;
+                let grade = Grade::from_server(mode, ok, p.grade.as_deref(), p.behaviour_checked);
+                tracing::debug!(
+                    status = reply.status,
+                    ok,
+                    server_grade = ?p.grade,
+                    behaviour_checked = ?p.behaviour_checked,
+                    ?grade,
+                    "compile-api: graded reply mapped"
+                );
+                ApiOutcome::Graded(GradedReply {
+                    grade,
+                    message: format_server_verdict(grade, &p.stdout, &p.stderr),
+                    note: non_empty(p.note),
+                    expected: non_empty(p.expected),
+                    actual: p.actual,
+                })
+            }
             None => ApiOutcome::Offline {
                 reason: format!(
                     "the server sent a reply the game couldn't read (HTTP {})",
@@ -149,13 +306,31 @@ pub fn classify(result: Result<HttpReply, TransportError>) -> ApiOutcome {
     }
 }
 
-/// What the main loop applies: text for the editor, pass/fail, and
-/// whether a pass is saved.
+/// What the main loop applies: text for the editor, pass/fail, whether a
+/// pass is saved, and the structured extras the result pane shows.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Verdict {
     pub formatted: String,
     pub ok: bool,
     pub persist_clear: bool,
+    /// The grade, when something graded the code (server or stub).
+    pub grade: Option<Grade>,
+    /// Note / expected / actual for the result pane. `for_result` equals
+    /// `formatted`.
+    pub detail: ResultDetail,
+}
+
+impl Verdict {
+    fn plain(formatted: String, ok: bool, persist_clear: bool, grade: Option<Grade>) -> Self {
+        let detail = ResultDetail::bare(&formatted);
+        Self {
+            formatted,
+            ok,
+            persist_clear,
+            grade,
+            detail,
+        }
+    }
 }
 
 fn wait_phrase(secs: Option<u64>) -> String {
@@ -166,10 +341,19 @@ fn wait_phrase(secs: Option<u64>) -> String {
     }
 }
 
+/// The stub grader is a pattern grader: its pass is never "verified".
+fn stub_grade(v: &StubVerdict) -> Grade {
+    if v.ok {
+        Grade::PassedUnverified(Unverified::PatternOnly)
+    } else {
+        Grade::Failed
+    }
+}
+
 fn stub_text(v: &StubVerdict) -> String {
-    let tag = if v.ok { "ok" } else { "fail" };
+    let grade = stub_grade(v);
     let body = if v.ok { &v.stdout } else { &v.stderr };
-    let mut out = format!("[{tag}] {body}");
+    let mut out = format!("{} {body}", grade.tag());
     if v.ok && !v.stderr.is_empty() {
         out.push_str("\n--stderr--\n");
         out.push_str(&v.stderr);
@@ -184,17 +368,24 @@ pub fn verdict_with_server(
     encounter_id: &str,
     stub: impl FnOnce() -> Option<StubVerdict>,
 ) -> Verdict {
-    let refused = |formatted: String| Verdict {
-        formatted,
-        ok: false,
-        persist_clear: false,
-    };
+    let refused = |formatted: String| Verdict::plain(formatted, false, false, None);
     match outcome {
-        ApiOutcome::Graded { ok, message } => Verdict {
-            formatted: message.clone(),
-            ok: *ok,
-            persist_clear: *ok,
-        },
+        ApiOutcome::Graded(g) => {
+            let ok = g.grade.is_pass();
+            Verdict {
+                formatted: g.message.clone(),
+                ok,
+                // Policy: verified AND unverified passes are clears.
+                persist_clear: ok,
+                grade: Some(g.grade),
+                detail: ResultDetail {
+                    for_result: g.message.clone(),
+                    note: g.note.clone(),
+                    expected: g.expected.clone(),
+                    actual: g.actual.clone(),
+                },
+            }
+        }
         ApiOutcome::RateLimited { retry_after_secs } => refused(format!(
             "[rate limited] You're compiling faster than the server allows. \
              Wait {} and press Compile again. Your code wasn't checked yet.",
@@ -225,11 +416,7 @@ pub fn verdict_with_server(
                          compile server is reachable again.)",
                     );
                 }
-                Verdict {
-                    formatted,
-                    ok: v.ok,
-                    persist_clear: false,
-                }
+                Verdict::plain(formatted, v.ok, false, Some(stub_grade(&v)))
             }
             None => refused(format!(
                 "[client error] Couldn't reach the compile server ({reason}), and there \
@@ -240,26 +427,27 @@ pub fn verdict_with_server(
 }
 
 /// Verdict in offline demo mode (no server configured on purpose): the
-/// stub grader is canonical, so its passes are saved. No banner.
+/// stub grader is canonical, so its passes are saved, but they are still
+/// presented as "pattern check only". No offline banner.
 pub fn verdict_offline_mode(encounter_id: &str, stub: Option<StubVerdict>) -> Verdict {
     match stub {
-        Some(v) => Verdict {
-            formatted: stub_text(&v),
-            ok: v.ok,
-            persist_clear: v.ok,
-        },
-        None => Verdict {
-            formatted: format!("[offline] no offline grader for encounter `{encounter_id}`"),
-            ok: false,
-            persist_clear: false,
-        },
+        Some(v) => Verdict::plain(stub_text(&v), v.ok, v.ok, Some(stub_grade(&v))),
+        None => Verdict::plain(
+            format!("[offline] no offline grader for encounter `{encounter_id}`"),
+            false,
+            false,
+            None,
+        ),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plugins::editor::diagnostics::{ResultKind, parse_result};
+    use crate::plugins::editor::diagnostics::{ResultKind, ResultTag, parse_result};
+
+    const REAL: CompileMode = CompileMode::Real;
+    const PATTERN: CompileMode = CompileMode::Pattern;
 
     fn reply(status: u16, retry: Option<&str>, body: &str) -> Result<HttpReply, TransportError> {
         Ok(HttpReply {
@@ -267,6 +455,13 @@ mod tests {
             retry_after: retry.map(str::to_string),
             body: body.to_string(),
         })
+    }
+
+    fn graded(mode: CompileMode, body: &str) -> GradedReply {
+        match classify(mode, reply(200, None, body)) {
+            ApiOutcome::Graded(g) => g,
+            other => panic!("expected graded, got {other:?}"),
+        }
     }
 
     fn stub(ok: bool) -> Option<StubVerdict> {
@@ -287,46 +482,160 @@ mod tests {
 
     const REJECT_429: &str = r#"{"ok":false,"stdout":"","stderr":"rate limit exceeded; retry in 7s","error":"rate_limited","retry_after_seconds":7}"#;
 
+    /// One `/compile-real` body per server `grade` value.
+    fn real_body(ok: bool, grade: &str, checked: bool) -> String {
+        format!(
+            r#"{{"ok":{ok},"stdout":"[real] 42","stderr":"","grade":"{grade}","behaviour_checked":{checked},"note":"note for {grade}"}}"#
+        )
+    }
+
     #[test]
-    fn graded_pass_and_fail() {
-        let o = classify(reply(200, None, r#"{"ok":true,"stdout":"42","stderr":""}"#));
-        assert_eq!(
-            o,
-            ApiOutcome::Graded {
-                ok: true,
-                message: "[ok] 42".into()
-            }
+    fn every_server_grade_value_maps_to_its_own_outcome() {
+        let cases = [
+            (true, "passed", true, Grade::Passed, ResultTag::Verified),
+            (
+                true,
+                "compiled_not_checked",
+                false,
+                Grade::PassedUnverified(Unverified::CompiledNotChecked),
+                ResultTag::Unverified,
+            ),
+            (
+                true,
+                "ran_not_checked",
+                false,
+                Grade::PassedUnverified(Unverified::RanNotChecked),
+                ResultTag::Unverified,
+            ),
+            (
+                false,
+                "wrong_output",
+                true,
+                Grade::WrongOutput,
+                ResultTag::WrongOutput,
+            ),
+            (
+                false,
+                "compile_error",
+                false,
+                Grade::CompileError,
+                ResultTag::CompileError,
+            ),
+            (
+                false,
+                "runtime_error",
+                false,
+                Grade::RuntimeError,
+                ResultTag::RuntimeError,
+            ),
+            (
+                false,
+                "static_check_failed",
+                false,
+                Grade::StaticCheckFailed,
+                ResultTag::StaticCheckFailed,
+            ),
+        ];
+        for (ok, name, checked, want, tag) in cases {
+            let g = graded(REAL, &real_body(ok, name, checked));
+            assert_eq!(g.grade, want, "{name}");
+            assert_eq!(g.note.as_deref(), Some(format!("note for {name}").as_str()));
+            let v = verdict_with_server(&ApiOutcome::Graded(g), "m", || panic!("no stub"));
+            assert_eq!(v.ok, ok, "{name}");
+            assert_eq!(
+                v.persist_clear, ok,
+                "{name}: passes (even unverified) are clears"
+            );
+            let p = parse_result(&v.formatted);
+            assert_eq!(p.tag, tag, "{name}");
+            assert_eq!(p.kind == ResultKind::Pass, ok, "{name}");
+            assert_eq!(v.detail.for_result, v.formatted);
+        }
+    }
+
+    #[test]
+    fn absent_fields_are_never_verified() {
+        // Old server on the real route: ok but no grade fields.
+        let g = graded(REAL, r#"{"ok":true,"stdout":"[real] 42","stderr":""}"#);
+        assert_eq!(g.grade, Grade::PassedUnverified(Unverified::Unknown));
+        // Pattern route: never sends grade fields; pattern check only.
+        let g = graded(PATTERN, r#"{"ok":true,"stdout":"nice","stderr":""}"#);
+        assert_eq!(g.grade, Grade::PassedUnverified(Unverified::PatternOnly));
+        assert_eq!(parse_result(&g.message).tag, ResultTag::PatternOnly);
+        // `passed` without `behaviour_checked: true` is not verified.
+        let g = graded(
+            REAL,
+            r#"{"ok":true,"stdout":"","stderr":"","grade":"passed"}"#,
         );
-        let o = classify(reply(
-            200,
-            None,
-            r#"{"ok":false,"stdout":"[real]","stderr":"error[E0384]: x\n --> src/main.rs:4:5"}"#,
-        ));
-        let ApiOutcome::Graded { ok, message } = o else {
-            panic!("expected graded")
-        };
-        assert!(!ok);
-        // Server text passes through byte for byte.
+        assert_eq!(g.grade, Grade::PassedUnverified(Unverified::Unknown));
+        let g = graded(
+            REAL,
+            r#"{"ok":true,"stdout":"","stderr":"","grade":"passed","behaviour_checked":false}"#,
+        );
+        assert_eq!(g.grade, Grade::PassedUnverified(Unverified::Unknown));
+        // Unknown future grade value: readable, unverified.
+        let g = graded(
+            REAL,
+            r#"{"ok":true,"stdout":"","stderr":"","grade":"vibes"}"#,
+        );
+        assert_eq!(g.grade, Grade::PassedUnverified(Unverified::Unknown));
+        // Failures without a grade are a generic fail.
+        let g = graded(PATTERN, r#"{"ok":false,"stdout":"","stderr":"nope"}"#);
+        assert_eq!(g.grade, Grade::Failed);
+        let g = graded(
+            REAL,
+            r#"{"ok":false,"stdout":"","stderr":"x","grade":"passed"}"#,
+        );
+        assert_eq!(g.grade, Grade::Failed);
+    }
+
+    #[test]
+    fn wrong_output_carries_expected_and_actual() {
+        let body = r#"{"ok":false,"stdout":"[real] 41","stderr":"Your program ran, but did not do what this mission asks.\nExpected a line reading `42`\nGot:\n41","grade":"wrong_output","behaviour_checked":true,"expected":"a line reading `42`","actual":"41","note":"output checked against the mission"}"#;
+        let g = graded(REAL, body);
+        assert_eq!(g.grade, Grade::WrongOutput);
+        assert_eq!(g.expected.as_deref(), Some("a line reading `42`"));
+        assert_eq!(g.actual.as_deref(), Some("41"));
+        let v = verdict_with_server(&ApiOutcome::Graded(g), "m", || None);
+        assert_eq!(v.detail.expected.as_deref(), Some("a line reading `42`"));
+        assert!(!v.persist_clear);
+    }
+
+    #[test]
+    fn server_text_passes_through_byte_for_byte() {
+        let g = graded(
+            REAL,
+            r#"{"ok":false,"stdout":"[real]","stderr":"error[E0384]: x\n --> src/main.rs:4:5","grade":"compile_error","behaviour_checked":false}"#,
+        );
         assert_eq!(
-            message,
-            "[fail] [real]\n--stderr--\nerror[E0384]: x\n --> src/main.rs:4:5"
+            g.message,
+            "[fail:compile] [real]\n--stderr--\nerror[E0384]: x\n --> src/main.rs:4:5"
         );
     }
 
     #[test]
     fn bad_request_with_body_is_a_failed_verdict() {
-        let o = classify(reply(
-            400,
-            None,
-            r#"{"ok":false,"stdout":"","stderr":"empty source"}"#,
-        ));
-        assert!(matches!(o, ApiOutcome::Graded { ok: false, .. }));
+        let o = classify(
+            PATTERN,
+            reply(
+                400,
+                None,
+                r#"{"ok":false,"stdout":"","stderr":"empty source"}"#,
+            ),
+        );
+        assert_eq!(o.grade(), Some(Grade::Failed));
+        // A 400 is never a pass, whatever `ok` says.
+        let o = classify(
+            PATTERN,
+            reply(400, None, r#"{"ok":true,"stdout":"","stderr":""}"#),
+        );
+        assert_eq!(o.grade(), Some(Grade::Failed));
     }
 
     #[test]
     fn unreadable_success_body_is_offline() {
         assert!(matches!(
-            classify(reply(200, None, "<html>proxy page</html>")),
+            classify(PATTERN, reply(200, None, "<html>proxy page</html>")),
             ApiOutcome::Offline { .. }
         ));
     }
@@ -334,30 +643,29 @@ mod tests {
     #[test]
     fn rate_limited_reads_header_then_body() {
         assert_eq!(
-            classify(reply(429, Some("12"), REJECT_429)),
+            classify(PATTERN, reply(429, Some("12"), REJECT_429)),
             ApiOutcome::RateLimited {
                 retry_after_secs: Some(12)
             }
         );
         // HTTP-date header is not parsed; fall back to the body field.
         assert_eq!(
-            classify(reply(
-                429,
-                Some("Wed, 21 Oct 2026 07:28:00 GMT"),
-                REJECT_429
-            )),
+            classify(
+                PATTERN,
+                reply(429, Some("Wed, 21 Oct 2026 07:28:00 GMT"), REJECT_429)
+            ),
             ApiOutcome::RateLimited {
                 retry_after_secs: Some(7)
             }
         );
         assert_eq!(
-            classify(reply(429, None, "")),
+            classify(PATTERN, reply(429, None, "")),
             ApiOutcome::RateLimited {
                 retry_after_secs: None
             }
         );
         assert_eq!(
-            classify(reply(429, Some("999999"), "")),
+            classify(PATTERN, reply(429, Some("999999"), "")),
             ApiOutcome::RateLimited {
                 retry_after_secs: Some(MAX_RETRY_AFTER_SECS)
             }
@@ -367,20 +675,26 @@ mod tests {
     #[test]
     fn busy_unauthorized_too_large() {
         assert_eq!(
-            classify(reply(503, Some("5"), "")),
+            classify(REAL, reply(503, Some("5"), "")),
             ApiOutcome::Busy {
                 retry_after_secs: Some(5)
             }
         );
-        assert_eq!(classify(reply(401, None, "")), ApiOutcome::Unauthorized);
-        assert_eq!(classify(reply(413, None, "")), ApiOutcome::TooLarge);
+        assert_eq!(
+            classify(REAL, reply(401, None, "")),
+            ApiOutcome::Unauthorized
+        );
+        assert_eq!(classify(REAL, reply(413, None, "")), ApiOutcome::TooLarge);
     }
 
     #[test]
     fn other_statuses_and_transport_errors_are_offline() {
         for s in [404, 405, 415, 422, 500, 502, 504] {
             assert!(
-                matches!(classify(reply(s, None, "{}")), ApiOutcome::Offline { .. }),
+                matches!(
+                    classify(REAL, reply(s, None, "{}")),
+                    ApiOutcome::Offline { .. }
+                ),
                 "{s}"
             );
         }
@@ -389,27 +703,8 @@ mod tests {
             TransportError::Connect,
             TransportError::Other("dns".into()),
         ] {
-            assert!(matches!(classify(Err(e)), ApiOutcome::Offline { .. }));
+            assert!(matches!(classify(REAL, Err(e)), ApiOutcome::Offline { .. }));
         }
-    }
-
-    #[test]
-    fn server_pass_is_saved_server_fail_is_not() {
-        let pass = ApiOutcome::Graded {
-            ok: true,
-            message: "[ok] hi".into(),
-        };
-        let v = verdict_with_server(&pass, "m", || panic!("stub must not run"));
-        assert!(v.ok && v.persist_clear);
-        assert_eq!(parse_result(&v.formatted).kind, ResultKind::Pass);
-
-        let fail = ApiOutcome::Graded {
-            ok: false,
-            message: "[fail] no".into(),
-        };
-        let v = verdict_with_server(&fail, "m", || panic!("stub must not run"));
-        assert!(!v.ok && !v.persist_clear);
-        assert_eq!(parse_result(&v.formatted).kind, ResultKind::Fail);
     }
 
     #[test]
@@ -422,6 +717,7 @@ mod tests {
         assert!(!v.persist_clear, "fallback pass must not be saved");
         let p = parse_result(&v.formatted);
         assert_eq!((p.kind, p.offline), (ResultKind::Pass, true));
+        assert_eq!(p.tag, ResultTag::PatternOnly, "stub is pattern-only");
 
         let v = verdict_with_server(&off, "m", || stub(false));
         assert!(!v.ok && !v.persist_clear);
@@ -448,6 +744,7 @@ mod tests {
         ] {
             let v = verdict_with_server(&o, "m", || panic!("stub must not run for {o:?}"));
             assert!(!v.ok && !v.persist_clear);
+            assert_eq!(v.grade, None);
             assert_eq!(
                 parse_result(&v.formatted).kind,
                 ResultKind::Error,
@@ -473,11 +770,12 @@ mod tests {
     }
 
     #[test]
-    fn offline_demo_mode_saves_stub_passes() {
+    fn offline_demo_mode_saves_stub_passes_as_pattern_only() {
         let v = verdict_offline_mode("m", stub(true));
         assert!(v.ok && v.persist_clear);
         let p = parse_result(&v.formatted);
         assert_eq!((p.kind, p.offline), (ResultKind::Pass, false));
+        assert_eq!(p.tag, ResultTag::PatternOnly);
 
         let v = verdict_offline_mode("m", stub(false));
         assert!(!v.ok && !v.persist_clear);

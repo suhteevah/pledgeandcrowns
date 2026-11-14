@@ -23,7 +23,7 @@ use bevy::prelude::*;
 use crossbeam_channel::{Receiver, Sender, unbounded};
 
 pub use config::{ApiEndpoint, ApiTarget, CompileApiConfig, CompileMode};
-pub use outcome::{ApiOutcome, Verdict};
+pub use outcome::{ApiOutcome, Grade, Unverified, Verdict};
 
 /// What a request ships back to the main loop.
 struct CompileOutcome {
@@ -72,7 +72,7 @@ async fn grade_remote(endpoint: ApiEndpoint, source: String, encounter_id: Strin
     #[cfg(target_arch = "wasm32")]
     let result = transport::post_compile(&endpoint, &source, &encounter_id).await;
 
-    let api_outcome = outcome::classify(result);
+    let api_outcome = outcome::classify(endpoint.mode, result);
     log_outcome(&encounter_id, &api_outcome);
     outcome::verdict_with_server(&api_outcome, &encounter_id, || {
         tracing::warn!("compile-api: falling back to offline stub grader for `{encounter_id}`");
@@ -82,9 +82,13 @@ async fn grade_remote(endpoint: ApiEndpoint, source: String, encounter_id: Strin
 
 fn log_outcome(encounter_id: &str, o: &ApiOutcome) {
     match o {
-        ApiOutcome::Graded { ok, .. } => {
-            tracing::info!(encounter = encounter_id, ok, "compile-api: graded")
-        }
+        ApiOutcome::Graded(g) => tracing::info!(
+            encounter = encounter_id,
+            grade = ?g.grade,
+            verified = matches!(g.grade, outcome::Grade::Passed),
+            note = ?g.note,
+            "compile-api: graded"
+        ),
         ApiOutcome::RateLimited { retry_after_secs } => tracing::warn!(
             encounter = encounter_id,
             retry_after_secs = ?retry_after_secs,
@@ -234,19 +238,28 @@ fn drain_results(
     }) = channel.receiver.try_recv()
     {
         tracing::info!(
-            "compile result: encounter={} ok={} persist={} {}",
+            "compile result: encounter={} ok={} persist={} grade={:?} {}",
             encounter_id,
             verdict.ok,
             verdict.persist_clear,
+            verdict.grade,
             verdict.formatted
         );
         if verdict.ok && verdict.persist_clear {
+            if !matches!(verdict.grade, Some(outcome::Grade::Passed)) {
+                // Policy: an unverified pass still clears the mission; the
+                // editor labels it NOT VERIFIED / pattern check only.
+                tracing::info!(
+                    "unverified pass for `{encounter_id}` saved as a clear ({:?})",
+                    verdict.grade
+                );
+            }
             progress.mark_cleared(&encounter_id);
         } else if verdict.ok {
             tracing::info!(
                 "non-persisting pass for `{encounter_id}` (offline fallback; server configured but unavailable)"
             );
         }
-        editor.last_compile_result = Some(verdict.formatted);
+        editor.set_result(verdict.formatted, verdict.detail);
     }
 }

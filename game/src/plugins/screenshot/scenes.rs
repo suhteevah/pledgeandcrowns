@@ -15,6 +15,8 @@ use bevy::prelude::*;
 
 use super::collision::{PUSH_SECS, feet_inside_any, gap_to_wall, probe_wall, probes};
 use super::{Action, Scene, ShotLog, WorldFn};
+use crate::plugins::compile_client::CompileMode;
+use crate::plugins::compile_client::outcome::{HttpReply, classify, verdict_with_server};
 use crate::plugins::dialogue::Dialogue;
 use crate::plugins::editor::{EditorSession, EditorState};
 use crate::plugins::menu::{MenuScreen, MenuUi};
@@ -51,7 +53,7 @@ const BUGGY_SOURCE: &str =
 /// A canned rustc failure in the exact shape `compile_client` writes for a
 /// graded failure: server text verbatim, so rustc reports the line one
 /// below the player's (the server prepends one `#![allow]` line).
-const CANNED_FAIL: &str = "[fail] [real]\n--stderr--\n\
+const CANNED_FAIL: &str = "[fail:compile] [real]\n--stderr--\n\
 error[E0384]: cannot assign twice to immutable variable `answer`\n \
 --> src/main.rs:4:5\n  |\n\
 3 |     let answer = 42;\n  |         ------ first assignment to `answer`\n\
@@ -60,6 +62,25 @@ help: consider making this binding mutable\n  |\n\
 3 |     let mut answer = 42;\n  |         +++\n\n\
 error: aborting due to 1 previous error\n\n\
 For more information about this error, try `rustc --explain E0384`.";
+
+/// A longer edit with several rustc errors and a warning (player lines;
+/// the server reports each one line lower).
+const LONG_SOURCE: &str = "fn take(v: String) {}\n\nfn main() {\n    let answer = 42;\n    answer = 43;\n    let n: i32 = \"five\";\n    let s = String::from(\"hi\");\n    take(s);\n    println!(\"{} {}\", s, y);\n}\n";
+
+/// `/compile-real` reply for [`LONG_SOURCE`]: four errors and a warning,
+/// as the server sends it (cargo progress lines included).
+const LONG_FAIL_JSON: &str = r#"{"ok":false,"stdout":"[real]","stderr":"   Compiling player_submission v0.0.0 (/build)\nerror[E0425]: cannot find value `y` in this scope\n  --> src/main.rs:10:28\n   |\n10 |     println!(\"{} {}\", s, y);\n   |                            ^ help: a local variable with a similar name exists: `s`\n\nwarning: unused variable: `n`\n --> src/main.rs:7:9\n  |\n7 |     let n: i32 = \"five\";\n  |         ^ help: if this is intentional, prefix it with an underscore: `_n`\n  |\n  = note: `#[warn(unused_variables)]` on by default\n\nerror[E0308]: mismatched types\n --> src/main.rs:7:18\n  |\n7 |     let n: i32 = \"five\";\n  |            ---   ^^^^^^ expected `i32`, found `&str`\n  |            |\n  |            expected due to this\n\nerror[E0384]: cannot assign twice to immutable variable `answer`\n --> src/main.rs:6:5\n  |\n5 |     let answer = 42;\n  |         ------ first assignment to `answer`\n6 |     answer = 43;\n  |     ^^^^^^^^^^^ cannot assign twice to immutable variable\n  |\nhelp: consider making this binding mutable\n  |\n5 |     let mut answer = 42;\n  |         +++\n\nerror[E0382]: borrow of moved value: `s`\n  --> src/main.rs:10:23\n   |\n8  |     let s = String::from(\"hi\");\n   |         - move occurs because `s` has type `String`, which does not implement the `Copy` trait\n9  |     take(s);\n   |          - value moved here\n10 |     println!(\"{} {}\", s, y);\n   |                       ^ value borrowed here after move\n   |\nnote: consider changing this parameter type in function `take` to borrow instead if owning the value isn't necessary\n  --> src/main.rs:2:12\n   |\n2  | fn take(v: String) {}\n   |    ----    ^^^^^^ this parameter takes ownership of the value\n\nSome errors have detailed explanations: E0308, E0382, E0384, E0425.\nFor more information about an error, try `rustc --explain E0308`.\nwarning: `player_submission` (bin \"player_submission\") generated 1 warning\nerror: could not compile `player_submission` (bin \"player_submission\") due to 4 previous errors; 1 warning emitted","grade":"compile_error","behaviour_checked":false,"note":"did not build"}"#;
+
+const WRONG_SOURCE: &str = "fn main() {\n    let answer = 41;\n    println!(\"{answer}\");\n}\n";
+/// `/compile-real` wrong-output reply, verbatim server shape.
+const WRONG_OUTPUT_JSON: &str = r#"{"ok":false,"stdout":"[real] 41","stderr":"Your program ran, but did not do what this mission asks.\nExpected a line reading `42`\nGot:\n41","grade":"wrong_output","behaviour_checked":true,"expected":"a line reading `42`","actual":"41","note":"output checked against the mission"}"#;
+/// `/compile-real` compile-only mission: accepted, behaviour not checked.
+const UNVERIFIED_JSON: &str = r#"{"ok":true,"stdout":"[real] compiled\n-- not checked: behaviour not checked on this server: wasm32-wasip1 has no threads, so this program is compiled and statically checked but never run","stderr":"","grade":"compiled_not_checked","behaviour_checked":false,"note":"behaviour not checked on this server: wasm32-wasip1 has no threads, so this program is compiled and statically checked but never run"}"#;
+/// `/compile-real` verified pass.
+const VERIFIED_JSON: &str = r#"{"ok":true,"stdout":"[real] 42\n-- checked: does what the mission asks","stderr":"","grade":"passed","behaviour_checked":true,"note":"output checked against the mission"}"#;
+/// `/compile` (pattern route) pass: no grade fields at all.
+const PATTERN_JSON: &str =
+    r#"{"ok":true,"stdout":"Ferris clicks approvingly: `answer` is bound to 42.","stderr":""}"#;
 
 const PASSING_SOURCE: &str = "fn main() {\n    let answer = 42;\n    println!(\"{answer}\");\n}\n";
 const CANNED_PASS: &str = "[ok] 42";
@@ -246,6 +267,37 @@ fn canned_failure(world: &mut World) {
     ed.last_compile_result = Some(CANNED_FAIL.to_string());
 }
 
+/// Show a server reply in the editor exactly as a real compile would:
+/// the canned JSON goes through the client's own classifier and verdict
+/// mapper. Display only (no failure is counted).
+fn show_server_reply(world: &mut World, mode: CompileMode, json: &str) {
+    let outcome = classify(
+        mode,
+        Ok(HttpReply {
+            status: 200,
+            retry_after: None,
+            body: json.to_string(),
+        }),
+    );
+    let verdict = verdict_with_server(&outcome, FIRST_MISSION, || None);
+    tracing::info!(grade = ?verdict.grade, "scene: canned server reply shown");
+    world
+        .resource_mut::<EditorState>()
+        .set_result(verdict.formatted, verdict.detail);
+}
+
+/// Resize the primary window in-app, through Bevy's `Window` component
+/// (no OS input, no focus change).
+fn set_window_size(world: &mut World, w: f32, h: f32) {
+    let mut q = world.query_filtered::<&mut Window, With<bevy::window::PrimaryWindow>>();
+    let mut n = 0usize;
+    for mut win in q.iter_mut(world) {
+        win.resolution.set(w, h);
+        n += 1;
+    }
+    tracing::info!(w, h, windows = n, "scene: primary window resized");
+}
+
 fn close_editor(world: &mut World) {
     let mut ed = world.resource_mut::<EditorState>();
     ed.open = false;
@@ -264,6 +316,7 @@ pub(super) fn all_scenes() -> Vec<Scene> {
     dialogue_scenes(&mut v);
     dialogue_fix_scenes(&mut v);
     editor_scenes(&mut v);
+    editor_result_scenes(&mut v);
     overlay_scenes(&mut v);
     v
 }
@@ -692,6 +745,93 @@ fn editor_scenes(v: &mut Vec<Scene>) {
         ],
         0.5,
         boxed(close_editor),
+    ));
+}
+
+/// Result-pane scenes for the honest-grades work. Each reopens the editor
+/// on the first mission with a matching buffer and a canned server reply.
+fn editor_result_scenes(v: &mut Vec<Scene>) {
+    let enter = || Action::EnterState(GameState::InGame, ENTER_GAME_SETTLE);
+    let cases: [(&str, &'static str, CompileMode, &'static str); 5] = [
+        (
+            "editor-fail-long",
+            LONG_SOURCE,
+            CompileMode::Real,
+            LONG_FAIL_JSON,
+        ),
+        (
+            "editor-wrong-output",
+            WRONG_SOURCE,
+            CompileMode::Real,
+            WRONG_OUTPUT_JSON,
+        ),
+        (
+            "editor-unverified-pass",
+            PASSING_SOURCE,
+            CompileMode::Real,
+            UNVERIFIED_JSON,
+        ),
+        (
+            "editor-verified-pass",
+            PASSING_SOURCE,
+            CompileMode::Real,
+            VERIFIED_JSON,
+        ),
+        (
+            "editor-pattern-pass",
+            PASSING_SOURCE,
+            CompileMode::Pattern,
+            PATTERN_JSON,
+        ),
+    ];
+    for (name, source, mode, json) in cases {
+        v.push(scene(
+            name,
+            vec![
+                enter(),
+                act(move |w| {
+                    w.resource_mut::<EditorSession>().reset_view();
+                    open_editor(w, FIRST_MISSION, source);
+                    show_server_reply(w, mode, json);
+                }),
+                Action::Wait(0.2),
+            ],
+            0.5,
+            boxed(close_editor),
+        ));
+    }
+    // The smallest supported window: long failure, then the solution
+    // (the gate is open: editor-fail + editor-solution recorded three
+    // failures). Restores 1280x720 afterwards.
+    v.push(scene(
+        "editor-960x540-fail",
+        vec![
+            enter(),
+            act(|w| set_window_size(w, 960.0, 540.0)),
+            act(|w| {
+                w.resource_mut::<EditorSession>().reset_view();
+                open_editor(w, FIRST_MISSION, LONG_SOURCE);
+                show_server_reply(w, CompileMode::Real, LONG_FAIL_JSON);
+            }),
+            Action::Wait(1.0),
+        ],
+        0.6,
+        None,
+    ));
+    v.push(scene(
+        "editor-960x540-solution",
+        vec![
+            act(|w| {
+                w.resource_mut::<EditorSession>()
+                    .reveal_solution(FIRST_MISSION);
+            }),
+            Action::Wait(0.3),
+        ],
+        0.5,
+        boxed(|w| {
+            close_editor(w);
+            set_window_size(w, 1280.0, 720.0);
+        }),
     ));
 }
 
