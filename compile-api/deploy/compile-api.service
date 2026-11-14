@@ -7,32 +7,44 @@
 #   internet --TLS--> reverse proxy (Caddy, same host) --> 127.0.0.1:7878
 # The service itself can talk to localhost only. cargo builds run with
 # --offline and need no network, so outbound traffic is denied for the
-# server AND every cargo/rustc child (they share this unit's cgroup).
+# server AND every build child (they share this unit's cgroup). On top of
+# that each build runs inside bubblewrap with its own empty network
+# namespace (PNC_BUILD_SANDBOX=bwrap).
 
 [Unit]
 Description=Pledge & Crown compile API (player Rust -> wasm32-wasip1 -> wasmtime)
 Documentation=file:///opt/pnc-compile/README.md
 After=network.target
+# Crash-loop guard: at most 10 starts in 5 minutes, then stay down and
+# let the operator look (journalctl -u compile-api). A one-off OOM of a
+# build child does not count: OOMPolicy=continue below keeps the unit up.
+StartLimitIntervalSec=300
+StartLimitBurst=10
 
 [Service]
 Type=simple
 User=pnc-compile
 Group=pnc-compile
+# Read by systemd (PID 1, as root) before privileges are dropped. The
+# file is 0600 root:root, so the service user itself cannot read it, and
+# neither can anything the service spawns.
 EnvironmentFile=/etc/pnc-compile/env
 # Toolchain: rustup installed root-owned under /opt/rust (read-only to the
-# service). CARGO_HOME is the writable state dir because cargo takes a
-# package-cache lock there even for dependency-free --offline builds.
+# service). CARGO_HOME is the writable state dir for the self-test /
+# dev path; sandboxed builds use a per-job CARGO_HOME inside the job dir.
 Environment=PATH=/opt/rust/cargo/bin:/usr/local/bin:/usr/bin:/bin
 Environment=RUSTUP_HOME=/opt/rust/rustup
 Environment=CARGO_HOME=/var/lib/pnc-compile/cargo
 Environment=HOME=/var/lib/pnc-compile
 ExecStart=/usr/local/bin/pledge_compile_api
 Restart=on-failure
-RestartSec=2s
+RestartSec=5s
 
 # ---- Writable paths --------------------------------------------------------
-# Per-build sandboxes live in std::env::temp_dir() = /tmp, which is a
-# private, per-service tmpfs here. That plus the state dir are the ONLY
+# Per-build job dirs live under std::env::temp_dir() = /tmp. PrivateTmp=yes
+# gives the service its own private /tmp (a per-service directory on the
+# host's /tmp filesystem, bind-mounted over /tmp; it is NOT a tmpfs and
+# counts against disk, not RAM). That plus the state dir are the ONLY
 # writable locations; everything else is read-only (ProtectSystem=strict).
 PrivateTmp=yes
 StateDirectory=pnc-compile
@@ -43,14 +55,19 @@ UMask=0077
 ProtectSystem=strict
 ProtectHome=yes
 PrivateDevices=yes
-ProtectKernelTunables=yes
 ProtectKernelModules=yes
-ProtectKernelLogs=yes
 ProtectControlGroups=yes
 ProtectClock=yes
 ProtectHostname=yes
-ProtectProc=invisible
-ProcSubset=pid
+# NOT set on purpose: ProtectProc=, ProcSubset=, ProtectKernelTunables=,
+# ProtectKernelLogs=. Each over-mounts parts of /proc, and the kernel only
+# lets an unprivileged user namespace mount a fresh procfs (bwrap --proc,
+# which hides the server's /proc/<pid>/environ from the build) if the
+# existing /proc is fully visible. The build sandbox gives player-
+# influenced processes a much smaller view than these settings did; the
+# server process itself is first-party code. If you re-enable any of them,
+# the server will refuse to start (its bwrap self-test fails).
+#
 # Optional, verify on the box first: nothing is exec'd from /tmp or the
 # state dir for a dependency-free bin crate (no build.rs, no proc-macros),
 # so these can be made noexec.
@@ -61,20 +78,24 @@ NoNewPrivileges=yes
 CapabilityBoundingSet=
 AmbientCapabilities=
 RestrictSUIDSGID=yes
-RestrictNamespaces=yes
+# bwrap (unprivileged) creates user, mount, pid, net, ipc, uts and cgroup
+# namespaces for every build. Time namespaces stay forbidden.
+RestrictNamespaces=user mnt pid net ipc uts cgroup
 RestrictRealtime=yes
 LockPersonality=yes
 RemoveIPC=yes
 SystemCallArchitectures=native
-SystemCallFilter=@system-service
-SystemCallFilter=~@privileged @mount @debug @reboot @swap @obsolete @cpu-emulation @clock @module @raw-io
+# @mount is allowed because bwrap mounts inside its user namespace; the
+# server has no capabilities in the host namespace, so mount() there fails.
+SystemCallFilter=@system-service @mount
+SystemCallFilter=~@privileged @debug @reboot @swap @obsolete @cpu-emulation @clock @module @raw-io
 SystemCallErrorNumber=EPERM
 # NOT set on purpose: MemoryDenyWriteExecute=yes. wasmtime JIT-compiles
 # each module and must flip pages from writable to executable; MDWE makes
 # every /compile-real run fail.
 
 # ---- Network ----------------------------------------------------------------
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 # Deny all IP traffic except loopback (the reverse proxy). This blocks
 # outbound connections from player-influenced build steps entirely.
 # If you ever bind publicly without a proxy, IPAddressAllow must then
@@ -87,6 +108,15 @@ IPAddressAllow=localhost
 # compile job. 2 x 512M + server + wasm runs (16 MiB each) fits in 1.5G.
 MemoryMax=1536M
 MemorySwapMax=0
+# A build child that blows the cgroup limit is OOM-killed on its own; the
+# service keeps running (default OOMPolicy=stop would stop the whole unit
+# and count toward the start limit). Each build is additionally capped by
+# RLIMIT_AS (PNC_BUILD_ADDRESS_SPACE_MIB, default 1280, max 1408) - strictly
+# below MemoryMax, so no single build can take the unit to its limit by
+# itself. Two concurrent worst-case builds can still hit MemoryMax; the
+# kernel then kills the largest process in the cgroup (a rustc), not the
+# whole unit.
+OOMPolicy=continue
 TasksMax=256
 LimitNOFILE=4096
 LimitCORE=0

@@ -12,6 +12,8 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use std::time::Duration;
 
+use crate::rate_limit::LimiterStats;
+
 /// Prometheus text-format content type.
 pub const CONTENT_TYPE: &str = "text/plain; version=0.0.4; charset=utf-8";
 
@@ -22,10 +24,21 @@ pub enum RejectReason {
     Rate,
     Queue,
     Body,
+    /// Player source hit the compile-time file-read deny-list.
+    SourcePolicy,
+    /// Malformed request field (e.g. `encounter_id`).
+    Input,
 }
 
 impl RejectReason {
-    const ALL: [RejectReason; 4] = [Self::Auth, Self::Rate, Self::Queue, Self::Body];
+    const ALL: [RejectReason; 6] = [
+        Self::Auth,
+        Self::Rate,
+        Self::Queue,
+        Self::Body,
+        Self::SourcePolicy,
+        Self::Input,
+    ];
 
     pub fn as_str(self) -> &'static str {
         match self {
@@ -33,6 +46,8 @@ impl RejectReason {
             Self::Rate => "rate",
             Self::Queue => "queue",
             Self::Body => "body",
+            Self::SourcePolicy => "source_policy",
+            Self::Input => "input",
         }
     }
 
@@ -106,7 +121,8 @@ pub struct Metrics {
     run_duration: Histogram,
     builds_in_flight: AtomicI64,
     builds_queued: AtomicI64,
-    rejections: [AtomicU64; 4],
+    rejections: [AtomicU64; 6],
+    rate_fail_opens: AtomicU64,
 }
 
 impl Default for Metrics {
@@ -124,7 +140,17 @@ impl Metrics {
             builds_in_flight: AtomicI64::new(0),
             builds_queued: AtomicI64::new(0),
             rejections: Default::default(),
+            rate_fail_opens: AtomicU64::new(0),
         }
+    }
+
+    /// A request let through untracked because a limiter table was full.
+    pub fn record_rate_fail_open(&self) {
+        self.rate_fail_opens.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn rate_fail_opens(&self) -> u64 {
+        self.rate_fail_opens.load(Ordering::Relaxed)
     }
 
     /// `route` must be a route template (or `"unmatched"`), never a raw
@@ -156,6 +182,50 @@ impl Metrics {
 
     pub fn rejections(&self, reason: RejectReason) -> u64 {
         self.rejections[reason.index()].load(Ordering::Relaxed)
+    }
+
+    /// Render the full exposition text plus per-limiter series.
+    pub fn render_with_limiters(&self, limiters: &[(&str, LimiterStats)]) -> String {
+        let mut out = self.render();
+        let _ = writeln!(
+            out,
+            "# HELP pnc_rate_limit_fail_open_total Requests allowed untracked because a \
+             limiter table was full."
+        );
+        let _ = writeln!(out, "# TYPE pnc_rate_limit_fail_open_total counter");
+        let _ = writeln!(
+            out,
+            "pnc_rate_limit_fail_open_total {}",
+            self.rate_fail_opens()
+        );
+        let _ = writeln!(
+            out,
+            "# HELP pnc_rate_limit_tracked_clients Client buckets held by each limiter."
+        );
+        let _ = writeln!(out, "# TYPE pnc_rate_limit_tracked_clients gauge");
+        for (name, s) in limiters {
+            let _ = writeln!(
+                out,
+                "pnc_rate_limit_tracked_clients{{limiter=\"{}\"}} {}",
+                escape_label(name),
+                s.tracked
+            );
+        }
+        let _ = writeln!(
+            out,
+            "# HELP pnc_rate_limit_evictions_total Buckets evicted (least recently seen) \
+             from a full limiter table."
+        );
+        let _ = writeln!(out, "# TYPE pnc_rate_limit_evictions_total counter");
+        for (name, s) in limiters {
+            let _ = writeln!(
+                out,
+                "pnc_rate_limit_evictions_total{{limiter=\"{}\"}} {}",
+                escape_label(name),
+                s.evictions
+            );
+        }
+        out
     }
 
     /// Render the full exposition text.
@@ -263,5 +333,23 @@ mod tests {
         assert!(text.contains("pnc_http_requests_total{route=\"/compile\",status=\"200\"} 2"));
         assert!(text.contains("pnc_rejections_total{reason=\"rate\"} 1"));
         assert!(text.contains("pnc_rejections_total{reason=\"auth\"} 0"));
+        assert!(text.contains("pnc_rejections_total{reason=\"source_policy\"} 0"));
+    }
+
+    #[test]
+    fn limiter_series_render() {
+        let m = Metrics::new();
+        m.record_rate_fail_open();
+        let text = m.render_with_limiters(&[(
+            "global",
+            LimiterStats {
+                tracked: 3,
+                evictions: 7,
+                fail_opens: 1,
+            },
+        )]);
+        assert!(text.contains("pnc_rate_limit_fail_open_total 1"));
+        assert!(text.contains("pnc_rate_limit_tracked_clients{limiter=\"global\"} 3"));
+        assert!(text.contains("pnc_rate_limit_evictions_total{limiter=\"global\"} 7"));
     }
 }

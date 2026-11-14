@@ -25,12 +25,38 @@ fn build_wasm_rejects_empty_source() {
 }
 
 #[test]
+fn build_wasm_refuses_deny_listed_source_without_building() {
+    // No cargo runs here: the deny-list answers first (fast, not ignored).
+    for src in [
+        "fn main() { print!(\"{}\", include_str!(\"/etc/hostname\")); }",
+        "#[path = \"/etc/hostname\"] mod m; fn main() {}",
+    ] {
+        let v = build_wasm(src).unwrap();
+        assert!(!v.ok);
+        assert!(v.wasm.is_none());
+        assert!(
+            v.stderr
+                .starts_with("this server does not allow reading files at compile time"),
+            "{}",
+            v.stderr
+        );
+    }
+}
+
+#[test]
 #[ignore = "slow: shells out to cargo build for wasm32-wasip1"]
 fn build_wasm_produces_artifact_for_hello_world() {
     let v = build_wasm("fn main() { println!(\"hello\"); }").unwrap();
     assert!(v.ok, "expected ok build, stderr:\n{}", v.stderr);
     let bytes = v.wasm.expect("ok build must carry wasm bytes");
     assert!(!bytes.is_empty(), "wasm artifact was empty");
+    // A real curriculum-sized module sits far under the size cap.
+    assert!(
+        bytes.len() < pledge_compile_api::wasm_runner::MAX_WASM_BYTES / 4,
+        "hello world is {} bytes",
+        bytes.len()
+    );
+    println!("hello world wasm: {} bytes", bytes.len());
     // A wasm module starts with the magic header b"\0asm".
     assert_eq!(&bytes[..4], b"\0asm", "artifact is not a wasm module");
 }

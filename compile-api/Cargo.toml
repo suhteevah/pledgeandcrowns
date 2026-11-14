@@ -42,6 +42,19 @@ subtle = "2.6"
 wasmtime = "44"
 wasmtime-wasi = { version = "44", features = ["p1"] }
 
+# Frame-by-frame request-body reading in `middleware::limit_body`, so an
+# oversized upload can be drained (bounded) before the 413 is sent.
+# Already in the lock tree as an axum/hyper dependency: zero new crates.
+http-body-util = "0.1"
+
+# Unix only: safe wrappers for kill(-pgid, SIGKILL), kill(-pgid, 0) and
+# geteuid (process-tree kill in `proc_tree`, build-root owner check in
+# `build_root`). Already in the lock tree via wasmtime/cap-std/tempfile,
+# so this adds zero new crates; it lets us avoid writing any `unsafe`
+# libc FFI ourselves. Not compiled on Windows.
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "1.1", features = ["process", "std"] }
+
 [dev-dependencies]
 reqwest = { workspace = true }
 serde_json = "1"
