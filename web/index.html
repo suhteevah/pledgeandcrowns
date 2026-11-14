@@ -1,18 +1,225 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Pledge & Crown</title>
-  <style>
-    html, body { margin: 0; padding: 0; background: #161313; overflow: hidden; }
-    canvas { display: block; image-rendering: pixelated; margin: 0 auto; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pledge &amp; Crown</title>
+<style>
+  /* Palette: Heraldic Code (design/03-art-style-bible.md). */
+  :root {
+    --cobalt-deep: #0E2E54;
+    --parchment: #FCEFC8;
+    --parchment-dim: rgba(252, 239, 200, 0.55);
+    --error: #C56883; /* Dusty rose */
+    --gold: #D2A53F;   /* Old gold */
+  }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--cobalt-deep);
+    color: var(--parchment);
+    overflow: hidden;
+    font-family: ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace;
+  }
+  #stage {
+    position: fixed; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  /* Bevy creates its own <canvas>; the loader moves it in here and scales
+     it with a CSS transform so the game keeps its 1280x720 backbuffer and
+     the browser upscales by an integer factor, nearest-neighbour. */
+  #stage canvas {
+    display: block;
+    flex: none;
+    outline: none;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    transform-origin: center center;
+  }
+  #loader {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 18px; padding: 16px; box-sizing: border-box;
+    text-align: center;
+  }
+  #loader h1 {
+    margin: 0; font-size: 28px; letter-spacing: 0.12em; font-weight: bold;
+  }
+  #bar {
+    width: min(320px, 80vw); height: 14px;
+    border: 2px solid var(--parchment);
+    box-sizing: border-box; padding: 2px;
+    position: relative; overflow: hidden;
+  }
+  #fill {
+    height: 100%; width: 0%;
+    background: var(--gold);
+  }
+  #bar.indeterminate #fill {
+    width: 30%;
+    position: absolute; top: 2px; bottom: 2px; height: auto;
+    animation: sweep 1.2s steps(12) infinite;
+  }
+  @keyframes sweep { from { left: -30%; } to { left: 100%; } }
+  #status { font-size: 14px; color: var(--parchment-dim); min-height: 1.4em; }
+  #error {
+    display: none;
+    max-width: 560px; font-size: 14px; line-height: 1.5;
+    border: 2px solid var(--error); padding: 12px 16px;
+    color: var(--parchment); text-align: left; white-space: pre-wrap;
+  }
+  #error strong { color: var(--error); }
+  .hidden { display: none !important; }
+</style>
 </head>
 <body>
-  <canvas id="bevy"></canvas>
-  <script type="module">
-    import init from "./pkg/pledge_and_crown.js";
-    init();
-  </script>
+<div id="stage"></div>
+<div id="loader" role="status" aria-live="polite">
+  <h1>PLEDGE &amp; CROWN</h1>
+  <div id="bar"><div id="fill"></div></div>
+  <div id="status">Preparing...</div>
+  <div id="error"></div>
+  <noscript><div style="color:#C56883">JavaScript is required to play Pledge &amp; Crown.</div></noscript>
+</div>
+<script type="module">
+  // Self-contained loader: no fonts, no CDNs, no analytics.
+  const WASM_URL = "./pkg/pledge_and_crown_bg.wasm";
+  const GLUE_URL = "./pkg/pledge_and_crown.js";
+  const BASE_W = 1280, BASE_H = 720; // matches the game's WindowPlugin
+
+  const $ = (id) => document.getElementById(id);
+  const bar = $("bar"), fill = $("fill"), statusEl = $("status"), errEl = $("error");
+  let started = false;
+
+  const mb = (n) => (n / 1048576).toFixed(1) + " MB";
+  const setStatus = (t) => { statusEl.textContent = t; };
+
+  function fail(title, detail) {
+    console.error("[loader]", title, detail || "");
+    bar.classList.add("hidden");
+    statusEl.classList.add("hidden");
+    $("loader").classList.remove("hidden");
+    errEl.style.display = "block";
+    errEl.innerHTML = "";
+    const s = document.createElement("strong");
+    s.textContent = title;
+    errEl.appendChild(s);
+    if (detail) errEl.appendChild(document.createTextNode("\n" + detail));
+  }
+
+  // winit (Bevy's windowing layer) deliberately throws to unwind out of
+  // the event-loop start on the web. That is not a failure.
+  function isControlFlow(e) {
+    const msg = String((e && e.message) || e || "");
+    return msg.includes("Using exceptions for control flow");
+  }
+
+  function hasWebGL2() {
+    try {
+      const c = document.createElement("canvas");
+      return !!(window.WebGL2RenderingContext && c.getContext("webgl2"));
+    } catch (_) { return false; }
+  }
+
+  async function fetchWasm() {
+    const resp = await fetch(WASM_URL);
+    if (!resp.ok) throw new Error("HTTP " + resp.status + " fetching " + WASM_URL);
+    const lenHeader = resp.headers.get("Content-Length");
+    // Content-Length is the on-the-wire size; if the server compresses,
+    // the decoded stream is larger, so treat it as a hint and clamp.
+    const encoded = (resp.headers.get("Content-Encoding") || "").trim() !== "";
+    const total = lenHeader && !encoded ? parseInt(lenHeader, 10) : 0;
+    if (!resp.body || !resp.body.getReader) {
+      bar.classList.add("indeterminate");
+      setStatus("Downloading...");
+      return new Uint8Array(await resp.arrayBuffer());
+    }
+    if (!total) bar.classList.add("indeterminate");
+    const reader = resp.body.getReader();
+    const chunks = [];
+    let got = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      got += value.length;
+      if (total) {
+        const pct = Math.min(100, (got / total) * 100);
+        fill.style.width = pct.toFixed(1) + "%";
+        setStatus("Downloading " + mb(got) + " / " + mb(total));
+      } else {
+        setStatus("Downloading " + mb(got));
+      }
+    }
+    const out = new Uint8Array(got);
+    let off = 0;
+    for (const c of chunks) { out.set(c, off); off += c.length; }
+    return out;
+  }
+
+  // Integer upscale when the viewport allows it; below 1x, shrink to fit.
+  function fitCanvas(canvas) {
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const fit = Math.min(vw / BASE_W, vh / BASE_H);
+    const k = fit >= 1 ? Math.floor(fit) : fit;
+    canvas.style.transform = "scale(" + k + ")";
+  }
+
+  function adoptCanvas(canvas) {
+    if (canvas.dataset.adopted) return;
+    canvas.dataset.adopted = "1";
+    $("stage").appendChild(canvas);
+    canvas.setAttribute("tabindex", "0");
+    fitCanvas(canvas);
+    window.addEventListener("resize", () => fitCanvas(canvas));
+    canvas.addEventListener("pointerdown", () => canvas.focus());
+    canvas.focus({ preventScroll: true });
+    $("loader").classList.add("hidden");
+  }
+
+  // Bevy appends its canvas to <body> once the window is created.
+  const observer = new MutationObserver(() => {
+    const c = document.querySelector("body > canvas, #stage canvas");
+    if (c) { adoptCanvas(c); observer.disconnect(); }
+  });
+
+  window.addEventListener("error", (ev) => {
+    if (isControlFlow(ev.error || ev.message)) { ev.preventDefault(); return; }
+    if (started && !$("loader").classList.contains("hidden")) {
+      fail("The game failed to start.", String(ev.message || ev.error));
+    }
+  });
+  window.addEventListener("unhandledrejection", (ev) => {
+    if (isControlFlow(ev.reason)) { ev.preventDefault(); }
+  });
+
+  async function main() {
+    if (!hasWebGL2()) {
+      fail("WebGL2 is not available.",
+        "Pledge & Crown needs a browser with WebGL2 enabled (current Chrome, Edge, Firefox or Safari 15+). " +
+        "Check that hardware acceleration is turned on in your browser settings.");
+      return;
+    }
+    if (typeof WebAssembly !== "object") {
+      fail("WebAssembly is not available.", "Please use a current browser.");
+      return;
+    }
+    try {
+      setStatus("Connecting...");
+      const [glue, bytes] = await Promise.all([import(GLUE_URL), fetchWasm()]);
+      bar.classList.remove("indeterminate");
+      fill.style.width = "100%";
+      setStatus("Starting the kingdom...");
+      observer.observe(document.body, { childList: true, subtree: true });
+      started = true;
+      await glue.default({ module_or_path: bytes });
+    } catch (e) {
+      if (isControlFlow(e)) return;
+      fail("Loading failed.", String((e && e.message) || e));
+    }
+  }
+
+  main();
+</script>
 </body>
 </html>

@@ -11,7 +11,7 @@ members = [
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
-authors = ["Matt Gates <mmichels88@gmail.com>"]
+authors = ["Matt Gates"]
 # Dual-licensed: game crate is MIT, compile-api crate is AGPL-3.0-or-later.
 # Per-crate `license` fields override; do not set a workspace-level license.
 repository = "https://github.com/pledgeandcrown/pledgeandcrown"
@@ -63,6 +63,20 @@ walkdir = "2"
 codegen-units = 1
 lto = "fat"
 opt-level = 3
+
+# Size-tuned profile for the wasm web build (scripts/web-build.ps1).
+# opt-level "s" rather than "z": "z" shaves a little more but disables
+# loop vectorisation, which costs frame time in Bevy's hot systems.
+# panic = "abort" matches what wasm32-unknown-unknown does anyway (no
+# unwinding without the exception-handling proposal), so it only drops
+# dead landing-pad code. strip removes the symbol/name section.
+[profile.wasm-release]
+inherits = "release"
+opt-level = "s"
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"
 
 # Bevy recommends opt-level=1 for dev to keep iteration speed sane.
 [profile.dev]

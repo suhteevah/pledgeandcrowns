@@ -8,8 +8,8 @@
 name = "app"
 version = "0.1.0"
 description = "Pledge & Crown - Tauri 2.0 wrapper around the wasm web build"
-authors = ["Matt Gates <mmichels88@gmail.com>"]
-license = ""
+authors = ["Matt Gates"]
+license = "MIT"
 repository = ""
 edition = "2021"
 rust-version = "1.77.2"
