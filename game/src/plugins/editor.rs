@@ -81,6 +81,28 @@ impl EditorSession {
     pub fn failures(&self, mission_id: &str) -> u32 {
         self.tracker.failures(mission_id)
     }
+
+    /// Scripted-capture hook (`screenshot` plugin): mark a compile for
+    /// `mission_id` as in flight, exactly as the Compile button does,
+    /// without dispatching a network request. The next verdict written to
+    /// `EditorState::last_compile_result` is then counted by the normal
+    /// `track_compile_results` system. Never called in normal play.
+    pub fn note_compile_requested(&mut self, mission_id: &str) {
+        tracing::debug!("scripted: compile marked in flight for {mission_id}");
+        self.awaiting_result_for = Some(mission_id.to_string());
+    }
+
+    /// Scripted-capture hook (`screenshot` plugin): show the reference
+    /// solution for `encounter_id`, as clicking "Show solution" does. The
+    /// editor still hides it unless the solution gate is open (3 failed
+    /// compiles), so this cannot reveal anything the player couldn't.
+    /// Never called in normal play.
+    pub fn reveal_solution(&mut self, encounter_id: &str) {
+        tracing::debug!("scripted: reveal solution for {encounter_id}");
+        self.ui_encounter = encounter_id.to_string();
+        self.confirm_reset = false;
+        self.show_solution = true;
+    }
 }
 
 pub struct EditorPlugin;
