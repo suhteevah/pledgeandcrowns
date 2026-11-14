@@ -8,6 +8,7 @@ use bevy::prelude::*;
 
 pub mod audio;
 pub mod compile_client;
+pub mod dialogue;
 pub mod editor;
 pub mod menu;
 pub mod mission;
@@ -42,6 +43,7 @@ impl Plugin for CorePlugin {
             screenshot::ShotPlugin,
             editor::EditorPlugin,
             menu::MenuPlugin,
+            dialogue::DialoguePlugin,
             mission::MissionPlugin,
             compile_client::CompileClientPlugin,
             audio::GameAudioPlugin,
