@@ -18,18 +18,27 @@
 //! | `PNC_MAX_QUEUED_BUILDS`     | `8`                                           |
 //! | `PNC_RUN_MEMORY_MIB`        | `16` (design/05 §2), max `128`                |
 //! | `PNC_METRICS_TOKENS`        | *(unset: `/metrics` is loopback-only)*        |
-//! | `PNC_BUILD_SANDBOX`         | `none` (dev); `bwrap` required when exposed   |
+//! | `PNC_METRICS_BIND`          | `127.0.0.1:9878` (loopback only, never proxied) |
+//! | `PNC_BUILDER_SOCKET`        | *(unset: build in this process, dev only)*    |
+//! | `PNC_BUILD_SANDBOX`         | `bwrap` on Linux, `none` elsewhere            |
 //! | `PNC_TOOLCHAIN_DIR`         | *(required for `bwrap`)*                      |
 //! | `PNC_BWRAP_PATH`            | `/usr/bin/bwrap`                              |
 //! | `PNC_PRLIMIT_PATH`          | `/usr/bin/prlimit`                            |
+//! | `PNC_BWRAP_PROC`            | `none` (`fresh`: `--proc /proc`)              |
 //! | `PNC_BUILD_ADDRESS_SPACE_MIB` | `1280` (512..=1408, below unit MemoryMax)   |
 //! | `PNC_BUILD_ROOT`            | `<temp>/pledge-wasm-builder`                  |
 //! | `PNC_RATE_LIMIT_MAX_CLIENTS`| `100000`                                      |
 //! | `PNC_SOURCE_DENYLIST`       | `true`                                        |
+//! | `PNC_HEADER_READ_TIMEOUT_SECS` | `10` (1..=60)                              |
+//! | `PNC_BODY_READ_TIMEOUT_SECS` | `15` (1..=120)                               |
+//! | `PNC_REQUEST_DEADLINE_SECS` | `120` (70..=600)                              |
 //! | `PNC_ALLOW_TRUST_PROXY_PUBLIC_BIND` | `false`                               |
-//! | `PNC_ALLOW_UNSANDBOXED_BUILDS` | `false`                                    |
+//! | `PNC_DEV_UNSAFE_LOCAL_BUILDS` | `false` (dev override; loopback bind only)  |
 //!
 //! # Safety invariants (enforced by [`Config::validate`])
+//!
+//! "Exposed" below means: any bearer token configured, OR a non-loopback
+//! bind, OR `PNC_TRUST_PROXY` on.
 //!
 //! - With no bearer token configured the server refuses to bind to
 //!   anything but a loopback address
@@ -37,25 +46,38 @@
 //! - `PNC_TRUST_PROXY` with a non-loopback bind is refused unless
 //!   `PNC_ALLOW_TRUST_PROXY_PUBLIC_BIND=true`: anyone reaching the socket
 //!   directly could spoof `X-Forwarded-For` and dodge the rate limit.
-//! - `PNC_BUILD_SANDBOX=none` (rustc on the host, able to read any file
-//!   the service user can) is refused on a non-loopback bind. On Linux it
-//!   is refused with a non-loopback bind no matter what, and also when
-//!   `PNC_TRUST_PROXY` is on (the production "behind a proxy" shape)
-//!   unless `PNC_ALLOW_UNSANDBOXED_BUILDS=true`. On non-Linux dev boxes a
-//!   non-loopback `none` bind needs `PNC_ALLOW_UNSANDBOXED_BUILDS=true`.
-//! - `bwrap` is Linux-only and needs `PNC_TOOLCHAIN_DIR`.
+//! - `PNC_DEV_UNSAFE_LOCAL_BUILDS=true` is refused on a non-loopback bind,
+//!   full stop ([`ConfigError::DevOverrideOnPublicBind`]).
+//! - `/metrics` is served on its own listener, `PNC_METRICS_BIND`, which
+//!   must be loopback ([`ConfigError::MetricsPublicBind`]); the reverse
+//!   proxy only ever forwards to `PNC_BIND`.
+//! - Exposed and building in this process (no `PNC_BUILDER_SOCKET`):
+//!   - `PNC_BUILD_SANDBOX=none` is refused
+//!     ([`ConfigError::UnsandboxedExposure`]) on every platform;
+//!   - on Linux, building at all in the token-holding process is refused
+//!     ([`ConfigError::InProcessExposure`]): production runs player code
+//!     in the separate builder service (`pnc-builder.service`);
+//!
+//!   each unless `PNC_DEV_UNSAFE_LOCAL_BUILDS=true` (loopback only).
+//! - Exposed with `PNC_SOURCE_DENYLIST=false` is refused unless the dev
+//!   override is set ([`ConfigError::DenylistOffExposed`]).
+//! - `bwrap` is Linux-only and needs `PNC_TOOLCHAIN_DIR`; the builder
+//!   executor is Linux-only and needs an absolute socket path.
+//! - The removed `PNC_ALLOW_UNSANDBOXED_BUILDS` is refused if set to true,
+//!   so an old env file cannot silently mean something else.
 //!
 //! Secrets (`PNC_AUTH_TOKENS`) never appear in `Debug` output or in error
 //! messages.
 
 use std::fmt;
 use std::net::SocketAddr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use axum::http::HeaderValue;
 
 use crate::build_sandbox::{
-    BuildRlimits, DEFAULT_BUILD_ADDRESS_SPACE_MIB, MAX_BUILD_ADDRESS_SPACE_MIB,
+    BuildRlimits, BwrapProc, DEFAULT_BUILD_ADDRESS_SPACE_MIB, MAX_BUILD_ADDRESS_SPACE_MIB,
     MIN_BUILD_ADDRESS_SPACE_MIB, SandboxMode, SandboxSettings, validate_toolchain_dir,
 };
 use crate::rate_limit::MAX_TRACKED_CLIENTS;
@@ -82,7 +104,16 @@ pub mod vars {
     pub const RATE_LIMIT_MAX_CLIENTS: &str = "PNC_RATE_LIMIT_MAX_CLIENTS";
     pub const SOURCE_DENYLIST: &str = "PNC_SOURCE_DENYLIST";
     pub const ALLOW_TRUST_PROXY_PUBLIC_BIND: &str = "PNC_ALLOW_TRUST_PROXY_PUBLIC_BIND";
+    /// Removed (replaced by [`DEV_UNSAFE_LOCAL_BUILDS`]); refused if true.
     pub const ALLOW_UNSANDBOXED_BUILDS: &str = "PNC_ALLOW_UNSANDBOXED_BUILDS";
+    pub const DEV_UNSAFE_LOCAL_BUILDS: &str = "PNC_DEV_UNSAFE_LOCAL_BUILDS";
+    pub const METRICS_BIND: &str = "PNC_METRICS_BIND";
+    pub const BUILDER_SOCKET: &str = "PNC_BUILDER_SOCKET";
+    pub const BUILDER_MAX_JOBS: &str = "PNC_BUILDER_MAX_JOBS";
+    pub const BWRAP_PROC: &str = "PNC_BWRAP_PROC";
+    pub const HEADER_READ_TIMEOUT_SECS: &str = "PNC_HEADER_READ_TIMEOUT_SECS";
+    pub const BODY_READ_TIMEOUT_SECS: &str = "PNC_BODY_READ_TIMEOUT_SECS";
+    pub const REQUEST_DEADLINE_SECS: &str = "PNC_REQUEST_DEADLINE_SECS";
 }
 
 /// Default build root dir name under the system temp dir.
@@ -90,6 +121,18 @@ pub const DEFAULT_BUILD_ROOT_NAME: &str = "pledge-wasm-builder";
 
 /// Default bind address. Loopback: safe with no auth configured.
 pub const DEFAULT_BIND: &str = "127.0.0.1:7878";
+/// Default `/metrics` listener. Loopback only, never proxied.
+pub const DEFAULT_METRICS_BIND: &str = "127.0.0.1:9878";
+/// Default builder socket (the builder unit's `RuntimeDirectory`).
+pub const DEFAULT_BUILDER_SOCKET: &str = "/run/pnc-builder/builder.sock";
+/// Time allowed for a client to send the request line + headers.
+pub const DEFAULT_HEADER_READ_TIMEOUT: Duration = Duration::from_secs(10);
+/// Time allowed for a client to send the whole (<= 68 KiB) body.
+pub const DEFAULT_BODY_READ_TIMEOUT: Duration = Duration::from_secs(15);
+/// Total time for one request, queue wait and build included. Must exceed
+/// the builder reply deadline (`ipc::REPLY_DEADLINE`, 65 s).
+pub const DEFAULT_REQUEST_DEADLINE: Duration = Duration::from_secs(120);
+const MIN_REQUEST_DEADLINE_SECS: u64 = 70;
 /// Default CORS allow-list: the local `web-serve` dev server only.
 pub const DEFAULT_CORS_ORIGINS: &[&str] = &["http://127.0.0.1:8080", "http://localhost:8080"];
 /// design/05 §2: per-IP 600/min.
@@ -140,13 +183,75 @@ pub enum ConfigError {
     TrustProxyPublicBind { addr: SocketAddr },
     #[error(
         "refusing to start with {}=none: {reason}. Unsandboxed builds let player source read \
-         any file the service user can (env file, /proc). Use {}=bwrap",
+         any file the service user can (env file, /proc). Use the builder service with \
+         {}=bwrap (local dev only: {}=true on a loopback bind)",
         vars::BUILD_SANDBOX,
-        vars::BUILD_SANDBOX
+        vars::BUILD_SANDBOX,
+        vars::DEV_UNSAFE_LOCAL_BUILDS
     )]
     UnsandboxedExposure { reason: String },
+    #[error(
+        "refusing to build player code inside the token-holding server process: {reason}. Run \
+         the builder service and set {} (local dev only: {}=true on a loopback bind)",
+        vars::BUILDER_SOCKET,
+        vars::DEV_UNSAFE_LOCAL_BUILDS
+    )]
+    InProcessExposure { reason: String },
+    #[error(
+        "refusing {}=true with non-loopback bind {addr}: the dev override is loopback-only",
+        vars::DEV_UNSAFE_LOCAL_BUILDS
+    )]
+    DevOverrideOnPublicBind { addr: SocketAddr },
+    #[error(
+        "refusing {}={addr}: the metrics listener must be loopback (it is never proxied)",
+        vars::METRICS_BIND
+    )]
+    MetricsPublicBind { addr: SocketAddr },
+    #[error("{}={addr} collides with {}", vars::METRICS_BIND, vars::BIND)]
+    MetricsBindConflict { addr: SocketAddr },
+    #[error(
+        "refusing {}=false on an exposed deployment ({reason}); it is only for local dev",
+        vars::SOURCE_DENYLIST
+    )]
+    DenylistOffExposed { reason: String },
+    #[error("{var} was removed; {hint}")]
+    RemovedVariable {
+        var: &'static str,
+        hint: &'static str,
+    },
     #[error("{}=bwrap is only supported on Linux", vars::BUILD_SANDBOX)]
     SandboxUnsupported,
+    #[error(
+        "{} (the builder service) is only supported on Linux",
+        vars::BUILDER_SOCKET
+    )]
+    BuilderUnsupported,
+    #[error(
+        "refusing to start the builder with {var} set: the builder must hold no secrets (keep \
+         tokens in the API service's env file only)"
+    )]
+    BuilderHoldsSecrets { var: &'static str },
+}
+
+/// Where `/compile-real` builds and runs player code.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum Executor {
+    /// In this process (local dev and tests). Refused when exposed on
+    /// Linux; see the module docs.
+    #[default]
+    InProcess,
+    /// One `<exe> job` child process per request, killed at its deadline
+    /// (programmatic only: tests and local dev).
+    Subprocess { exe: PathBuf },
+    /// The builder service over its Unix socket (production).
+    Builder { socket: PathBuf },
+}
+
+impl Executor {
+    /// True when player code runs under this process's own unit/user.
+    pub fn is_local(&self) -> bool {
+        !matches!(self, Self::Builder { .. })
+    }
 }
 
 /// A bearer token. `Debug` is redacted; the raw bytes are only reachable
@@ -194,11 +299,23 @@ pub struct Config {
     pub build_root: PathBuf,
     /// Distinct clients tracked per rate limiter before pressure handling.
     pub rate_limit_max_clients: usize,
-    /// Second-layer source deny-list ([`crate::source_policy`]). Only
-    /// `deploy/verify-sandbox.sh` should ever turn this off, temporarily.
+    /// Second-layer source deny-list ([`crate::source_policy`]). Can only
+    /// be turned off on an unexposed (local dev) server.
     pub source_denylist: bool,
     pub allow_trust_proxy_public_bind: bool,
-    pub allow_unsandboxed_builds: bool,
+    /// `PNC_DEV_UNSAFE_LOCAL_BUILDS`: allow unsandboxed / in-process
+    /// builds on an exposed-looking config. Loopback bind only.
+    pub dev_unsafe_local_builds: bool,
+    /// Where `/compile-real` work runs.
+    pub executor: Executor,
+    /// `/metrics` listener (loopback only).
+    pub metrics_bind: SocketAddr,
+    /// Request line + headers must arrive within this.
+    pub header_read_timeout: Duration,
+    /// The whole body must arrive within this.
+    pub body_read_timeout: Duration,
+    /// Total time for one request (queue wait + build included).
+    pub request_deadline: Duration,
 }
 
 impl Default for Config {
@@ -223,7 +340,12 @@ impl Default for Config {
             rate_limit_max_clients: MAX_TRACKED_CLIENTS,
             source_denylist: true,
             allow_trust_proxy_public_bind: false,
-            allow_unsandboxed_builds: false,
+            dev_unsafe_local_builds: false,
+            executor: Executor::InProcess,
+            metrics_bind: SocketAddr::from(([127, 0, 0, 1], 9878)),
+            header_read_timeout: DEFAULT_HEADER_READ_TIMEOUT,
+            body_read_timeout: DEFAULT_BODY_READ_TIMEOUT,
+            request_deadline: DEFAULT_REQUEST_DEADLINE,
         }
     }
 }
@@ -260,7 +382,12 @@ impl fmt::Debug for Config {
                 "allow_trust_proxy_public_bind",
                 &self.allow_trust_proxy_public_bind,
             )
-            .field("allow_unsandboxed_builds", &self.allow_unsandboxed_builds)
+            .field("dev_unsafe_local_builds", &self.dev_unsafe_local_builds)
+            .field("executor", &self.executor)
+            .field("metrics_bind", &self.metrics_bind)
+            .field("header_read_timeout", &self.header_read_timeout)
+            .field("body_read_timeout", &self.body_read_timeout)
+            .field("request_deadline", &self.request_deadline)
             .finish()
     }
 }
@@ -346,47 +473,7 @@ impl Config {
             Some(v) => parse_tokens_for(vars::METRICS_TOKENS, &v)?,
         };
 
-        let mode = match get(vars::BUILD_SANDBOX) {
-            None => SandboxMode::default(),
-            Some(v) => v.parse().map_err(|reason| ConfigError::Invalid {
-                var: vars::BUILD_SANDBOX,
-                value: v.clone(),
-                reason,
-            })?,
-        };
-        let toolchain_dir = match get(vars::TOOLCHAIN_DIR) {
-            None => None,
-            Some(v) => {
-                let p = PathBuf::from(&v);
-                validate_toolchain_dir(&p).map_err(|reason| ConfigError::Invalid {
-                    var: vars::TOOLCHAIN_DIR,
-                    value: v.clone(),
-                    reason,
-                })?;
-                Some(p)
-            }
-        };
-        let address_space_mib: u64 = parse_ranged(
-            vars::BUILD_ADDRESS_SPACE_MIB,
-            get(vars::BUILD_ADDRESS_SPACE_MIB),
-            DEFAULT_BUILD_ADDRESS_SPACE_MIB,
-            MIN_BUILD_ADDRESS_SPACE_MIB,
-            MAX_BUILD_ADDRESS_SPACE_MIB,
-        )?;
-        let sandbox = SandboxSettings {
-            mode,
-            toolchain_dir,
-            bwrap_path: get(vars::BWRAP_PATH)
-                .map(PathBuf::from)
-                .unwrap_or(d.sandbox.bwrap_path),
-            prlimit_path: get(vars::PRLIMIT_PATH)
-                .map(PathBuf::from)
-                .unwrap_or(d.sandbox.prlimit_path),
-            rlimits: BuildRlimits {
-                address_space_bytes: address_space_mib * 1024 * 1024,
-                ..BuildRlimits::default()
-            },
-        };
+        let sandbox = parse_sandbox(&get)?;
         let build_root = get(vars::BUILD_ROOT)
             .map(PathBuf::from)
             .unwrap_or(d.build_root);
@@ -405,10 +492,43 @@ impl Config {
             None => false,
             Some(v) => parse_bool(vars::ALLOW_TRUST_PROXY_PUBLIC_BIND, &v)?,
         };
-        let allow_unsandboxed_builds = match get(vars::ALLOW_UNSANDBOXED_BUILDS) {
-            None => false,
-            Some(v) => parse_bool(vars::ALLOW_UNSANDBOXED_BUILDS, &v)?,
+        reject_removed_override(&get)?;
+        let dev_unsafe_local_builds = parse_dev_override(&get)?;
+        let executor = match get(vars::BUILDER_SOCKET) {
+            None => Executor::InProcess,
+            Some(v) => Executor::Builder {
+                socket: parse_socket_path(&v)?,
+            },
         };
+        let metrics_bind = match get(vars::METRICS_BIND) {
+            None => d.metrics_bind,
+            Some(v) => v.parse().map_err(|e| ConfigError::Invalid {
+                var: vars::METRICS_BIND,
+                value: v.clone(),
+                reason: format!("{e} (expected ip:port)"),
+            })?,
+        };
+        let secs = |var: &'static str, default: Duration, min: u64, max: u64| {
+            parse_ranged(var, get(var), default.as_secs(), min, max).map(Duration::from_secs)
+        };
+        let header_read_timeout = secs(
+            vars::HEADER_READ_TIMEOUT_SECS,
+            DEFAULT_HEADER_READ_TIMEOUT,
+            1,
+            60,
+        )?;
+        let body_read_timeout = secs(
+            vars::BODY_READ_TIMEOUT_SECS,
+            DEFAULT_BODY_READ_TIMEOUT,
+            1,
+            120,
+        )?;
+        let request_deadline = secs(
+            vars::REQUEST_DEADLINE_SECS,
+            DEFAULT_REQUEST_DEADLINE,
+            MIN_REQUEST_DEADLINE_SECS,
+            600,
+        )?;
 
         let cfg = Self {
             bind_addr,
@@ -426,10 +546,30 @@ impl Config {
             rate_limit_max_clients,
             source_denylist,
             allow_trust_proxy_public_bind,
-            allow_unsandboxed_builds,
+            dev_unsafe_local_builds,
+            executor,
+            metrics_bind,
+            header_read_timeout,
+            body_read_timeout,
+            request_deadline,
         };
         cfg.validate()?;
         Ok(cfg)
+    }
+
+    /// Why this config counts as exposed (see the module docs), or `None`.
+    pub fn exposure(&self) -> Option<String> {
+        let mut why = Vec::new();
+        if !self.auth_tokens.is_empty() {
+            why.push("bearer tokens are configured".to_string());
+        }
+        if !self.bind_addr.ip().is_loopback() {
+            why.push(format!("bind address {} is not loopback", self.bind_addr));
+        }
+        if self.trust_proxy {
+            why.push(format!("{} is on (proxied deployment)", vars::TRUST_PROXY));
+        }
+        (!why.is_empty()).then(|| why.join(", "))
     }
 
     /// Cross-field invariants. Called by [`Config::from_lookup`]; call it
@@ -452,41 +592,48 @@ impl Config {
                 addr: self.bind_addr,
             });
         }
-        match self.sandbox.mode {
-            SandboxMode::Bwrap => {
+        if self.dev_unsafe_local_builds && !loopback {
+            return Err(ConfigError::DevOverrideOnPublicBind {
+                addr: self.bind_addr,
+            });
+        }
+        if !self.metrics_bind.ip().is_loopback() {
+            return Err(ConfigError::MetricsPublicBind {
+                addr: self.metrics_bind,
+            });
+        }
+        if self.metrics_bind == self.bind_addr {
+            return Err(ConfigError::MetricsBindConflict {
+                addr: self.metrics_bind,
+            });
+        }
+        let exposure = self.exposure();
+        let refused_exposure = exposure.filter(|_| !self.dev_unsafe_local_builds);
+        if !self.source_denylist
+            && let Some(reason) = refused_exposure.clone()
+        {
+            return Err(ConfigError::DenylistOffExposed { reason });
+        }
+        match &self.executor {
+            Executor::Builder { socket } => {
                 if !linux {
-                    return Err(ConfigError::SandboxUnsupported);
+                    return Err(ConfigError::BuilderUnsupported);
                 }
-                if self.sandbox.toolchain_dir.is_none() {
-                    return Err(ConfigError::Invalid {
-                        var: vars::TOOLCHAIN_DIR,
-                        value: String::new(),
-                        reason: format!("required when {}=bwrap", vars::BUILD_SANDBOX),
-                    });
-                }
+                check_socket_path(socket)?;
+                // The API's own sandbox settings are unused: the builder
+                // validates its own (see `builder::BuilderConfig`).
             }
-            SandboxMode::None => {
-                let exposure = |reason: String| ConfigError::UnsandboxedExposure { reason };
-                if !loopback {
-                    if linux {
-                        return Err(exposure(format!(
-                            "bind address {} is not loopback (no override on Linux)",
-                            self.bind_addr
-                        )));
-                    }
-                    if !self.allow_unsandboxed_builds {
-                        return Err(exposure(format!(
-                            "bind address {} is not loopback (dev override: {}=true)",
-                            self.bind_addr,
-                            vars::ALLOW_UNSANDBOXED_BUILDS
-                        )));
-                    }
+            Executor::InProcess | Executor::Subprocess { .. } => {
+                if linux && let Some(reason) = refused_exposure.clone() {
+                    return Err(ConfigError::InProcessExposure { reason });
                 }
-                if linux && self.trust_proxy && !self.allow_unsandboxed_builds {
-                    return Err(exposure(format!(
-                        "{} is on, so this is a proxied (exposed) deployment",
-                        vars::TRUST_PROXY
-                    )));
+                match self.sandbox.mode {
+                    SandboxMode::Bwrap => check_bwrap(&self.sandbox, linux)?,
+                    SandboxMode::None => {
+                        if let Some(reason) = refused_exposure {
+                            return Err(ConfigError::UnsandboxedExposure { reason });
+                        }
+                    }
                 }
             }
         }
@@ -498,7 +645,128 @@ impl Config {
     }
 }
 
-fn parse_ranged<T>(
+/// `bwrap` needs Linux and a toolchain dir.
+pub(crate) fn check_bwrap(sandbox: &SandboxSettings, linux: bool) -> Result<(), ConfigError> {
+    if !linux {
+        return Err(ConfigError::SandboxUnsupported);
+    }
+    if sandbox.toolchain_dir.is_none() {
+        return Err(ConfigError::Invalid {
+            var: vars::TOOLCHAIN_DIR,
+            value: String::new(),
+            reason: format!(
+                "required when {}=bwrap (the default on Linux; for local dev set {}=none)",
+                vars::BUILD_SANDBOX,
+                vars::BUILD_SANDBOX
+            ),
+        });
+    }
+    Ok(())
+}
+
+fn check_socket_path(p: &Path) -> Result<(), ConfigError> {
+    let s = p.to_string_lossy();
+    if !s.starts_with('/') || s.contains("/../") || s.ends_with("/..") || s.len() > 100 {
+        return Err(ConfigError::Invalid {
+            var: vars::BUILDER_SOCKET,
+            value: s.into_owned(),
+            reason: "must be an absolute Unix path without `..`, at most 100 bytes".to_string(),
+        });
+    }
+    Ok(())
+}
+
+pub(crate) fn parse_socket_path(v: &str) -> Result<PathBuf, ConfigError> {
+    let p = PathBuf::from(v);
+    check_socket_path(&p)?;
+    Ok(p)
+}
+
+/// `PNC_ALLOW_UNSANDBOXED_BUILDS` was removed: refuse it when truthy so an
+/// old env file cannot keep meaning "unsandboxed is fine".
+pub(crate) fn reject_removed_override(
+    get: &impl Fn(&str) -> Option<String>,
+) -> Result<(), ConfigError> {
+    if let Some(v) = get(vars::ALLOW_UNSANDBOXED_BUILDS)
+        && parse_bool(vars::ALLOW_UNSANDBOXED_BUILDS, &v)?
+    {
+        return Err(ConfigError::RemovedVariable {
+            var: vars::ALLOW_UNSANDBOXED_BUILDS,
+            hint: "production builds run in the builder service; for local dev on a loopback \
+                   bind use PNC_DEV_UNSAFE_LOCAL_BUILDS=true",
+        });
+    }
+    Ok(())
+}
+
+pub(crate) fn parse_dev_override(
+    get: &impl Fn(&str) -> Option<String>,
+) -> Result<bool, ConfigError> {
+    match get(vars::DEV_UNSAFE_LOCAL_BUILDS) {
+        None => Ok(false),
+        Some(v) => parse_bool(vars::DEV_UNSAFE_LOCAL_BUILDS, &v),
+    }
+}
+
+/// The build-sandbox settings, shared by the API config and the builder.
+/// `PNC_BUILD_SANDBOX` unset means [`SandboxMode::platform_default`].
+pub(crate) fn parse_sandbox(
+    get: &impl Fn(&str) -> Option<String>,
+) -> Result<SandboxSettings, ConfigError> {
+    let d = SandboxSettings::default();
+    let mode = match get(vars::BUILD_SANDBOX) {
+        None => SandboxMode::platform_default(),
+        Some(v) => v.parse().map_err(|reason| ConfigError::Invalid {
+            var: vars::BUILD_SANDBOX,
+            value: v.clone(),
+            reason,
+        })?,
+    };
+    let toolchain_dir = match get(vars::TOOLCHAIN_DIR) {
+        None => None,
+        Some(v) => {
+            let p = PathBuf::from(&v);
+            validate_toolchain_dir(&p).map_err(|reason| ConfigError::Invalid {
+                var: vars::TOOLCHAIN_DIR,
+                value: v.clone(),
+                reason,
+            })?;
+            Some(p)
+        }
+    };
+    let address_space_mib: u64 = parse_ranged(
+        vars::BUILD_ADDRESS_SPACE_MIB,
+        get(vars::BUILD_ADDRESS_SPACE_MIB),
+        DEFAULT_BUILD_ADDRESS_SPACE_MIB,
+        MIN_BUILD_ADDRESS_SPACE_MIB,
+        MAX_BUILD_ADDRESS_SPACE_MIB,
+    )?;
+    let proc_mode = match get(vars::BWRAP_PROC) {
+        None => BwrapProc::default(),
+        Some(v) => v.parse().map_err(|reason| ConfigError::Invalid {
+            var: vars::BWRAP_PROC,
+            value: v.clone(),
+            reason,
+        })?,
+    };
+    Ok(SandboxSettings {
+        mode,
+        toolchain_dir,
+        bwrap_path: get(vars::BWRAP_PATH)
+            .map(PathBuf::from)
+            .unwrap_or(d.bwrap_path),
+        prlimit_path: get(vars::PRLIMIT_PATH)
+            .map(PathBuf::from)
+            .unwrap_or(d.prlimit_path),
+        rlimits: BuildRlimits {
+            address_space_bytes: address_space_mib * 1024 * 1024,
+            ..BuildRlimits::default()
+        },
+        proc_mode,
+    })
+}
+
+pub(crate) fn parse_ranged<T>(
     var: &'static str,
     raw: Option<String>,
     default: T,
@@ -527,7 +795,7 @@ where
     Ok(n)
 }
 
-fn parse_bool(var: &'static str, v: &str) -> Result<bool, ConfigError> {
+pub(crate) fn parse_bool(var: &'static str, v: &str) -> Result<bool, ConfigError> {
     match v.to_ascii_lowercase().as_str() {
         "1" | "true" | "yes" | "on" => Ok(true),
         "0" | "false" | "no" | "off" => Ok(false),
@@ -597,7 +865,19 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
 
+    /// Parse `pairs` as a local dev box would: `PNC_BUILD_SANDBOX=none`
+    /// unless the test sets it (the env default is `bwrap` on Linux).
     fn cfg(pairs: &[(&str, &str)]) -> Result<Config, ConfigError> {
+        let mut map: HashMap<String, String> = pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        map.entry(vars::BUILD_SANDBOX.to_string())
+            .or_insert_with(|| "none".to_string());
+        Config::from_lookup(|k| map.get(k).cloned())
+    }
+
+    fn raw_cfg(pairs: &[(&str, &str)]) -> Result<Config, ConfigError> {
         let map: HashMap<String, String> = pairs
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -608,8 +888,26 @@ mod tests {
     const TOKEN: &str = "0123456789abcdef0123456789abcdef";
 
     #[test]
+    fn env_default_sandbox_is_bwrap_on_linux() {
+        // No PNC_BUILD_SANDBOX at all: Linux gets bwrap (and so needs a
+        // toolchain dir, a loud startup error), other platforms none.
+        let r = raw_cfg(&[]);
+        if cfg!(target_os = "linux") {
+            assert!(
+                matches!(&r, Err(ConfigError::Invalid { var, .. }) if *var == vars::TOOLCHAIN_DIR),
+                "{r:?}"
+            );
+        } else {
+            assert_eq!(r.unwrap().sandbox.mode, SandboxMode::None);
+        }
+    }
+
+    #[test]
     fn defaults_are_valid_and_match_design() {
         let c = cfg(&[]).expect("defaults must validate");
+        assert_eq!(c.metrics_bind.to_string(), DEFAULT_METRICS_BIND);
+        assert_eq!(c.executor, Executor::InProcess);
+        assert_eq!(c.request_deadline, DEFAULT_REQUEST_DEADLINE);
         assert_eq!(c.bind_addr.to_string(), DEFAULT_BIND);
         assert_eq!(c.rate_limit_per_min, 600);
         assert_eq!(c.real_rate_limit_per_min, 20);
@@ -654,7 +952,11 @@ mod tests {
 
     #[test]
     fn debug_output_redacts_tokens() {
-        let c = cfg(&[(vars::AUTH_TOKENS, TOKEN)]).unwrap();
+        let c = cfg(&[
+            (vars::AUTH_TOKENS, TOKEN),
+            (vars::DEV_UNSAFE_LOCAL_BUILDS, "true"),
+        ])
+        .unwrap();
         let dbg = format!("{c:?}");
         assert!(!dbg.contains(TOKEN), "token leaked into Debug: {dbg}");
         assert!(dbg.contains("redacted"));
@@ -680,49 +982,215 @@ mod tests {
         c.sandbox.toolchain_dir = Some(PathBuf::from(TC));
     }
 
-    #[test]
-    fn unsandboxed_public_bind_refused_on_linux_even_with_override() {
-        let overridden = |c: &mut Config| {
-            public_with_token(c);
-            c.allow_unsandboxed_builds = true;
+    fn builder(c: &mut Config) {
+        c.executor = Executor::Builder {
+            socket: PathBuf::from(DEFAULT_BUILDER_SOCKET),
         };
-        assert!(matches!(
-            validate_on(true, overridden),
-            Err(ConfigError::UnsandboxedExposure { .. })
-        ));
-        // The dev override works on non-Linux only, and is required there.
-        assert!(validate_on(false, overridden).is_ok());
-        assert!(matches!(
-            validate_on(false, public_with_token),
-            Err(ConfigError::UnsandboxedExposure { .. })
-        ));
-        // bwrap on Linux with a toolchain is fine.
-        assert!(
-            validate_on(true, |c| {
+    }
+
+    fn with_tokens(c: &mut Config) {
+        c.auth_tokens = vec![Secret::new(TOKEN)];
+    }
+
+    fn with_proxy(c: &mut Config) {
+        c.trust_proxy = true;
+    }
+
+    fn with_tokens_and_proxy(c: &mut Config) {
+        with_tokens(c);
+        with_proxy(c);
+    }
+
+    type Exposure = (&'static str, fn(&mut Config));
+
+    /// The "exposed" triggers, each applied to an otherwise-dev config.
+    fn exposures() -> [Exposure; 4] {
+        [
+            ("tokens", with_tokens),
+            ("public bind + token", public_with_token),
+            ("trust proxy", with_proxy),
+            ("tokens + trust proxy", with_tokens_and_proxy),
+        ]
+    }
+
+    /// Re-review P1-B: `none` is refused whenever the config is exposed,
+    /// on both platforms, without the dev override.
+    #[test]
+    fn unsandboxed_in_process_refused_whenever_exposed() {
+        for linux in [true, false] {
+            for (name, expose) in exposures() {
+                let r = validate_on(linux, expose);
+                let expected_variant = if linux {
+                    matches!(r, Err(ConfigError::InProcessExposure { .. }))
+                } else {
+                    matches!(r, Err(ConfigError::UnsandboxedExposure { .. }))
+                };
+                assert!(expected_variant, "linux={linux} {name}: {r:?}");
+            }
+            // Plain loopback, no token, no proxy: local dev stays allowed.
+            assert!(validate_on(linux, |_| {}).is_ok(), "linux={linux}");
+        }
+    }
+
+    /// The dev override unlocks loopback exposure shapes (tokens, trust
+    /// proxy) and is refused outright on a non-loopback bind.
+    #[test]
+    fn dev_override_is_loopback_only() {
+        for linux in [true, false] {
+            for (name, expose) in exposures() {
+                let r = validate_on(linux, |c| {
+                    expose(c);
+                    c.dev_unsafe_local_builds = true;
+                });
+                if name.starts_with("public") {
+                    assert!(
+                        matches!(r, Err(ConfigError::DevOverrideOnPublicBind { .. })),
+                        "linux={linux} {name}: {r:?}"
+                    );
+                } else {
+                    assert!(r.is_ok(), "linux={linux} {name}: {r:?}");
+                }
+            }
+            // Override on a public bind is refused even with a builder.
+            let r = validate_on(linux, |c| {
                 public_with_token(c);
+                builder(c);
+                c.dev_unsafe_local_builds = true;
+            });
+            assert!(
+                matches!(r, Err(ConfigError::DevOverrideOnPublicBind { .. })),
+                "{r:?}"
+            );
+        }
+    }
+
+    /// Linux production shape: exposed + builder executor. Building in the
+    /// token-holding process is refused even with bwrap.
+    #[test]
+    fn exposed_linux_requires_the_builder() {
+        for (name, expose) in exposures() {
+            let with_bwrap = validate_on(true, |c| {
+                expose(c);
                 bwrap(c);
-            })
-            .is_ok()
-        );
+            });
+            assert!(
+                matches!(with_bwrap, Err(ConfigError::InProcessExposure { .. })),
+                "{name}: {with_bwrap:?}"
+            );
+            let subprocess = validate_on(true, |c| {
+                expose(c);
+                bwrap(c);
+                c.executor = Executor::Subprocess {
+                    exe: PathBuf::from("/usr/local/bin/pledge_compile_api"),
+                };
+            });
+            assert!(
+                matches!(subprocess, Err(ConfigError::InProcessExposure { .. })),
+                "{name}: {subprocess:?}"
+            );
+            // With the builder the API's own sandbox mode is irrelevant.
+            let ok = validate_on(true, |c| {
+                expose(c);
+                builder(c);
+            });
+            assert!(ok.is_ok(), "{name}: {ok:?}");
+            assert!(matches!(
+                validate_on(false, |c| {
+                    expose(c);
+                    builder(c);
+                }),
+                Err(ConfigError::BuilderUnsupported)
+            ));
+        }
+        assert!(matches!(
+            validate_on(true, |c| {
+                c.executor = Executor::Builder {
+                    socket: PathBuf::from("relative.sock"),
+                };
+            }),
+            Err(ConfigError::Invalid { .. })
+        ));
     }
 
     #[test]
-    fn unsandboxed_behind_proxy_refused_on_linux() {
-        let proxied = |c: &mut Config| c.trust_proxy = true;
-        assert!(matches!(
-            validate_on(true, proxied),
-            Err(ConfigError::UnsandboxedExposure { .. })
-        ));
-        assert!(validate_on(false, proxied).is_ok());
+    fn env_parsing_of_the_p1b_rules() {
+        // Exposed via env with the dev-box sandbox (none).
+        assert!(cfg(&[(vars::AUTH_TOKENS, TOKEN)]).is_err());
+        assert!(cfg(&[(vars::TRUST_PROXY, "true")]).is_err());
         assert!(
-            validate_on(true, |c| {
-                c.trust_proxy = true;
-                c.allow_unsandboxed_builds = true;
-            })
+            cfg(&[
+                (vars::AUTH_TOKENS, TOKEN),
+                (vars::DEV_UNSAFE_LOCAL_BUILDS, "true")
+            ])
             .is_ok()
         );
-        // Plain loopback dev on Linux stays allowed.
-        assert!(validate_on(true, |_| {}).is_ok());
+        assert!(matches!(
+            cfg(&[
+                (vars::BIND, "0.0.0.0:7878"),
+                (vars::AUTH_TOKENS, TOKEN),
+                (vars::DEV_UNSAFE_LOCAL_BUILDS, "true")
+            ]),
+            Err(ConfigError::DevOverrideOnPublicBind { .. })
+        ));
+        // The removed variable is refused when true, ignored when false.
+        assert!(matches!(
+            cfg(&[(vars::ALLOW_UNSANDBOXED_BUILDS, "true")]),
+            Err(ConfigError::RemovedVariable { .. })
+        ));
+        assert!(cfg(&[(vars::ALLOW_UNSANDBOXED_BUILDS, "false")]).is_ok());
+        // Builder socket via env.
+        let c = cfg(&[(vars::BUILDER_SOCKET, DEFAULT_BUILDER_SOCKET)]);
+        if cfg!(target_os = "linux") {
+            assert!(matches!(c.unwrap().executor, Executor::Builder { .. }));
+        } else {
+            assert!(matches!(c, Err(ConfigError::BuilderUnsupported)));
+        }
+    }
+
+    #[test]
+    fn denylist_off_only_when_unexposed() {
+        assert!(validate_on(true, |c| c.source_denylist = false).is_ok());
+        for linux in [true, false] {
+            let r = validate_on(linux, |c| {
+                c.source_denylist = false;
+                with_tokens(c);
+                builder(c);
+            });
+            assert!(
+                matches!(r, Err(ConfigError::DenylistOffExposed { .. })),
+                "{r:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn metrics_listener_must_be_loopback_and_distinct() {
+        assert!(matches!(
+            cfg(&[(vars::METRICS_BIND, "0.0.0.0:9878")]),
+            Err(ConfigError::MetricsPublicBind { .. })
+        ));
+        assert!(matches!(
+            cfg(&[(vars::METRICS_BIND, DEFAULT_BIND)]),
+            Err(ConfigError::MetricsBindConflict { .. })
+        ));
+        assert!(cfg(&[(vars::METRICS_BIND, "[::1]:9900")]).is_ok());
+    }
+
+    #[test]
+    fn timeouts_parse_within_bounds() {
+        let c = cfg(&[
+            (vars::HEADER_READ_TIMEOUT_SECS, "5"),
+            (vars::BODY_READ_TIMEOUT_SECS, "7"),
+            (vars::REQUEST_DEADLINE_SECS, "90"),
+        ])
+        .unwrap();
+        assert_eq!(c.header_read_timeout, Duration::from_secs(5));
+        assert_eq!(c.body_read_timeout, Duration::from_secs(7));
+        assert_eq!(c.request_deadline, Duration::from_secs(90));
+        assert!(cfg(&[(vars::HEADER_READ_TIMEOUT_SECS, "0")]).is_err());
+        assert!(cfg(&[(vars::BODY_READ_TIMEOUT_SECS, "0")]).is_err());
+        // The deadline cannot undercut a build (65 s builder reply budget).
+        assert!(cfg(&[(vars::REQUEST_DEADLINE_SECS, "30")]).is_err());
     }
 
     #[test]
@@ -738,13 +1206,14 @@ mod tests {
         );
         assert!(cfg(&[(vars::TOOLCHAIN_DIR, "/etc/rust")]).is_err());
         assert!(cfg(&[(vars::BUILD_SANDBOX, "docker")]).is_err());
+        assert!(cfg(&[(vars::BWRAP_PROC, "host")]).is_err());
     }
 
     #[test]
     fn trust_proxy_on_public_bind_needs_explicit_override() {
         let base = |c: &mut Config| {
             public_with_token(c);
-            bwrap(c);
+            builder(c);
             c.trust_proxy = true;
         };
         assert!(matches!(
@@ -780,12 +1249,12 @@ mod tests {
     #[test]
     fn bad_bool_rejected() {
         assert!(cfg(&[(vars::TRUST_PROXY, "maybe")]).is_err());
-        // (The override keeps this parse test valid on Linux, where
-        // TRUST_PROXY with an unsandboxed build is otherwise refused.)
+        // (The dev override keeps this parse test valid: TRUST_PROXY with
+        // an in-process unsandboxed build is otherwise refused.)
         assert!(
             cfg(&[
                 (vars::TRUST_PROXY, "1"),
-                (vars::ALLOW_UNSANDBOXED_BUILDS, "1")
+                (vars::DEV_UNSAFE_LOCAL_BUILDS, "1")
             ])
             .unwrap()
             .trust_proxy

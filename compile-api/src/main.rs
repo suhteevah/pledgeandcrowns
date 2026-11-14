@@ -2,26 +2,116 @@
 //! Pledge & Crown compile API binary. Routes + handlers live in
 //! `lib.rs` so the integration test harness can mount the same router.
 //!
-//! Configuration comes from `PNC_*` environment variables, parsed once
-//! into [`pledge_compile_api::Config`] (see `config.rs` for the table and
-//! `deploy/env.example` for a commented template).
+//! Subcommands (one binary, two systemd units):
+//!
+//! | Command | Who runs it | What it does |
+//! |---|---|---|
+//! | `serve` (default) | `pnc-compile-api.service` | HTTP API; holds the tokens; never builds player code in production |
+//! | `builder` | `pnc-builder.service` | builds + runs player code, one process per job; no secrets |
+//! | `job` | the builder (internal) | one job: envelope on stdin, reply on stdout |
+//! | `sandbox-verify` | `deploy/verify-sandbox.sh` | one probe build with the deny-list off, bwrap only |
+//! | `toolchain` | the deploy README | prints the pinned rustc version |
+//!
+//! Configuration comes from `PNC_*` environment variables (see
+//! `config.rs` and `deploy/env.example`).
+
+use std::process::ExitCode;
 
 use pledge_compile_api::build_sandbox::SandboxMode;
+use pledge_compile_api::builder::{self, BuilderConfig};
+use pledge_compile_api::jobs;
+use pledge_compile_api::toolchain::PINNED_RUSTC_VERSION;
 use pledge_compile_api::wasm_builder::{self, BuildSettings};
-use pledge_compile_api::{AppState, Config, build_root, build_router, serve};
+use pledge_compile_api::{
+    AppState, Config, Executor, build_metrics_router, build_root, build_router, serve_with,
+};
 use tracing_subscriber::{EnvFilter, fmt};
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-        EnvFilter::new("pledge_compile_api=debug,tower_http=info,axum::rejection=trace")
-    });
-    fmt().with_env_filter(filter).with_target(true).init();
+const DEFAULT_FILTER: &str = "pledge_compile_api=debug,tower_http=info,axum::rejection=trace";
 
+fn init_logging(to_stderr: bool) {
+    let filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(DEFAULT_FILTER));
+    if to_stderr {
+        // stdout carries data (job reply / probe JSON).
+        fmt()
+            .with_env_filter(filter)
+            .with_target(true)
+            .with_writer(std::io::stderr)
+            .init();
+    } else {
+        fmt().with_env_filter(filter).with_target(true).init();
+    }
+}
+
+fn main() -> ExitCode {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let cmd = args.first().map(String::as_str).unwrap_or("serve");
+    if args.len() > 1 {
+        eprintln!("usage: pledge_compile_api [serve|builder|job|sandbox-verify|toolchain]");
+        return ExitCode::from(64);
+    }
+    match cmd {
+        "toolchain" => {
+            println!("{PINNED_RUSTC_VERSION}");
+            ExitCode::SUCCESS
+        }
+        jobs::JOB_SUBCOMMAND => {
+            init_logging(true);
+            jobs::job_main()
+        }
+        builder::SANDBOX_VERIFY_SUBCOMMAND => {
+            init_logging(true);
+            builder::sandbox_verify_main()
+        }
+        builder::BUILDER_SUBCOMMAND => {
+            init_logging(false);
+            let result = BuilderConfig::from_env()
+                .map_err(anyhow::Error::from)
+                .and_then(builder::run_builder);
+            match result {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(e) => {
+                    tracing::error!("builder: {e:#}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
+        "serve" => {
+            init_logging(false);
+            let rt = match tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+            {
+                Ok(rt) => rt,
+                Err(e) => {
+                    tracing::error!("cannot start the async runtime: {e}");
+                    return ExitCode::FAILURE;
+                }
+            };
+            match rt.block_on(serve_main()) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(e) => {
+                    tracing::error!("serve: {e:#}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
+        other => {
+            eprintln!(
+                "unknown command {other:?}; usage: pledge_compile_api \
+                 [serve|builder|job|sandbox-verify|toolchain]"
+            );
+            ExitCode::from(64)
+        }
+    }
+}
+
+async fn serve_main() -> anyhow::Result<()> {
     let config = match Config::from_env() {
         Ok(c) => c,
         Err(e) => {
-            tracing::error!("invalid configuration: {e}");
+            tracing::error!("refusing to start: invalid configuration: {e}");
             return Err(e.into());
         }
     };
@@ -29,7 +119,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("config: {config:?}");
     if config.auth_enabled() {
         tracing::info!(
-            "auth: bearer token required on /compile, /compile-real, /metrics ({} token(s))",
+            "auth: bearer token required on /compile, /compile-real ({} token(s))",
             config.auth_tokens.len()
         );
     } else {
@@ -44,17 +134,66 @@ async fn main() -> anyhow::Result<()> {
         );
     }
     if config.metrics_tokens.is_empty() {
-        tracing::info!("metrics: no PNC_METRICS_TOKENS; /metrics served to direct loopback only");
+        tracing::info!(
+            "metrics: no PNC_METRICS_TOKENS; /metrics on {} answers direct loopback only",
+            config.metrics_bind
+        );
     }
     if !config.source_denylist {
+        tracing::warn!("PNC_SOURCE_DENYLIST=false: the second-layer source deny-list is OFF (dev)");
+    }
+    if config.dev_unsafe_local_builds {
         tracing::warn!(
-            "PNC_SOURCE_DENYLIST=false: the second-layer source deny-list is OFF. This is only \
-             for deploy/verify-sandbox.sh; turn it back on."
+            "PNC_DEV_UNSAFE_LOCAL_BUILDS=true: local dev override active (loopback only). Never \
+             set this on a server."
         );
     }
 
-    // Build root: create/verify ownership + mode, then sweep job dirs a
-    // previous crash left behind.
+    match &config.executor {
+        Executor::Builder { socket } => {
+            tracing::info!(
+                socket = %socket.display(),
+                "executor: builder service (this process never builds or runs player code)"
+            );
+            match std::fs::symlink_metadata(socket) {
+                Ok(_) => {}
+                Err(e) => tracing::warn!(
+                    "builder socket {} not present yet ({e}); /compile-real fails until \
+                     pnc-builder.service is up",
+                    socket.display()
+                ),
+            }
+        }
+        Executor::InProcess | Executor::Subprocess { .. } => {
+            tracing::warn!(
+                executor = ?config.executor,
+                "executor: player code builds and runs on this host as this user (dev only)"
+            );
+            local_build_self_test(&config).await?;
+        }
+    }
+
+    let addr = config.bind_addr;
+    let metrics_addr = config.metrics_bind;
+    let header_timeout = config.header_read_timeout;
+    let state = AppState::new(config);
+    let app = build_router(state.clone());
+    let metrics_app = build_metrics_router(state);
+
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    let metrics_listener = tokio::net::TcpListener::bind(metrics_addr).await?;
+    tracing::info!("pledge compile api listening on http://{addr}");
+    tracing::info!("metrics listening on http://{metrics_addr}/metrics (loopback only)");
+    tokio::try_join!(
+        serve_with(listener, app, header_timeout),
+        serve_with(metrics_listener, metrics_app, header_timeout),
+    )?;
+    Ok(())
+}
+
+/// In-process / subprocess executors build on this host: prepare the
+/// build root and run the build self-test (mandatory for bwrap).
+async fn local_build_self_test(config: &Config) -> anyhow::Result<()> {
     build_root::prepare(&config.build_root)?;
     match build_root::sweep_stale(&config.build_root, build_root::STALE_JOB_AGE) {
         Ok(n) => tracing::info!(
@@ -63,10 +202,7 @@ async fn main() -> anyhow::Result<()> {
         ),
         Err(e) => tracing::warn!("build root sweep failed: {e}"),
     }
-
-    // Build sandbox self-test. Mandatory for bwrap: refuse to serve if the
-    // sandbox does not isolate, or a trivial build cannot run inside it.
-    let settings = BuildSettings::from_config(&config);
+    let settings = BuildSettings::from_config(config);
     let mode = settings.sandbox.mode;
     let self_test =
         tokio::task::spawn_blocking(move || wasm_builder::startup_self_test(&settings)).await?;
@@ -84,15 +220,8 @@ async fn main() -> anyhow::Result<()> {
     if mode == SandboxMode::None {
         tracing::warn!(
             "PNC_BUILD_SANDBOX=none: player builds run on the host and can read any file this \
-             user can. Dev only; config refuses this for exposed deployments."
+             user can. Local dev only; config refuses it for exposed deployments."
         );
     }
-
-    let addr = config.bind_addr;
-    let app = build_router(AppState::new(config));
-
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    tracing::info!("pledge compile api listening on http://{addr}");
-    serve(listener, app).await?;
     Ok(())
 }

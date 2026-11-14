@@ -19,11 +19,22 @@
 //!   - the Rust toolchain dir (`PNC_TOOLCHAIN_DIR`) read-only;
 //!   - the per-request job dir, bind-mounted read-write at `/build`, with
 //!     its `Cargo.toml` and `src/` re-mounted read-only on top;
-//!   - a fresh `/proc` (new PID namespace: only sandbox processes), a
-//!     minimal `/dev`, and an empty tmpfs `/tmp`.
+//!   - a minimal `/dev` and an empty tmpfs `/tmp`;
+//!   - `/proc`: by default NONE at all ([`BwrapProc::None`]). rustc finds
+//!     its sysroot with `dladdr` and cargo is given `RUSTC` explicitly, so
+//!     the build does not need procfs, and not mounting one means bwrap
+//!     never asks the kernel for a fresh procfs mount. That mount is only
+//!     allowed when the caller's `/proc` is fully visible, which is what
+//!     forced `ProtectProc=`/`ProtectKernelTunables=` off in the old unit;
+//!     with no procfs mount the builder unit keeps them on. To verify on
+//!     Linux (the startup self-test builds and runs a real program, so a
+//!     toolchain that does need `/proc` fails closed there).
+//!     [`BwrapProc::Fresh`] (`PNC_BWRAP_PROC=fresh`) restores the old
+//!     `--proc /proc` (a procfs for the new PID namespace only) for the
+//!     case where it does; the unit's proc protections must then go.
 //!
 //!   Not visible: `/`, `/etc` (so the env file), `/var`, `/home`, `/root`,
-//!   the server's `/proc` entry. All namespaces are unshared, network
+//!   any host `/proc` entry. All namespaces are unshared, network
 //!   included (`--unshare-all`), the environment is cleared both on the
 //!   outer `bwrap` process and inside (`--clearenv`), and the sandbox
 //!   dies with its parent. `prlimit` applies per-build rlimits (address
@@ -47,6 +58,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str::FromStr;
 
+use serde::{Deserialize, Serialize};
+
 /// Where the job dir appears inside the sandbox. Fixed, so diagnostics
 /// show `/build/src/main.rs` rather than a host temp path.
 pub const SANDBOX_JOB_DIR: &str = "/build";
@@ -64,13 +77,58 @@ pub const DEFAULT_PRLIMIT_PATH: &str = "/usr/bin/prlimit";
 const FORBIDDEN_TOOLCHAIN_PREFIXES: &[&str] = &["/etc", "/proc", "/sys", "/dev", "/root", "/home"];
 
 /// `PNC_BUILD_SANDBOX`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+///
+/// `Default` (`None`) is the *programmatic* default used by
+/// `Config::default()` for in-process tests and local dev, which is always
+/// loopback with no tokens. The *environment* default, used when
+/// `PNC_BUILD_SANDBOX` is unset, is [`SandboxMode::platform_default`]:
+/// `bwrap` on Linux.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum SandboxMode {
     /// Host build, dev only.
     #[default]
     None,
     /// bubblewrap + prlimit (Linux).
     Bwrap,
+}
+
+impl SandboxMode {
+    /// Mode used when `PNC_BUILD_SANDBOX` is unset: `bwrap` on Linux (a
+    /// deploy that forgets the variable gets the sandbox, or a loud
+    /// startup error if the toolchain dir is missing), `none` elsewhere
+    /// (bwrap does not exist there).
+    pub fn platform_default() -> Self {
+        Self::default_for(cfg!(target_os = "linux"))
+    }
+
+    /// [`SandboxMode::platform_default`] with the platform explicit, for
+    /// tests.
+    pub fn default_for(linux: bool) -> Self {
+        if linux { Self::Bwrap } else { Self::None }
+    }
+}
+
+/// `PNC_BWRAP_PROC`: what the sandbox sees at `/proc`. See module docs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BwrapProc {
+    /// No `/proc` inside the sandbox (default).
+    #[default]
+    None,
+    /// `--proc /proc`: a procfs for the sandbox's own PID namespace.
+    Fresh,
+}
+
+impl FromStr for BwrapProc {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_ascii_lowercase().as_str() {
+            "none" => Ok(Self::None),
+            "fresh" => Ok(Self::Fresh),
+            _ => Err("expected `none` or `fresh`".to_string()),
+        }
+    }
 }
 
 impl FromStr for SandboxMode {
@@ -94,7 +152,8 @@ impl fmt::Display for SandboxMode {
 }
 
 /// Per-build resource limits applied via `prlimit` in `bwrap` mode.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct BuildRlimits {
     /// `RLIMIT_AS`. Address space, not RSS: rustc maps far more than it
     /// touches, so this is a runaway backstop, set strictly below the
@@ -122,15 +181,53 @@ impl Default for BuildRlimits {
             address_space_bytes: DEFAULT_BUILD_ADDRESS_SPACE_MIB * 1024 * 1024,
             // Wall clock is 30 s; rustc runs codegen on several threads,
             // and RLIMIT_CPU counts all of a process's threads.
-            cpu_secs: 90,
-            file_size_bytes: 64 * 1024 * 1024,
-            nofile: 1024,
+            cpu_secs: DEFAULT_BUILD_CPU_SECS,
+            file_size_bytes: DEFAULT_BUILD_FILE_SIZE_BYTES,
+            nofile: DEFAULT_BUILD_NOFILE,
         }
     }
 }
 
+/// Default `RLIMIT_CPU` per build process, seconds.
+pub const DEFAULT_BUILD_CPU_SECS: u64 = 90;
+/// Default `RLIMIT_FSIZE` per build process.
+pub const DEFAULT_BUILD_FILE_SIZE_BYTES: u64 = 64 * 1024 * 1024;
+/// Default `RLIMIT_NOFILE` per build process.
+pub const DEFAULT_BUILD_NOFILE: u64 = 1024;
+
+impl BuildRlimits {
+    /// Reject limits that are looser than the shipped defaults (or the
+    /// address-space ceiling). Used when settings arrive over a process
+    /// boundary (`jobs`), so a confused or compromised parent cannot
+    /// widen them.
+    pub fn validate(&self) -> Result<(), String> {
+        let as_range =
+            MIN_BUILD_ADDRESS_SPACE_MIB * 1024 * 1024..=MAX_BUILD_ADDRESS_SPACE_MIB * 1024 * 1024;
+        if !as_range.contains(&self.address_space_bytes) {
+            return Err(format!(
+                "address_space_bytes {} outside {as_range:?}",
+                self.address_space_bytes
+            ));
+        }
+        if self.cpu_secs == 0 || self.cpu_secs > DEFAULT_BUILD_CPU_SECS {
+            return Err(format!("cpu_secs {} outside 1..=90", self.cpu_secs));
+        }
+        if self.file_size_bytes == 0 || self.file_size_bytes > DEFAULT_BUILD_FILE_SIZE_BYTES {
+            return Err(format!(
+                "file_size_bytes {} too large",
+                self.file_size_bytes
+            ));
+        }
+        if self.nofile == 0 || self.nofile > DEFAULT_BUILD_NOFILE {
+            return Err(format!("nofile {} too large", self.nofile));
+        }
+        Ok(())
+    }
+}
+
 /// Everything needed to construct a sandboxed build command.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SandboxSettings {
     pub mode: SandboxMode,
     /// Toolchain root containing `bin/cargo`, `bin/rustc` and
@@ -140,6 +237,9 @@ pub struct SandboxSettings {
     pub bwrap_path: PathBuf,
     pub prlimit_path: PathBuf,
     pub rlimits: BuildRlimits,
+    /// What the sandbox sees at `/proc` (bwrap only).
+    #[serde(default)]
+    pub proc_mode: BwrapProc,
 }
 
 impl Default for SandboxSettings {
@@ -150,7 +250,30 @@ impl Default for SandboxSettings {
             bwrap_path: PathBuf::from(DEFAULT_BWRAP_PATH),
             prlimit_path: PathBuf::from(DEFAULT_PRLIMIT_PATH),
             rlimits: BuildRlimits::default(),
+            proc_mode: BwrapProc::None,
         }
+    }
+}
+
+impl SandboxSettings {
+    /// Structural checks for settings received over a process boundary.
+    pub fn validate(&self) -> Result<(), String> {
+        self.rlimits.validate()?;
+        if let Some(tc) = &self.toolchain_dir {
+            validate_toolchain_dir(tc)?;
+        }
+        if self.mode == SandboxMode::Bwrap && self.toolchain_dir.is_none() {
+            return Err("bwrap mode needs a toolchain dir".to_string());
+        }
+        for (name, p) in [
+            ("bwrap_path", &self.bwrap_path),
+            ("prlimit_path", &self.prlimit_path),
+        ] {
+            if !p.is_absolute() && !p.to_string_lossy().starts_with('/') {
+                return Err(format!("{name} must be absolute"));
+            }
+        }
+        Ok(())
     }
 }
 
@@ -283,9 +406,7 @@ pub fn bwrap_spec(
         os("--ro-bind"),
         join_os(job_dir_host, "src"),
         os(format!("{SANDBOX_JOB_DIR}/src")),
-        // Fresh /proc for the new PID namespace, minimal /dev, empty /tmp.
-        os("--proc"),
-        os("/proc"),
+        // Minimal /dev, empty /tmp. /proc: see `BwrapProc`.
         os("--dev"),
         os("/dev"),
         os("--tmpfs"),
@@ -293,6 +414,10 @@ pub fn bwrap_spec(
         os("--chdir"),
         os(SANDBOX_JOB_DIR),
     ];
+    if settings.proc_mode == BwrapProc::Fresh {
+        args.push(os("--proc"));
+        args.push(os("/proc"));
+    }
     for (k, v) in inner_env {
         args.push(os("--setenv"));
         args.push(os(k));
@@ -342,7 +467,7 @@ fn cargo_build_args(manifest: OsString) -> Vec<OsString> {
 
 /// Host environment variables passed through in `none` mode. Mirrors the
 /// pre-sandbox allow-list; nothing secret is on it.
-const HOST_ENV_ALLOWLIST: &[&str] = &[
+pub(crate) const HOST_ENV_ALLOWLIST: &[&str] = &[
     "PATH",                   // resolve `cargo`, `rustc`, linker, rust-lld
     "CARGO_HOME",             // toolchain + registry cache
     "RUSTUP_HOME",            // rustup root (resolves the wasip1 std)
@@ -476,6 +601,19 @@ pub fn probe_isolation(settings: &SandboxSettings, root: &Path) -> Result<(), Sa
                 etc.stderr.trim()
             ),
         ));
+    }
+    if settings.proc_mode == BwrapProc::None {
+        let procfs = run("/proc absent", &["/usr/bin/test", "-e", "/proc/self"])?;
+        if procfs.status.code() != Some(1) {
+            return Err(probe_err(
+                "/proc absent",
+                format!(
+                    "expected exit 1, got {:?}: {}",
+                    procfs.status,
+                    procfs.stderr.trim()
+                ),
+            ));
+        }
     }
     let env = run("environment cleared", &["/usr/bin/env"])?;
     if !env.status.success() || env.stdout.contains("PNC_") {
@@ -627,7 +765,7 @@ mod tests {
     }
 
     #[test]
-    fn network_and_namespaces_are_unshared_with_fresh_proc_and_tmp() {
+    fn network_and_namespaces_are_unshared_with_no_proc_and_fresh_tmp() {
         let argv = spec().argv_lossy();
         let b = bwrap_args(&argv);
         assert!(b.iter().any(|a| a == "--unshare-all"));
@@ -638,10 +776,43 @@ mod tests {
         assert!(b.iter().any(|a| a == "--die-with-parent"));
         assert!(b.iter().any(|a| a == "--clearenv"));
         let pair = |flag: &str, val: &str| b.windows(2).any(|w| w[0] == flag && w[1] == val);
-        assert!(pair("--proc", "/proc"));
+        // Default: no procfs at all (no mount request, no host /proc).
+        assert!(!b.iter().any(|a| a == "--proc"), "{b:?}");
         assert!(pair("--dev", "/dev"));
         assert!(pair("--tmpfs", "/tmp"));
         assert!(!b.iter().any(|a| a == "--dev-bind"));
+
+        // PNC_BWRAP_PROC=fresh: a procfs for the sandbox's PID namespace.
+        let mut s = settings();
+        s.proc_mode = BwrapProc::Fresh;
+        let argv = cargo_build_spec(&s, Path::new(JOB)).unwrap().argv_lossy();
+        let b = bwrap_args(&argv);
+        assert!(b.windows(2).any(|w| w[0] == "--proc" && w[1] == "/proc"));
+        assert_eq!("fresh".parse::<BwrapProc>(), Ok(BwrapProc::Fresh));
+        assert!("host".parse::<BwrapProc>().is_err());
+    }
+
+    #[test]
+    fn platform_default_is_bwrap_on_linux_only() {
+        assert_eq!(SandboxMode::default_for(true), SandboxMode::Bwrap);
+        assert_eq!(SandboxMode::default_for(false), SandboxMode::None);
+    }
+
+    #[test]
+    fn received_settings_cannot_loosen_rlimits() {
+        assert!(settings().validate().is_ok());
+        let mut s = settings();
+        s.rlimits.cpu_secs = 10_000;
+        assert!(s.validate().is_err());
+        let mut s = settings();
+        s.rlimits.address_space_bytes = 64 << 30;
+        assert!(s.validate().is_err());
+        let mut s = settings();
+        s.toolchain_dir = Some(PathBuf::from("/etc/rust"));
+        assert!(s.validate().is_err());
+        let mut s = settings();
+        s.toolchain_dir = None;
+        assert!(s.validate().is_err(), "bwrap without toolchain");
     }
 
     #[test]
@@ -703,7 +874,8 @@ mod tests {
 
     #[test]
     fn address_space_cap_is_below_unit_memory_max() {
-        let unit = include_str!("../deploy/compile-api.service");
+        // Builds run under the builder unit.
+        let unit = include_str!("../deploy/pnc-builder.service");
         let mem_max_mib: u64 = unit
             .lines()
             .find_map(|l| l.trim().strip_prefix("MemoryMax="))

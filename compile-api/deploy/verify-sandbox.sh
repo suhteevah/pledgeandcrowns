@@ -1,160 +1,300 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# verify-sandbox.sh - prove, on the deployed VPS, that player source cannot
-# read host files at compile time through the compile API.
-#
-# Run as root on the server, against the LOCAL API (127.0.0.1), before the
-# service is exposed and after every update:
+# verify-sandbox.sh - prove, on the deployed host, that player code cannot
+# read host files at build time and that the two-unit deployment is wired
+# the way the security review requires. Run as root, before exposing the
+# service and after every update:
 #
 #     sudo /opt/pnc-compile/verify-sandbox.sh
 #
-# What it does:
-#   1. Checks the env file is 0600 root:root and unreadable by the service
-#      user.
-#   2. Backs up the env file, appends a random canary variable, and turns
-#      the second-layer source deny-list OFF (PNC_SOURCE_DENYLIST=false) so
-#      the probes actually reach rustc and test the sandbox itself.
-#   3. Restarts the service (the canary is now in the server's environment
-#      and therefore in /proc/<pid>/environ) and waits for /health.
-#   4. Submits probe programs that try to read, at compile time, the env
-#      file, the server's /proc/<pid>/environ, /proc/1/environ and /etc.
-#   5. FAILS if the canary or the bearer token appears in ANY response, or
-#      if a probe that must fail to compile succeeds. A positive control
-#      checks that a normal program still builds and runs.
-#   6. Always restores the original env file and restarts the service
-#      (trap on EXIT), so the deny-list is back on afterwards.
+# It requires POSITIVE evidence for every claim and prints PASS only if
+# every single check held; any failed check exits non-zero.
 #
-# These probe sources are the only file-read payloads in the repository;
-# they exist here because the check is meaningless without them.
+#   1. Secrets: the API env file is 0600 root:root and unreadable by both
+#      service users; the builder unit and its env file hold no tokens.
+#   2. Units: both are active; the builder journal (current run) shows
+#      "isolation checks passed" and "build self-test passed"; the API
+#      journal shows it hands builds to the builder.
+#   3. Sandbox probes, run as the builder user with exactly the builder's
+#      settings, through `pledge_compile_api sandbox-verify` (deny-list OFF
+#      for that one CLI build; it has no listener, refuses to run with a
+#      token in its environment and refuses PNC_BUILD_SANDBOX=none, so it
+#      cannot be "left on"):
+#        - positive control: include_str! of a file that IS inside the
+#          sandbox (/build/Cargo.toml) compiles, runs and prints it - so
+#          the probe mechanism (absolute include, deny-list really off)
+#          works;
+#        - host control: every probed path EXISTS on the host;
+#        - each negative probe must fail with rustc's exact
+#          "couldn't read `<path>`: No such file or directory" (or
+#          "file not found for module" / "not defined at compile time"),
+#          not merely fail.
+#   4. Config refusals (no network): `serve` with a token and
+#      PNC_BUILD_SANDBOX=none, `builder` with a token, and `sandbox-verify`
+#      with a token must all refuse to start.
+#   5. HTTP through the real API with exact status codes: /health 200,
+#      no token 401, an end-to-end build 200 with the program's output,
+#      a deny-listed probe 400 source_policy, /metrics on the API
+#      listener 404, /metrics on the loopback metrics listener 200 (or
+#      401 without its token when PNC_METRICS_TOKENS is set).
+#
+# The probe sources below are the only file-read payloads in the
+# repository; they live here because the check is meaningless without them.
 
 set -euo pipefail
 
-ENV_FILE="${PNC_ENV_FILE:-/etc/pnc-compile/env}"
-UNIT="${PNC_UNIT:-compile-api}"
-SERVICE_USER="${PNC_SERVICE_USER:-pnc-compile}"
+BIN="${PNC_BIN:-/usr/local/bin/pledge_compile_api}"
+API_ENV="${PNC_ENV_FILE:-/etc/pnc-compile/env}"
+BUILDER_ENV="${PNC_BUILDER_ENV:-/etc/pnc-builder/builder.env}"
+API_USER="${PNC_API_USER:-pnc-api}"
+BUILDER_USER="${PNC_BUILDER_USER:-pnc-builder}"
+API_UNIT="${PNC_API_UNIT:-pnc-compile-api}"
+BUILDER_UNIT="${PNC_BUILDER_UNIT:-pnc-builder}"
+SOCKET="${PNC_BUILDER_SOCKET_PATH:-/run/pnc-builder/builder.sock}"
 
-die() { echo "FAIL: $*" >&2; exit 1; }
-info() { echo "--- $*"; }
+PASSED=0
+FAILED=0
+ok()   { PASSED=$((PASSED + 1)); echo "ok   - $*"; }
+fail() { FAILED=$((FAILED + 1)); echo "FAIL - $*" >&2; }
+die()  { echo "FAIL - $*" >&2; echo "RESULT: FAIL (aborted)" >&2; exit 1; }
 
 [ "$(id -u)" -eq 0 ] || die "run as root (sudo)"
-command -v curl >/dev/null || die "curl is required"
-[ -f "$ENV_FILE" ] || die "env file $ENV_FILE not found"
-
-# ---- 1. env file permissions ------------------------------------------------
-perms="$(stat -c '%a %U %G' "$ENV_FILE")"
-[ "$perms" = "600 root root" ] || die "$ENV_FILE is '$perms', expected '600 root root'"
-if runuser -u "$SERVICE_USER" -- cat "$ENV_FILE" >/dev/null 2>&1; then
-    die "$SERVICE_USER can read $ENV_FILE"
-fi
-info "env file is root-only"
-
-get_var() { sed -n "s/^$1=//p" "$ENV_FILE" | tail -n 1; }
-TOKEN="$(get_var PNC_AUTH_TOKENS | cut -d, -f1 | tr -d '[:space:]')"
-BIND="$(get_var PNC_BIND)"; BIND="${BIND:-127.0.0.1:7878}"
-SANDBOX="$(get_var PNC_BUILD_SANDBOX)"
-[ "$SANDBOX" = "bwrap" ] || die "PNC_BUILD_SANDBOX is '${SANDBOX:-unset}', expected 'bwrap'"
-case "$BIND" in
-    127.*|"[::1]"*) ;;
-    *) die "PNC_BIND=$BIND is not loopback; run this against a loopback bind" ;;
-esac
-API="http://$BIND"
-
-# ---- 2. canary + deny-list off (restored on exit) ---------------------------
-BACKUP="$(mktemp /root/pnc-env-backup.XXXXXX)"
-cp -p "$ENV_FILE" "$BACKUP"
-restore() {
-    status=$?
-    cp -p "$BACKUP" "$ENV_FILE" && rm -f "$BACKUP"
-    systemctl restart "$UNIT" || true
-    if [ $status -eq 0 ]; then echo "PASS (env restored, $UNIT restarted)";
-    else echo "env restored, $UNIT restarted; result: FAIL" >&2; fi
-}
-trap restore EXIT
-
-CANARY="pnc-canary-$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')"
-{
-    echo ""
-    echo "PNC_SANDBOX_CANARY=$CANARY"
-    echo "PNC_SOURCE_DENYLIST=false"
-} >> "$ENV_FILE"
-grep -q "^PNC_SANDBOX_CANARY=$CANARY\$" "$ENV_FILE" || die "could not plant canary"
-
-# ---- 3. restart and wait -----------------------------------------------------
-info "restarting $UNIT with canary"
-systemctl restart "$UNIT"
-for _ in $(seq 1 60); do
-    curl -fsS "$API/health" >/dev/null 2>&1 && break
-    sleep 1
+for tool in curl runuser systemctl journalctl grep sed mktemp stat install head od tr timeout; do
+    command -v "$tool" >/dev/null || die "$tool is required"
 done
-curl -fsS "$API/health" >/dev/null || die "$UNIT did not come back (journalctl -u $UNIT)"
-PID="$(systemctl show -p MainPID --value "$UNIT")"
-[ -n "$PID" ] && [ "$PID" != "0" ] || die "no MainPID for $UNIT"
-grep -qa "$CANARY" "/proc/$PID/environ" || die "canary is not in the server environment; test invalid"
-info "canary planted in env file and server environ (pid $PID)"
+[ -x "$BIN" ] || die "$BIN is not executable"
+[ -f "$API_ENV" ] || die "API env file $API_ENV not found"
+[ -f "$BUILDER_ENV" ] || die "builder env file $BUILDER_ENV not found"
 
-# ---- 4/5. probes --------------------------------------------------------------
-json_escape() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'; }
+WORK="$(mktemp -d /tmp/pnc-verify.XXXXXX)"
+chmod 0711 "$WORK"
+trap 'rm -rf "$WORK"' EXIT
+rand_hex() { head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n'; }
 
-submit() {
-    local src="$1"
-    local auth=()
-    [ -n "$TOKEN" ] && auth=(-H "Authorization: Bearer $TOKEN")
-    curl -sS --max-time 90 "${auth[@]}" -H 'content-type: application/json' \
-        -d "{\"encounter_id\":\"sandbox_probe\",\"source\":\"$(json_escape "$src")\"}" \
-        "$API/compile-real"
-}
-
-assert_clean() {
-    local name="$1" resp="$2"
-    if printf '%s' "$resp" | grep -qF "$CANARY"; then
-        die "probe '$name' LEAKED THE CANARY: $resp"
+# ---- 1. secrets ----------------------------------------------------------------
+perms="$(stat -c '%a %U %G' "$API_ENV")"
+if [ "$perms" = "600 root root" ]; then ok "$API_ENV is 600 root root"; else fail "$API_ENV is '$perms', expected '600 root root'"; fi
+for user in "$API_USER" "$BUILDER_USER"; do
+    if runuser -u "$user" -- cat "$API_ENV" >/dev/null 2>&1; then
+        fail "$user can read $API_ENV"
+    else
+        ok "$user cannot read $API_ENV"
     fi
-    if [ -n "$TOKEN" ] && printf '%s' "$resp" | grep -qF "$TOKEN"; then
-        die "probe '$name' LEAKED THE BEARER TOKEN"
+done
+if grep -Eq '^PNC_(AUTH|METRICS)_TOKENS=.+' "$BUILDER_ENV"; then
+    fail "$BUILDER_ENV contains a token"
+else
+    ok "$BUILDER_ENV holds no token"
+fi
+if systemctl cat "$BUILDER_UNIT" | grep -v '^[[:space:]]*#' | grep -q '/etc/pnc-compile'; then
+    fail "$BUILDER_UNIT references /etc/pnc-compile (the secret env file)"
+else
+    ok "$BUILDER_UNIT does not reference the secret env file"
+fi
+if grep -q '^PNC_BUILD_SANDBOX=bwrap$' "$BUILDER_ENV"; then
+    ok "builder uses PNC_BUILD_SANDBOX=bwrap"
+else
+    die "$BUILDER_ENV must set PNC_BUILD_SANDBOX=bwrap"
+fi
+
+# ---- 2. units --------------------------------------------------------------------
+for unit in "$BUILDER_UNIT" "$API_UNIT"; do
+    if systemctl is-active --quiet "$unit"; then ok "$unit is active"; else fail "$unit is not active"; fi
+done
+journal_of() {
+    local inv
+    inv="$(systemctl show -p InvocationID --value "$1")"
+    [ -n "$inv" ] || { echo ""; return; }
+    journalctl --no-pager -o cat _SYSTEMD_INVOCATION_ID="$inv" 2>/dev/null || true
+}
+BUILDER_LOG="$(journal_of "$BUILDER_UNIT")"
+for needle in "toolchain: matches the pinned version" "isolation checks passed" "build self-test passed" "builder: listening"; do
+    if grep -qF "$needle" <<<"$BUILDER_LOG"; then ok "builder journal: '$needle'"; else fail "builder journal lacks '$needle'"; fi
+done
+API_LOG="$(journal_of "$API_UNIT")"
+if grep -qF "executor: builder service" <<<"$API_LOG"; then
+    ok "API journal: builds go to the builder service"
+else
+    fail "API journal lacks 'executor: builder service'"
+fi
+if [ -S "$SOCKET" ]; then ok "builder socket $SOCKET exists"; else fail "builder socket $SOCKET missing"; fi
+
+# ---- 3. sandbox probes -------------------------------------------------------------
+mapfile -t BENV < <(grep -E '^[A-Z_][A-Z0-9_]*=' "$BUILDER_ENV")
+PROC_MODE="$(sed -n 's/^PNC_BWRAP_PROC=//p' "$BUILDER_ENV" | tail -n 1)"
+PROBE_ROOT="$WORK/root"
+install -d -m 0700 -o "$BUILDER_USER" "$PROBE_ROOT"
+CANARY="PNC_PROBE_CANARY"
+CANARY_VALUE="canary-$(rand_hex)"
+API_PID="$(systemctl show -p MainPID --value "$API_UNIT")"
+
+N=0
+# run_probe <source>: run one probe build as the builder user; JSON on stdout.
+run_probe() {
+    N=$((N + 1))
+    local src="$WORK/probe-$N.rs"
+    printf '%s\n' "$1" > "$src"
+    runuser -u "$BUILDER_USER" -- env -i PATH=/usr/bin:/bin "${BENV[@]}" \
+        PNC_BUILD_ROOT="$PROBE_ROOT" RUST_LOG=warn "$CANARY=$CANARY_VALUE" \
+        "$BIN" sandbox-verify < "$src" 2> "$WORK/probe-$N.err"
+}
+
+# Positive control: a file that IS visible inside the sandbox.
+if out="$(run_probe 'fn main() { print!("{}", include_str!("/build/Cargo.toml")); }')"; then
+    if grep -qF '"compiled":true' <<<"$out" && grep -qF '"ran_ok":true' <<<"$out" \
+        && grep -qF 'player_submission' <<<"$out"; then
+        ok "positive control: include_str!(\"/build/Cargo.toml\") read the in-sandbox file"
+    else
+        fail "positive control did not read /build/Cargo.toml (probe mechanism broken): $out"
+    fi
+else
+    fail "positive control: sandbox-verify failed to run: $(head -c 800 "$WORK/probe-$N.err")"
+fi
+
+# probe_missing <name> <path> <source>: path exists on the host, and rustc
+# inside the sandbox reports exactly that it does not exist.
+probe_missing() {
+    local name="$1" path="$2" src="$3" out
+    if [ ! -e "$path" ]; then
+        fail "host control: $path does not exist on the host, probe '$name' would prove nothing"
+        return
+    fi
+    if ! out="$(run_probe "$src")"; then
+        fail "probe '$name': sandbox-verify failed to run: $(head -c 800 "$WORK/probe-$N.err")"
+        return
+    fi
+    if grep -qF "$CANARY_VALUE" <<<"$out"; then
+        fail "probe '$name' LEAKED the environment canary"
+    elif grep -qF '"compiled":false' <<<"$out" \
+        && grep -qF "couldn't read \`$path\`: No such file or directory" <<<"$out"; then
+        ok "probe '$name': rustc in the sandbox: couldn't read \`$path\`: No such file or directory"
+    else
+        fail "probe '$name': expected rustc \"couldn't read \`$path\`: No such file or directory\", got: $(head -c 800 <<<"$out")"
     fi
 }
 
-assert_not_ok() {
-    local name="$1" resp="$2"
-    printf '%s' "$resp" | grep -q '"ok":false' || die "probe '$name' unexpectedly succeeded: $resp"
+probe_missing "API env file (include_str)" "$API_ENV" \
+    "fn main() { print!(\"{}\", include_str!(\"$API_ENV\")); }"
+probe_missing "/etc/passwd (include_bytes)" "/etc/passwd" \
+    'fn main() { let b: &[u8] = include_bytes!("/etc/passwd"); println!("{}", b.len()); }'
+probe_missing "builder env file" "$BUILDER_ENV" \
+    "fn main() { print!(\"{}\", include_str!(\"$BUILDER_ENV\")); }"
+probe_missing "builder socket" "$SOCKET" \
+    "fn main() { let b: &[u8] = include_bytes!(\"$SOCKET\"); println!(\"{}\", b.len()); }"
+if [ -n "$API_PID" ] && [ "$API_PID" != "0" ]; then
+    probe_missing "API process environ" "/proc/$API_PID/environ" \
+        "fn main() { let b: &[u8] = include_bytes!(\"/proc/$API_PID/environ\"); println!(\"{}\", b.len()); }"
+else
+    fail "no MainPID for $API_UNIT; cannot probe its /proc entry"
+fi
+if [ "${PROC_MODE:-none}" = "none" ]; then
+    probe_missing "/proc/self/environ (no procfs in the sandbox)" "/proc/self/environ" \
+        'fn main() { let b: &[u8] = include_bytes!("/proc/self/environ"); println!("{}", b.len()); }'
+fi
+
+# #[path] module redirection: rustc E0583 with the module name.
+if out="$(run_probe "#[path = \"$API_ENV\"] mod leak; fn main() {}")"; then
+    if grep -qF '"compiled":false' <<<"$out" && grep -qF 'file not found for module `leak`' <<<"$out"; then
+        ok "probe '#[path] to the env file': file not found for module \`leak\`"
+    else
+        fail "probe '#[path]': expected 'file not found for module \`leak\`', got: $(head -c 800 <<<"$out")"
+    fi
+else
+    fail "probe '#[path]': sandbox-verify failed to run"
+fi
+
+# Build-time environment: the canary IS in sandbox-verify's own
+# environment, so env! would compile if the environment leaked in.
+if out="$(run_probe "fn main() { println!(\"{}\", env!(\"$CANARY\")); }")"; then
+    if grep -qF "$CANARY_VALUE" <<<"$out"; then
+        fail "probe 'env!': the build saw the caller's environment"
+    elif grep -qF '"compiled":false' <<<"$out" \
+        && grep -qF "environment variable \`$CANARY\` not defined at compile time" <<<"$out"; then
+        ok "probe 'env!': environment variable \`$CANARY\` not defined at compile time"
+    else
+        fail "probe 'env!': expected 'not defined at compile time', got: $(head -c 800 <<<"$out")"
+    fi
+else
+    fail "probe 'env!': sandbox-verify failed to run"
+fi
+
+# ---- 4. config refusals (no network) -------------------------------------------------
+TOK="$(rand_hex)"
+refuses() {
+    local name="$1" needle="$2"; shift 2
+    local out
+    if out="$(timeout 20 runuser -u "$BUILDER_USER" -- env -i PATH=/usr/bin:/bin RUST_LOG=error "$@" 2>&1)"; then
+        fail "$name: started (exit 0) but must refuse"
+    elif grep -qF "$needle" <<<"$out"; then
+        ok "$name: refused ($needle)"
+    else
+        fail "$name: exited non-zero without the expected refusal '$needle': $(head -c 600 <<<"$out")"
+    fi
 }
+refuses "serve with a token and PNC_BUILD_SANDBOX=none" "refusing" \
+    PNC_AUTH_TOKENS="$TOK" PNC_BUILD_SANDBOX=none PNC_BIND=127.0.0.1:1 PNC_METRICS_BIND=127.0.0.1:2 \
+    "$BIN" serve
+refuses "builder with a token" "must hold no secrets" \
+    PNC_AUTH_TOKENS="$TOK" "${BENV[@]}" "$BIN" builder
+refuses "sandbox-verify with a token" "must hold no secrets" \
+    PNC_AUTH_TOKENS="$TOK" "${BENV[@]}" "$BIN" sandbox-verify
 
-# Positive control: the sandboxed build works at all.
-resp="$(submit 'fn main() { println!("sandbox-ok"); }')"
-printf '%s' "$resp" | grep -q 'sandbox-ok' || die "positive control failed: $resp"
-info "positive control: ok"
+# ---- 5. HTTP through the real API ----------------------------------------------------
+get_var() { sed -n "s/^$1=//p" "$API_ENV" | tail -n 1 | tr -d '[:space:]'; }
+TOKEN="$(get_var PNC_AUTH_TOKENS | cut -d, -f1)"
+METRICS_TOKEN="$(get_var PNC_METRICS_TOKENS | cut -d, -f1)"
+BIND="$(get_var PNC_BIND)"; BIND="${BIND:-127.0.0.1:7878}"
+METRICS_BIND="$(get_var PNC_METRICS_BIND)"; METRICS_BIND="${METRICS_BIND:-127.0.0.1:9878}"
+[ -n "$TOKEN" ] || fail "PNC_AUTH_TOKENS is empty in $API_ENV (production requires it)"
 
-probe() {
-    local name="$1" src="$2"
-    local resp
-    resp="$(submit "$src")"
-    assert_clean "$name" "$resp"
-    assert_not_ok "$name" "$resp"
-    info "probe '$name': blocked"
+# expect_status <name> <code> <curl args...>: exact status or FAIL.
+expect_status() {
+    local name="$1" want="$2" code; shift 2
+    code="$(curl -sS -o "$WORK/body" -w '%{http_code}' --max-time 120 "$@" 2>"$WORK/curl.err")" \
+        || code="curl-error($(head -c 200 "$WORK/curl.err"))"
+    if [ "$code" = "$want" ]; then
+        ok "$name: HTTP $code"
+        return 0
+    fi
+    fail "$name: expected HTTP $want, got $code: $(head -c 400 "$WORK/body" 2>/dev/null)"
+    return 1
 }
+JSON='content-type: application/json'
+expect_status "GET /health" 200 "http://$BIND/health" || true
+expect_status "POST /compile-real without a token" 401 -X POST -H "$JSON" \
+    -d '{"source":"fn main(){}","encounter_id":"pnc_verify"}' "http://$BIND/compile-real" || true
+if expect_status "POST /compile-real end to end (API -> builder -> job)" 200 \
+    -H "Authorization: Bearer $TOKEN" -H "$JSON" \
+    -d '{"source":"fn main(){ println!(\"pnc-e2e-ok\"); }","encounter_id":"pnc_verify"}' \
+    "http://$BIND/compile-real"; then
+    if grep -qF '"ok":true' "$WORK/body" && grep -qF 'pnc-e2e-ok' "$WORK/body"; then
+        ok "end-to-end build ran and returned the program's output"
+    else
+        fail "end-to-end build: 200 but no ok/output: $(head -c 400 "$WORK/body")"
+    fi
+fi
+if expect_status "deny-list is on in production" 400 \
+    -H "Authorization: Bearer $TOKEN" -H "$JSON" \
+    -d '{"source":"fn main(){ let _ = include_str!(\"/etc/passwd\"); }","encounter_id":"pnc_verify"}' \
+    "http://$BIND/compile-real"; then
+    if grep -qF '"error":"source_policy"' "$WORK/body"; then ok "deny-list refusal is source_policy"; else fail "400 but not source_policy"; fi
+fi
+expect_status "/metrics is not served on the API listener" 404 "http://$BIND/metrics" || true
+expect_status "/metrics through the API listener with a proxy header" 404 \
+    -H 'X-Forwarded-For: 203.0.113.9' "http://$BIND/metrics" || true
+if [ -n "$METRICS_TOKEN" ]; then
+    expect_status "metrics listener without its token" 401 "http://$METRICS_BIND/metrics" || true
+    expect_status "metrics listener with its token" 200 \
+        -H "Authorization: Bearer $METRICS_TOKEN" "http://$METRICS_BIND/metrics" || true
+else
+    expect_status "metrics listener (direct loopback)" 200 "http://$METRICS_BIND/metrics" || true
+fi
 
-probe "env file via include_str" \
-    "fn main() { print!(\"{}\", include_str!(\"$ENV_FILE\")); }"
-probe "env file via include_bytes" \
-    "fn main() { let b: &[u8] = include_bytes!(\"$ENV_FILE\"); println!(\"{}\", String::from_utf8_lossy(b)); }"
-probe "env file via #[path] diagnostics" \
-    "#[path = \"$ENV_FILE\"] mod leak; fn main() {}"
-probe "server environ via include_bytes" \
-    "fn main() { let b: &[u8] = include_bytes!(\"/proc/$PID/environ\"); println!(\"{}\", String::from_utf8_lossy(b)); }"
-probe "/etc visible at all" \
-    "fn main() { print!(\"{}\", include_str!(\"/etc/hostname\")); }"
-
-# /proc/1 inside the sandbox is bubblewrap's own init. It may be readable;
-# what matters is that its environment holds nothing of the server's.
-resp="$(submit 'fn main() { let b: &[u8] = include_bytes!("/proc/1/environ"); println!("{}", String::from_utf8_lossy(b)); }')"
-assert_clean "sandbox pid 1 environ" "$resp"
-info "probe 'sandbox pid 1 environ': no canary"
-
-# Compile-time environment: env! must not see server variables.
-resp="$(submit 'fn main() { println!("{}", env!("PNC_SANDBOX_CANARY")); }')"
-assert_clean "env! canary" "$resp"
-assert_not_ok "env! canary" "$resp"
-info "probe 'env! canary': blocked"
-
-exit 0
+# ---- verdict -------------------------------------------------------------------------
+if [ "$FAILED" -eq 0 ] && [ "$PASSED" -gt 0 ]; then
+    echo "PASS ($PASSED checks held, 0 failed)"
+    exit 0
+fi
+echo "RESULT: FAIL ($FAILED failed, $PASSED passed)" >&2
+exit 1

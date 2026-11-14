@@ -4802,6 +4802,8 @@ dependencies = [
  "anyhow",
  "axum",
  "http-body-util",
+ "hyper",
+ "hyper-util",
  "reqwest",
  "rustix 1.1.4",
  "serde",

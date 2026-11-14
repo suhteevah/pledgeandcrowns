@@ -27,7 +27,17 @@
 //!   (a `macro_rules!` metavariable could otherwise smuggle `path` into an
 //!   attribute from a macro argument);
 //! - out-of-line modules (`mod name;`), which load a second source file.
-//!   Only `src/main.rs` exists in a job dir, so these never compile anyway.
+//!   Only `src/main.rs` exists in a job dir, so these never compile anyway;
+//! - `mod` followed by a macro metavariable (`mod $name;`): a macro could
+//!   otherwise mint the module name from an argument;
+//! - `#` (or `#!`) directly followed by `$`: a macro could otherwise
+//!   forward a whole attribute group (`#$attr` with `$attr:tt` =
+//!   `[path = ".."]`) past the attribute scan;
+//! - any non-ASCII character outside comments and string/char literals.
+//!   rustc's identifier and whitespace rules (XID, NFC normalisation,
+//!   `Pattern_White_Space`) differ from this lexer's, and every such
+//!   divergence is a potential bypass; ASCII-only code removes the class
+//!   (comments, doc comments and literals may still hold any text).
 //!
 //! What it can NOT guarantee:
 //!
@@ -44,9 +54,13 @@
 //! - It does not block `env!` / `option_env!`: they cannot be reliably
 //!   caught at token level (`use std::env as e; e!(..)`), and the build
 //!   runs with a cleared, allow-listed environment that holds no secrets.
-//! - Known false positives: a variable named `include`, and
-//!   `macro_rules!` patterns that forward attributes (`#[$m]`). Neither is
-//!   needed by the curriculum.
+//! - Known false positives: a variable named `include`, `macro_rules!`
+//!   patterns that forward attributes (`#[$m]`, `#$m`), and non-ASCII
+//!   identifiers. None is needed by the curriculum.
+//! - Residual (not a file read): a macro can forward the `mod` keyword
+//!   itself as a `tt` (`$k secrets;` with `$k` = `mod`). Without
+//!   `#[path]` (which stays refused) such a module can only load a file
+//!   from the job's own `src/` dir, which holds only server files.
 //!
 //! Names inside comments, doc comments and string literals are NOT
 //! refused, because lessons legitimately talk about them.
@@ -73,6 +87,14 @@ pub enum PolicyViolation {
     UnstableFeature,
     #[error("macro metavariables (`$`) inside attributes are not allowed")]
     MetavarInAttribute,
+    #[error("macro metavariables (`$`) as an attribute are not allowed")]
+    MacroForwardedAttribute,
+    #[error("macro metavariables (`$`) as a module name are not allowed")]
+    MacroModuleName,
+    #[error(
+        "non-ASCII character U+{codepoint:04X} outside comments and string literals is not allowed"
+    )]
+    NonAsciiCode { codepoint: u32 },
 }
 
 impl PolicyViolation {
@@ -86,6 +108,9 @@ impl PolicyViolation {
             Self::NativeLink => "native_link",
             Self::UnstableFeature => "unstable_feature",
             Self::MetavarInAttribute => "metavar_in_attribute",
+            Self::MacroForwardedAttribute => "macro_forwarded_attribute",
+            Self::MacroModuleName => "macro_module_name",
+            Self::NonAsciiCode { .. } => "non_ascii_code",
         }
     }
 
@@ -93,6 +118,10 @@ impl PolicyViolation {
     pub fn player_message(&self) -> String {
         let headline = match self {
             Self::UnstableFeature => "this server does not allow unstable features",
+            Self::NonAsciiCode { .. } => {
+                "this server only accepts ASCII code (use non-ASCII text only in comments and \
+                 strings)"
+            }
             _ => "this server does not allow reading files at compile time",
         };
         format!("{headline} ({self})")
@@ -103,13 +132,15 @@ impl PolicyViolation {
 enum Tok {
     Ident(String),
     Punct(char),
+    /// A non-ASCII character in code (outside comments and literals).
+    NonAscii(char),
 }
 
 impl fmt::Display for Tok {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Tok::Ident(s) => f.write_str(s),
-            Tok::Punct(c) => write!(f, "{c}"),
+            Tok::Punct(c) | Tok::NonAscii(c) => write!(f, "{c}"),
         }
     }
 }
@@ -125,10 +156,18 @@ fn scan(toks: &[Tok]) -> Result<(), PolicyViolation> {
     let mut i = 0;
     while i < toks.len() {
         match &toks[i] {
+            Tok::NonAscii(c) => {
+                return Err(PolicyViolation::NonAsciiCode {
+                    codepoint: u32::from(*c),
+                });
+            }
             Tok::Ident(name) if FILE_INCLUSION_IDENTS.contains(&name.as_str()) => {
                 return Err(PolicyViolation::FileInclusion { name: name.clone() });
             }
             Tok::Ident(kw) if kw == "mod" => {
+                if toks.get(i + 1) == Some(&Tok::Punct('$')) {
+                    return Err(PolicyViolation::MacroModuleName);
+                }
                 if let (Some(Tok::Ident(name)), Some(Tok::Punct(';'))) =
                     (toks.get(i + 1), toks.get(i + 2))
                 {
@@ -140,6 +179,9 @@ fn scan(toks: &[Tok]) -> Result<(), PolicyViolation> {
                 let mut j = i + 1;
                 if toks.get(j) == Some(&Tok::Punct('!')) {
                     j += 1;
+                }
+                if toks.get(j) == Some(&Tok::Punct('$')) {
+                    return Err(PolicyViolation::MacroForwardedAttribute);
                 }
                 if toks.get(j) == Some(&Tok::Punct('[')) {
                     let end = matching_close(toks, j);
@@ -185,18 +227,25 @@ fn check_attribute(body: &[Tok]) -> Result<(), PolicyViolation> {
                 }
                 _ => {}
             },
+            Tok::NonAscii(c) => {
+                return Err(PolicyViolation::NonAsciiCode {
+                    codepoint: u32::from(*c),
+                });
+            }
             Tok::Punct(_) => {}
         }
     }
     Ok(())
 }
 
+// ASCII only: any non-ASCII character in code is lexed as `Tok::NonAscii`
+// and refused, so these never need Unicode identifier rules.
 fn is_ident_start(c: char) -> bool {
-    c == '_' || c.is_alphabetic()
+    c == '_' || c.is_ascii_alphabetic()
 }
 
 fn is_ident_continue(c: char) -> bool {
-    c == '_' || c.is_alphanumeric()
+    c == '_' || c.is_ascii_alphanumeric()
 }
 
 /// Strip comments and literals; return identifiers and punctuation.
@@ -222,6 +271,14 @@ fn lex(src: &str) -> Vec<Tok> {
                 // Unterminated: scan the rest as code (conservative).
                 None => i += 2,
             }
+            continue;
+        }
+        // Non-ASCII in code (comments and literals were skipped whole
+        // above / below, so this only sees code, including non-ASCII
+        // whitespace, which rustc and `char::is_whitespace` disagree on).
+        if !c.is_ascii() {
+            out.push(Tok::NonAscii(c));
+            i += 1;
             continue;
         }
         // Prefixed literals: b"..", br"..", r"..", r#".."#, c"..", cr"..",
@@ -500,6 +557,75 @@ mod tests {
         assert_eq!(
             denied("macro_rules! m { ($a:ident) => { #[$a = \"/etc/x\"] mod q; } } m!(pth);"),
             PolicyViolation::MetavarInAttribute
+        );
+    }
+
+    /// Re-review P2: `#$x` forwards a whole attribute group from a macro
+    /// argument past the `#[...]` scan.
+    #[test]
+    fn macro_forwarded_attribute_is_refused() {
+        for src in [
+            "macro_rules! m { ($a:tt) => { #$a mod q; } } m!([path = \"/etc/x\"]); fn main() {}",
+            "macro_rules! m { ($a:tt) => { #!$a } } m!([path = \"/etc/x\"]); fn main() {}",
+            "macro_rules! m { ($a:tt) => { # $a mod q; } } fn main() {}",
+        ] {
+            assert_eq!(
+                denied(src),
+                PolicyViolation::MacroForwardedAttribute,
+                "{src}"
+            );
+        }
+        // A plain `#` that is not an attribute start is still fine.
+        assert_eq!(check("fn main() { let s = r#\"x\"#; }"), Ok(()));
+    }
+
+    /// Re-review P2: `mod $n;` mints an out-of-line module name from a
+    /// macro argument, so the `mod <ident> ;` check never sees it.
+    #[test]
+    fn macro_produced_module_name_is_refused() {
+        for src in [
+            "macro_rules! m { ($n:ident) => { mod $n; } } m!(secrets); fn main() {}",
+            "macro_rules! m { ($n:ident) => { pub mod $n { } } } fn main() {}",
+        ] {
+            assert_eq!(denied(src), PolicyViolation::MacroModuleName, "{src}");
+        }
+    }
+
+    /// Re-review P2: the lexer's identifier/whitespace rules differ from
+    /// rustc's for non-ASCII text, so non-ASCII code is refused outright.
+    #[test]
+    fn non_ascii_outside_comments_and_literals_is_refused() {
+        for (src, cp) in [
+            ("fn main() { let caf\u{e9} = 1; }", 0xE9),
+            // Zero-width space splitting a denied name.
+            ("fn main() { inc\u{200B}lude_str!(\"x\"); }", 0x200B),
+            // NBSP: whitespace to `char::is_whitespace`, not to rustc.
+            ("fn main()\u{a0}{}", 0xA0),
+            // Fullwidth letters.
+            ("fn \u{ff4d}ain() {}", 0xFF4D),
+            ("#[\u{1d429}ath = \"x\"] mod m {}", 0x1D429),
+            // Non-ASCII after a lifetime quote is code, not a literal.
+            ("fn f<'\u{e9}>() {}", 0xE9),
+        ] {
+            assert_eq!(
+                denied(src),
+                PolicyViolation::NonAsciiCode { codepoint: cp },
+                "{src:?}"
+            );
+        }
+        // Allowed: in comments, doc comments, strings, raw strings, chars.
+        for src in [
+            "// caf\u{e9} \u{1f600}\nfn main() {}",
+            "/* \u{200B} */ fn main() {}",
+            "/// D\u{e9}j\u{e0} vu\nfn main() {}",
+            "fn main() { println!(\"caf\u{e9} \u{1f600}\"); }",
+            "fn main() { let s = r#\"\u{e9}\"#; let c = '\u{e9}'; let d = '\u{1f600}'; }",
+        ] {
+            assert_eq!(check(src), Ok(()), "{src:?}");
+        }
+        assert_eq!(
+            PolicyViolation::NonAsciiCode { codepoint: 0xE9 }.kind(),
+            "non_ascii_code"
         );
     }
 

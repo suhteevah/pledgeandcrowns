@@ -14,35 +14,56 @@
 //!   Blocking work runs on `spawn_blocking` behind a build semaphore
 //!   (`PNC_MAX_CONCURRENT_BUILDS`) with a bounded wait queue
 //!   (`PNC_MAX_QUEUED_BUILDS`); overflow gets 503 + `Retry-After`.
-//! - `GET /metrics` — Prometheus text format. Its own token
-//!   (`PNC_METRICS_TOKENS`) or direct-loopback only; player tokens are
-//!   not accepted.
+//! - `GET /metrics` — Prometheus text format, on a SEPARATE loopback-only
+//!   listener (`PNC_METRICS_BIND`, [`build_metrics_router`]) that the
+//!   reverse proxy never forwards to. Its own token (`PNC_METRICS_TOKENS`)
+//!   or direct-loopback only; player tokens are not accepted.
 //!
 //! `/compile` and `/compile-real` require `Authorization: Bearer <token>`
 //! whenever a token is configured. See [`middleware`] for layer order and
 //! [`config`] for every knob.
+//!
+//! # Where player code runs ([`config::Executor`])
+//!
+//! - Production: the separate builder service ([`builder`]) over a Unix
+//!   socket ([`ipc`]); this process holds the tokens and never builds or
+//!   runs player code.
+//! - Local dev / tests: in this process, or one child process per job
+//!   ([`jobs`]).
+//!
+//! # Timeouts
+//!
+//! Request line + headers: `PNC_HEADER_READ_TIMEOUT_SECS` (hyper, see
+//! [`serve_with`]); body: `PNC_BODY_READ_TIMEOUT_SECS` (408); whole
+//! request including queue wait and build: `PNC_REQUEST_DEADLINE_SECS`
+//! (503 `deadline_exceeded`). A build that is cut off by the request
+//! deadline keeps its build slot until the build itself has ended.
 
 pub mod build_root;
 pub mod build_sandbox;
+pub mod builder;
 pub mod cargo_grader;
 pub mod config;
 pub mod expectations;
 pub mod grader;
+pub mod helper_threads;
+pub mod ipc;
+pub mod jobs;
 pub mod metrics;
 pub mod middleware;
 pub mod proc_tree;
 pub mod rate_limit;
 pub mod source_policy;
+pub mod toolchain;
 pub mod wasm_builder;
 pub mod wasm_runner;
 
-use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use axum::extract::rejection::JsonRejection;
-use axum::extract::{DefaultBodyLimit, State};
+use axum::extract::{ConnectInfo, DefaultBodyLimit, State};
 use axum::http::{HeaderValue, Method, StatusCode, header};
 use axum::middleware::from_fn_with_state;
 use axum::response::{IntoResponse, Response};
@@ -53,8 +74,9 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore, TryAcquireError};
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::trace::TraceLayer;
 
-pub use config::{Config, ConfigError};
+pub use config::{Config, ConfigError, Executor};
 use expectations::{GradeState, GradedRun};
+use ipc::JobRequest;
 use metrics::{Metrics, RejectReason};
 use rate_limit::{OnFull, RateLimiter};
 use wasm_builder::{BuildSettings, RealOutcome, RunLimits};
@@ -185,6 +207,10 @@ pub enum Rejection {
     SourcePolicy(String),
     #[error("client address unavailable")]
     ClientAddrUnavailable,
+    #[error("request body was not received within {secs}s")]
+    RequestTimeout { secs: u64 },
+    #[error("request did not complete within {secs}s; retry later")]
+    DeadlineExceeded { secs: u64 },
     #[error("internal error: {0}")]
     Internal(String),
 }
@@ -194,11 +220,14 @@ impl Rejection {
         match self {
             Self::Unauthorized => StatusCode::UNAUTHORIZED,
             Self::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
-            Self::QueueFull { .. } => StatusCode::SERVICE_UNAVAILABLE,
+            Self::QueueFull { .. } | Self::DeadlineExceeded { .. } => {
+                StatusCode::SERVICE_UNAVAILABLE
+            }
             Self::BodyTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
             Self::BadRequest { status, .. } => *status,
             Self::Forbidden(_) => StatusCode::FORBIDDEN,
             Self::SourcePolicy(_) => StatusCode::BAD_REQUEST,
+            Self::RequestTimeout { .. } => StatusCode::REQUEST_TIMEOUT,
             Self::ClientAddrUnavailable | Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -212,6 +241,8 @@ impl Rejection {
             Self::BadRequest { .. } => "bad_request",
             Self::Forbidden(_) => "forbidden",
             Self::SourcePolicy(_) => "source_policy",
+            Self::RequestTimeout { .. } => "request_timeout",
+            Self::DeadlineExceeded { .. } => "deadline_exceeded",
             Self::ClientAddrUnavailable | Self::Internal(_) => "internal",
         }
     }
@@ -246,6 +277,10 @@ impl IntoResponse for Rejection {
             resp.headers_mut()
                 .insert(header::WWW_AUTHENTICATE, HeaderValue::from_static("Bearer"));
         }
+        if matches!(self, Self::RequestTimeout { .. }) {
+            resp.headers_mut()
+                .insert(header::CONNECTION, HeaderValue::from_static("close"));
+        }
         resp
     }
 }
@@ -279,12 +314,29 @@ impl AppState {
     /// Production state: real `cargo build` (in the configured build
     /// sandbox, under the configured build root) + wasmtime run, graded
     /// against the mission's expectation.
+    ///
+    /// Where the work runs follows `config.executor`: in this process,
+    /// in one child process per job, or in the builder service.
     pub fn new(config: Config) -> Self {
         let settings = BuildSettings::from_config(&config);
-        let grader: MissionGrader =
-            Arc::new(move |encounter: &str, source: &str, limits: &RunLimits| {
-                expectations::grade_in(encounter, source, limits, &settings)
-            });
+        let grader: MissionGrader = match config.executor.clone() {
+            Executor::InProcess => {
+                Arc::new(move |encounter: &str, source: &str, limits: &RunLimits| {
+                    expectations::grade_in(encounter, source, limits, &settings)
+                })
+            }
+            Executor::Subprocess { exe } => {
+                Arc::new(move |encounter: &str, source: &str, limits: &RunLimits| {
+                    jobs::grade_via_subprocess(
+                        &exe,
+                        &settings,
+                        job_request(encounter, source, limits),
+                        jobs::JOB_DEADLINE,
+                    )
+                })
+            }
+            Executor::Builder { socket } => Arc::new(builder_grader(socket)),
+        };
         Self::with_mission_grader(config, grader)
     }
 
@@ -354,6 +406,44 @@ impl AppState {
             ..RunLimits::default()
         }
     }
+
+    /// Free build slots right now (tests assert it returns to
+    /// `max_concurrent_builds` once work has really ended).
+    #[doc(hidden)]
+    pub fn available_build_slots(&self) -> usize {
+        self.0.builds.available_permits()
+    }
+}
+
+/// The IPC request for one grading call.
+fn job_request(encounter: &str, source: &str, limits: &RunLimits) -> JobRequest {
+    JobRequest {
+        encounter_id: encounter.to_string(),
+        source: source.to_string(),
+        run_max_memory_bytes: limits.max_memory_bytes,
+    }
+}
+
+#[cfg(unix)]
+fn builder_grader(
+    socket: std::path::PathBuf,
+) -> impl Fn(&str, &str, &RunLimits) -> anyhow::Result<GradedRun> + Send + Sync + 'static {
+    move |encounter: &str, source: &str, limits: &RunLimits| {
+        let reply = ipc::call_builder(&socket, &job_request(encounter, source, limits))?;
+        jobs::reply_to_graded(reply)
+    }
+}
+
+#[cfg(not(unix))]
+fn builder_grader(
+    socket: std::path::PathBuf,
+) -> impl Fn(&str, &str, &RunLimits) -> anyhow::Result<GradedRun> + Send + Sync + 'static {
+    move |_encounter: &str, _source: &str, _limits: &RunLimits| {
+        Err(anyhow::anyhow!(
+            "the builder service ({}) is only supported on Linux",
+            socket.display()
+        ))
+    }
 }
 
 /// Router with dev-default configuration (loopback, no auth). Serve it
@@ -389,17 +479,17 @@ pub fn build_router(state: AppState) -> Router {
         // Backstop only: `limit_body` has already enforced the cap.
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES));
 
-    let metrics = Router::new()
-        .route("/metrics", get(metrics_handler))
-        .route_layer(from_fn_with_state(
+    // No /metrics here: it lives on its own loopback listener
+    // (`build_metrics_router`), so the reverse proxy cannot reach it.
+    let limited = player
+        .layer(from_fn_with_state(
             state.clone(),
-            middleware::require_metrics_access,
+            middleware::global_rate_limit,
+        ))
+        .layer(from_fn_with_state(
+            state.clone(),
+            middleware::request_deadline,
         ));
-
-    let limited = player.merge(metrics).layer(from_fn_with_state(
-        state.clone(),
-        middleware::global_rate_limit,
-    ));
 
     Router::new()
         .merge(limited)
@@ -414,14 +504,72 @@ pub fn build_router(state: AppState) -> Router {
         .with_state(state)
 }
 
-/// Serve `router` on `listener` with peer-address info attached (needed
-/// by the per-IP rate limiter).
+/// Router for the metrics listener (`PNC_METRICS_BIND`, loopback only):
+/// `GET /metrics` and nothing else. Same [`AppState`] as the API router so
+/// it reports the same counters.
+pub fn build_metrics_router(state: AppState) -> Router {
+    Router::new()
+        .route("/metrics", get(metrics_handler))
+        .route_layer(from_fn_with_state(
+            state.clone(),
+            middleware::require_metrics_access,
+        ))
+        .layer(TraceLayer::new_for_http())
+        .with_state(state)
+}
+
+/// Serve `router` on `listener` with the default header-read timeout
+/// ([`config::DEFAULT_HEADER_READ_TIMEOUT`]). See [`serve_with`].
 pub async fn serve(listener: tokio::net::TcpListener, router: Router) -> std::io::Result<()> {
-    axum::serve(
-        listener,
-        router.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .await
+    serve_with(listener, router, config::DEFAULT_HEADER_READ_TIMEOUT).await
+}
+
+/// Serve `router` on `listener`, HTTP/1.1 only, with:
+///
+/// - the peer address attached to every request as
+///   `ConnectInfo<SocketAddr>` (the per-IP rate limiter needs it);
+/// - a header-read timeout: a client that has not sent the full request
+///   line + headers within `header_read_timeout` is disconnected (hyper's
+///   own timer; `axum::serve` sets no timer, so this was unbounded).
+///
+/// Body and whole-request deadlines are middleware (see
+/// [`middleware::limit_body`] and [`middleware::request_deadline`]).
+pub async fn serve_with(
+    listener: tokio::net::TcpListener,
+    router: Router,
+    header_read_timeout: Duration,
+) -> std::io::Result<()> {
+    use hyper_util::rt::{TokioIo, TokioTimer};
+    use hyper_util::service::TowerToHyperService;
+    use tower::ServiceExt;
+
+    loop {
+        let (stream, peer) = match listener.accept().await {
+            Ok(conn) => conn,
+            Err(e) => {
+                // EMFILE and friends: back off instead of spinning.
+                tracing::warn!("serve: accept failed: {e}");
+                tokio::time::sleep(Duration::from_millis(50)).await;
+                continue;
+            }
+        };
+        let svc = router.clone().map_request(
+            move |mut req: axum::http::Request<hyper::body::Incoming>| {
+                req.extensions_mut().insert(ConnectInfo(peer));
+                req
+            },
+        );
+        let svc = TowerToHyperService::new(svc);
+        tokio::spawn(async move {
+            let mut builder = hyper::server::conn::http1::Builder::new();
+            builder
+                .timer(TokioTimer::new())
+                .header_read_timeout(header_read_timeout);
+            if let Err(e) = builder.serve_connection(TokioIo::new(stream), svc).await {
+                tracing::debug!(%peer, "serve: connection ended with error: {e}");
+            }
+        });
+    }
 }
 
 async fn health() -> impl IntoResponse {
@@ -598,8 +746,10 @@ async fn acquire_build_slot(state: &AppState) -> Result<OwnedSemaphorePermit, Re
 ///
 /// The build never runs on the async runtime: it moves to
 /// `spawn_blocking` holding a semaphore permit, and the permit is held by
-/// the blocking task itself, so a client that disconnects mid-build does
-/// not free the slot before the build actually finishes.
+/// the blocking task itself, so a client that disconnects (or hits the
+/// request deadline) mid-build does not free the slot before the build
+/// actually finishes. If the build's processes could not be killed
+/// ([`proc_tree::ProcError::Survivors`]) the permit is never released.
 async fn compile_real(
     State(state): State<AppState>,
     payload: Result<Json<CompileRequest>, JsonRejection>,
@@ -646,9 +796,22 @@ async fn compile_real(
     let source = req.source;
     let encounter = req.encounter_id.clone();
     let joined = tokio::task::spawn_blocking(move || {
-        let _permit = permit;
         let _in_flight = InFlight::enter(task_state);
-        grader(&encounter, &source, &limits)
+        let result = grader(&encounter, &source, &limits);
+        if let Err(e) = &result
+            && proc_tree::chain_has_survivors(e)
+        {
+            // Processes of this build may still be running: never give
+            // the slot back (the capacity they use stays accounted for).
+            tracing::error!(
+                "compile-real: build processes survived SIGKILL; retiring this build slot \
+                 permanently (restart the service): {e:#}"
+            );
+            std::mem::forget(permit);
+        } else {
+            drop(permit);
+        }
+        result
     })
     .await;
 
@@ -658,6 +821,19 @@ async fn compile_real(
     // can be self-contradictory.
     let graded = match joined {
         Ok(Ok(graded)) => graded,
+        Ok(Err(e))
+            if matches!(
+                e.downcast_ref::<jobs::ExecError>(),
+                Some(jobs::ExecError::Busy)
+            ) =>
+        {
+            tracing::warn!("rejected: builder has no free job slot");
+            state.metrics().record_rejection(RejectReason::Queue);
+            return Rejection::QueueFull {
+                retry_after_secs: QUEUE_RETRY_AFTER_SECS,
+            }
+            .into_response();
+        }
         Ok(Err(e)) => {
             tracing::error!("compile-real: wasm_builder setup failure: {e:#}");
             return (

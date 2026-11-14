@@ -185,6 +185,13 @@ impl Table {
     fn store(&mut self, key: IpAddr, tokens: f64, now: Instant) {
         self.map.insert(key, Bucket { tokens, last: now });
     }
+
+    /// Update `key` only if it is already tracked.
+    fn store_existing(&mut self, key: IpAddr, tokens: f64, now: Instant) {
+        if let Some(b) = self.map.get_mut(&key) {
+            *b = Bucket { tokens, last: now };
+        }
+    }
 }
 
 struct Tables {
@@ -253,25 +260,21 @@ impl RateLimiter {
             v6_aggregates,
         } = &mut *t;
 
-        if !self.make_room(clients, &key, now) {
-            return Decision::FailOpen;
-        }
-        if let Some(agg) = &agg
-            && !self.make_room(v6_aggregates, agg, now)
-        {
-            return Decision::FailOpen;
-        }
-
+        // Decide first, from the stored buckets (an untracked key counts
+        // as a full bucket), so a denied request never creates, evicts or
+        // prunes anything: a flood of fresh /64s that the /48 aggregate
+        // refuses must not fill the client table (re-review P2).
         let client_tokens = clients.tokens_now(&key, now);
         let agg_tokens = agg.as_ref().map(|a| v6_aggregates.tokens_now(a, now));
 
         let deny_client = client_tokens < 1.0;
         let deny_agg = agg_tokens.is_some_and(|t| t < 1.0);
         if deny_client || deny_agg {
-            // Persist the refill, consume nothing.
-            clients.store(key, client_tokens, now);
+            // Persist the refill of buckets that already exist; consume
+            // nothing and store nothing new.
+            clients.store_existing(key, client_tokens, now);
             if let (Some(a), Some(t)) = (agg, agg_tokens) {
-                v6_aggregates.store(a, t, now);
+                v6_aggregates.store_existing(a, t, now);
             }
             let retry_after_secs = if deny_client {
                 clients.retry_after(client_tokens)
@@ -282,6 +285,15 @@ impl RateLimiter {
                 tracing::debug!(limiter = self.name, %ip, "rate_limit: /48 aggregate exhausted");
             }
             return Decision::Deny { retry_after_secs };
+        }
+
+        if !self.make_room(clients, &key, now) {
+            return Decision::FailOpen;
+        }
+        if let Some(agg) = &agg
+            && !self.make_room(v6_aggregates, agg, now)
+        {
+            return Decision::FailOpen;
         }
         clients.store(key, client_tokens - 1.0, now);
         if let (Some(a), Some(t)) = (agg, agg_tokens) {
@@ -440,6 +452,26 @@ mod tests {
         let mapped: IpAddr = "::ffff:10.0.0.7".parse().unwrap();
         assert_eq!(rl.check_at(mapped, t0), Decision::Allow);
         assert!(matches!(rl.check_at(v4(7), t0), Decision::Deny { .. }));
+    }
+
+    /// Re-review P2: a /64 refused by its /48 aggregate must not get a
+    /// client entry (otherwise rotating /64s fills the table for free).
+    #[test]
+    fn aggregate_denials_store_no_client_entry() {
+        let rl = RateLimiter::new("t", 1, OnFull::EvictLru);
+        let t0 = Instant::now();
+        for subnet in 0..V6_AGGREGATE_MULTIPLIER as u16 {
+            let ip = IpAddr::V6(Ipv6Addr::new(0x2001, 0xdb8, 7, subnet, 0, 0, 0, 1));
+            assert_eq!(rl.check_at(ip, t0), Decision::Allow);
+        }
+        let tracked = rl.tracked();
+        assert_eq!(tracked, V6_AGGREGATE_MULTIPLIER as usize);
+        for subnet in 100..1_100u16 {
+            let ip = IpAddr::V6(Ipv6Addr::new(0x2001, 0xdb8, 7, subnet, 0, 0, 0, 1));
+            assert!(matches!(rl.check_at(ip, t0), Decision::Deny { .. }));
+        }
+        assert_eq!(rl.tracked(), tracked, "denied /64s must not be stored");
+        assert_eq!(rl.stats().evictions, 0, "a denial must not evict");
     }
 
     #[test]

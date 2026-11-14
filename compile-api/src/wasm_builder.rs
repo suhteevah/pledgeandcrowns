@@ -46,11 +46,13 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow};
+use serde::{Deserialize, Serialize};
 
 use crate::build_root::{self, JobDirGuard};
-use crate::build_sandbox::{self, SandboxSettings, WASIP1_TARGET};
+use crate::build_sandbox::{self, SandboxMode, SandboxSettings, WASIP1_TARGET};
 use crate::proc_tree;
 use crate::source_policy;
+use crate::toolchain;
 use crate::wasm_runner::{self, MAX_WASM_BYTES, RunVerdict};
 
 /// Hard cap on stdout/stderr capture from `cargo build`.
@@ -136,8 +138,10 @@ impl Default for RunLimits {
 
 /// Where and how builds run. Built from [`crate::Config`] by the server;
 /// [`BuildSettings::default`] is the dev setup (temp-dir root, no
-/// sandbox, deny-list on).
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// sandbox, deny-list on). Serializable because the builder hands it to
+/// each one-shot job process ([`crate::jobs`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct BuildSettings {
     pub root: PathBuf,
     pub sandbox: SandboxSettings,
@@ -161,6 +165,17 @@ impl BuildSettings {
             sandbox: cfg.sandbox.clone(),
             source_denylist: cfg.source_denylist,
         }
+    }
+
+    /// Structural checks for settings received over a process boundary.
+    pub fn validate(&self) -> std::result::Result<(), String> {
+        if !self.root.is_absolute() {
+            return Err(format!(
+                "build root {} is not absolute",
+                self.root.display()
+            ));
+        }
+        self.sandbox.validate()
     }
 }
 
@@ -360,10 +375,44 @@ pub fn compile_and_run_layout(
 /// run of a trivial program through the exact production path, which
 /// proves the toolchain, the binds and the rlimits work together.
 pub fn startup_self_test(settings: &BuildSettings) -> Result<()> {
-    if settings.sandbox.mode == build_sandbox::SandboxMode::Bwrap {
+    check_toolchain(&settings.sandbox)?;
+    if settings.sandbox.mode == SandboxMode::Bwrap {
         build_sandbox::probe_isolation(&settings.sandbox, &settings.root)
             .context("build sandbox isolation probe failed")?;
     }
+    build_self_test(settings)
+}
+
+/// Log the rustc version the builds will use and compare it with
+/// [`toolchain::PINNED_RUSTC_VERSION`]: a mismatch is fatal in `bwrap`
+/// mode, a loud warning in `none` (dev) mode.
+pub fn check_toolchain(sandbox: &SandboxSettings) -> Result<()> {
+    let found = match toolchain::probe_rustc(sandbox) {
+        Ok(v) => v,
+        Err(e) if sandbox.mode == SandboxMode::None => {
+            tracing::warn!("toolchain check skipped (dev, sandbox none): {e}");
+            return Ok(());
+        }
+        Err(e) => return Err(anyhow!(e).context("toolchain check failed")),
+    };
+    match (toolchain::check_version(&found), sandbox.mode) {
+        (Ok(()), _) => {
+            tracing::info!(rustc = %found, "toolchain: matches the pinned version");
+            Ok(())
+        }
+        (Err(e), SandboxMode::Bwrap) => {
+            tracing::error!("refusing: {e}");
+            Err(anyhow!(e))
+        }
+        (Err(e), SandboxMode::None) => {
+            tracing::warn!("dev toolchain differs from the pin (allowed with sandbox none): {e}");
+            Ok(())
+        }
+    }
+}
+
+/// Build and run a trivial program through the exact production path.
+pub fn build_self_test(settings: &BuildSettings) -> Result<()> {
     let outcome = compile_and_run_in(
         "fn main() { println!(\"pnc-self-test\"); }",
         &RunLimits::default(),
@@ -502,46 +551,173 @@ fn run_cargo_build(job: &Path, sandbox: &SandboxSettings) -> Result<BuildVerdict
 
     // Read the artifact. Bin target `player_submission` -> `<name>.wasm`
     // under the target/<triple>/release dir.
-    let artifact = job
-        .join("target")
-        .join(WASIP1_TARGET)
-        .join("release")
-        .join("player_submission.wasm");
-    let len = match fs::metadata(&artifact) {
-        Ok(m) => m.len(),
-        Err(e) => {
+    const ARTIFACT_DIRS: [&str; 3] = ["target", WASIP1_TARGET, "release"];
+    let bytes = match read_artifact(job, &ARTIFACT_DIRS, "player_submission.wasm")? {
+        ArtifactRead::Bytes(b) => b,
+        ArtifactRead::Missing(e) => {
             // Built clean but no artifact — almost always "no `main`"
             // (a lib-shaped snippet built as a bin). Report it honestly
             // rather than pretending the run can proceed.
-            tracing::warn!(
-                "wasm_builder: build succeeded but artifact missing at {}: {e}",
-                artifact.display()
-            );
+            tracing::warn!("wasm_builder: build succeeded but artifact missing: {e}");
             return Ok(BuildVerdict {
                 ok: false,
                 stderr: format!("build produced no runnable binary (is there a `fn main`?): {e}"),
                 wasm: None,
             });
         }
+        ArtifactRead::Refused(reason) => {
+            tracing::warn!("wasm_builder: refused build artifact: {reason}");
+            return Ok(BuildVerdict {
+                ok: false,
+                stderr: format!("built module refused: {reason}"),
+                wasm: None,
+            });
+        }
     };
-    if len > MAX_WASM_BYTES as u64 {
-        tracing::warn!(
-            bytes = len,
-            limit = MAX_WASM_BYTES,
-            "wasm_builder: rejected oversized artifact"
-        );
-        return Ok(BuildVerdict {
-            ok: false,
-            stderr: format!("built module is {len} bytes, over the {MAX_WASM_BYTES}-byte limit"),
-            wasm: None,
-        });
-    }
-    let bytes = fs::read(&artifact)
-        .with_context(|| format!("wasm_builder: failed to read {}", artifact.display()))?;
     tracing::debug!("wasm_builder: read {} wasm bytes", bytes.len());
     Ok(BuildVerdict {
         ok: true,
         stderr: out.stdout,
         wasm: Some(bytes),
     })
+}
+
+/// Outcome of [`read_artifact`].
+#[derive(Debug)]
+pub enum ArtifactRead {
+    Bytes(Vec<u8>),
+    /// Not there (the build produced no binary).
+    Missing(String),
+    /// There, but not something we will read (symlink, not a regular file,
+    /// wrong owner/device, over [`MAX_WASM_BYTES`]).
+    Refused(String),
+}
+
+/// Read `<job>/<dirs...>/<file>` without following symlinks and with a size
+/// cap applied before and while reading.
+///
+/// The build ran with write access to the job dir, so every component
+/// below `job` is untrusted: each directory must be a real directory (not
+/// a symlink) on the job dir's device, and the file itself is opened with
+/// `O_NOFOLLOW` (Unix), must be a regular file owned by us on the same
+/// device, and is read through a `take(MAX + 1)` so a file that grows
+/// after the check is still capped. No build process is alive at this
+/// point (the tree is confirmed dead), so the checks cannot race the
+/// build. Windows (dev only) gets the symlink and size checks.
+#[doc(hidden)]
+pub fn read_artifact(job: &Path, dirs: &[&str], file: &str) -> Result<ArtifactRead> {
+    use std::io::Read;
+
+    let job_meta = fs::symlink_metadata(job)
+        .with_context(|| format!("wasm_builder: stat job dir {}", job.display()))?;
+    let mut dir = job.to_path_buf();
+    for component in dirs {
+        dir.push(component);
+        let meta = match fs::symlink_metadata(&dir) {
+            Ok(m) => m,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(ArtifactRead::Missing(format!("{}: {e}", dir.display())));
+            }
+            Err(e) => return Ok(ArtifactRead::Refused(format!("{}: {e}", dir.display()))),
+        };
+        if meta.file_type().is_symlink() || !meta.is_dir() {
+            return Ok(ArtifactRead::Refused(format!(
+                "{} is not a plain directory",
+                dir.display()
+            )));
+        }
+        if !same_device(&job_meta, &meta) {
+            return Ok(ArtifactRead::Refused(format!(
+                "{} is on another device",
+                dir.display()
+            )));
+        }
+    }
+    let path = dir.join(file);
+    let opened = open_no_follow(&path);
+    let f = match opened {
+        Ok(f) => f,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(ArtifactRead::Missing(format!("{}: {e}", path.display())));
+        }
+        Err(e) => {
+            // ELOOP from O_NOFOLLOW on a symlink lands here.
+            return Ok(ArtifactRead::Refused(format!("{}: {e}", path.display())));
+        }
+    };
+    let meta = f
+        .metadata()
+        .with_context(|| format!("wasm_builder: fstat {}", path.display()))?;
+    if !meta.is_file() {
+        return Ok(ArtifactRead::Refused(format!(
+            "{} is not a regular file",
+            path.display()
+        )));
+    }
+    if !same_device(&job_meta, &meta) {
+        return Ok(ArtifactRead::Refused(format!(
+            "{} is on another device",
+            path.display()
+        )));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let euid = rustix::process::geteuid().as_raw();
+        if meta.uid() != euid {
+            return Ok(ArtifactRead::Refused(format!(
+                "{} is owned by uid {}, not {euid}",
+                path.display(),
+                meta.uid()
+            )));
+        }
+    }
+    let len = meta.len();
+    if len > MAX_WASM_BYTES as u64 {
+        return Ok(ArtifactRead::Refused(format!(
+            "built module is {len} bytes, over the {MAX_WASM_BYTES}-byte limit"
+        )));
+    }
+    let mut bytes = Vec::with_capacity(usize::try_from(len).unwrap_or(0));
+    f.take(MAX_WASM_BYTES as u64 + 1)
+        .read_to_end(&mut bytes)
+        .with_context(|| format!("wasm_builder: failed to read {}", path.display()))?;
+    if bytes.len() > MAX_WASM_BYTES {
+        return Ok(ArtifactRead::Refused(format!(
+            "built module grew past the {MAX_WASM_BYTES}-byte limit while being read"
+        )));
+    }
+    Ok(ArtifactRead::Bytes(bytes))
+}
+
+#[cfg(unix)]
+fn open_no_follow(path: &Path) -> std::io::Result<fs::File> {
+    use rustix::fs::{Mode, OFlags};
+    let fd = rustix::fs::open(
+        path,
+        OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::CLOEXEC | OFlags::NOCTTY,
+        Mode::empty(),
+    )?;
+    Ok(fs::File::from(fd))
+}
+
+#[cfg(not(unix))]
+fn open_no_follow(path: &Path) -> std::io::Result<fs::File> {
+    // No O_NOFOLLOW: refuse a symlink by lstat first (dev only; nothing
+    // runs between this check and the open).
+    if fs::symlink_metadata(path)?.file_type().is_symlink() {
+        return Err(std::io::Error::other("refusing to follow a symlink"));
+    }
+    fs::File::open(path)
+}
+
+#[cfg(unix)]
+fn same_device(a: &fs::Metadata, b: &fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    a.dev() == b.dev()
+}
+
+#[cfg(not(unix))]
+fn same_device(_a: &fs::Metadata, _b: &fs::Metadata) -> bool {
+    true
 }

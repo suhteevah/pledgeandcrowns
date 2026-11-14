@@ -1,0 +1,147 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Pledge & Crown BUILDER service - builds AND runs player code.
+# Install: see compile-api/deploy/README.md. Change it here and re-copy.
+#
+# Split design (security re-review P1-A): this unit holds NO secrets
+# (no EnvironmentFile with tokens; the binary refuses to start if a token
+# variable is set) and carries the settings unprivileged bubblewrap needs.
+# The token-holding HTTP server is pnc-compile-api.service, fully
+# hardened, and talks to this unit only over /run/pnc-builder/builder.sock.
+#
+# Per request the builder starts one `pledge_compile_api job` process that
+# does the cargo build (inside bwrap, via prlimit) and the wasmtime run,
+# and SIGKILLs that process's whole group at the 50 s job deadline. If a
+# job's processes cannot be killed the builder exits with status 70 and
+# systemd (KillMode=control-group, the default) kills everything left in
+# this cgroup before restarting it.
+#
+# NOT RUN ON A REAL HOST YET. The startup self-test is fail-closed: if any
+# setting below stops bwrap, the builder logs the failing step and exits.
+
+[Unit]
+Description=Pledge & Crown builder (player Rust -> wasm32-wasip1 -> wasmtime, one process per job)
+Documentation=file:///opt/pnc-compile/README.md
+After=network.target
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=simple
+User=pnc-builder
+# Primary group pnc-ipc: the RuntimeDirectory (and the socket in it) are
+# group-owned by pnc-ipc, the group the API user is a member of.
+Group=pnc-ipc
+# Non-secret settings only (0644 root:root). NEVER point this unit at
+# /etc/pnc-compile/env.
+EnvironmentFile=/etc/pnc-builder/builder.env
+Environment=PNC_BUILDER_SOCKET=/run/pnc-builder/builder.sock
+ExecStart=/usr/local/bin/pledge_compile_api builder
+Restart=on-failure
+RestartSec=5s
+
+# ---- Writable paths --------------------------------------------------------
+# Socket dir: /run/pnc-builder, pnc-builder:pnc-ipc 0750. The builder
+# creates builder.sock under UMask=0077 and then chmods it to 0660.
+RuntimeDirectory=pnc-builder
+RuntimeDirectoryMode=0750
+# Job dirs: <PrivateTmp>/pledge-wasm-builder/<uuid>/ (a per-service dir on
+# the host /tmp filesystem; disk, not RAM).
+PrivateTmp=yes
+UMask=0077
+
+# ---- Filesystem / kernel isolation ------------------------------------------
+ProtectSystem=strict
+ProtectHome=yes
+PrivateDevices=yes
+PrivateNetwork=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+# Kept ON because the sandbox no longer mounts a procfs (PNC_BWRAP_PROC=none,
+# the default): the kernel's "only mount a fresh procfs if /proc is fully
+# visible" rule is never consulted, so these over-mounts do not stop bwrap.
+# TO VERIFY ON LINUX (startup self-test). If you must set PNC_BWRAP_PROC=fresh,
+# remove these three lines too.
+ProtectKernelTunables=yes
+ProtectKernelLogs=yes
+ProtectProc=invisible
+# NOT set: ProcSubset=pid. It hides /proc/sys, and bwrap reads
+# /proc/sys/kernel/overflowuid and overflowgid at startup when it sets up the
+# user namespace (expected failure: "Can't read /proc/sys/kernel/overflowuid").
+# To try it: add ProcSubset=pid, restart, and check the journal for
+# "isolation checks passed"; remove it again if bwrap fails.
+#
+# NOT set: MemoryDenyWriteExecute=yes. wasmtime JIT-compiles each module in
+# the job process and must map pages executable after writing them.
+#
+# NOT set: PrivateUsers=yes. bwrap creates its own user namespace; nesting
+# under a systemd one is legal but unverified, so it stays off.
+
+# ---- Privilege ----------------------------------------------------------------
+NoNewPrivileges=yes
+# Empty in the HOST namespace. Unprivileged bwrap gets its capabilities only
+# inside the user namespace it creates (the kernel gives a new user namespace
+# a full set regardless of the parent's bounding set), and drops them all
+# (--cap-drop ALL) before exec'ing cargo.
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictSUIDSGID=yes
+# bwrap --unshare-all: user, mount, pid, net, ipc, uts and cgroup
+# namespaces. Time namespaces stay forbidden.
+RestrictNamespaces=user mnt pid net ipc uts cgroup
+RestrictRealtime=yes
+LockPersonality=yes
+RemoveIPC=yes
+SystemCallArchitectures=native
+
+# ---- Syscall filter: explicit ALLOW composition for unprivileged bwrap -----
+# What bwrap + prlimit + cargo/rustc + wasmtime need, and which allow group
+# provides it (check with `systemd-analyze syscall-filter @system-service`
+# and `systemd-analyze syscall-filter @mount` on the target host):
+#   clone, clone3, unshare (CLONE_NEW*), setns, prctl
+#     (PR_SET_NO_NEW_PRIVS, PR_SET_PDEATHSIG, PR_CAPBSET_DROP,
+#     PR_SET_KEEPCAPS), execve, wait4 ..................... @process
+#   capget, capset (drop caps inside the userns) ..... @system-service itself
+#   setuid, setgid, setgroups, setresuid, setresgid
+#     (uid/gid map setup inside the userns) ............... @setuid
+#   mount, umount2, pivot_root, chroot, mount_setattr,
+#     open_tree, move_mount, fsopen/fsconfig/fsmount ...... @mount
+#   socket(AF_NETLINK) + bind/sendmsg/recvmsg (bwrap brings
+#     up "lo" in the new net namespace via rtnetlink) ..... @network-io
+#   prlimit64 / setrlimit (prlimit applies the per-build
+#     rlimits) ............................................ @resources
+#   mmap/mprotect/sigaltstack/rt_sigaction (wasmtime JIT +
+#     trap handlers) ...................................... @default,
+#                                                           @basic-io, @signal
+# The deny line below subtracts ONLY groups that contain none of the above.
+# In particular it does NOT subtract @privileged (which contains pivot_root,
+# chroot, capset, setuid and setgroups - the old unit's mistake), @mount,
+# @setuid or @resources.
+SystemCallFilter=@system-service @mount
+SystemCallFilter=~@clock @cpu-emulation @debug @module @obsolete @raw-io @reboot @swap
+SystemCallErrorNumber=EPERM
+
+# ---- Network ----------------------------------------------------------------
+# AF_UNIX: the listening socket. AF_NETLINK: bwrap's loopback setup in the
+# build's own (empty) net namespace. No AF_INET/AF_INET6 at all.
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+IPAddressDeny=any
+
+# ---- Resources ----------------------------------------------------------------
+# PNC_BUILDER_MAX_JOBS=2 by default; design/05 budgets 512 MB per compile
+# job. Each build is capped by RLIMIT_AS (PNC_BUILD_ADDRESS_SPACE_MIB,
+# default 1280, max 1408), strictly below MemoryMax, so no single build can
+# take the unit to its limit by itself.
+MemoryMax=1536M
+MemorySwapMax=0
+# A job process (or rustc) that blows the cgroup limit is OOM-killed on its
+# own; the builder keeps running (OOMPolicy=stop would stop the unit).
+OOMPolicy=continue
+TasksMax=256
+LimitNOFILE=4096
+LimitCORE=0
+CPUQuota=200%
+
+[Install]
+WantedBy=multi-user.target

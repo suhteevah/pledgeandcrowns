@@ -28,12 +28,24 @@
 //!   raw `windows-sys` FFI). Gap: we do not independently confirm that no
 //!   descendant survived on Windows; `taskkill`'s exit status is logged.
 //!   Windows is never a production target.
+//!
+//! The wall-clock `timeout` covers the whole run: output collection AND the
+//! wait for the child to exit. A child that closes its stdout/stderr but
+//! keeps running is killed at the deadline like any other (it used to be
+//! waited for without a bound). Readers and the optional stdin writer are
+//! counted helper threads ([`crate::helper_threads`]).
+//!
+//! Callers that hold a concurrency slot must treat
+//! [`ProcError::Survivors`] as "the work is NOT over": never release the
+//! slot on that error (see `lib.rs` and `builder.rs`).
 
-use std::io::Read;
+use std::io::{Read, Write};
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
+
+use crate::helper_threads;
 
 /// How long to wait, after `SIGKILL`, for every process in the group to
 /// disappear (or, on Windows, for `taskkill` to finish).
@@ -68,11 +80,37 @@ pub enum ProcError {
         pgid: u32,
         waited: Duration,
     },
+    #[error("{label}: could not start a helper thread: {source}")]
+    Thread {
+        label: String,
+        #[source]
+        source: std::io::Error,
+    },
+}
+
+impl ProcError {
+    /// True for [`ProcError::Survivors`]: processes of this run may still
+    /// be alive, so its concurrency slot must not be released.
+    pub fn is_survivors(&self) -> bool {
+        matches!(self, Self::Survivors { .. })
+    }
+}
+
+/// True if `err` (or anything in its cause chain) is
+/// [`ProcError::Survivors`].
+pub fn chain_has_survivors(err: &anyhow::Error) -> bool {
+    err.chain().any(|cause| {
+        cause
+            .downcast_ref::<ProcError>()
+            .is_some_and(ProcError::is_survivors)
+    })
 }
 
 /// Result of a supervised run.
 #[derive(Debug)]
 pub struct Captured {
+    /// OS process id of the direct child (for logs and tests).
+    pub pid: u32,
     /// Exit status of the direct child.
     pub status: ExitStatus,
     /// Captured stdout, lossy UTF-8, capped.
@@ -91,12 +129,29 @@ pub struct Captured {
 ///
 /// `cmd`'s stdin/stdout/stderr are overridden (null / piped / piped).
 pub fn run_captured(
-    mut cmd: Command,
+    cmd: Command,
     timeout: Duration,
     cap_bytes: usize,
     label: &str,
 ) -> Result<Captured, ProcError> {
-    cmd.stdin(Stdio::null())
+    run_captured_with_input(cmd, None, timeout, cap_bytes, label)
+}
+
+/// [`run_captured`], optionally feeding `input` to the child's stdin (then
+/// closing it). With `input == None` stdin is `/dev/null`.
+pub fn run_captured_with_input(
+    mut cmd: Command,
+    input: Option<Vec<u8>>,
+    timeout: Duration,
+    cap_bytes: usize,
+    label: &str,
+) -> Result<Captured, ProcError> {
+    let stdin_mode = if input.is_some() {
+        Stdio::piped()
+    } else {
+        Stdio::null()
+    };
+    cmd.stdin(stdin_mode)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     #[cfg(unix)]
@@ -106,19 +161,62 @@ pub fn run_captured(
     }
 
     let started = Instant::now();
-    let mut child = cmd.spawn().map_err(|source| ProcError::Spawn {
-        label: label.to_string(),
-        source,
+    let deadline = started + timeout;
+    let mut child = cmd.spawn().map_err(|source| {
+        tracing::error!(label, "proc_tree: spawn failed: {source}");
+        ProcError::Spawn {
+            label: label.to_string(),
+            source,
+        }
     })?;
-    tracing::debug!(label, pid = child.id(), "proc_tree: spawned");
+    let pid = child.id();
+    tracing::debug!(label, pid, "proc_tree: spawned");
 
     let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
         kill_tree_now(&mut child, label);
         let _ = child.wait();
+        tracing::error!(label, "proc_tree: stdout/stderr not piped");
         return Err(ProcError::NotPiped {
             label: label.to_string(),
         });
     };
+
+    let thread_err = |source: std::io::Error| ProcError::Thread {
+        label: label.to_string(),
+        source,
+    };
+
+    // Feed stdin from a helper so a child that does not read it cannot
+    // block us; the pipe closes when the writer finishes.
+    let mut writer = None;
+    if let Some(bytes) = input {
+        match child.stdin.take() {
+            Some(mut sink) => {
+                let wlabel = label.to_string();
+                let spawned = helper_threads::spawn("stdin-writer", move || {
+                    if let Err(e) = sink.write_all(&bytes) {
+                        tracing::debug!(label = wlabel, "proc_tree: stdin write ended early: {e}");
+                    }
+                });
+                match spawned {
+                    Ok(h) => writer = Some(h),
+                    Err(e) => {
+                        kill_tree_now(&mut child, label);
+                        let _ = child.wait();
+                        return Err(thread_err(e));
+                    }
+                }
+            }
+            None => {
+                kill_tree_now(&mut child, label);
+                let _ = child.wait();
+                tracing::error!(label, "proc_tree: stdin not piped");
+                return Err(ProcError::NotPiped {
+                    label: label.to_string(),
+                });
+            }
+        }
+    }
 
     // Each reader sends its capped output when its pipe hits EOF; the
     // watchdog wakes on those messages instead of busy-polling.
@@ -128,21 +226,26 @@ pub fn run_captured(
         (1usize, Box::new(stderr) as Box<dyn Read + Send>),
     ] {
         let tx = tx.clone();
-        thread::spawn(move || {
+        let spawned = helper_threads::spawn("output-reader", move || {
             let s = read_capped(pipe, cap_bytes);
             let _ = tx.send((idx, s));
         });
+        if let Err(e) = spawned {
+            kill_tree_now(&mut child, label);
+            let _ = child.wait();
+            return Err(thread_err(e));
+        }
     }
     drop(tx);
 
     let mut outputs: [Option<String>; 2] = [None, None];
     let mut timed_out = false;
     while outputs.iter().any(Option::is_none) {
-        let elapsed = started.elapsed();
-        let Some(remaining) = timeout.checked_sub(elapsed) else {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
             timed_out = true;
             break;
-        };
+        }
         match rx.recv_timeout(remaining) {
             Ok((idx, s)) => outputs[idx] = Some(s),
             Err(mpsc::RecvTimeoutError::Timeout) => {
@@ -153,30 +256,59 @@ pub fn run_captured(
         }
     }
 
-    let status = if timed_out {
-        tracing::warn!(
-            label,
-            ?timeout,
-            "proc_tree: watchdog fired, killing process tree"
-        );
-        kill_tree_now(&mut child, label);
-        let status = child.wait().map_err(|source| ProcError::Wait {
-            label: label.to_string(),
-            source,
-        })?;
-        confirm_tree_dead(&child, label)?;
-        status
-    } else {
-        let status = child.wait().map_err(|source| ProcError::Wait {
-            label: label.to_string(),
-            source,
-        })?;
-        // Normal exit: sweep any straggler that kept running after the
-        // leader exited, then confirm.
-        sweep_group_after_exit(&child, label);
-        confirm_tree_dead(&child, label)?;
-        status
+    // Pipes closed does not mean the child exited: bound the wait by the
+    // same deadline (a child can close stdout/stderr and keep running).
+    let mut exited = None;
+    if !timed_out {
+        exited = wait_until(&mut child, deadline, label)?;
+        if exited.is_none() {
+            tracing::warn!(
+                label,
+                ?timeout,
+                "proc_tree: child closed its output but did not exit before the deadline"
+            );
+            timed_out = true;
+        }
+    }
+
+    let status = match exited {
+        Some(status) => {
+            // Normal exit: sweep any straggler that kept running after the
+            // leader exited, then confirm.
+            sweep_group_after_exit(&child, label);
+            confirm_tree_dead(&child, label)?;
+            status
+        }
+        None => {
+            tracing::warn!(
+                label,
+                ?timeout,
+                "proc_tree: watchdog fired, killing process tree"
+            );
+            kill_tree_now(&mut child, label);
+            // SIGKILL cannot be ignored, so this wait ends unless the
+            // kernel itself is stuck; it is still bounded below.
+            let status = match wait_until(&mut child, Instant::now() + TREE_DEATH_TIMEOUT, label)? {
+                Some(s) => s,
+                None => {
+                    tracing::error!(label, pid, "proc_tree: child survived SIGKILL");
+                    return Err(ProcError::Survivors {
+                        label: label.to_string(),
+                        pgid: pid,
+                        waited: TREE_DEATH_TIMEOUT,
+                    });
+                }
+            };
+            confirm_tree_dead(&child, label)?;
+            status
+        }
     };
+
+    if let Some(h) = writer
+        && h.join().is_err()
+    {
+        tracing::warn!(label, "proc_tree: stdin writer panicked");
+    }
 
     // Collect whatever the readers have; with the tree dead the pipes are
     // closed, so this is immediate unless an escaped process holds them.
@@ -204,12 +336,39 @@ pub fn run_captured(
         "proc_tree: finished"
     );
     Ok(Captured {
+        pid,
         status,
         stdout: out.unwrap_or_default(),
         stderr: err.unwrap_or_default(),
         timed_out,
         elapsed,
     })
+}
+
+/// Poll `child` until it exits or `deadline` passes. `Ok(None)` means it
+/// is still running at the deadline.
+fn wait_until(
+    child: &mut Child,
+    deadline: Instant,
+    label: &str,
+) -> Result<Option<ExitStatus>, ProcError> {
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return Ok(Some(status)),
+            Ok(None) => {}
+            Err(source) => {
+                tracing::error!(label, "proc_tree: wait failed: {source}");
+                return Err(ProcError::Wait {
+                    label: label.to_string(),
+                    source,
+                });
+            }
+        }
+        if Instant::now() >= deadline {
+            return Ok(None);
+        }
+        thread::sleep(Duration::from_millis(5));
+    }
 }
 
 /// Kill the child and all its descendants right now (timeout path).
