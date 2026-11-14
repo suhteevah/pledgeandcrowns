@@ -11,6 +11,11 @@
 //! - **v1** (`{ version, cleared }`): migrated losslessly — the cleared set
 //!   carries over, settings take their defaults, no saved position.
 //! - **v2** (`{ version, cleared, settings, player_position }`): current.
+//!   It may be followed by one optional, magic-tagged extension block
+//!   ([`SaveExtV2`]: the `opened` mission set). A v2 save without the
+//!   block loads with an empty `opened` set, and the block is only written
+//!   when `opened` is non-empty, so a save with nothing opened is
+//!   byte-identical to the original v2 layout.
 //! - anything else: [`SaveError::UnsupportedVersion`].
 //!
 //! The wire structs (`SaveFileV1`, `SaveFileV2`, `SettingsV2`) are frozen.
@@ -83,6 +88,10 @@ pub enum SaveError {
 #[derive(Resource, Default, Debug, Clone, PartialEq, Eq)]
 pub struct MissionProgress {
     cleared: HashSet<String>,
+    /// Missions whose NPC has already made their offer (the dialogue
+    /// handed off to the mission at least once). Separates the Offer
+    /// greeting from the In-progress nudge across restarts.
+    opened: HashSet<String>,
 }
 
 impl MissionProgress {
@@ -97,10 +106,24 @@ impl MissionProgress {
     pub fn cleared_count(&self) -> usize {
         self.cleared.len()
     }
-    /// Forget every clear (New Game).
+    /// Remember that `encounter_id`'s offer has been heard.
+    pub fn mark_opened(&mut self, encounter_id: &str) {
+        if self.opened.insert(encounter_id.to_string()) {
+            tracing::debug!("mission opened: {encounter_id}");
+        }
+    }
+    pub fn is_opened(&self, encounter_id: &str) -> bool {
+        self.opened.contains(encounter_id)
+    }
+    /// Forget every clear and every opened offer (New Game).
     pub fn reset(&mut self) {
-        tracing::info!(was = self.cleared.len(), "mission progress reset");
+        tracing::info!(
+            was = self.cleared.len(),
+            opened = self.opened.len(),
+            "mission progress reset"
+        );
         self.cleared.clear();
+        self.opened.clear();
     }
 
     /// Write a save holding just this progress (default settings, no
@@ -242,6 +265,16 @@ struct SaveFileV2 {
     player_position: Option<[f32; 2]>,
 }
 
+/// Tag that starts the optional block after a v2 payload.
+const EXT_V2_MAGIC: [u8; 4] = *b"PNCx";
+
+/// Optional extension block appended after a v2 payload (see module docs).
+#[derive(Serialize, Deserialize, Debug)]
+struct SaveExtV2 {
+    magic: [u8; 4],
+    opened: Vec<String>,
+}
+
 fn bincode_config() -> bincode::config::Configuration {
     bincode::config::standard()
 }
@@ -283,7 +316,17 @@ impl SaveData {
             },
             player_position: self.player_position.map(|p| [p.x, p.y]),
         };
-        Ok(bincode::serde::encode_to_vec(&file, bincode_config())?)
+        let mut bytes = bincode::serde::encode_to_vec(&file, bincode_config())?;
+        if !self.progress.opened.is_empty() {
+            let mut opened: Vec<String> = self.progress.opened.iter().cloned().collect();
+            opened.sort();
+            let ext = SaveExtV2 {
+                magic: EXT_V2_MAGIC,
+                opened,
+            };
+            bytes.extend(bincode::serde::encode_to_vec(&ext, bincode_config())?);
+        }
+        Ok(bytes)
     }
 
     /// Deserialize any supported version, migrating older ones.
@@ -302,13 +345,16 @@ impl SaveData {
                 Ok(Self {
                     progress: MissionProgress {
                         cleared: v1.cleared.into_iter().collect(),
+                        opened: HashSet::new(),
                     },
                     settings: Settings::default(),
                     player_position: None,
                 })
             }
             2 => {
-                let v2: SaveFileV2 = decode_exact(bytes, 2)?;
+                let (v2, read) =
+                    bincode::serde::decode_from_slice::<SaveFileV2, _>(bytes, bincode_config())?;
+                let opened = decode_ext_v2(&bytes[read..])?;
                 let player_position = match v2.player_position {
                     Some([x, y]) if x.is_finite() && y.is_finite() => Some(Vec2::new(x, y)),
                     Some(bad) => {
@@ -320,6 +366,7 @@ impl SaveData {
                 Ok(Self {
                     progress: MissionProgress {
                         cleared: v2.cleared.into_iter().collect(),
+                        opened,
                     },
                     settings: Settings {
                         master_volume: v2.settings.master_volume,
@@ -332,6 +379,29 @@ impl SaveData {
             }
             found => Err(SaveError::UnsupportedVersion { found }),
         }
+    }
+}
+
+/// Decode the optional block after a v2 payload. Empty input means a save
+/// written before the block existed: nothing opened. Anything else must be
+/// exactly one tagged block, or the save is rejected as trailing garbage.
+fn decode_ext_v2(rest: &[u8]) -> Result<HashSet<String>, SaveError> {
+    if rest.is_empty() {
+        return Ok(HashSet::new());
+    }
+    let garbage = SaveError::TrailingBytes {
+        version: 2,
+        extra: rest.len(),
+    };
+    match decode_exact::<SaveExtV2>(rest, 2) {
+        Ok(ext) if ext.magic == EXT_V2_MAGIC => {
+            tracing::debug!(
+                opened = ext.opened.len(),
+                "save has the v2 opened-set block"
+            );
+            Ok(ext.opened.into_iter().collect())
+        }
+        _ => Err(garbage),
     }
 }
 
@@ -828,6 +898,56 @@ mod tests {
         };
         let back = SaveData::decode(&d.encode().unwrap()).unwrap();
         assert_eq!(back.player_position, None);
+    }
+
+    #[test]
+    fn opened_set_round_trips_and_resets() {
+        let mut d = SaveData::default();
+        d.progress.mark_cleared("intro_let_binding");
+        d.progress.mark_opened("double_function");
+        let back = SaveData::decode(&d.encode().unwrap()).unwrap();
+        assert!(back.progress.is_opened("double_function"));
+        assert!(!back.progress.is_opened("intro_let_binding"));
+        assert_eq!(back, d);
+        let mut p = back.progress;
+        p.reset();
+        assert!(!p.is_opened("double_function"));
+    }
+
+    /// Migration: a v2 save written before the opened set existed (the
+    /// frozen wire struct, nothing after it) loads with nothing opened, and
+    /// a save with nothing opened still encodes to exactly that layout.
+    #[test]
+    fn v2_save_without_opened_block_loads_as_empty() {
+        let legacy = SaveFileV2 {
+            version: 2,
+            cleared: vec!["intro_let_binding".to_string()],
+            settings: SettingsV2 {
+                master_volume: 80,
+                music_volume: 70,
+                sfx_volume: 80,
+            },
+            player_position: Some([1.0, 2.0]),
+        };
+        let bytes = bincode::serde::encode_to_vec(&legacy, bincode_config()).unwrap();
+        let d = SaveData::decode(&bytes).unwrap();
+        assert!(d.progress.is_cleared("intro_let_binding"));
+        assert!(!d.progress.is_opened("intro_let_binding"));
+        assert_eq!(d.encode().unwrap(), bytes, "no opened => original v2 bytes");
+    }
+
+    #[test]
+    fn untagged_trailing_block_is_rejected() {
+        let mut bytes = SaveData::default().encode().unwrap();
+        let fake = SaveExtV2 {
+            magic: *b"nope",
+            opened: vec!["x".to_string()],
+        };
+        bytes.extend(bincode::serde::encode_to_vec(&fake, bincode_config()).unwrap());
+        assert!(matches!(
+            SaveData::decode(&bytes),
+            Err(SaveError::TrailingBytes { version: 2, .. })
+        ));
     }
 
     #[test]

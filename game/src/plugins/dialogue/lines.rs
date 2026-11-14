@@ -9,22 +9,31 @@
 //! to [`AUTHORED`] in that NPC's craft metaphor (see
 //! `.claude/agents/voice-editor.md`) rather than editing the fallbacks.
 //!
-//! Lines are templates: `{next}` is replaced with the name of the NPC whose
-//! mission is next in registry order. Keep each line at or under
-//! [`super::MAX_LINE_CHARS`] after substitution (a test enforces it).
+//! Lines are templates: `{next}` is replaced with the name of the NPC the
+//! player should see next (see [`super::next_hint`]). Keep each line at or
+//! under [`super::MAX_LINE_CHARS`] after substitution (a test enforces it).
 //! Anything said about Rust must be technically correct (hard rule 3).
+//!
+//! `not_yet` lines are only used when `{next}` is the speaker's DIRECT
+//! prerequisite (the mission right before theirs), so "see {next} first,
+//! then come back" is literally true. When the next playable mission is
+//! further back, every NPC says [`NOT_YET_ELSEWHERE`]; when nothing is
+//! playable (a mission outside this build), [`NOT_YET_NOTHING`].
+//!
+//! Inline code goes in backticks; the box renders it as a code chip and
+//! never shows the backticks themselves. Backticks must pair up.
 
 /// Lines for one NPC (or the generic fallback), one slice per status. An
 /// empty slice means "use the generic lines for this status".
 #[derive(Debug, Clone, Copy)]
 pub struct StatusLines {
-    /// Their mission is still locked behind an earlier one.
+    /// Their mission is locked and `{next}` is their direct prerequisite.
     pub not_yet: &'static [&'static str],
-    /// Unlocked and never opened this session. The mission panel opens
-    /// after the last line.
+    /// Unlocked and never opened (saved per mission). The mission panel
+    /// opens after the last line.
     pub offer: &'static [&'static str],
-    /// Opened this session but not cleared. The mission panel opens after
-    /// the last line.
+    /// Opened before but not cleared. The mission panel opens after the
+    /// last line.
     pub in_progress: &'static [&'static str],
     /// Cleared. Flavour only; no mission panel.
     pub cleared: &'static [&'static str],
@@ -40,11 +49,18 @@ pub struct NpcLines {
 
 /// Fallback for any NPC/status without authored text.
 pub const GENERIC: StatusLines = StatusLines {
-    not_yet: &["Not yet. Find {next} first, then come back to me."],
+    not_yet: &["Not yet. {next} has the lesson just before mine. See them first, then come back."],
     offer: &["Well met. I have a task for you, if you have the time."],
     in_progress: &["Back again? The task is where you left it."],
     cleared: &["Thank you. That was good work."],
 };
+
+/// Locked, and the next playable mission is not the speaker's direct
+/// prerequisite: point at it without promising the speaker comes next.
+pub const NOT_YET_ELSEWHERE: &str = "I'm not ready for you yet. See {next} first.";
+
+/// Locked, and no mission is playable at all (this build ends earlier).
+pub const NOT_YET_NOTHING: &str = "I'm not ready for you yet. Come back another day.";
 
 /// Authored lines for the Hearthstone Square cast.
 pub const AUTHORED: &[NpcLines] = &[

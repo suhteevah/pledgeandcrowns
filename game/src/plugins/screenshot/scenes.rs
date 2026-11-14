@@ -8,21 +8,21 @@
 //!
 //! Every state change goes through the game's own resources: `NextState`,
 //! `MenuUi`, `MissionProgress`, `EditorState`, `CompletionView`,
-//! `DialogueMemory`, the two `EditorSession` hooks, and in-app key taps /
+//! `MissionProgress::mark_opened`, the two `EditorSession` hooks, and in-app key taps /
 //! holds on Bevy's `ButtonInput` (F to talk, WASD to walk).
 
 use bevy::prelude::*;
 
 use super::collision::{PUSH_SECS, feet_inside_any, gap_to_wall, probe_wall, probes};
 use super::{Action, Scene, ShotLog, WorldFn};
-use crate::plugins::dialogue::{Dialogue, DialogueMemory};
+use crate::plugins::dialogue::Dialogue;
 use crate::plugins::editor::{EditorSession, EditorState};
 use crate::plugins::menu::{MenuScreen, MenuUi};
 use crate::plugins::mission::{ActiveMission, CompletionView, MissionRegistry};
 use crate::plugins::npc::NPC_ROSTER;
 use crate::plugins::player::Player;
 use crate::plugins::progress::{MissionProgress, SavedPlayerPosition, Settings};
-use crate::plugins::prop::{MEADOW_OAKS, PropKind, Solid};
+use crate::plugins::prop::{MEADOW_OAKS, Prop, PropKind, Solid};
 use crate::plugins::state::{GameState, PauseState};
 use crate::plugins::world::district_slot;
 
@@ -113,12 +113,66 @@ fn player_pos(world: &mut World) -> Option<Vec2> {
     q.iter(world).next().map(|t| t.translation.truncate())
 }
 
-/// Fresh in-memory progress: nothing cleared, no saved position.
+/// Fresh in-memory progress: nothing cleared or opened, no saved position.
 fn fresh_progress(world: &mut World) {
     world.resource_mut::<MissionProgress>().reset();
     world.resource_mut::<SavedPlayerPosition>().0 = None;
-    world.resource_mut::<DialogueMemory>().opened.clear();
     tracing::debug!("scene: progress reset (in-memory)");
+}
+
+/// Fresh progress, then clear every mission that comes before `id` in
+/// registry order (in-memory). Unknown ids clear nothing.
+fn clear_before(world: &mut World, id: &str) {
+    fresh_progress(world);
+    let ids: Vec<&'static str> = world
+        .resource::<MissionRegistry>()
+        .missions
+        .iter()
+        .map(|m| m.id)
+        .take_while(|m| *m != id)
+        .collect();
+    if ids.len() == world.resource::<MissionRegistry>().missions.len() {
+        tracing::warn!(id, "clear_before: mission not in registry; nothing cleared");
+        return;
+    }
+    clear_missions(world, &ids);
+}
+
+/// The registry prerequisite of `id`, if any.
+fn prereq_of(world: &World, id: &str) -> Option<&'static str> {
+    world
+        .resource::<MissionRegistry>()
+        .find(id)
+        .and_then(|m| m.prereq)
+}
+
+/// Log (and record in the DONE file) the lowest alpha among props whose
+/// art overlaps the player's sprite, so a capture can be checked for the
+/// occlusion fade without eyeballing it.
+fn log_occluder_alpha(world: &mut World, label: &'static str) {
+    let Some(p) = player_pos(world) else {
+        tracing::warn!(label, "fade scene: no player");
+        return;
+    };
+    let body = crate::plugins::prop::character_body(p, Vec2::splat(32.0));
+    let mut q = world.query::<(&Transform, &Prop, &Sprite)>();
+    let min_alpha = q
+        .iter(world)
+        .filter(|(t, prop, _)| {
+            prop.kind
+                .visual_at(t.translation.truncate())
+                .overlaps(&body)
+        })
+        .map(|(_, _, s)| s.color.alpha())
+        .fold(None, |acc: Option<f32>, a| {
+            Some(acc.map_or(a, |m| m.min(a)))
+        });
+    let line = format!(
+        "fade {label}: player=({:.1},{:.1}) overlapping_prop_min_alpha={min_alpha:?}",
+        p.x, p.y
+    );
+    tracing::info!("{line}");
+    world.resource_mut::<ShotLog>().0.push(line);
 }
 
 fn clear_missions(world: &mut World, ids: &[&str]) {
@@ -206,7 +260,9 @@ pub(super) fn all_scenes() -> Vec<Scene> {
     world_scenes(&mut v);
     ysort_scenes(&mut v);
     collision_scenes(&mut v);
+    fade_scenes(&mut v);
     dialogue_scenes(&mut v);
+    dialogue_fix_scenes(&mut v);
     editor_scenes(&mut v);
     overlay_scenes(&mut v);
     v
@@ -389,9 +445,8 @@ fn dialogue_scenes(v: &mut Vec<Scene>) {
             FIRST_MISSION,
             Box::new(|w: &mut World| {
                 fresh_progress(w);
-                w.resource_mut::<DialogueMemory>()
-                    .opened
-                    .insert(FIRST_MISSION);
+                w.resource_mut::<MissionProgress>()
+                    .mark_opened(FIRST_MISSION);
             }),
         ),
         (
@@ -424,6 +479,143 @@ fn dialogue_scenes(v: &mut Vec<Scene>) {
                     match open {
                         Some((speaker, status)) => {
                             tracing::info!(name, speaker, ?status, "dialogue scene open")
+                        }
+                        None => tracing::warn!(name, "dialogue scene: no dialogue open"),
+                    }
+                }),
+            ],
+            0.4,
+            boxed(|w| {
+                close_dialogue(w);
+                fresh_progress(w);
+            }),
+        ));
+    }
+}
+
+/// Occlusion fade proofs: the player behind the cottage roof, behind the
+/// oak canopy, and flush against the cottage's east and west walls (under
+/// the eave). Each logs the overlapping props' alpha to the DONE file.
+fn fade_scenes(v: &mut Vec<Scene>) {
+    let foot = crate::plugins::player::PLAYER_FOOT;
+    let foot_cy = (foot.min.y + foot.max.y) * 0.5;
+    let mut cases: Vec<(&'static str, Vec2)> = Vec::new();
+    if let Some(base) = super::collision::probe_cottage_base() {
+        let wall = PropKind::Cottage.solid_at(base);
+        let wall_cy = (wall.min.y + wall.max.y) * 0.5;
+        cases.push((
+            "cottage-behind",
+            Vec2::new(base.x + 10.0, wall.max.y - foot.min.y),
+        ));
+        cases.push((
+            "cottage-east",
+            Vec2::new(wall.max.x - foot.min.x, wall_cy - foot_cy),
+        ));
+        cases.push((
+            "cottage-west",
+            Vec2::new(wall.min.x - foot.max.x, wall_cy - foot_cy),
+        ));
+    }
+    if let Some(base) = MEADOW_OAKS.first().copied() {
+        let trunk = PropKind::Oak.solid_at(base);
+        cases.push((
+            "oak-behind",
+            Vec2::new(base.x + 6.0, trunk.max.y - foot.min.y),
+        ));
+    }
+    for (label, pos) in cases {
+        v.push(scene(
+            &format!("fade-{label}"),
+            vec![
+                Action::EnterState(GameState::InGame, ENTER_GAME_SETTLE),
+                teleport_to(pos),
+                Action::Wait(0.5),
+                act(move |w| log_occluder_alpha(w, label)),
+            ],
+            0.1,
+            None,
+        ));
+    }
+}
+
+/// Dialogue fixes: inline code (mid-typewriter and complete) and the
+/// NotYetAvailable pointer for a mid-game save and a direct-prereq save.
+fn dialogue_fix_scenes(v: &mut Vec<Scene>) {
+    let enter = || Action::EnterState(GameState::InGame, ENTER_GAME_SETTLE);
+    let late_npc = NPC_ROSTER.last().map_or(FIRST_MISSION, |s| s.mission_id);
+    // Ferris's second offer line has `let` around visible char 38-41
+    // (45 chars/s): open, complete line 1, advance, then capture ~0.9 s
+    // into line 2 (code chip half typed) and again once it is complete.
+    let to_second_line = || {
+        vec![
+            enter(),
+            act(fresh_progress),
+            beside_npc(FIRST_MISSION),
+            Action::Wait(0.4),
+            Action::Tap(KeyCode::KeyF),
+            Action::Wait(0.2),
+            Action::Tap(KeyCode::KeyF),
+            Action::Wait(0.2),
+            Action::Tap(KeyCode::KeyF),
+        ]
+    };
+    v.push(scene(
+        "dialogue-code-typing",
+        to_second_line(),
+        0.88,
+        boxed(close_dialogue),
+    ));
+    let mut complete = to_second_line();
+    complete.push(Action::Wait(0.3));
+    complete.push(Action::Tap(KeyCode::KeyF));
+    v.push(scene(
+        "dialogue-code-complete",
+        complete,
+        0.4,
+        boxed(close_dialogue),
+    ));
+
+    // Mid-game: the first six missions cleared; the last NPC points at the
+    // seventh mission's NPC, not at Ferris and not at "themselves next".
+    let prep_mid: WorldFn = Box::new(|w: &mut World| {
+        let seventh = w
+            .resource::<MissionRegistry>()
+            .missions
+            .get(6)
+            .map(|m| m.id);
+        match seventh {
+            Some(id) => clear_before(w, id),
+            None => tracing::warn!("notyet-midgame: registry has < 7 missions"),
+        }
+    });
+    // Everything before the speaker's prerequisite cleared: the speaker
+    // names that prerequisite as the lesson right before theirs.
+    let prep_prereq: WorldFn = Box::new(move |w: &mut World| match prereq_of(w, late_npc) {
+        Some(pre) => clear_before(w, pre),
+        None => tracing::warn!(late_npc, "notyet-prereq: speaker has no prereq"),
+    });
+    for (name, prep) in [("notyet-midgame", prep_mid), ("notyet-prereq", prep_prereq)] {
+        v.push(scene(
+            &format!("dialogue-{name}"),
+            vec![
+                enter(),
+                Action::Do(prep),
+                beside_npc(late_npc),
+                Action::Wait(0.4),
+                Action::Tap(KeyCode::KeyF),
+                Action::Wait(0.3),
+                Action::Tap(KeyCode::KeyF),
+                act(move |w| {
+                    let line = w
+                        .resource::<Dialogue>()
+                        .active
+                        .as_ref()
+                        .map(|a| (a.speaker, a.status, a.run.line().to_string()));
+                    match line {
+                        Some((speaker, status, text)) => {
+                            let entry = format!("dialogue {name}: {speaker} {status:?}: {text}");
+                            tracing::info!("{entry}");
+                            w.resource_mut::<ShotLog>().0.push(entry);
                         }
                         None => tracing::warn!(name, "dialogue scene: no dialogue open"),
                     }
