@@ -17,7 +17,8 @@ use bevy::prelude::*;
 /// The player's collision footprint relative to the sprite centre: a small
 /// box at the feet (the sprite is 32px, centre-anchored), so the head and
 /// shoulders can overlap a roof or canopy while the feet stop at the wall.
-const PLAYER_FOOT: Aabb = Aabb::from_base(0.0, 6.0, -16.0, -10.0);
+/// Public so the screenshot plugin's collision probes can assert against it.
+pub const PLAYER_FOOT: Aabb = Aabb::from_base(0.0, 6.0, -16.0, -10.0);
 
 /// Camera lerp factor per second; 1.0 = snap, 0.0 = never moves.
 const CAMERA_FOLLOW_SPEED: f32 = 6.0;
@@ -90,7 +91,9 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     ));
 }
 
-fn move_player(
+/// Public (unchanged behaviour) so the screenshot plugin's headless
+/// collision test can run the real movement system in a minimal `App`.
+pub fn move_player(
     keys: Res<ButtonInput<KeyCode>>,
     time: Res<Time>,
     editor: Res<crate::plugins::editor::EditorState>,
