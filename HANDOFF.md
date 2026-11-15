@@ -1,7 +1,7 @@
 # HANDOFF.md
 
 ## Last Updated
-2026-11-15 — **Orchestrated build-out: waves 1-9 merged and signed off; art for Acts 3-8 awaiting approval.**
+2026-11-15 — **Orchestrated build-out: waves 1-11 merged and signed off; art for Acts 3-8 awaiting approval.**
 
 Branch **`finish/integration`** (not pushed, `main` untouched). Fable
 orchestrates Opus agents in git worktrees, reviews each branch, merges, and
@@ -84,6 +84,15 @@ runs `scripts/ci.ps1` on the merged result as the sign-off gate.
   Open: no voice-editor pass on the three owners' new lines; still no
   combat layer (Hydra regrowth, Cliphy, the Warden's fourth phase are
   design-doc only); `pitch/` counts untouched (owner's).
+
+- **Wave 11** (`5aaae22`, `361901e`, merged at `f763dfb`, CI green): voice
+  pass on the six Act 3-8 trial presenters (18 lines); NPC placement fix:
+  the district grid now shrinks to fit each plaza (32 NPCs were standing on
+  plaza edge walls), the Cartographer no longer stands on the spawn point,
+  `game/tests/npc_placement.rs` guards it, capture scenes use
+  `npc::TALK_SPOT_OFFSET`. `NPC_ROSTER.pos` is a leftover spawning never
+  reads. Open: curriculum doc calls the barkeep "Old Maybe, speaks in
+  `Option`" but no shipped text does.
 
 ### Art awaiting Matt's approval (design canvas, none wired)
 30 villagers of Acts 3-8 redrawn on their kits (`ref-31..65 *-v2.jsx`), player
