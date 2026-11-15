@@ -17,6 +17,11 @@
 //!   [`run_captured`] return, so the caller's semaphore permit is held
 //!   until the tree is confirmed dead. A survivor past the deadline is an
 //!   error ([`ProcError::Survivors`]), never silently ignored.
+//!   On Linux the timeout path also kills descendants that lead groups of
+//!   their own (the `job` process runs cargo through `run_captured`, which
+//!   gives cargo a new group): the child's group is SIGSTOPped, every
+//!   descendant's group is found through `/proc/*/stat` parent links, and
+//!   all of them are SIGKILLed and confirmed empty.
 //!   Limitation: a process that deliberately leaves the group (`setsid`)
 //!   escapes the sweep. No player code runs during a dependency-free build
 //!   (no `build.rs`, no proc-macros), and under `PNC_BUILD_SANDBOX=bwrap`
@@ -285,7 +290,7 @@ pub fn run_captured_with_input(
                 ?timeout,
                 "proc_tree: watchdog fired, killing process tree"
             );
-            kill_tree_now(&mut child, label);
+            let nested = kill_tree_now(&mut child, label);
             // SIGKILL cannot be ignored, so this wait ends unless the
             // kernel itself is stuck; it is still bounded below.
             let status = match wait_until(&mut child, Instant::now() + TREE_DEATH_TIMEOUT, label)? {
@@ -300,6 +305,7 @@ pub fn run_captured_with_input(
                 }
             };
             confirm_tree_dead(&child, label)?;
+            confirm_groups_dead(&nested, label)?;
             status
         }
     };
@@ -372,11 +378,44 @@ fn wait_until(
 }
 
 /// Kill the child and all its descendants right now (timeout path).
-fn kill_tree_now(child: &mut Child, label: &str) {
+///
+/// Returns the *other* process groups that held descendants of the child
+/// and were killed too (Linux; see [`descendant_groups`]). The caller must
+/// confirm those empty as well before it may release the run's slot.
+fn kill_tree_now(child: &mut Child, label: &str) -> Vec<u32> {
     #[cfg(unix)]
     {
         use rustix::process::{Pid, Signal, kill_process_group};
         let pgid = Pid::from_child(child);
+        // A descendant may lead its own process group: the `job` process
+        // runs its cargo build through `run_captured`, which puts cargo
+        // (and rustc under it) in a NEW group. Killing only the child's
+        // group leaves that one running (seen on Linux 2026-11-14 with
+        // PNC_BUILD_SANDBOX=none; bwrap's --die-with-parent masks it).
+        // Freeze the child's group first so it cannot start another group
+        // while we look, find every descendant's group, then kill them all.
+        #[cfg(target_os = "linux")]
+        let nested = {
+            let _ = kill_process_group(pgid, Signal::STOP);
+            let groups = descendant_groups(child.id());
+            for g in &groups {
+                if let Some(p) = i32::try_from(*g).ok().and_then(Pid::from_raw) {
+                    match kill_process_group(p, Signal::KILL) {
+                        Ok(()) => tracing::debug!(
+                            label,
+                            pgid = g,
+                            "proc_tree: SIGKILL sent to nested group"
+                        ),
+                        Err(e) => {
+                            tracing::debug!(label, pgid = g, "proc_tree: nested group kill: {e}")
+                        }
+                    }
+                }
+            }
+            groups
+        };
+        #[cfg(not(target_os = "linux"))]
+        let nested = Vec::new();
         match kill_process_group(pgid, Signal::KILL) {
             Ok(()) => tracing::debug!(label, pgid = child.id(), "proc_tree: SIGKILL sent to group"),
             Err(e) if e == rustix::io::Errno::SRCH => {
@@ -390,6 +429,7 @@ fn kill_tree_now(child: &mut Child, label: &str) {
                 let _ = child.kill();
             }
         }
+        nested
     }
     #[cfg(windows)]
     {
@@ -407,6 +447,7 @@ fn kill_tree_now(child: &mut Child, label: &str) {
         // Belt and braces: make sure the direct child is gone even if
         // taskkill could not run.
         let _ = child.kill();
+        Vec::new()
     }
     #[cfg(not(any(unix, windows)))]
     {
@@ -415,6 +456,98 @@ fn kill_tree_now(child: &mut Child, label: &str) {
             "proc_tree: no tree kill on this platform; killing leader"
         );
         let _ = child.kill();
+        Vec::new()
+    }
+}
+
+/// Linux: the process groups (other than `root`'s own and ours) that
+/// contain a descendant of `root`, from the parent links in `/proc/*/stat`.
+/// Call it while `root` is still alive (its children are re-parented to a
+/// reaper once it dies). Processes this user cannot see are skipped; the
+/// builder's descendants all run as the builder user.
+#[cfg(target_os = "linux")]
+fn descendant_groups(root: u32) -> Vec<u32> {
+    // (pid, ppid, pgrp) of every visible process.
+    let mut procs: Vec<(u32, u32, u32)> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir("/proc") {
+        for entry in entries.flatten() {
+            let Some(pid) = entry.file_name().to_str().and_then(|s| s.parse().ok()) else {
+                continue;
+            };
+            let Ok(stat) = std::fs::read_to_string(entry.path().join("stat")) else {
+                continue;
+            };
+            // "pid (comm) state ppid pgrp ...": comm may hold spaces and
+            // parentheses, so split after the LAST ')'.
+            let Some((_, rest)) = stat.rsplit_once(')') else {
+                continue;
+            };
+            let mut fields = rest.split_whitespace().skip(1);
+            let ppid = fields.next().and_then(|v| v.parse().ok());
+            let pgrp = fields.next().and_then(|v| v.parse().ok());
+            if let (Some(ppid), Some(pgrp)) = (ppid, pgrp) {
+                procs.push((pid, ppid, pgrp));
+            }
+        }
+    }
+    let mut tree = vec![root];
+    let mut i = 0;
+    while i < tree.len() {
+        let parent = tree[i];
+        for &(pid, ppid, _) in &procs {
+            if ppid == parent && !tree.contains(&pid) {
+                tree.push(pid);
+            }
+        }
+        i += 1;
+    }
+    let own = u32::try_from(rustix::process::getpgrp().as_raw_pid()).unwrap_or(0);
+    let mut groups: Vec<u32> = procs
+        .iter()
+        .filter(|(pid, _, _)| tree[1..].contains(pid))
+        .map(|&(_, _, pgrp)| pgrp)
+        .filter(|&g| g > 1 && g != root && g != own)
+        .collect();
+    groups.sort_unstable();
+    groups.dedup();
+    groups
+}
+
+/// Poll until every group in `groups` is empty (bounded like
+/// [`confirm_tree_dead`]).
+fn confirm_groups_dead(groups: &[u32], label: &str) -> Result<(), ProcError> {
+    #[cfg(unix)]
+    {
+        use rustix::process::{Pid, test_kill_process_group};
+        let started = Instant::now();
+        for &g in groups {
+            let Some(pgid) = i32::try_from(g).ok().and_then(Pid::from_raw) else {
+                continue;
+            };
+            while !matches!(test_kill_process_group(pgid), Err(e) if e == rustix::io::Errno::SRCH) {
+                let waited = started.elapsed();
+                if waited >= TREE_DEATH_TIMEOUT {
+                    tracing::error!(
+                        label,
+                        pgid = g,
+                        ?waited,
+                        "proc_tree: nested group survivors"
+                    );
+                    return Err(ProcError::Survivors {
+                        label: label.to_string(),
+                        pgid: g,
+                        waited,
+                    });
+                }
+                thread::sleep(Duration::from_millis(10));
+            }
+        }
+        Ok(())
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (groups, label);
+        Ok(())
     }
 }
 

@@ -27,9 +27,10 @@
 #          works;
 #        - host control: every probed path EXISTS on the host;
 #        - each negative probe must fail with rustc's exact
-#          "couldn't read `<path>`: No such file or directory" (or
-#          "file not found for module" / "not defined at compile time"),
-#          not merely fail.
+#          "couldn't read `<path>`: No such file or directory" (or, for
+#          #[path] to a file the builder user CAN read on the host,
+#          "couldn't find file `<path>`"; for env!, "not defined at
+#          compile time"), not merely fail.
 #   4. Config refusals (no network): `serve` with a token and
 #      PNC_BUILD_SANDBOX=none, `builder` with a token, and `sandbox-verify`
 #      with a token must all refuse to start.
@@ -193,12 +194,21 @@ if [ "${PROC_MODE:-none}" = "none" ]; then
         'fn main() { let b: &[u8] = include_bytes!("/proc/self/environ"); println!("{}", b.len()); }'
 fi
 
-# #[path] module redirection: rustc E0583 with the module name.
-if out="$(run_probe "#[path = \"$API_ENV\"] mod leak; fn main() {}")"; then
-    if grep -qF '"compiled":false' <<<"$out" && grep -qF 'file not found for module `leak`' <<<"$out"; then
-        ok "probe '#[path] to the env file': file not found for module \`leak\`"
+# #[path] module redirection. rustc checks only that the module file
+# EXISTS, and a stat that fails with EACCES (the 0700 /etc/pnc-compile)
+# also reads as "not found", so the target must be a file the builder
+# user CAN read on the host: then "not found" can only mean the sandbox.
+# Wording: rustc 1.99 says "couldn't find file `<path>`"; older releases
+# said "file not found for module `leak`" (E0583).
+if ! runuser -u "$BUILDER_USER" -- test -r "$BUILDER_ENV"; then
+    fail "host control: $BUILDER_USER cannot read $BUILDER_ENV, the #[path] probe would prove nothing"
+elif out="$(run_probe "#[path = \"$BUILDER_ENV\"] mod leak; fn main() {}")"; then
+    if grep -qF '"compiled":false' <<<"$out" \
+        && { grep -qF "couldn't find file \`$BUILDER_ENV\`" <<<"$out" \
+             || grep -qF 'file not found for module `leak`' <<<"$out"; }; then
+        ok "probe '#[path] to the (host-readable) builder env file': rustc in the sandbox cannot find it"
     else
-        fail "probe '#[path]': expected 'file not found for module \`leak\`', got: $(head -c 800 <<<"$out")"
+        fail "probe '#[path]': expected \"couldn't find file \`$BUILDER_ENV\`\", got: $(head -c 800 <<<"$out")"
     fi
 else
     fail "probe '#[path]': sandbox-verify failed to run"

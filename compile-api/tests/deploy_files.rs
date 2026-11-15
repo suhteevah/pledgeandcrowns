@@ -181,6 +181,8 @@ fn verify_script_requires_positive_evidence() {
         "couldn't read",
         "No such file or directory",
         "file not found for module",
+        // rustc 1.99's wording for a missing #[path] file (Linux run).
+        "couldn't find file",
         "not defined at compile time",
     ] {
         assert!(

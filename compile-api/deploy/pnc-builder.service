@@ -15,8 +15,10 @@
 # systemd (KillMode=control-group, the default) kills everything left in
 # this cgroup before restarting it.
 #
-# NOT RUN ON A REAL HOST YET. The startup self-test is fail-closed: if any
-# setting below stops bwrap, the builder logs the failing step and exits.
+# Run on one real host so far (openSUSE Leap Micro 6.2, kernel 6.12,
+# systemd 257, bwrap 0.11; 2026-11-14). The startup self-test is
+# fail-closed: if any setting below stops bwrap, the builder logs the
+# failing step and exits.
 
 [Unit]
 Description=Pledge & Crown builder (player Rust -> wasm32-wasip1 -> wasmtime, one process per job)
@@ -45,8 +47,14 @@ RestartSec=5s
 RuntimeDirectory=pnc-builder
 RuntimeDirectoryMode=0750
 # Job dirs: <PrivateTmp>/pledge-wasm-builder/<uuid>/ (a per-service dir on
-# the host /tmp filesystem; disk, not RAM).
+# the host /tmp filesystem: disk, or RAM where /tmp is a tmpfs, e.g.
+# openSUSE). PrivateTmp also privatises /var/tmp, so the toolchain and the
+# binary must NOT live under /tmp or /var/tmp (nor /home: ProtectHome).
 PrivateTmp=yes
+# Nothing is ever executed from the job dirs (rustc/cargo/rust-lld run from
+# the toolchain dir, the module runs in wasmtime); verified on Linux
+# 2026-11-14 (self-test + HTTP builds pass with it).
+NoExecPaths=/tmp
 UMask=0077
 
 # ---- Filesystem / kernel isolation ------------------------------------------
@@ -61,22 +69,26 @@ ProtectHostname=yes
 # Kept ON because the sandbox no longer mounts a procfs (PNC_BWRAP_PROC=none,
 # the default): the kernel's "only mount a fresh procfs if /proc is fully
 # visible" rule is never consulted, so these over-mounts do not stop bwrap.
-# TO VERIFY ON LINUX (startup self-test). If you must set PNC_BWRAP_PROC=fresh,
-# remove these three lines too.
+# Verified on Linux 2026-11-14 (kernel 6.12, systemd 257): self-test passes
+# with all three on; PNC_BWRAP_PROC=fresh with them on fails closed with
+# "Can't mount proc on /newroot/proc: Operation not permitted". If you must
+# set PNC_BWRAP_PROC=fresh, remove these three lines too.
 ProtectKernelTunables=yes
 ProtectKernelLogs=yes
 ProtectProc=invisible
 # NOT set: ProcSubset=pid. It hides /proc/sys, and bwrap reads
 # /proc/sys/kernel/overflowuid and overflowgid at startup when it sets up the
 # user namespace (expected failure: "Can't read /proc/sys/kernel/overflowuid").
-# To try it: add ProcSubset=pid, restart, and check the journal for
-# "isolation checks passed"; remove it again if bwrap fails.
+# Verified on Linux 2026-11-14: with ProcSubset=pid the self-test fails
+# closed with exactly that message, so it stays off.
 #
 # NOT set: MemoryDenyWriteExecute=yes. wasmtime JIT-compiles each module in
 # the job process and must map pages executable after writing them.
 #
 # NOT set: PrivateUsers=yes. bwrap creates its own user namespace; nesting
-# under a systemd one is legal but unverified, so it stays off.
+# under a systemd one worked on openSUSE (kernel 6.12, 2026-11-14: self-test
+# passed) but is unverified under Ubuntu's AppArmor userns restriction, so
+# it stays off for now.
 
 # ---- Privilege ----------------------------------------------------------------
 NoNewPrivileges=yes
@@ -109,8 +121,8 @@ SystemCallArchitectures=native
 #     open_tree, move_mount, fsopen/fsconfig/fsmount ...... @mount
 #   socket(AF_NETLINK) + bind/sendmsg/recvmsg (bwrap brings
 #     up "lo" in the new net namespace via rtnetlink) ..... @network-io
-#   prlimit64 / setrlimit (prlimit applies the per-build
-#     rlimits) ............................................ @resources
+#   prlimit64 (prlimit applies the per-build rlimits) .... @default
+#     (setrlimit ......................................... @resources)
 #   mmap/mprotect/sigaltstack/rt_sigaction (wasmtime JIT +
 #     trap handlers) ...................................... @default,
 #                                                           @basic-io, @signal

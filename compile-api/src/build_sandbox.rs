@@ -15,13 +15,16 @@
 //!   `prlimit <rlimits> -- bwrap <namespaces + binds> -- <toolchain>/bin/cargo build ...`.
 //!   Inside the sandbox the only things visible are:
 //!   - `/usr` read-only (glibc and the dynamic loader rustc links
-//!     against), with `/bin`, `/lib`, `/lib64` as symlinks into it;
+//!     against), with `/bin`, `/lib`, `/lib64` as symlinks into it, and
+//!     an empty tmpfs over `/usr/local` (operator scripts live there);
 //!   - the Rust toolchain dir (`PNC_TOOLCHAIN_DIR`) read-only;
 //!   - the per-request job dir, bind-mounted read-write at `/build`, with
 //!     its `Cargo.toml` and `src/` re-mounted read-only on top;
 //!   - a minimal `/dev` and an empty tmpfs `/tmp`;
 //!   - `/proc`: by default NONE at all ([`BwrapProc::None`]). rustc finds
-//!     its sysroot with `dladdr` and cargo is given `RUSTC` explicitly, so
+//!     its sysroot with `dladdr`, cargo is given `RUSTC` explicitly, and
+//!     `LD_LIBRARY_PATH` names the toolchain's `lib/` (the loader cannot
+//!     expand rustc's `$ORIGIN` RUNPATH without `/proc/self/exe`), so
 //!     the build does not need procfs, and not mounting one means bwrap
 //!     never asks the kernel for a fresh procfs mount. That mount is only
 //!     allowed when the caller's `/proc` is fully visible, which is what
@@ -381,6 +384,13 @@ pub fn bwrap_spec(
         os("--ro-bind"),
         os("/usr"),
         os("/usr"),
+        // ...minus /usr/local: the one host-writable part of /usr, where
+        // operators keep their own scripts (on the first Linux host it
+        // held world-readable files with credentials). The build needs
+        // nothing from it; a toolchain configured under it is bound back
+        // on top below.
+        os("--tmpfs"),
+        os("/usr/local"),
         os("--symlink"),
         os("usr/bin"),
         os("/bin"),
@@ -437,11 +447,20 @@ pub fn bwrap_spec(
 }
 
 /// Environment inside the sandbox for a cargo build.
+///
+/// `LD_LIBRARY_PATH` is required by the no-procfs sandbox (verified on
+/// Linux, 2026-11-14): rustc and rust-lld find `librustc_driver-*.so` and
+/// `libLLVM.so` through `RUNPATH $ORIGIN/../lib`, and glibc's loader
+/// expands `$ORIGIN` for the main program by reading `/proc/self/exe`.
+/// With no `/proc` that expansion fails and rustc exits 127 ("error while
+/// loading shared libraries: librustc_driver-*.so"). Naming the read-only
+/// toolchain `lib/` dir directly avoids the lookup; nothing else is on it.
 fn sandbox_build_env(toolchain: &Path) -> Vec<(&'static str, OsString)> {
     let mut path = toolchain.join("bin").into_os_string();
     path.push(":/usr/bin:/bin");
     vec![
         ("PATH", path),
+        ("LD_LIBRARY_PATH", join_os(toolchain, "lib")),
         ("HOME", os(SANDBOX_JOB_DIR)),
         ("CARGO_HOME", os(format!("{SANDBOX_JOB_DIR}/.cargo-home"))),
         ("CARGO_TARGET_DIR", os(format!("{SANDBOX_JOB_DIR}/target"))),
@@ -780,6 +799,13 @@ mod tests {
         assert!(!b.iter().any(|a| a == "--proc"), "{b:?}");
         assert!(pair("--dev", "/dev"));
         assert!(pair("--tmpfs", "/tmp"));
+        // /usr is bound, but its host-writable /usr/local is hidden, and
+        // that happens AFTER the /usr bind (bwrap applies args in order).
+        let usr = b
+            .windows(3)
+            .position(|w| w == ["--ro-bind", "/usr", "/usr"]);
+        let local = b.windows(2).position(|w| w == ["--tmpfs", "/usr/local"]);
+        assert!(matches!((usr, local), (Some(u), Some(l)) if u < l), "{b:?}");
         assert!(!b.iter().any(|a| a == "--dev-bind"));
 
         // PNC_BWRAP_PROC=fresh: a procfs for the sandbox's PID namespace.
@@ -833,6 +859,14 @@ mod tests {
             .collect();
         assert!(set.contains(&"PATH") && set.contains(&"RUSTC"));
         assert!(!set.iter().any(|k| k.starts_with("PNC_")), "{set:?}");
+        // No procfs inside: the loader needs the toolchain lib dir named
+        // explicitly (rustc's RUNPATH is $ORIGIN-relative).
+        assert!(
+            b.windows(3).any(|w| w[0] == "--setenv"
+                && w[1] == "LD_LIBRARY_PATH"
+                && norm(&w[2]) == format!("{TOOLCHAIN}/lib")),
+            "{b:?}"
+        );
     }
 
     #[test]
