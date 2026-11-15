@@ -8,10 +8,16 @@
 //! - Progression is strict-linear: mission N+1 is locked until mission N
 //!   is cleared.
 //! - With the `demo` feature, nothing past the demo boundary is playable.
+//! - Missions whose Task states the exact output (`PINNED_OUTPUT`) show
+//!   every expected line as a code span in the Task text, and the
+//!   player-facing solution really prints exactly that (`--ignored`).
+//! - Outputs claimed for common mistakes in those missions' Hints
+//!   (`HINT_CLAIMS`) are what those programs really print (`--ignored`).
 
 mod common;
 
 use common::PLAYER_EDITION;
+use pledge_and_crown::plugins::editor::solutions::canonical_solution;
 use pledge_and_crown::plugins::mission::{DEMO_LAST_MISSION_ID, MissionRegistry};
 use pledge_and_crown::plugins::progress::MissionProgress;
 use std::path::PathBuf;
@@ -21,9 +27,11 @@ use std::process::Command;
 /// code the lesson is about.
 const STARTERS_THAT_MUST_FAIL: &[(&str, &str)] = &[("lifetimes", "E0106")];
 
-fn scratch_dir() -> PathBuf {
+/// Fresh per-test, per-process scratch dir (the slow tests run in
+/// parallel, so each needs its own).
+fn scratch_dir(tag: &str) -> PathBuf {
     let dir =
-        PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("starters-{}", std::process::id()));
+        PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("{tag}-{}", std::process::id()));
     if dir.exists() {
         std::fs::remove_dir_all(&dir).expect("clear stale scratch dir");
     }
@@ -34,7 +42,7 @@ fn scratch_dir() -> PathBuf {
 #[test]
 #[ignore = "slow: runs rustc once per mission"]
 fn every_starter_compiles_or_fails_for_its_intended_reason() {
-    let dir = scratch_dir();
+    let dir = scratch_dir("starters");
     let reg = MissionRegistry::default();
     let mut problems = Vec::new();
     for m in &reg.missions {
@@ -86,6 +94,146 @@ fn every_starter_compiles_or_fails_for_its_intended_reason() {
         "starter problems:\n{}",
         problems.join("\n")
     );
+}
+
+/// Missions whose Task text pins the program's output, with that output
+/// (lines joined by `\n`). The server's output checks for these missions
+/// (`compile-api/src/expectations/data.rs`) were recorded from the same
+/// solutions in the real sandbox.
+const PINNED_OUTPUT: &[(&str, &str)] = &[
+    ("vec_iter", "60"),
+    ("closure_basic", "42"),
+    ("enum_match", "0\n90\n180\n270"),
+    ("and_then", "Some(2)\nNone"),
+    ("hashmap_basic", "Some(7)\nNone"),
+    ("arc_mutex", "5"),
+    ("mpsc_channel", "7\n11"),
+    ("atomic", "10\n11"),
+    ("rc_basic", "1\n2\n1"),
+    ("refcell", "10\n15"),
+    ("cell", "1\n5"),
+    ("rc_refcell", "15"),
+    ("weak_ref", "Some(5)\nNone"),
+];
+
+/// `(mission, program, stdout)`: the mistakes the Hint text of a pinned
+/// mission describes, and what they print (hard rule 3: the claim must be
+/// true).
+const HINT_CLAIMS: &[(&str, &str, &str)] = &[
+    (
+        "rc_basic",
+        "use std::rc::Rc;\nfn main() {\n    let original = Rc::new(String::from(\"hoard\"));\n    println!(\"{}\", Rc::strong_count(&original));\n    let shared = Rc::new((*original).clone());\n    println!(\"{}\", Rc::strong_count(&original));\n    drop(shared);\n    println!(\"{}\", Rc::strong_count(&original));\n}\n",
+        "1\n1\n1",
+    ),
+    (
+        "refcell",
+        "use std::cell::RefCell;\nfn main() {\n    let guarded = RefCell::new(10);\n    let r = &guarded;\n    println!(\"{}\", r.borrow());\n    let mut n = *r.borrow_mut();\n    n += 5;\n    let _ = n;\n    println!(\"{}\", r.borrow());\n}\n",
+        "10\n10",
+    ),
+    (
+        "cell",
+        "use std::cell::Cell;\nfn main() {\n    let slot = Cell::new(1);\n    let r = &slot;\n    println!(\"{}\", r.get());\n    let mut copy = r.get();\n    copy += 4;\n    let _ = copy;\n    println!(\"{}\", r.get());\n}\n",
+        "1\n1",
+    ),
+    (
+        "rc_refcell",
+        "use std::cell::RefCell;\nuse std::rc::Rc;\nfn main() {\n    let shared = Rc::new(RefCell::new(0));\n    let other = Rc::new(RefCell::new(*shared.borrow()));\n    *other.borrow_mut() += 10;\n    *shared.borrow_mut() += 5;\n    println!(\"{}\", shared.borrow());\n    println!(\"{}\", other.borrow());\n}\n",
+        "5\n10",
+    ),
+    (
+        "weak_ref",
+        "use std::rc::{Rc, Weak};\nfn main() {\n    let strong = Rc::new(5);\n    let weak: Weak<i32> = Rc::downgrade(&strong);\n    let alive = weak.upgrade();\n    println!(\"{alive:?}\");\n    drop(strong);\n    println!(\"{:?}\", weak.upgrade());\n}\n",
+        "Some(5)\nSome(5)",
+    ),
+];
+
+/// The `## Task` section of a tutorial.
+fn task_section(tutorial: &str) -> &str {
+    let start = tutorial
+        .find("## Task")
+        .expect("tutorial has a Task section");
+    let rest = &tutorial[start..];
+    let end = rest.find("## Hint").unwrap_or(rest.len());
+    &rest[..end]
+}
+
+#[test]
+fn pinned_output_lines_are_shown_in_the_task() {
+    let reg = MissionRegistry::default();
+    for (id, output) in PINNED_OUTPUT {
+        let m = reg
+            .find(id)
+            .unwrap_or_else(|| panic!("`{id}` is not a mission"));
+        let task = task_section(m.tutorial);
+        for line in output.lines() {
+            assert!(
+                task.contains(&format!("`{line}`")),
+                "`{id}`: the Task must show the expected line `{line}` in a code span\n{task}"
+            );
+        }
+    }
+    for (id, _, _) in HINT_CLAIMS {
+        assert!(
+            PINNED_OUTPUT.iter().any(|(p, _)| p == id),
+            "{id} is not pinned"
+        );
+    }
+}
+
+/// Build `src` with rustc (warnings allowed: the mistakes are deliberate)
+/// and return its stdout, normalised like the server does.
+fn run_native(dir: &std::path::Path, name: &str, src: &str) -> String {
+    let src_path = dir.join(format!("{name}.rs"));
+    let exe = dir.join(format!("{name}.exe"));
+    std::fs::write(&src_path, src).expect("write program");
+    let out = Command::new("rustc")
+        .args(["--edition", PLAYER_EDITION, "--crate-type", "bin"])
+        .arg("-o")
+        .arg(&exe)
+        .arg(&src_path)
+        .output()
+        .expect("spawn rustc");
+    assert!(
+        out.status.success(),
+        "{name} does not compile:\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let run = Command::new(&exe).output().expect("run program");
+    assert!(run.status.success(), "{name} did not exit cleanly");
+    String::from_utf8_lossy(&run.stdout)
+        .replace("\r\n", "\n")
+        .lines()
+        .map(str::trim_end)
+        .collect::<Vec<_>>()
+        .join("\n")
+        .trim_end()
+        .to_string()
+}
+
+#[test]
+#[ignore = "slow: runs rustc once per pinned mission and hint claim"]
+fn pinned_outputs_and_hint_claims_are_true() {
+    let dir = scratch_dir("pinned");
+    let mut problems = Vec::new();
+    for (id, want) in PINNED_OUTPUT {
+        let src = canonical_solution(id).unwrap_or_else(|| panic!("no solution for `{id}`"));
+        let got = run_native(&dir, id, src);
+        if got != *want {
+            problems.push(format!(
+                "`{id}` solution prints {got:?}, Task says {want:?}"
+            ));
+        }
+    }
+    for (n, (id, src, want)) in HINT_CLAIMS.iter().enumerate() {
+        let got = run_native(&dir, &format!("hint_{n}_{id}"), src);
+        if got != *want {
+            problems.push(format!(
+                "`{id}` hint claim prints {got:?}, expected {want:?}"
+            ));
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(problems.is_empty(), "{}", problems.join("\n"));
 }
 
 #[test]

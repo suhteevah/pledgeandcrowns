@@ -371,6 +371,95 @@ technically wrong. Every "The grader needs ..." hint was compared with the
 `stub_grader.rs` rule table as of `ffd62c1`; only H1 differed. The Borrow
 Checker NPC's lines are in `npc.rs` and were not part of either pass.
 
+## Behaviour checks on `/compile-real` (pinned outputs, 2026-11-14)
+
+The compile server grades each mission with one check from
+`compile-api/src/expectations/data.rs`. Before this pass 41 of 57 were
+behaviour-checked; 13 were `RunOnly` ("PASS - NOT VERIFIED") because the
+Task let the player choose the values, and 3 are compile-only. The 13
+Tasks now name the values and show every expected line in a code span,
+so one behaviour is specified.
+
+**Totals now: 54 of 57 behaviour-checked (29 output checks, 25 harness
+checks), 3 static-only, 0 unverified.** The 3 static-only missions cannot
+run on `wasm32-wasip1`: `thread_spawn` and `thread_scope` trap (asserted by
+`solutions_build_and_run_in_the_real_server_sandbox`), and `async_fn` has
+no executor. `expectations::tests::classification_totals` pins these
+numbers.
+
+**The three Act 7 "concurrency" missions do not need threads.** Classified
+by running them, not by name: the canonical solutions of `arc_mutex`,
+`mpsc_channel` and `atomic` use `Arc<Mutex>`, a channel and an atomic on
+the main thread only (no `spawn`), and all three built and ran cleanly in
+the real sandbox (`print_canonical_transcripts`: `ok=true`, before and
+after this change). The `arc_mutex` Task says so: the sandbox runs one
+thread and the cloned `Arc` is what you would move into a spawned thread.
+
+**Construct tokens (`uses`).** A short pinned output can be printed as
+literals. Each of the 13 entries therefore also carries `uses`, token
+groups checked after the behaviour matched (same rule as the compile-only
+static check: comments and strings do not count); missing tokens give
+`static_check_failed`. What this proves and does not: output + tokens
+shows the program printed the right lines AND contains the construct;
+it does NOT prove the construct produced those lines (a program could
+call `Rc::clone` once and still print literals). The harness mission
+(`enum_match`) is stronger: the checker calls `degrees` itself.
+
+| id | old task -> new task | check |
+|---|---|---|
+| vec_iter | sum any `Vec<i32>` -> sum `vec![10, 20, 30]`, print `60` | output `60` + `.iter()`, `.sum` |
+| closure_basic | call `add` with anything -> print `add(19, 23)`: `42` | output `42` + `let add`, `\|` |
+| enum_match | any enum with 2+ variants mapped to anything -> `North/East/South/West`, `fn degrees(d: Direction) -> i32` giving 0/90/180/270, `main` prints all four | harness (4 calls) + main prints `0`,`90`,`180`,`270` + `match` |
+| and_then | chain four times (nothing printed) -> print 2-step `Some(2)` then 4-step `None` | output lines in order + `.and_then(` |
+| hashmap_basic | insert/get any key -> insert `7` at `"vault"`, print `get("vault")`, `get("cellar")`: `Some(7)`, `None` | output in order + `.insert(`, `.get(` |
+| arc_mutex | lock and mutate -> `0`, `Arc::clone`, add `5` via clone's guard, print via first: `5` | output `5` + `Arc::clone`/`.clone()`, `.lock(` |
+| mpsc_channel | send/recv one value -> send `7`, `11`, recv twice: `7`, `11` | output in order + `.send(`, `.recv(` |
+| atomic | `fetch_add` once -> start `10`, print `fetch_add`'s return then `load`: `10`, `11` | output in order + `.fetch_add(`, `.load(` |
+| rc_basic | `Rc::new` + `Rc::clone` -> print `strong_count` before clone, after clone, after `drop`: `1`, `2`, `1` | output in order + `Rc::clone`, `strong_count` |
+| refcell | mutate via `borrow_mut` -> `10`, print, add `5` via a shared `&`, print: `10`, `15` | output in order + `.borrow_mut(` |
+| cell | `set` then `get` -> `1`, print, `set(5)` via a shared `&`, print: `1`, `5` | output in order + `.set(`, `.get(` |
+| rc_refcell | mutate through the clone -> `0`, add `10` via clone and `5` via original, print: `15` | output `15` + `Rc::clone`/`.clone()`, `.borrow_mut(` |
+| weak_ref | `downgrade` + `upgrade` -> print `upgrade()` before and after `drop`: `Some(5)`, `None` | output in order + `downgrade`, `.upgrade(` |
+
+Wrong-but-compiling variants that now fail (all in
+`compile-api/tests/expectations_proof.rs`, alongside a literal-print
+program per mission that must be `static_check_failed`): `vec_iter` one
+element short (`30`) and `.count()` (`3`); `closure_basic` `a - b`, `a + a`;
+`enum_match` East/West swapped, and a `_ =>` catch-all with a `main` that
+prints the right lines (the harness catches it); `and_then` three steps
+(`Some(1)`); `hashmap_basic` unwrapped value, wrong key; `arc_mutex` value
+copied out of the guard, and a second `Arc` around a copy (`0`);
+`mpsc_channel` one `recv`; `atomic` `load` printed twice, and "fetch_add
+returns the new value" (`11`, `11`); `rc_basic` `Rc::new(clone of the
+String)` (`1`,`1`,`1`) and no `drop` (`1`,`2`,`2`); `refcell` value copied
+out (`10`,`10`); `cell` changed the `get()` copy (`1`,`1`); `rc_refcell` two
+boxes (`5`) and printing via the clone before the second change (`10`);
+`weak_ref` upgraded `Rc` kept alive across the `drop` (`Some(5)`,`Some(5)`).
+
+`every_expectation_discriminates` (`--ignored`, 195 real wasm builds +
+sandbox runs): 0 unexpected results; **54 of 54 behaviour-checked missions
+proven** (canonical passes, starter fails, every wrong variant fails), and
+all 13 literal-print programs are `static_check_failed`.
+
+Every starter still compiles and fails its check (prints nothing, `todo`
+or `0`; `enum_match`'s starter has no `degrees`, so the checker cannot
+build). The expected lines in `data.rs` were recorded by running the new
+solutions through the real build + sandbox path
+(`print_canonical_transcripts`). `game/tests/mission_text.rs` now asserts
+each pinned line is shown in the Task text, and (`--ignored`) that each
+solution prints exactly that natively, and that the outputs the new Hints
+claim for common mistakes (`rc_basic`, `refcell`, `cell`, `rc_refcell`,
+`weak_ref`) are what those programs print.
+
+Grader tables (`stub_grader.rs`, `grader.rs`): no token changed. The
+`enum_match` contract fixture now uses the new `degrees` shape; the other
+12 fixtures still satisfy their unchanged token rules. Snapshots
+regenerated (`PNC_UPDATE_GRADER_SNAPSHOTS=1`): 349 cases before and after
+in each file; 332 byte-identical; 17 inputs changed (13 starters whose
+comments or text changed, and 4 `enum_match` fixture cases: canonical and
+3 near-misses); for every `(id, case)` the verdict (ok, stdout, stderr) is
+identical before and after: **0 verdict or message changes.**
+
 ## Progression
 
 Gating is real and strict-linear. The `prereq: None` in every literal is

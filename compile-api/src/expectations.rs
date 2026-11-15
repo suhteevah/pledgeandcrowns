@@ -12,14 +12,21 @@
 //!   server compiles its own checker next to the player's code, calls the
 //!   player's items with fixed inputs and compares what they return with
 //!   lines recorded from the canonical solution. See **Harness layout**.
-//! - [`Check::RunOnly`]: the mission lets the player choose the values
-//!   (e.g. "build a Vec and sum it"), so there is nothing fixed to compare.
-//!   The program is built and run; the response says the output was not
-//!   checked.
+//! - [`Check::RunOnly`]: for a mission that lets the player choose the
+//!   values (e.g. "build a Vec and sum it"), so there is nothing fixed to
+//!   compare. The program is built and run; the response says the output
+//!   was not checked. No mission uses it today: every runnable mission's
+//!   text pins its output.
 //! - [`Check::CompileOnly`]: the program cannot be run meaningfully on
 //!   `wasm32-wasip1` (threads). It is built, never run, and checked with
 //!   token-level static checks. The response says behaviour was not
 //!   checked on this server.
+//!
+//! A `Stdout` or `Harness` entry may also list [`MissionCheck::uses`]:
+//! token groups that must appear in the code once the behaviour matched
+//! (failing them gives [`GradeState::StaticCheckFailed`]). They close the
+//! "print the expected lines as literals" shortcut for missions whose
+//! output is short, without claiming more than a token check proves.
 //!
 //! An id with no entry keeps the old behaviour (built + ran = ok) and the
 //! response says no output check was applied.
@@ -205,6 +212,13 @@ pub enum Check {
 pub struct MissionCheck {
     pub id: &'static str,
     pub check: Check,
+    /// Static token groups (same rule as [`Check::CompileOnly`]'s
+    /// `required`) applied AFTER a [`Check::Stdout`] or [`Check::Harness`]
+    /// check has passed. Used where the pinned output alone could be
+    /// produced by printing literals: matching output plus these tokens is
+    /// evidence (not proof) that the mission's construct produced it.
+    /// Empty for every other check kind.
+    pub uses: &'static [&'static [&'static str]],
 }
 
 /// Every mission with a check, in registry order.
@@ -229,7 +243,9 @@ pub enum GradeState {
     RuntimeError,
     /// Built and ran, but did not do what the mission asks.
     WrongOutput,
-    /// Built, but the static checks for a compile-only mission failed.
+    /// Built, but static checks failed: a compile-only mission's
+    /// `required` tokens, or a checked mission's [`MissionCheck::uses`]
+    /// tokens (its behaviour matched, but not via the taught construct).
     StaticCheckFailed,
     /// Built and passed static checks; behaviour NOT checked (cannot run
     /// on this server).
@@ -671,6 +687,12 @@ pub fn grade_in(
             grade_compile_only(source, reason, required, limits, settings)?
         }
     };
+    let graded = match spec {
+        Some(m) if graded.state == GradeState::Passed && !m.uses.is_empty() => {
+            apply_uses(source, graded, m.uses)
+        }
+        _ => graded,
+    };
     tracing::info!(
         encounter = encounter_id,
         state = ?graded.state,
@@ -835,25 +857,56 @@ fn grade_compile_only(
             actual: None,
             note,
         }),
-        Err(group) => {
-            let want = group
-                .iter()
-                .map(|t| format!("`{t}`"))
-                .collect::<Vec<_>>()
-                .join(" or ");
-            let mut outcome = outcome;
-            outcome.stderr = format!(
-                "Your code compiles, but it does not use what this mission teaches: \
-                 expected {want} in your code (comments and strings do not count)."
-            );
-            Ok(GradedRun {
-                outcome,
-                state: GradeState::StaticCheckFailed,
-                expected: Some(want),
-                actual: None,
-                note,
-            })
+        Err(group) => Ok(static_check_failed(outcome, group, note)),
+    }
+}
+
+/// Apply a passing run's [`MissionCheck::uses`]: keep the pass when every
+/// group is present, otherwise downgrade to `StaticCheckFailed`.
+fn apply_uses(
+    source: &str,
+    graded: GradedRun,
+    uses: &'static [&'static [&'static str]],
+) -> GradedRun {
+    match static_check(source, uses) {
+        Ok(()) => {
+            tracing::debug!("expectations: construct tokens present");
+            graded
         }
+        Err(group) => {
+            tracing::debug!(
+                ?group,
+                "expectations: output matched but construct tokens missing"
+            );
+            static_check_failed(
+                graded.outcome,
+                group,
+                "output matched, but the code does not use the mission's construct".to_string(),
+            )
+        }
+    }
+}
+
+fn static_check_failed(
+    mut outcome: RealOutcome,
+    group: &'static [&'static str],
+    note: String,
+) -> GradedRun {
+    let want = group
+        .iter()
+        .map(|t| format!("`{t}`"))
+        .collect::<Vec<_>>()
+        .join(" or ");
+    outcome.stderr = format!(
+        "Your code compiles, but it does not use what this mission teaches: \
+         expected {want} in your code (comments and strings do not count)."
+    );
+    GradedRun {
+        outcome,
+        state: GradeState::StaticCheckFailed,
+        expected: Some(want),
+        actual: None,
+        note,
     }
 }
 
@@ -1003,6 +1056,14 @@ error: could not compile `player_submission` (bin \"player_submission\") due to 
         for m in all() {
             assert!(seen.insert(m.id), "duplicate id {}", m.id);
             assert!(crate::valid_encounter_id(m.id), "{}", m.id);
+            if !m.uses.is_empty() {
+                assert!(
+                    matches!(m.check, Check::Stdout { .. } | Check::Harness(_)),
+                    "{}: `uses` only applies to behaviour checks",
+                    m.id
+                );
+                assert!(m.uses.iter().all(|g| !g.is_empty()), "{}", m.id);
+            }
             match m.check {
                 Check::Stdout { matchers } => assert!(!matchers.is_empty(), "{}", m.id),
                 Check::Harness(h) => {
@@ -1021,6 +1082,20 @@ error: could not compile `player_submission` (bin \"player_submission\") due to 
             }
         }
         assert_eq!(all().len(), 57, "one entry per registry mission");
+    }
+
+    /// The headline numbers in `docs/mission-audit.md`. Change both together.
+    #[test]
+    fn classification_totals() {
+        let count = |f: fn(&Check) -> bool| all().iter().filter(|m| f(&m.check)).count();
+        let behaviour = count(|c| matches!(c, Check::Stdout { .. } | Check::Harness(_)));
+        let static_only = count(|c| matches!(c, Check::CompileOnly { .. }));
+        let unverified = count(|c| matches!(c, Check::RunOnly { .. }));
+        assert_eq!(
+            (behaviour, static_only, unverified),
+            (54, 3, 0),
+            "behaviour-checked / static-only / run-only"
+        );
     }
 
     #[test]

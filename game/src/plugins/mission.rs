@@ -333,14 +333,15 @@ would produce.\n\n\
 The type annotation on the binding (`: i32`) is what tells `sum` which \
 numeric type to add into. Without it the compiler can't pick.\n\n\
 ## Task\n\
-Build a `Vec<i32>`, then sum it via `.iter().sum()` and print the total.\n\n\
+Build a `Vec<i32>` holding `10`, `20` and `30`, sum it via \
+`.iter().sum()`, and print the total. Your program should print `60`.\n\n\
 ## Hint\n\
 The grader looks for `vec!`, `.iter()`, and `.sum`. The annotation on \
-the binding (or a turbofish on `sum`) is required for the code to \
-actually compile, but the grader only checks tokens.",
+the binding (or a turbofish on `sum`) is what lets the code compile at \
+all: without it `sum` cannot tell which number type to produce.",
                 prereq: None,
                 available: true,
-                starter_code: "fn main() {\n    // build a Vec<i32>, sum it via .iter().sum(), print the total\n    println!(\"todo\");\n}\n",
+                starter_code: "fn main() {\n    // build a Vec<i32> of 10, 20 and 30, sum it via .iter().sum(), print the total\n    println!(\"todo\");\n}\n",
             },
             Mission {
                 id: "tuple_destructure",
@@ -480,13 +481,14 @@ A multi-line body uses braces: `|x| { let y = x + 1; y * 2 }`. Closures \
 that capture by move use the `move` keyword; we'll meet those later.\n\n\
 ## Task\n\
 Bind a closure named `add` that takes two parameters `a` and `b` and \
-returns their sum. Then call it from `main` and print the result.\n\n\
+returns their sum. Then call `add(19, 23)` from `main` and print the \
+result. Your program should print `42`.\n\n\
 ## Hint\n\
 The grader requires `let add`, the closure-literal opener `= |`, and \
-the body fragment `+ b`.",
+a body that adds the two parameters, like `a + b`.",
                 prereq: None,
                 available: true,
-                starter_code: "fn main() {\n    let _todo = 0;\n    // bind a closure named `add` that returns a + b, then call it\n    println!(\"{_todo}\");\n}\n",
+                starter_code: "fn main() {\n    let _todo = 0;\n    // bind a closure named `add` that returns a + b, then print add(19, 23)\n    println!(\"{_todo}\");\n}\n",
             },
             Mission {
                 id: "slice_basic",
@@ -591,7 +593,7 @@ binder `|x|`.",
             Mission {
                 id: "enum_match",
                 npc_name: "The Heraldic Sage",
-                prompt: "Define `enum Direction` with several variants and match on it.",
+                prompt: "Define `enum Direction` with four compass variants and `match` each to its bearing.",
                 tutorial: "## Concept\n\
 The Heraldic Sage's sash carries one stitched panel per variant — oak, \
 river, sun, azure — and a `match` arm walks left to right across the chest. \
@@ -606,14 +608,18 @@ prevents you from silently forgetting a case.\n\n\
 Use the path syntax `EnumName::Variant` to construct or match a variant. \
 You can also `use Shape::*;` inside a function to drop the prefix.\n\n\
 ## Task\n\
-Define `enum Direction` with at least two variants, then write a function \
-that takes a `Direction` and uses `match` to map each variant to a value.\n\n\
+Define `enum Direction` with the variants `North`, `East`, `South` and \
+`West`. Write `fn degrees(d: Direction) -> i32` that uses `match` to give \
+each its compass bearing: `0`, `90`, `180` and `270`, in that order. In \
+`main`, print `degrees` of all four, in the same order, one per line. Your \
+program should print `0`, `90`, `180`, `270`.\n\n\
 ## Hint\n\
 The grader requires `enum Direction`, a `match ` expression, and at \
-least one `Direction::` variant path.",
+least one `Direction::` variant path. The mission checker also calls \
+your `degrees` with each variant, so the signature must match exactly.",
                 prereq: None,
                 available: true,
-                starter_code: "// define enum Direction with several variants\n\nfn main() {\n    // match on a Direction value and produce something\n}\n",
+                starter_code: "// define enum Direction with North, East, South and West\n\nfn main() {\n    // print the compass bearing of each Direction, one per line\n}\n",
             },
             Mission {
                 id: "while_loop",
@@ -1063,14 +1069,16 @@ then this, then this — stop at the first failure\" without a pyramid of \
 ```\nfn half(n: i32) -> Option<i32> {\n    if n % 2 == 0 { Some(n / 2) } else { None }\n}\nSome(8).and_then(half).and_then(half);  // Some(2)\nSome(8).and_then(half).and_then(half).and_then(half);  // Some(1)\nSome(8).and_then(half).and_then(half).and_then(half).and_then(half);  // None (1 is odd)\n```\n\
 `Result::and_then` works the same way over `Ok`/`Err`.\n\n\
 ## Task\n\
-`half` is given. Chain it on `Some(8)` with `.and_then` four times, so \
-the odd intermediate (1) short-circuits to `None`.\n\n\
+`half` is given. Chain it on `Some(8)` with `.and_then` twice and print \
+the result with `{:?}`, then chain it four times and print that too. \
+Your program should print `Some(2)`, then `None`: in the four-step \
+chain the odd intermediate (1) short-circuits.\n\n\
 ## Hint\n\
 The grader needs `Option` and `.and_then(`. The Tabkeeper runs the tab — \
 one unpaid round and the whole chain is cut.",
                 prereq: None,
                 available: true,
-                starter_code: "fn half(n: i32) -> Option<i32> {\n    if n % 2 == 0 { Some(n / 2) } else { None }\n}\n\nfn main() {\n    // chain `half` on Some(8) so the first failure short-circuits to None\n    let _ = half(8);\n}\n",
+                starter_code: "fn half(n: i32) -> Option<i32> {\n    if n % 2 == 0 { Some(n / 2) } else { None }\n}\n\nfn main() {\n    // chain `half` on Some(8) twice and print it with {:?}, then four times and print that\n    let _ = half(8);\n}\n",
             },
             Mission {
                 id: "unwrap_or_else",
@@ -1114,14 +1122,16 @@ type system makes you handle that).\n\n\
 The map's `K`/`V` types are inferred from the first `insert`. `.get` borrows \
 the key; it returns `None` for a missing one.\n\n\
 ## Task\n\
-Bring `HashMap` into scope, build one, `insert` a value under a string key, \
-then `get` it back.\n\n\
+Bring `HashMap` into scope and build one. `insert` the value `7` under \
+the key `\"vault\"`, then print `.get(\"vault\")` and `.get(\"cellar\")` \
+with `{:?}`, one per line. Your program should print `Some(7)`, then \
+`None`: nothing was ever stored under the cellar key.\n\n\
 ## Hint\n\
 The grader needs `HashMap`, `.insert(`, and `.get(`. The Keymaster files \
 every store under its own key.",
                 prereq: None,
                 available: true,
-                starter_code: "fn main() {\n    // store a value under a string key in a map, then look it up by that key\n    let _ = ();\n}\n",
+                starter_code: "fn main() {\n    // store 7 under the key vault in a map, then print what looking up vault and cellar gives\n    let _ = ();\n}\n",
             },
             Mission {
                 id: "iter_filter",
@@ -1284,14 +1294,18 @@ get exclusive access.\n\n\
 `.lock()` returns a `Result` (it errors if another thread panicked holding \
 the lock); the guard derefs to the inner value.\n\n\
 ## Task\n\
-Wrap a number in `Arc::new(Mutex::new(...))`, `.lock()` it, and mutate the \
-value through the guard.\n\n\
+Wrap `0` in `Arc::new(Mutex::new(...))` and make a second handle with \
+`Arc::clone`. Add `5` through the second handle's `.lock()` guard, then \
+lock the first handle and print the value. Your program should print \
+`5`: both handles share one value. (This sandbox runs a single thread, \
+so both handles stay on it; the clone is what you would move into a \
+spawned thread.)\n\n\
 ## Hint\n\
 The grader needs `Arc`, `Mutex`, and `.lock(`. The Keeper holds the one key \
 to the lamp — only one hand on it at a time.",
                 prereq: None,
                 available: true,
-                starter_code: "fn main() {\n    // wrap a number so it can be shared across threads and mutated one-at-a-time behind a guard\n    let _ = 0;\n}\n",
+                starter_code: "fn main() {\n    // wrap 0 so two handles can share it and mutate it one-at-a-time behind a guard; add 5 through one, print through the other\n    let _ = 0;\n}\n",
             },
             Mission {
                 id: "mpsc_channel",
@@ -1309,14 +1323,16 @@ of sharing memory — often simpler to reason about than locks.\n\n\
 Both `send` and `recv` return `Result` — `send` errors if the receiver is \
 gone, `recv` if all senders are.\n\n\
 ## Task\n\
-Open a channel, `send` a value through the sender, and `recv` it from the \
-receiver.\n\n\
+Open a channel, `send` the value `7` and then `11` through the sender, \
+and `recv` twice from the receiver, printing each value on its own line. \
+Your program should print `7`, then `11`: a channel hands values out in \
+the order they went in.\n\n\
 ## Hint\n\
 The grader needs `mpsc::channel`, `.send(`, and `.recv(`. The Signaler \
 flashes the message down the coast; the next tower reads it.",
                 prereq: None,
                 available: true,
-                starter_code: "fn main() {\n    // open a channel, push a value in at one end, and pull it out at the other\n    let _ = ();\n}\n",
+                starter_code: "fn main() {\n    // open a channel, push 7 then 11 in at one end, and pull both out at the other, printing each\n    let _ = ();\n}\n",
             },
             Mission {
                 id: "atomic",
@@ -1334,14 +1350,16 @@ simplest, strongest choice.\n\n\
 ```\nuse std::sync::atomic::{AtomicUsize, Ordering};\nlet counter = AtomicUsize::new(0);\ncounter.fetch_add(1, Ordering::SeqCst);\nlet now = counter.load(Ordering::SeqCst);   // 1\n```\n\
 No `.lock()`, no guard — the atomic *is* the synchronization.\n\n\
 ## Task\n\
-Make an `AtomicUsize`, then bump it by one with `.fetch_add(1, \
-Ordering::SeqCst)`.\n\n\
+Make an `AtomicUsize` holding `10`. Bump it with `.fetch_add(1, \
+Ordering::SeqCst)` and print the value that call returns, then print \
+`.load(Ordering::SeqCst)`. Your program should print `10`, then `11`: \
+`fetch_add` returns the value from *before* the add.\n\n\
 ## Hint\n\
 The grader needs `Atomic` and `.fetch_add(`. The Tidewatch's gauge clicks \
 up one notch — no gatekeeper needed.",
                 prereq: None,
                 available: true,
-                starter_code: "fn main() {\n    // make a shared counter that can be incremented without a lock, then bump it by one\n    let _ = 0;\n}\n",
+                starter_code: "fn main() {\n    // make a shared counter holding 10 that can be bumped without a lock; bump it by one, print what that returned, then the new value\n    let _ = 0;\n}\n",
             },
             Mission {
                 id: "thread_scope",
@@ -1437,13 +1455,17 @@ say. (`Arc` is the thread-safe version you met on the Coast.)\n\n\
 `Rc::clone(&x)` is the idiomatic spelling (cheap, makes the count bump \
 explicit) — prefer it over `x.clone()`.\n\n\
 ## Task\n\
-Wrap a value in `Rc::new`, then make a second handle to it with `Rc::clone`.\n\n\
+Wrap `String::from(\"hoard\")` in `Rc::new` and print \
+`Rc::strong_count(&original)`. Make a second handle with `Rc::clone` and \
+print the count again, then `drop` that handle and print it a third time. \
+Your program should print `1`, `2`, then `1`, one per line.\n\n\
 ## Hint\n\
 The grader needs `Rc::new` and `Rc::clone`. The Sharekeeper hands out claims \
-to one hoard — and keeps count.",
+to one hoard — and keeps count. Cloning the `String` itself and wrapping \
+the copy in a new `Rc` makes a second hoard, and the count stays at `1`.",
                 prereq: None,
                 available: true,
-                starter_code: "fn main() {\n    // give two owners a shared, reference-counted handle to the same value (single-threaded)\n    let _ = String::from(\"hoard\");\n}\n",
+                starter_code: "fn main() {\n    // give two owners a shared, reference-counted handle to the same value (single-threaded),\n    // printing the owner count before the second handle, with it, and after dropping it\n    let _ = String::from(\"hoard\");\n}\n",
             },
             Mission {
                 id: "refcell",
@@ -1462,13 +1484,18 @@ data.\n\n\
 The guards release when they drop; holding a `borrow_mut` while taking \
 another borrow panics.\n\n\
 ## Task\n\
-Put a value in `RefCell::new`, then mutate it through `.borrow_mut()`.\n\n\
+Put `10` in `RefCell::new` and take a plain shared reference (`&`) to it. \
+Print the value through that reference with `.borrow()`, add `5` through \
+the same reference with `.borrow_mut()`, then print it again. Your \
+program should print `10`, then `15`.\n\n\
 ## Hint\n\
 The grader needs `RefCell` and `.borrow_mut(`. The Warden lets you change \
-what's in the box — but checks the ledger as you do.",
+what's in the box — but checks the ledger as you do. Copying the number \
+out (`let mut n = *r.borrow_mut();`) and changing the copy leaves the box \
+untouched.",
                 prereq: None,
                 available: true,
-                starter_code: "fn main() {\n    // hold a value you can mutate through a shared reference, with the borrow rules checked at runtime\n    let _ = 0;\n}\n",
+                starter_code: "fn main() {\n    // hold 10 in a value you can mutate through a shared reference, with the borrow rules checked at runtime;\n    // print it, add 5 through the shared reference, print it again\n    let _ = 0;\n}\n",
             },
             Mission {
                 id: "cell",
@@ -1486,13 +1513,16 @@ value is small and `Copy`.\n\n\
 ```\nuse std::cell::Cell;\nlet slot = Cell::new(1);\nslot.set(5);             // swap the whole value\nlet now = slot.get();    // copy it out: 5\n```\n\
 No `.borrow()` — `Cell` deals in whole values, not references.\n\n\
 ## Task\n\
-Put a number in `Cell::new`, `.set()` a new value, then `.get()` it back.\n\n\
+Put `1` in `Cell::new` and take a shared reference (`&`) to it. Print \
+`.get()`, then `.set(5)` through the shared reference, then print \
+`.get()` again. Your program should print `1`, then `5`.\n\n\
 ## Hint\n\
 The grader needs `Cell::new` and `.set(`. The Swapwarden trades the whole \
-coin in the slot — no borrowing, just a swap.",
+coin in the slot — no borrowing, just a swap. `.get()` hands you a copy, \
+so changing that copy changes nothing in the slot.",
                 prereq: None,
                 available: true,
-                starter_code: "fn main() {\n    // hold a single Copy value you can swap out through a shared reference (no borrow guard)\n    let _ = 1;\n}\n",
+                starter_code: "fn main() {\n    // hold 1 as a single Copy value you can swap out through a shared reference (no borrow guard);\n    // print it, swap in 5 through the shared reference, print it again\n    let _ = 1;\n}\n",
             },
             Mission {
                 id: "rc_refcell",
@@ -1510,14 +1540,17 @@ observer lists without threads. (Across threads, the analogue is \
 ```\nuse std::cell::RefCell;\nuse std::rc::Rc;\nlet shared = Rc::new(RefCell::new(0));\nlet clone = Rc::clone(&shared);   // both point at the same RefCell\n*clone.borrow_mut() += 1;          // ...and either can mutate it\n```\n\
 The `Rc` shares the allocation; the `RefCell` guards the mutation.\n\n\
 ## Task\n\
-Build an `Rc::new(RefCell::new(...))`, clone the `Rc`, and mutate the value \
-through `.borrow_mut()` on the clone.\n\n\
+Build an `Rc::new(RefCell::new(0))` and clone the `Rc`. Add `10` through \
+`.borrow_mut()` on the clone and `5` through `.borrow_mut()` on the \
+original, then print the value. Your program should print `15`: both \
+handles open the same box.\n\n\
 ## Hint\n\
 The grader needs `Rc::new`, `RefCell`, and `.borrow_mut(`. The Strongbox: \
-many keys to one box, and the box can be opened and changed.",
+many keys to one box, and the box can be opened and changed. If you see \
+`10` or `5`, you built two boxes instead of cloning the `Rc`.",
                 prereq: None,
                 available: true,
-                starter_code: "fn main() {\n    // make a value that several owners share AND can mutate (the single-threaded shared-mutable pattern)\n    let _ = 0;\n}\n",
+                starter_code: "fn main() {\n    // make a value starting at 0 that two owners share AND can mutate (the single-threaded shared-mutable pattern);\n    // add 10 through one owner, 5 through the other, then print it\n    let _ = 0;\n}\n",
             },
             Mission {
                 id: "weak_ref",
@@ -1536,14 +1569,17 @@ still alive, `None` if it's been dropped. Use `Weak` for back-pointers \
 `downgrade` creates the weak handle; `upgrade` safely tries to reclaim a \
 strong one.\n\n\
 ## Task\n\
-From an `Rc`, make a `Weak` with `Rc::downgrade`, then try to access it with \
-`.upgrade()`.\n\n\
+From `Rc::new(5)`, make a `Weak` with `Rc::downgrade` and print \
+`weak.upgrade()` with `{:?}`. Then `drop` the `Rc` and print \
+`weak.upgrade()` again. Your program should print `Some(5)`, then `None`.\n\n\
 ## Hint\n\
 The grader needs `Weak`, `downgrade`, and `.upgrade(`. The Ghostkeeper holds \
-a tether to a hoard that may already have vanished.",
+a tether to a hoard that may already have vanished. Don't keep the first \
+upgraded `Rc` in a variable past the `drop`: it is a strong owner too, \
+and would keep the value alive.",
                 prereq: None,
                 available: true,
-                starter_code: "fn main() {\n    // make a non-owning handle to an Rc value (one that won't keep it alive, and might find it gone), then try to access it\n    let _ = ();\n}\n",
+                starter_code: "fn main() {\n    // make a non-owning handle to an Rc holding 5 (one that won't keep it alive, and might find it gone);\n    // print what accessing it gives, drop the Rc, then print it again\n    let _ = ();\n}\n",
             },
         ];
         // Strict-linear progression: each mission's prereq is the one

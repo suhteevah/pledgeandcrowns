@@ -552,7 +552,7 @@
   {
     "case": "starter",
     "id": "vec_iter",
-    "input": "fn main() {\n    // build a Vec<i32>, sum it via .iter().sum(), print the total\n    println!(\"todo\");\n}\n",
+    "input": "fn main() {\n    // build a Vec<i32> of 10, 20 and 30, sum it via .iter().sum(), print the total\n    println!(\"todo\");\n}\n",
     "verdict": {
       "ok": false,
       "stderr": "the Cooper waits — missing required: `vec!`",
@@ -942,7 +942,7 @@
   {
     "case": "starter",
     "id": "closure_basic",
-    "input": "fn main() {\n    let _todo = 0;\n    // bind a closure named `add` that returns a + b, then call it\n    println!(\"{_todo}\");\n}\n",
+    "input": "fn main() {\n    let _todo = 0;\n    // bind a closure named `add` that returns a + b, then print add(19, 23)\n    println!(\"{_todo}\");\n}\n",
     "verdict": {
       "ok": false,
       "stderr": "the Reckoner's quill hovers — missing required: `let add`",
@@ -1272,7 +1272,7 @@
   {
     "case": "canonical",
     "id": "enum_match",
-    "input": "enum Direction { North, South }\nfn name(d: Direction) -> &'static str {\n    match d {\n        Direction::North => \"n\",\n        Direction::South => \"s\",\n    }\n}\nfn main() { let _ = name(Direction::North); }",
+    "input": "enum Direction { North, East, South, West }\nfn degrees(d: Direction) -> i32 {\n    match d {\n        Direction::North => 0,\n        Direction::East => 90,\n        Direction::South => 180,\n        Direction::West => 270,\n    }\n}\nfn main() {\n    for d in [Direction::North, Direction::East, Direction::South, Direction::West] {\n        println!(\"{}\", degrees(d));\n    }\n}",
     "verdict": {
       "ok": true,
       "stderr": "",
@@ -1282,7 +1282,7 @@
   {
     "case": "starter",
     "id": "enum_match",
-    "input": "// define enum Direction with several variants\n\nfn main() {\n    // match on a Direction value and produce something\n}\n",
+    "input": "// define enum Direction with North, East, South and West\n\nfn main() {\n    // print the compass bearing of each Direction, one per line\n}\n",
     "verdict": {
       "ok": false,
       "stderr": "the Heraldic Sage frowns — missing required: `enum Direction`",
@@ -1302,7 +1302,7 @@
   {
     "case": "near_miss_0",
     "id": "enum_match",
-    "input": " Direction { North, South }\nfn name(d: Direction) -> &'static str {\n    match d {\n        Direction::North => \"n\",\n        Direction::South => \"s\",\n    }\n}\nfn main() { let _ = name(Direction::North); }",
+    "input": " Direction { North, East, South, West }\nfn degrees(d: Direction) -> i32 {\n    match d {\n        Direction::North => 0,\n        Direction::East => 90,\n        Direction::South => 180,\n        Direction::West => 270,\n    }\n}\nfn main() {\n    for d in [Direction::North, Direction::East, Direction::South, Direction::West] {\n        println!(\"{}\", degrees(d));\n    }\n}",
     "verdict": {
       "ok": false,
       "stderr": "the Heraldic Sage frowns — missing required: `enum Direction`",
@@ -1310,9 +1310,9 @@
     }
   },
   {
-    "case": "near_miss_5",
+    "case": "near_miss_7",
     "id": "enum_match",
-    "input": "enum Direction { North, South \nfn name(d: Direction) -> &'static str {\n    match d {\n        Direction::North => \"n\",\n        Direction::South => \"s\",\n    }\n}\nfn main() { let _ = name(Direction::North); }",
+    "input": "enum Direction { North, East, South, West \nfn degrees(d: Direction) -> i32 {\n    match d {\n        Direction::North => 0,\n        Direction::East => 90,\n        Direction::South => 180,\n        Direction::West => 270,\n    }\n}\nfn main() {\n    for d in [Direction::North, Direction::East, Direction::South, Direction::West] {\n        println!(\"{}\", degrees(d));\n    }\n}",
     "verdict": {
       "ok": false,
       "stderr": "the Heraldic Sage frowns — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
@@ -1320,9 +1320,9 @@
     }
   },
   {
-    "case": "near_miss_13",
+    "case": "near_miss_14",
     "id": "enum_match",
-    "input": "enum Direction { North, South }\nfn name(d: Direction) -> &'static str {\n     d {\n        Direction::North => \"n\",\n        Direction::South => \"s\",\n    }\n}\nfn main() { let _ = name(Direction::North); }",
+    "input": "enum Direction { North, East, South, West }\nfn degrees(d: Direction) -> i32 {\n     d {\n        Direction::North => 0,\n        Direction::East => 90,\n        Direction::South => 180,\n        Direction::West => 270,\n    }\n}\nfn main() {\n    for d in [Direction::North, Direction::East, Direction::South, Direction::West] {\n        println!(\"{}\", degrees(d));\n    }\n}",
     "verdict": {
       "ok": false,
       "stderr": "the Heraldic Sage frowns — inspect the variant with a `match ` expression",
@@ -2352,7 +2352,7 @@
   {
     "case": "starter",
     "id": "and_then",
-    "input": "fn half(n: i32) -> Option<i32> {\n    if n % 2 == 0 { Some(n / 2) } else { None }\n}\n\nfn main() {\n    // chain `half` on Some(8) so the first failure short-circuits to None\n    let _ = half(8);\n}\n",
+    "input": "fn half(n: i32) -> Option<i32> {\n    if n % 2 == 0 { Some(n / 2) } else { None }\n}\n\nfn main() {\n    // chain `half` on Some(8) twice and print it with {:?}, then four times and print that\n    let _ = half(8);\n}\n",
     "verdict": {
       "ok": false,
       "stderr": "the Tabkeeper waits — chain the fallible steps with `.and_then(`",
@@ -2462,7 +2462,7 @@
   {
     "case": "starter",
     "id": "hashmap_basic",
-    "input": "fn main() {\n    // store a value under a string key in a map, then look it up by that key\n    let _ = ();\n}\n",
+    "input": "fn main() {\n    // store 7 under the key vault in a map, then print what looking up vault and cellar gives\n    let _ = ();\n}\n",
     "verdict": {
       "ok": false,
       "stderr": "the Keymaster waits — missing required: `HashMap`",
@@ -2852,7 +2852,7 @@
   {
     "case": "starter",
     "id": "arc_mutex",
-    "input": "fn main() {\n    // wrap a number so it can be shared across threads and mutated one-at-a-time behind a guard\n    let _ = 0;\n}\n",
+    "input": "fn main() {\n    // wrap 0 so two handles can share it and mutate it one-at-a-time behind a guard; add 5 through one, print through the other\n    let _ = 0;\n}\n",
     "verdict": {
       "ok": false,
       "stderr": "the Lighthouse Keeper waits — share ownership with `Arc`",
@@ -2902,7 +2902,7 @@
   {
     "case": "starter",
     "id": "mpsc_channel",
-    "input": "fn main() {\n    // open a channel, push a value in at one end, and pull it out at the other\n    let _ = ();\n}\n",
+    "input": "fn main() {\n    // open a channel, push 7 then 11 in at one end, and pull both out at the other, printing each\n    let _ = ();\n}\n",
     "verdict": {
       "ok": false,
       "stderr": "the Signaler waits — missing required: `mpsc::channel`",
@@ -2972,7 +2972,7 @@
   {
     "case": "starter",
     "id": "atomic",
-    "input": "fn main() {\n    // make a shared counter that can be incremented without a lock, then bump it by one\n    let _ = 0;\n}\n",
+    "input": "fn main() {\n    // make a shared counter holding 10 that can be bumped without a lock; bump it by one, print what that returned, then the new value\n    let _ = 0;\n}\n",
     "verdict": {
       "ok": false,
       "stderr": "the Tidewatch waits — use an `Atomic` type",
@@ -3192,7 +3192,7 @@
   {
     "case": "starter",
     "id": "rc_basic",
-    "input": "fn main() {\n    // give two owners a shared, reference-counted handle to the same value (single-threaded)\n    let _ = String::from(\"hoard\");\n}\n",
+    "input": "fn main() {\n    // give two owners a shared, reference-counted handle to the same value (single-threaded),\n    // printing the owner count before the second handle, with it, and after dropping it\n    let _ = String::from(\"hoard\");\n}\n",
     "verdict": {
       "ok": false,
       "stderr": "the Sharekeeper waits — missing required: `Rc::new`",
@@ -3252,7 +3252,7 @@
   {
     "case": "starter",
     "id": "refcell",
-    "input": "fn main() {\n    // hold a value you can mutate through a shared reference, with the borrow rules checked at runtime\n    let _ = 0;\n}\n",
+    "input": "fn main() {\n    // hold 10 in a value you can mutate through a shared reference, with the borrow rules checked at runtime;\n    // print it, add 5 through the shared reference, print it again\n    let _ = 0;\n}\n",
     "verdict": {
       "ok": false,
       "stderr": "the Warden waits — missing required: `RefCell`",
@@ -3302,7 +3302,7 @@
   {
     "case": "starter",
     "id": "cell",
-    "input": "fn main() {\n    // hold a single Copy value you can swap out through a shared reference (no borrow guard)\n    let _ = 1;\n}\n",
+    "input": "fn main() {\n    // hold 1 as a single Copy value you can swap out through a shared reference (no borrow guard);\n    // print it, swap in 5 through the shared reference, print it again\n    let _ = 1;\n}\n",
     "verdict": {
       "ok": false,
       "stderr": "the Swapwarden waits — missing required: `Cell::new`",
@@ -3362,7 +3362,7 @@
   {
     "case": "starter",
     "id": "rc_refcell",
-    "input": "fn main() {\n    // make a value that several owners share AND can mutate (the single-threaded shared-mutable pattern)\n    let _ = 0;\n}\n",
+    "input": "fn main() {\n    // make a value starting at 0 that two owners share AND can mutate (the single-threaded shared-mutable pattern);\n    // add 10 through one owner, 5 through the other, then print it\n    let _ = 0;\n}\n",
     "verdict": {
       "ok": false,
       "stderr": "the Strongbox waits — share ownership with `Rc::new`",
@@ -3422,7 +3422,7 @@
   {
     "case": "starter",
     "id": "weak_ref",
-    "input": "fn main() {\n    // make a non-owning handle to an Rc value (one that won't keep it alive, and might find it gone), then try to access it\n    let _ = ();\n}\n",
+    "input": "fn main() {\n    // make a non-owning handle to an Rc holding 5 (one that won't keep it alive, and might find it gone);\n    // print what accessing it gives, drop the Rc, then print it again\n    let _ = ();\n}\n",
     "verdict": {
       "ok": false,
       "stderr": "the Ghostkeeper waits — missing required: a `Weak` reference",

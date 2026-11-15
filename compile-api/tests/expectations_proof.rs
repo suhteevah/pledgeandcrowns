@@ -5,8 +5,9 @@
 //! the canonical solution passes, the mission's starter code fails, and
 //! every hand-written wrong-but-compiling variant below fails. For
 //! `CompileOnly` missions the same holds for the static checks. For
-//! `RunOnly` missions the canonical solution must report "ran, not
-//! checked".
+//! `RunOnly` missions (none today) the canonical solution must report
+//! "ran, not checked". For every mission with `uses` tokens, a program
+//! that prints the pinned lines as literals must be `StaticCheckFailed`.
 //!
 //! The canonical solutions and starters are MIT game code. This crate is
 //! AGPL and must not depend on the game crate, so this dev-only test reads
@@ -370,6 +371,170 @@ fn wrong_variants() -> HashMap<&'static str, Vec<&'static str>> {
                 "struct Node { value: i32, next: Option<i32> }\nfn main() { let n = Node { value: 1, next: Some(2) }; println!(\"{}\", n.value); }",
             ],
         ),
+        // ── Formerly run-only: the mission text now pins the output.
+        (
+            "vec_iter",
+            vec![
+                // Left an element out.
+                "fn main() { let v = vec![10, 20]; let total: i32 = v.iter().sum(); println!(\"{total}\"); }",
+                // Counted the elements instead of adding them.
+                "fn main() { let v = vec![10, 20, 30]; let total = v.iter().count(); println!(\"{total}\"); }",
+            ],
+        ),
+        (
+            "closure_basic",
+            vec![
+                "fn main() { let add = |a: i32, b: i32| a - b; println!(\"{}\", add(19, 23)); }",
+                "fn main() { let add = |a: i32, _b: i32| a + a; println!(\"{}\", add(19, 23)); }",
+            ],
+        ),
+        (
+            "enum_match",
+            vec![
+                // East and West swapped.
+                "enum Direction { North, East, South, West }\nfn degrees(d: Direction) -> i32 { match d { Direction::North => 0, Direction::East => 270, Direction::South => 180, Direction::West => 90 } }\nfn main() { for d in [Direction::North, Direction::East, Direction::South, Direction::West] { println!(\"{}\", degrees(d)); } }",
+                // A catch-all arm swallows two variants; main still prints the right lines.
+                "enum Direction { North, East, South, West }\nfn degrees(d: Direction) -> i32 { match d { Direction::North => 0, _ => 90 } }\nfn main() { let _ = (Direction::South, Direction::West); for line in [0, 90, 180, 270] { println!(\"{line}\"); } let _ = degrees(Direction::East); }",
+            ],
+        ),
+        (
+            "and_then",
+            vec![
+                // Three steps instead of four: 8 -> 4 -> 2 -> 1 is still Some.
+                "fn half(n: i32) -> Option<i32> { if n % 2 == 0 { Some(n / 2) } else { None } }\nfn main() { println!(\"{:?}\", Some(8).and_then(half).and_then(half)); println!(\"{:?}\", Some(8).and_then(half).and_then(half).and_then(half)); }",
+            ],
+        ),
+        (
+            "hashmap_basic",
+            vec![
+                // Unwrapped instead of printing the Option.
+                "use std::collections::HashMap;\nfn main() { let mut m = HashMap::new(); m.insert(\"vault\", 7); println!(\"{}\", m.get(\"vault\").copied().unwrap_or(0)); println!(\"{:?}\", m.get(\"cellar\")); }",
+                // Looked up the wrong key twice.
+                "use std::collections::HashMap;\nfn main() { let mut m = HashMap::new(); m.insert(\"vault\", 7); println!(\"{:?}\", m.get(\"cellar\")); println!(\"{:?}\", m.get(\"cellar\")); }",
+            ],
+        ),
+        (
+            "arc_mutex",
+            vec![
+                // Copied the number out of the guard and changed the copy.
+                "use std::sync::{Arc, Mutex};\nfn main() { let shared = Arc::new(Mutex::new(0)); let other = Arc::clone(&shared); let mut n = *other.lock().expect(\"lock\"); n += 5; let _ = n; println!(\"{}\", shared.lock().expect(\"lock\")); }",
+                // A second Arc around a copy, not a second handle to the same one.
+                "use std::sync::{Arc, Mutex};\nfn main() { let shared = Arc::new(Mutex::new(0)); let other = Arc::new(Mutex::new(*shared.lock().expect(\"lock\"))); *other.lock().expect(\"lock\") += 5; println!(\"{}\", shared.lock().expect(\"lock\")); }",
+            ],
+        ),
+        (
+            "mpsc_channel",
+            vec![
+                // Received only once.
+                "use std::sync::mpsc;\nfn main() { let (tx, rx) = mpsc::channel(); tx.send(7).expect(\"send\"); tx.send(11).expect(\"send\"); println!(\"{}\", rx.recv().expect(\"recv\")); }",
+            ],
+        ),
+        (
+            "atomic",
+            vec![
+                // Printed the new value twice.
+                "use std::sync::atomic::{AtomicUsize, Ordering};\nfn main() { let c = AtomicUsize::new(10); c.fetch_add(1, Ordering::SeqCst); println!(\"{}\", c.load(Ordering::SeqCst)); println!(\"{}\", c.load(Ordering::SeqCst)); }",
+                // Assumed fetch_add returns the NEW value.
+                "use std::sync::atomic::{AtomicUsize, Ordering};\nfn main() { let c = AtomicUsize::new(10); let now = c.fetch_add(1, Ordering::SeqCst) + 1; println!(\"{now}\"); println!(\"{}\", c.load(Ordering::SeqCst)); }",
+            ],
+        ),
+        (
+            "rc_basic",
+            vec![
+                // Cloned the String into a new Rc: a second hoard, counts stay 1.
+                "use std::rc::Rc;\nfn main() { let original = Rc::new(String::from(\"hoard\")); println!(\"{}\", Rc::strong_count(&original)); let shared = Rc::new((*original).clone()); println!(\"{}\", Rc::strong_count(&original)); drop(shared); println!(\"{}\", Rc::strong_count(&original)); let _ = Rc::clone(&original); }",
+                // Forgot to drop the second handle.
+                "use std::rc::Rc;\nfn main() { let original = Rc::new(String::from(\"hoard\")); println!(\"{}\", Rc::strong_count(&original)); let shared = Rc::clone(&original); println!(\"{}\", Rc::strong_count(&original)); println!(\"{}\", Rc::strong_count(&shared)); }",
+            ],
+        ),
+        (
+            "refcell",
+            vec![
+                // Copied the value out of the guard and changed the copy.
+                "use std::cell::RefCell;\nfn main() { let g = RefCell::new(10); let r = &g; println!(\"{}\", r.borrow()); let mut n = *r.borrow_mut(); n += 5; let _ = n; println!(\"{}\", r.borrow()); }",
+            ],
+        ),
+        (
+            "cell",
+            vec![
+                // Changed the copy that get() returned.
+                "use std::cell::Cell;\nfn main() { let slot = Cell::new(1); let r = &slot; println!(\"{}\", r.get()); let mut copy = r.get(); copy += 4; let _ = copy; println!(\"{}\", r.get()); r.set(r.get()); }",
+            ],
+        ),
+        (
+            "rc_refcell",
+            vec![
+                // Two boxes: a new Rc<RefCell> around a copy instead of Rc::clone.
+                "use std::cell::RefCell;\nuse std::rc::Rc;\nfn main() { let shared = Rc::new(RefCell::new(0)); let other = Rc::new(RefCell::new(*shared.borrow())); *other.borrow_mut() += 10; *shared.borrow_mut() += 5; println!(\"{}\", shared.borrow()); }",
+                // Printed through the clone before the original's change.
+                "use std::cell::RefCell;\nuse std::rc::Rc;\nfn main() { let shared = Rc::new(RefCell::new(0)); let clone = Rc::clone(&shared); *clone.borrow_mut() += 10; println!(\"{}\", clone.borrow()); *shared.borrow_mut() += 5; }",
+            ],
+        ),
+        (
+            "weak_ref",
+            vec![
+                // Kept the upgraded Rc alive across the drop.
+                "use std::rc::{Rc, Weak};\nfn main() { let strong = Rc::new(5); let weak: Weak<i32> = Rc::downgrade(&strong); let alive = weak.upgrade(); println!(\"{alive:?}\"); drop(strong); println!(\"{:?}\", weak.upgrade()); }",
+            ],
+        ),
+    ])
+}
+
+/// Programs that print exactly the pinned lines as literals, without the
+/// construct the mission teaches. Each must fail the mission's `uses`
+/// tokens (`StaticCheckFailed`), proving the token check closes that
+/// shortcut. Exactly the missions with non-empty `uses` have entries.
+fn literal_prints() -> HashMap<&'static str, &'static str> {
+    HashMap::from([
+        (
+            "vec_iter",
+            "fn main() { let v = vec![10, 20, 30]; let _ = v; println!(\"60\"); }",
+        ),
+        ("closure_basic", "fn main() { println!(\"42\"); }"),
+        (
+            "enum_match",
+            "enum Direction { North, East, South, West }\nfn degrees(d: Direction) -> i32 { if let Direction::North = d { 0 } else if let Direction::East = d { 90 } else if let Direction::South = d { 180 } else { 270 } }\nfn main() { for d in [Direction::North, Direction::East, Direction::South, Direction::West] { println!(\"{}\", degrees(d)); } }",
+        ),
+        (
+            "and_then",
+            "fn main() { println!(\"Some(2)\"); println!(\"None\"); }",
+        ),
+        (
+            "hashmap_basic",
+            "fn main() { println!(\"Some(7)\"); println!(\"None\"); }",
+        ),
+        (
+            "arc_mutex",
+            "use std::sync::{Arc, Mutex};\nfn main() { let _m = Arc::new(Mutex::new(0)); println!(\"5\"); }",
+        ),
+        (
+            "mpsc_channel",
+            "use std::sync::mpsc;\nfn main() { let (tx, _rx) = mpsc::channel(); tx.send(7).expect(\"send\"); println!(\"7\"); println!(\"11\"); }",
+        ),
+        (
+            "atomic",
+            "fn main() { println!(\"10\"); println!(\"11\"); }",
+        ),
+        (
+            "rc_basic",
+            "use std::rc::Rc;\nfn main() { let _r = Rc::new(String::from(\"hoard\")); println!(\"1\"); println!(\"2\"); println!(\"1\"); }",
+        ),
+        (
+            "refcell",
+            "use std::cell::RefCell;\nfn main() { let _g = RefCell::new(10); println!(\"10\"); println!(\"15\"); }",
+        ),
+        (
+            "cell",
+            "use std::cell::Cell;\nfn main() { let _s = Cell::new(1); println!(\"1\"); println!(\"5\"); }",
+        ),
+        (
+            "rc_refcell",
+            "use std::cell::RefCell;\nuse std::rc::Rc;\nfn main() { let _s = Rc::new(RefCell::new(0)); println!(\"15\"); }",
+        ),
+        (
+            "weak_ref",
+            "use std::rc::Rc;\nfn main() { let _s = Rc::new(5); println!(\"Some(5)\"); println!(\"None\"); }",
+        ),
     ])
 }
 
@@ -378,6 +543,8 @@ enum Role {
     Canonical,
     Starter,
     Wrong(usize),
+    /// A [`literal_prints`] program: must be `StaticCheckFailed`.
+    Literal,
 }
 
 impl Role {
@@ -386,6 +553,7 @@ impl Role {
             Self::Canonical => "canonical".to_string(),
             Self::Starter => "starter".to_string(),
             Self::Wrong(i) => format!("wrong#{i}"),
+            Self::Literal => "literal".to_string(),
         }
     }
 }
@@ -439,6 +607,15 @@ fn game_sources_parse() {
             needs,
             wrong.contains_key(m.id),
             "{}: wrong variants must exist exactly for checked missions",
+            m.id
+        );
+    }
+    let literal = literal_prints();
+    for m in expectations::all() {
+        assert_eq!(
+            !m.uses.is_empty(),
+            literal.contains_key(m.id),
+            "{}: a literal-print variant must exist exactly for missions with `uses`",
             m.id
         );
     }
@@ -498,13 +675,21 @@ fn print_canonical_transcripts() {
 }
 
 #[test]
-#[ignore = "slow: ~150 real wasm builds"]
+#[ignore = "slow: ~200 real wasm builds"]
 fn every_expectation_discriminates() {
     let sols = canonical_solutions();
     let starters = starters();
     let wrong = wrong_variants();
+    let literal = literal_prints();
     let mut cases = Vec::new();
     for m in expectations::all() {
+        if let Some(src) = literal.get(m.id) {
+            cases.push(Case {
+                id: m.id,
+                role: Role::Literal,
+                source: (*src).to_string(),
+            });
+        }
         cases.push(Case {
             id: m.id,
             role: Role::Canonical,
@@ -543,6 +728,7 @@ fn every_expectation_discriminates() {
             // A run-only mission cannot reject its starter; record only.
             (Role::Starter, Check::RunOnly { .. }) => true,
             (Role::Starter | Role::Wrong(_), _) => !g.ok(),
+            (Role::Literal, _) => g.state == GradeState::StaticCheckFailed,
         };
         match case.role {
             Role::Canonical => entry.0 = ok,
@@ -553,6 +739,8 @@ fn every_expectation_discriminates() {
                     entry.3 += 1;
                 }
             }
+            // Counted through `failures` only.
+            Role::Literal => {}
         }
         println!(
             "{:<22} {:<10} -> {:?}{}",

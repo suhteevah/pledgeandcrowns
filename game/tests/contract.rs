@@ -138,14 +138,20 @@ fn main() { let item = Item { name: String::from("ring") }; println!("{item:?}")
 }"#
         }
         "enum_match" => {
-            r#"enum Direction { North, South }
-fn name(d: Direction) -> &'static str {
+            r#"enum Direction { North, East, South, West }
+fn degrees(d: Direction) -> i32 {
     match d {
-        Direction::North => "n",
-        Direction::South => "s",
+        Direction::North => 0,
+        Direction::East => 90,
+        Direction::South => 180,
+        Direction::West => 270,
     }
 }
-fn main() { let _ = name(Direction::North); }"#
+fn main() {
+    for d in [Direction::North, Direction::East, Direction::South, Direction::West] {
+        println!("{}", degrees(d));
+    }
+}"#
         }
         // ── Act 3: Guildhall Quarter.
         "impl_method" => {
