@@ -23,12 +23,17 @@
 
 use super::Check::{CompileOnly, Harness as H, Stdout};
 use super::Matcher::*;
-use super::{Harness, MissionCheck};
+use super::{Harness, HarnessMode, MissionCheck};
+
+// Every constructor below builds a `HarnessMode::ForbidUnsafe` entry: no
+// registered mission allows `unsafe` (Act 9 is not registered yet; its
+// `UnsafeLateNonce` fixtures live in tests/act9_unsafe_harness.rs).
 
 const fn m(id: &'static str, check: super::Check) -> MissionCheck {
     MissionCheck {
         id,
         check,
+        harness_mode: HarnessMode::ForbidUnsafe,
         uses: &[],
         forbids: &[],
     }
@@ -45,6 +50,7 @@ const fn mu(
     MissionCheck {
         id,
         check,
+        harness_mode: HarnessMode::ForbidUnsafe,
         uses,
         forbids: &[],
     }
@@ -62,6 +68,7 @@ const fn muf(
     MissionCheck {
         id,
         check,
+        harness_mode: HarnessMode::ForbidUnsafe,
         uses,
         forbids,
     }

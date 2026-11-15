@@ -25,6 +25,10 @@
 //!   `--die-with-parent` take every process inside with it) and the run is
 //!   graded as a timeout. The builder's 50 s job deadline stays the outer
 //!   bound.
+//! - A late-nonce harness run (`HarnessMode::UnsafeLateNonce`, see
+//!   `HARNESS-NOTES.md`) adds one optional header field, `late_nonce`;
+//!   the child then links the one-shot nonce import for that run only.
+//!   Every other run's header omits the field, so its bytes are unchanged.
 //! - Every input crossing into the child is validated again there (limits
 //!   no looser than the shipped ones, module size, exact length), and the
 //!   child's reply is decoded strictly with a size cap.
@@ -96,13 +100,20 @@ pub enum RunSandboxError {
 }
 
 /// Limits and size sent ahead of the module bytes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RunHeader {
     pub timeout_ms: u64,
     pub fuel: u64,
     pub max_memory_bytes: u64,
     pub wasm_bytes: u64,
+    /// Late-nonce harness runs only (`HarnessMode::UnsafeLateNonce`): the
+    /// nonce and import name for the one extra host function
+    /// ([`wasm_runner::LateNonce`]). Absent from the encoded header of
+    /// every other run, so their bytes on the wire are unchanged. Its
+    /// `Debug` is redacted, so logging the header never shows it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub late_nonce: Option<wasm_runner::LateNonce>,
 }
 
 impl RunHeader {
@@ -133,6 +144,11 @@ impl RunHeader {
                 self.wasm_bytes
             ));
         }
+        if let Some(late) = &self.late_nonce
+            && let Err(e) = late.validate()
+        {
+            return bad(e);
+        }
         Ok(())
     }
 }
@@ -153,11 +169,21 @@ pub enum RunChildReply {
 
 /// Encode the child's stdin: one JSON header line, `\n`, the module bytes.
 pub fn encode_run_input(bytes: &[u8], limits: &RunLimits) -> Result<Vec<u8>, RunSandboxError> {
+    encode_run_input_with(bytes, limits, None)
+}
+
+/// [`encode_run_input`] for a late-nonce harness run (`Some(late)`).
+pub fn encode_run_input_with(
+    bytes: &[u8],
+    limits: &RunLimits,
+    late: Option<&wasm_runner::LateNonce>,
+) -> Result<Vec<u8>, RunSandboxError> {
     let header = RunHeader {
         timeout_ms: limits.timeout_ms,
         fuel: limits.fuel,
         max_memory_bytes: limits.max_memory_bytes,
         wasm_bytes: bytes.len() as u64,
+        late_nonce: late.cloned(),
     };
     header.validate()?;
     let mut out =
@@ -253,14 +279,27 @@ pub fn run_wasm_sandboxed(
     limits: &RunLimits,
     sandbox: &SandboxSettings,
 ) -> anyhow::Result<RunVerdict> {
+    run_wasm_sandboxed_with(bytes, limits, sandbox, None)
+}
+
+/// [`run_wasm_sandboxed`] for a late-nonce harness run: the nonce travels
+/// to the child in the stdin header (never argv, env or logs) and the
+/// child links the extra import. Same bwrap spec, limits and supervision.
+pub fn run_wasm_sandboxed_with(
+    bytes: &[u8],
+    limits: &RunLimits,
+    sandbox: &SandboxSettings,
+    late: Option<&wasm_runner::LateNonce>,
+) -> anyhow::Result<RunVerdict> {
     let image = current_run_image()?;
-    let input = encode_run_input(bytes, limits)?;
+    let input = encode_run_input_with(bytes, limits, late)?;
     let spec = build_sandbox::run_bwrap_spec(sandbox, &image, RUN_WASM_SUBCOMMAND, &child_env());
     let deadline = run_child_deadline(limits.timeout_ms);
     tracing::debug!(
         argv = ?spec.argv_lossy(),
         ?deadline,
         bytes = bytes.len(),
+        late_nonce = late.is_some(),
         "run_sandbox: starting run child"
     );
     let out = proc_tree::run_captured_with_input(
@@ -361,7 +400,13 @@ pub fn run_wasm_main() -> ExitCode {
             Err(e) => RunChildReply::SetupError(e.to_string()),
             Ok((h, wasm)) => {
                 tracing::debug!(bytes = wasm.len(), ?h, "run-wasm: running module");
-                match wasm_runner::run_wasm(wasm, h.timeout_ms, h.fuel, h.max_memory_bytes) {
+                match wasm_runner::run_wasm_late_nonce(
+                    wasm,
+                    h.timeout_ms,
+                    h.fuel,
+                    h.max_memory_bytes,
+                    h.late_nonce.as_ref(),
+                ) {
                     Ok(v) => RunChildReply::Verdict {
                         ok: v.ok,
                         stdout: v.stdout,
@@ -673,6 +718,37 @@ mod tests {
             .replacen("{\"timeout_ms\"", "{\"x\":1,\"timeout_ms\"", 1)
             .into_bytes();
         assert!(decode_run_input(&tampered).is_err());
+        // A plain run's header carries no late-nonce key at all.
+        assert!(!String::from_utf8_lossy(&enc).contains("late_nonce"));
+        assert!(h.late_nonce.is_none());
+    }
+
+    #[test]
+    fn late_nonce_header_round_trips_is_validated_and_redacted() {
+        let wasm = b"\0asm\x01\0\0\0".to_vec();
+        let late = wasm_runner::LateNonce::generate();
+        let enc = encode_run_input_with(&wasm, &limits(), Some(&late)).unwrap();
+        let (h, body) = decode_run_input(&enc).unwrap();
+        assert_eq!(body, &wasm[..]);
+        assert_eq!(h.late_nonce.as_ref(), Some(&late));
+        // Logging the header (as run-wasm does at debug) never shows it.
+        let shown = format!("{h:?}");
+        assert!(!shown.contains(late.nonce()), "{shown}");
+        assert!(!shown.contains(late.import()), "{shown}");
+        // A malformed nonce or import is refused in the child.
+        let bad_nonce = String::from_utf8_lossy(&enc)
+            .replacen(late.nonce(), "PNCnot-hex", 1)
+            .into_bytes();
+        assert!(decode_run_input(&bad_nonce).is_err());
+        let bad_import = String::from_utf8_lossy(&enc)
+            .replacen(late.import(), "fd_write", 1)
+            .into_bytes();
+        assert!(decode_run_input(&bad_import).is_err());
+        // Unknown fields inside it are refused too.
+        let extra = String::from_utf8_lossy(&enc)
+            .replacen("{\"import\"", "{\"x\":1,\"import\"", 1)
+            .into_bytes();
+        assert!(decode_run_input(&extra).is_err());
     }
 
     #[test]
@@ -682,32 +758,33 @@ mod tests {
             fuel: RUN_FUEL,
             max_memory_bytes: MAX_RUN_MAX_MEMORY_BYTES,
             wasm_bytes: 8,
+            late_nonce: None,
         };
         assert!(base.validate().is_ok());
         for bad in [
             RunHeader {
                 timeout_ms: RUN_TIMEOUT_MS + 1,
-                ..base
+                ..base.clone()
             },
             RunHeader {
                 timeout_ms: 0,
-                ..base
+                ..base.clone()
             },
             RunHeader {
                 fuel: RUN_FUEL + 1,
-                ..base
+                ..base.clone()
             },
             RunHeader {
                 max_memory_bytes: MAX_RUN_MAX_MEMORY_BYTES + 1,
-                ..base
+                ..base.clone()
             },
             RunHeader {
                 wasm_bytes: MAX_WASM_BYTES as u64 + 1,
-                ..base
+                ..base.clone()
             },
             RunHeader {
                 wasm_bytes: 0,
-                ..base
+                ..base.clone()
             },
         ] {
             assert!(bad.validate().is_err(), "{bad:?}");

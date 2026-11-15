@@ -1,7 +1,10 @@
 # Harness grading: what it guarantees, and Act 9
 
-*Third security review (2026-11-15), findings C-1 and C-2. Design note
-only: Act 9 grading is NOT implemented.*
+*Third security review (2026-11-15), findings C-1 and C-2. Act 9 grading:
+design 1 below is BUILT as the opt-in harness mode
+`HarnessMode::UnsafeLateNonce` (2026-11-15) and proven on test-only
+fixtures; no Act 9 mission is registered yet. It raises the bar for
+forged results; it does not guarantee them (see "Design 1 as built").*
 
 ## How a harness mission is graded today
 
@@ -112,3 +115,168 @@ prints the tagged lines itself.
 Recommendation when Act 9 is built: design 2 for missions whose
 signatures are scalar or byte-oriented, design 3 where the lesson needs
 richer types; design 1 only as a stopgap, labelled as such.
+
+**Decision (2026-11-15, orchestrator):** design 1, as an explicit opt-in
+mode, for v1.0. A forged grade only fools the cheater (C-2 is accepted
+on the same grounds), the wasm and bwrap sandboxes protect the server
+whatever the grade, and designs 2/3 cost more than v1.0 can afford.
+
+## Design 1 as built: `HarnessMode::UnsafeLateNonce`
+
+Code: `src/expectations.rs` (`HarnessMode`, `harness_module_source_late`,
+`HARNESS_ENTRY_SOURCE_UNSAFE_ALLOWED`, `UNSAFE_HARNESS_FORBIDS`,
+`parse_transcript_tagged`), `src/wasm_runner.rs` (`LateNonce`, the host
+function), `src/run_sandbox.rs` (`RunHeader::late_nonce`). Proof:
+`tests/act9_unsafe_harness.rs`.
+
+### The switch
+
+`MissionCheck::harness_mode` is a field of the server's own table, chosen
+by mission id. Every registered mission is `ForbidUnsafe` (unit test
+`every_registered_mission_keeps_forbid_unsafe`); a player file that writes
+`#![allow(unsafe_code)]` on a registered harness mission is still a
+compile error with the plain "does not allow `unsafe`" message (slow test
+case `double_function: player file tries to opt into unsafe`). Only a
+`MissionCheck` with `harness_mode: UnsafeLateNonce` gets the entry file
+without `#![forbid(unsafe_code)]` and the late checker.
+
+### Delivery channel: a host import, not stdin
+
+stdin was rejected: it is readable from **safe** code (`std::io::stdin()`)
+at any moment, so a player could read the nonce before the checker does.
+A host import cannot be reached from the player's file:
+
+- it is imported from module `pnc_harness`; Rust imports from any module
+  but `env` only with `#[link(wasm_import_module = ...)]`, and the source
+  deny-list refuses `link` inside any attribute (`source_policy.rs`);
+- its name is `nonce_` + 32 random hex digits, fresh per request, compiled
+  into the checker only (the player cannot read the checker's file:
+  `include*!` is refused), so even a deny-list bypass would have to guess
+  128 bits;
+- it is one-shot: the first call consumes the nonce whatever its
+  arguments; later calls get `-1` and nothing. A checker that does not get
+  the nonce prints no tagged line, so the run grades as "exited before the
+  checker finished".
+
+It writes exactly 35 bytes through `wasmtime::Memory::write` (bounds
+checked; out of range gives `-3`, wrong length `-2`), never blocks, and is
+added to the `Linker` **only** for a run given a `LateNonce`. Every other
+run links WASIp1 alone, so a module importing it fails to instantiate.
+The engine `Config`, feature allow-list, fuel, epoch deadline, async
+timeout, backstop, store limits (`MAX_INSTANCES` stays 1), WASI context
+and the run sandbox's bwrap spec are unchanged. The nonce reaches the
+`run-wasm` child in its stdin header (`late_nonce`, omitted for every
+other run so their bytes are unchanged), is validated there (shape, no
+unknown fields), and is never logged: `LateNonce`'s `Debug` redacts it,
+and the fast test `run_child_links_the_import_only_when_the_header_carries_a_nonce`
+runs the real child at `RUST_LOG=debug` and checks its log has no `PNC`.
+
+### When the nonce enters guest memory
+
+The checker (`harness_module_source_late`) contains no nonce. `run()` is
+`calls(); finish();`:
+
+1. `calls()` runs the player's `main` (if checked) and the mission body.
+   `emit` formats each result to an owned `String`, drops the player's
+   value at once, and stores the text in a checker-private
+   `Mutex<Vec<String>>`. Every other player value is a local of `calls`
+   and is dropped when it returns. The `<main>` marks are printed during
+   this phase with a separate, non-secret per-request mark (`PNM...`):
+   forging one only moves the boundary of the player's own `main` output.
+2. `finish()` resets the panic hook (dropping any the player installed),
+   takes the stored lines, and only THEN calls the import. That call is
+   the first moment the nonce is in guest memory. At that moment the
+   checker holds: the `Vec<String>` of formatted `label = value` lines and
+   a 35-byte stack buffer. It builds one block (every result line, then
+   `<done>`) and prints it with one `print!`, then flushes. `finish` makes
+   no call into player code.
+
+The host side (`parse_transcript_tagged`) counts results and `<done>` only
+with the nonce, and flags any nonce-tagged line after `<done>` (or a
+second `<done>`): such a run never passes.
+
+Failure modes are those of `ForbidUnsafe` (slow test, `librarian_index`
+fixture): early exit is "exited before the checker finished" (wrong
+output), a panic, a spin, the memory cap and the output cap are runtime
+errors.
+
+### Static rules in this mode
+
+`UNSAFE_HARNESS_FORBIDS` (`global_allocator`, `export_name`) is applied
+to every `UnsafeLateNonce` pass, on top of the mission's own `forbids`.
+Each names a way to run player code DURING the late print. `no_mangle` is
+the same kind of hook but is the `extern_c` lesson, so missions forbid it
+individually where they can (the fixtures do, except `extern_c`).
+
+`uses` / `forbids` / pinned signatures work unchanged. What is checkable:
+tokens in code (`unsafe {`, `unsafe fn`, `unsafe impl Send`, `from_raw`,
+`MaybeUninit`, `repr(C)`, `no_mangle`). What is not: anything in a
+comment or string, because the matcher blanks both first; so "has a
+`// SAFETY:` comment" cannot be required (and a comment check would be
+satisfied by dead text anyway). `extern "C" fn` is not a usable token
+either: the `"C"` is blanked to `""`; use `unsafe extern` / `no_mangle`.
+
+### What the proof shows (`tests/act9_unsafe_harness.rs`)
+
+Five Act 9 spec missions as `UnsafeLateNonce` fixtures: `librarian_index`
+(`unsafe fn` call + raw-pointer deref), `extern_c` (FFI: `repr(C)`,
+`no_mangle`, `unsafe extern`), `librarian_seal` (`Box::into_raw`/
+`from_raw`, raw deref, `Drop`), `send_sync` (`unsafe impl`), `maybe_uninit`
+(`MaybeUninit`, pointer `write`, the `transmute` alternative). The spec
+has no `static mut` or union lesson (it cuts both for scope);
+`send_sync`'s `unsafe impl` stands in as the other unsafe superpower.
+For each, the spec's solution passes and three to five wrong variants do
+not. For the four whose checker calls player items:
+
+| Attack (on the hooked item's last call) | Result |
+|---|---|
+| scan all linear memory for `PNC` + 32 hex, forge and exit if found | finds only its own decoy (`hits=1 decoy_seen=true other_key=false`); graded on its real (wrong) answers |
+| print expected lines tagged with a guessed key, exit | "exited before the checker finished" |
+| `process::exit(0)` | same |
+| `panic!` | runtime error |
+| thread-local destructor that scans and prints after `<done>` | did not pass; on wasip1 the destructor never ran (no output), so the after-`<done>` rule is proven by the unit test only |
+
+`maybe_uninit` checks only `main`'s output (the spec's solution has no
+items to call), so it has nothing for the checker to key and the key
+attacks do not apply; it is the same trust level as a `Stdout` check
+plus its `uses` tokens.
+
+### What it cannot stop (the known limit, tested)
+
+Player `unsafe` code shares the checker's memory, and design 1 only keeps
+the NONCE out of it. Two attacks, kept as documented `#[ignore]`d tests
+that assert what actually happens:
+
+- **Rewrite a stored result: SUCCEEDS.**
+  `known_limit_heap_patch_forges_a_pass`: `fetch` is wrong for a
+  one-volume shelf (`Some(9)` for `Some(7)`); on its last call it scans
+  the heap for the checker's stored line `fetch([7], 0) = Some(9)` and
+  rewrites the `9`. The checker then prints the forged line, honestly
+  tagged, and the run is graded **Passed**. The nonce is never seen. Any
+  result formatted before player code's last call can be rewritten this
+  way, and the same holds for the allocator's state and std's stdout
+  buffer. Not fixed, and not to be fixed by obscurity: it is the price of
+  same-memory grading. The same player could simply hardcode `Some(7)`
+  (C-2), so it changes nothing for an honest learner.
+- **Run code during the late print: SUCCEEDS at run time, CAUGHT
+  statically.** `known_limit_global_allocator_forges_but_is_caught_statically`:
+  a `#[global_allocator]` armed on the last call scans memory on every
+  allocation; the checker's late `String` growth hands it the nonce; it
+  writes a forged transcript with libc `write` and `_exit(0)`. The
+  behaviour check passes (forged), and `UNSAFE_HARNESS_FORBIDS` turns it
+  into `StaticCheckFailed`. Other hooks of the same kind are NOT covered
+  statically and are assumed to work: `#[no_mangle]`/`#[export_name]`
+  interposition of a symbol std calls during the print (only
+  `export_name` is forbidden mode-wide; `no_mangle` is allowed for
+  `extern_c`), overwriting a vtable or function-pointer slot in the data
+  segment so that `print!` calls player code, or corrupting the stdout
+  buffer so the flushed bytes differ.
+
+So, in this mode: a player cannot pass by scanning for or guessing the
+nonce, by exiting early, or by printing after the checker; a player who
+writes an exploit against the checker's own heap can. That is "raising
+the bar", not a guarantee. If Act 9 ever needs real assurance, the
+upgrade path is design 2 or 3 above; a cheap intermediate step would be a
+second one-shot import that takes each result line the moment it is
+formatted, so no stored result survives a later call into player code
+(it would close the rewrite attack, not the late-print hooks).

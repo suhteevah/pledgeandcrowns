@@ -63,6 +63,19 @@ pnc-builder --per request--> `pledge_compile_api job` (supervisor, no player cod
   the job process's strict, size-capped JSON decoding of its reply.
   `verify-sandbox.sh` proves the run sandbox's view on the deployed host
   with a native probe (step 9).
+- **Late-nonce harness runs** (harness mode `UnsafeLateNonce`, built for
+  Act 9's `unsafe` lessons; **no registered mission uses it yet**, see
+  `../HARNESS-NOTES.md`): the run child's stdin header then carries one
+  extra field, `late_nonce` (that request's random grading nonce and a
+  random import name), and the child links ONE extra host function for
+  that run only: it writes the nonce into the guest once, through
+  wasmtime's bounds-checked memory API, and cannot block. Units, bwrap
+  arguments, rlimits, wasmtime settings and limits are unchanged; every
+  other run's header is byte-for-byte what it was. The nonce never
+  appears in argv, the environment or any log (the header's debug log is
+  redacted); logs show only `late_nonce=true`. A wasmtime escape in such
+  a run additionally learns its own request's nonce, which forges only
+  its own grade.
 - The builder holds no secret. The API holds the tokens and keeps full
   systemd hardening because it never builds or runs player code. The
   builder unit additionally hides `/usr/local` (except the binary), `/opt`

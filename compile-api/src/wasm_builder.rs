@@ -325,6 +325,22 @@ pub fn compile_and_run_layout(
     limits: &RunLimits,
     settings: &BuildSettings,
 ) -> Result<RealOutcome> {
+    compile_and_run_layout_with(source, layout, run, limits, settings, None)
+}
+
+/// [`compile_and_run_layout`] for a late-nonce harness build
+/// (`expectations::HarnessMode::UnsafeLateNonce`): with `Some(late)` the
+/// run links the one-shot nonce import ([`wasm_runner::LateNonce`]), in
+/// process or in the run sandbox alike. `None` is exactly
+/// [`compile_and_run_layout`].
+pub fn compile_and_run_layout_with(
+    source: &str,
+    layout: &Layout<'_>,
+    run: bool,
+    limits: &RunLimits,
+    settings: &BuildSettings,
+    late: Option<&wasm_runner::LateNonce>,
+) -> Result<RealOutcome> {
     let build_started = Instant::now();
     let build = build_wasm_inner(source, layout, settings)?.0;
     let build_time = build_started.elapsed();
@@ -357,13 +373,14 @@ pub fn compile_and_run_layout(
     // `run-wasm` child, see `run_sandbox`), never with this process's view
     // of the host. `none` (dev/tests/Windows): in-process.
     let RunVerdict { ok, stdout, stderr } = if settings.sandbox.mode == SandboxMode::Bwrap {
-        crate::run_sandbox::run_wasm_sandboxed(&bytes, limits, &settings.sandbox)?
+        crate::run_sandbox::run_wasm_sandboxed_with(&bytes, limits, &settings.sandbox, late)?
     } else {
-        wasm_runner::run_wasm(
+        wasm_runner::run_wasm_late_nonce(
             &bytes,
             limits.timeout_ms,
             limits.fuel,
             limits.max_memory_bytes,
+            late,
         )?
     };
     let run_time = run_started.elapsed();

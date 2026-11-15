@@ -48,6 +48,25 @@ Hard rule 1 ("no `unsafe` in shipped game code") is unchanged by this act.
   of this batch. Nothing in this spec needs one. If an implementer finds
   they want one, the design is wrong; stop and ask.
 
+## Server grading mode for this act (added 2026-11-15)
+
+Every mission before Act 9 that the server grades by calling the
+player's code builds with `#![forbid(unsafe_code)]`, which these lessons
+cannot pass. The server now has an opt-in harness mode for them,
+`HarnessMode::UnsafeLateNonce` (`compile-api/HARNESS-NOTES.md`, "Design 1
+as built"): `unsafe` is allowed, and the checker's result key comes from
+the host only after the player's code has finished. Any Act 9 mission
+graded through a server checker (rather than by its stdout alone) must
+be registered with that mode; all other missions keep `ForbidUnsafe`. It
+raises the bar for forged grades; it does not guarantee them (a player
+who rewrites the checker's stored results in memory can forge a pass,
+which only fools the cheater). It was proven on five of this spec's
+missions as test fixtures (`compile-api/tests/act9_unsafe_harness.rs`).
+The server-written checker contains one `unsafe` block, the FFI call to
+the host import; it is guest source in a string, compiled into the
+player's wasm module, not compile-api Rust code, so the hard-rule-1 list
+above still holds for the server process.
+
 ## Sandbox constraints and what they cost this act
 
 The player's program is one `src/main.rs`, std only, no dependencies,
