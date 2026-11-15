@@ -388,9 +388,20 @@ pub fn run_builder(cfg: BuilderConfig) -> anyhow::Result<()> {
         return Err(e);
     }
 
-    // Replace a stale socket from a previous run; refuse anything else.
+    // Replace a stale socket from a previous run; refuse anything else,
+    // including a socket another builder is still listening on (seen on
+    // Linux: a second `builder` started by hand silently took over the
+    // live socket, and the path pointed nowhere once it exited).
     match std::fs::symlink_metadata(&cfg.socket) {
-        Ok(m) if m.file_type().is_socket() => std::fs::remove_file(&cfg.socket)?,
+        Ok(m) if m.file_type().is_socket() => {
+            if std::os::unix::net::UnixStream::connect(&cfg.socket).is_ok() {
+                anyhow::bail!(
+                    "{} is a live socket (another builder is listening); refusing to replace it",
+                    cfg.socket.display()
+                );
+            }
+            std::fs::remove_file(&cfg.socket)?
+        }
         Ok(_) => anyhow::bail!(
             "{} exists and is not a socket; refusing to replace it",
             cfg.socket.display()

@@ -8,10 +8,12 @@
 | `builder.env.example` | Builder settings, nothing secret -> `/etc/pnc-builder/builder.env` (0644) |
 | `verify-sandbox.sh` | Operator proof: positive-evidence sandbox probes, config refusals, exact HTTP checks |
 
-**Status: nothing in this directory has been run on a Linux host yet.** The
-first install is a verification pass. Both services run fail-closed
-self-tests at startup, and `verify-sandbox.sh` must print `PASS`. **Do not
-expose the service until step 9 passes.**
+**Status: verified once on a real Linux host** (openSUSE Leap Micro 6.2,
+kernel 6.12, systemd 257, bubblewrap 0.11, 2026-11-14; evidence in
+`.claude/reviews/linux-verification-2026-11-14.md`). Not yet run on
+Debian/Ubuntu. Every install is still a verification pass: both services
+run fail-closed self-tests at startup, and `verify-sandbox.sh` must print
+`PASS`. **Do not expose the service until step 9 passes.**
 
 ## How it fits together
 
@@ -24,8 +26,9 @@ pnc-builder --per request--> `pledge_compile_api job` --> prlimit -> bwrap -> ca
 
 - rustc evaluates `include_str!`, `include_bytes!` and `#[path]` with the
   filesystem view of the process running it, so player builds run in
-  bubblewrap and see only `/usr`, the toolchain and their own job dir: no
-  `/etc`, no `/proc`, no network, a cleared environment, per-build rlimits.
+  bubblewrap and see only `/usr` (with an empty `/usr/local`), the
+  toolchain and their own job dir: no `/etc`, no `/proc`, no network, a
+  cleared environment, per-build rlimits.
 - The builder holds no secret, so a rustc or wasmtime escape lands in a
   process with nothing worth stealing. The API holds the tokens and keeps
   full systemd hardening because it never builds or runs player code.
@@ -107,6 +110,13 @@ ls -d /opt/rust/rustup/toolchains/"$TC"-*     # this is PNC_TOOLCHAIN_DIR
 The builder runs `<PNC_TOOLCHAIN_DIR>/bin/rustc --version` at startup and
 refuses to start on any other version. `wasm32-wasip1` is required.
 
+Where the toolchain (and the binary) may live: the builder unit has
+`PrivateTmp=yes` (which privatises `/var/tmp` as well as `/tmp`) and
+`ProtectHome=yes`, so anything under `/tmp`, `/var/tmp` or `/home` is
+invisible to it. `/opt` (as above) or `/usr/local` work. A toolchain dir
+is relocatable: `cp -a` of `toolchains/<TC>-<triple>` to another path
+works.
+
 ## 5. Configuration files
 
 ```bash
@@ -145,11 +155,18 @@ The builder's syscall filter is an explicit allow composition
 (the unit comment lists each syscall and its group). Confirm on this host:
 
 ```bash
-systemd-analyze syscall-filter @system-service | grep -wE 'capset|chroot|setgroups|setuid|setresuid|unshare|clone3|prctl|prlimit64'
-systemd-analyze syscall-filter @mount | grep -wE 'mount|umount2|pivot_root'
+# `syscall-filter @system-service` lists its nested groups (@process,
+# @setuid, @default, ...) by NAME without expanding them, so grepping it
+# directly misses most of these. Expand each group instead:
+for s in capset chroot setgroups setuid setresuid unshare clone3 setns prctl prlimit64 mount umount2 pivot_root; do
+  g=""; for grp in @system-service @process @setuid @default @mount; do
+    systemd-analyze syscall-filter "$grp" | grep -qw "^ *$s$" && g="$g $grp"; done
+  echo "$s:${g:- MISSING}"; done
 ```
 
-Expected: every listed name appears. Then:
+Expected (systemd 257): no `MISSING`; `chroot`, `mount`, `umount2`,
+`pivot_root` come from `@mount`, the rest from `@system-service` and the
+groups it includes (`prlimit64` is in `@default`). Then:
 
 ```bash
 sudo systemctl daemon-reload
@@ -189,15 +206,23 @@ If the builder exits instead, the log names the failing step:
 | `Creating new namespace failed`, `setting up uid map: Permission denied` | step 1 (sysctl / AppArmor), or `RestrictNamespaces=` edited |
 | `Can't read /proc/sys/kernel/overflowuid` | someone added `ProcSubset=pid` to the builder unit; remove it |
 | `Can't mount proc` | `PNC_BWRAP_PROC=fresh` with `ProtectProc=`/`ProtectKernelTunables=`/`ProtectKernelLogs=` still on; remove those three, or go back to `PNC_BWRAP_PROC=none` |
+| self-test: `rustc: error while loading shared libraries: librustc_driver-*.so` (exit 127) | a binary older than the 2026-11-14 fix: without `/proc` the loader cannot expand rustc's `$ORIGIN` RUNPATH, so the sandbox sets `LD_LIBRARY_PATH=<toolchain>/lib`. Rebuild; do NOT switch to `PNC_BWRAP_PROC=fresh` for this |
 | self-test build fails mentioning `/proc` | this rustc needs procfs: set `PNC_BWRAP_PROC=fresh` and drop the three settings above |
+| `proc_tree: processes outlived the build leader; SIGKILLed the group` on every sandboxed run | expected noise: bwrap reports the command's exit status before its in-sandbox init has exited; the sweep kills that init |
 | `SIGSYS` / `Operation not permitted` on another syscall | find it with `journalctl -k`, check the group with `systemd-analyze syscall-filter`, add that one syscall to the allow line |
 | `loopback: Failed RTM_NEWADDR` | `AF_NETLINK` missing from `RestrictAddressFamilies=` |
 | `does not match the pinned 1.99.0` | step 4: wrong toolchain or `PNC_TOOLCHAIN_DIR` |
 | allocation error in the self-test | raise `PNC_BUILD_ADDRESS_SPACE_MIB` (max 1408) |
 
-Optional hardening to try once it works (each fails closed): add
-`ProcSubset=pid` to the builder (expected to break bwrap, see the unit
-comment); add `NoExecPaths=/tmp` to the builder.
+Hardening tried on the first Linux host (2026-11-14): `ProcSubset=pid` on
+the builder breaks bwrap (`Can't read /proc/sys/kernel/overflowuid`), so it
+stays off; `NoExecPaths=/tmp` works and is now in the unit;
+`PrivateUsers=yes` worked there but stays off until checked on Ubuntu
+(AppArmor userns restriction).
+
+Note for `systemd-run` tests like step 10: `EnvironmentFile=` overrides
+`-E`/`Environment=` for the same variable, so `-E PNC_BIND=...` next to
+`-p EnvironmentFile=/etc/pnc-compile/env` is silently ignored.
 
 ## 8. Reverse proxy and metrics exposure
 
