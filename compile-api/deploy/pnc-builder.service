@@ -9,11 +9,13 @@
 # hardened, and talks to this unit only over /run/pnc-builder/builder.sock.
 #
 # Per request the builder starts one `pledge_compile_api job` process that
-# does the cargo build (inside bwrap, via prlimit) and the wasmtime run,
-# and SIGKILLs that process's whole group at the 50 s job deadline. If a
-# job's processes cannot be killed the builder exits with status 70 and
-# systemd (KillMode=control-group, the default) kills everything left in
-# this cgroup before restarting it.
+# does the cargo build (inside bwrap, via prlimit) and then the wasmtime
+# run (inside a SECOND, smaller bwrap sandbox: a `run-wasm` child that sees
+# only the server binary and its libraries), and SIGKILLs that process's
+# whole group at the 50 s job deadline. If a job's processes cannot be
+# killed the builder exits with status 70, and if its socket is replaced
+# under it, with status 71; either way systemd (KillMode=control-group,
+# the default) kills everything left in this cgroup before restarting it.
 #
 # Run on one real host so far (openSUSE Leap Micro 6.2, kernel 6.12,
 # systemd 257, bwrap 0.11; 2026-11-14). The startup self-test is
@@ -56,6 +58,26 @@ PrivateTmp=yes
 # 2026-11-14 (self-test + HTTP builds pass with it).
 NoExecPaths=/tmp
 UMask=0077
+
+# ---- Host areas the builder never needs (third review, S-1) -------------------
+# Defence in depth under the two bwrap sandboxes: even the builder and job
+# processes themselves (the only code here with a host view) cannot see
+# these. /usr/local is replaced by an empty read-only tmpfs with only the
+# binary bound back; /opt likewise with only /opt/pnc (the player
+# toolchain MUST live under /opt/pnc, README step 4); /run likewise with
+# only this unit's RuntimeDirectory, so no host Unix socket (D-Bus,
+# journald, container runtimes) is reachable. Logging goes to the
+# journal through the stdout stream systemd hands over, not /run.
+# ProtectHome=yes already hides /home, /root and /run/user. Verified on
+# Linux (2026-11-15): the service starts, self-tests and builds with all
+# of this on.
+TemporaryFileSystem=/usr/local:ro
+BindReadOnlyPaths=/usr/local/bin/pledge_compile_api
+TemporaryFileSystem=/opt:ro
+BindReadOnlyPaths=/opt/pnc
+TemporaryFileSystem=/run:ro
+BindPaths=/run/pnc-builder
+InaccessiblePaths=-/srv -/mnt -/media -/boot -/var/lib -/var/log -/var/cache -/var/spool -/var/mail -/var/opt -/var/www -/var/backups -/var/local
 
 # ---- Filesystem / kernel isolation ------------------------------------------
 ProtectSystem=strict

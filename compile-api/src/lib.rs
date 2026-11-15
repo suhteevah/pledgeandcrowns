@@ -53,6 +53,7 @@ pub mod metrics;
 pub mod middleware;
 pub mod proc_tree;
 pub mod rate_limit;
+pub mod run_sandbox;
 pub mod source_policy;
 pub mod toolchain;
 pub mod wasm_builder;
@@ -194,6 +195,9 @@ pub enum Rejection {
     RateLimited { retry_after_secs: u64 },
     #[error("build queue is full; retry in {retry_after_secs}s")]
     QueueFull { retry_after_secs: u64 },
+    /// The builder service is down or not answering (S-2).
+    #[error("the build service is temporarily unavailable; retry in {retry_after_secs}s")]
+    BuilderUnavailable { retry_after_secs: u64 },
     #[error("request body exceeds limit of {MAX_BODY_BYTES} bytes")]
     BodyTooLarge,
     #[error("{message}")]
@@ -220,9 +224,9 @@ impl Rejection {
         match self {
             Self::Unauthorized => StatusCode::UNAUTHORIZED,
             Self::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
-            Self::QueueFull { .. } | Self::DeadlineExceeded { .. } => {
-                StatusCode::SERVICE_UNAVAILABLE
-            }
+            Self::QueueFull { .. }
+            | Self::BuilderUnavailable { .. }
+            | Self::DeadlineExceeded { .. } => StatusCode::SERVICE_UNAVAILABLE,
             Self::BodyTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
             Self::BadRequest { status, .. } => *status,
             Self::Forbidden(_) => StatusCode::FORBIDDEN,
@@ -237,6 +241,7 @@ impl Rejection {
             Self::Unauthorized => "unauthorized",
             Self::RateLimited { .. } => "rate_limited",
             Self::QueueFull { .. } => "queue_full",
+            Self::BuilderUnavailable { .. } => "builder_unavailable",
             Self::BodyTooLarge => "body_too_large",
             Self::BadRequest { .. } => "bad_request",
             Self::Forbidden(_) => "forbidden",
@@ -249,9 +254,9 @@ impl Rejection {
 
     fn retry_after(&self) -> Option<u64> {
         match self {
-            Self::RateLimited { retry_after_secs } | Self::QueueFull { retry_after_secs } => {
-                Some(*retry_after_secs)
-            }
+            Self::RateLimited { retry_after_secs }
+            | Self::QueueFull { retry_after_secs }
+            | Self::BuilderUnavailable { retry_after_secs } => Some(*retry_after_secs),
             _ => None,
         }
     }
@@ -429,7 +434,14 @@ fn builder_grader(
     socket: std::path::PathBuf,
 ) -> impl Fn(&str, &str, &RunLimits) -> anyhow::Result<GradedRun> + Send + Sync + 'static {
     move |encounter: &str, source: &str, limits: &RunLimits| {
-        let reply = ipc::call_builder(&socket, &job_request(encounter, source, limits))?;
+        let reply = match ipc::call_builder(&socket, &job_request(encounter, source, limits)) {
+            Ok(r) => r,
+            Err(e) if e.is_unavailable() => {
+                tracing::warn!("compile-real: builder unavailable: {e}");
+                return Err(jobs::ExecError::Unavailable(e.to_string()).into());
+            }
+            Err(e) => return Err(e.into()),
+        };
         jobs::reply_to_graded(reply)
     }
 }
@@ -834,14 +846,20 @@ async fn compile_real(
             }
             .into_response();
         }
-        Ok(Err(e)) => {
-            tracing::error!("compile-real: wasm_builder setup failure: {e:#}");
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(CompileResponse::basic(false, "[real]", format!("{e:#}"))),
-            )
-                .into_response();
+        Ok(Err(e))
+            if matches!(
+                e.downcast_ref::<jobs::ExecError>(),
+                Some(jobs::ExecError::Unavailable(_))
+            ) =>
+        {
+            tracing::warn!("rejected: builder unavailable: {e:#}");
+            state.metrics().record_rejection(RejectReason::Unavailable);
+            return Rejection::BuilderUnavailable {
+                retry_after_secs: QUEUE_RETRY_AFTER_SECS,
+            }
+            .into_response();
         }
+        Ok(Err(e)) => return setup_failure_response(&e),
         Err(join_err) => {
             tracing::error!("compile-real: build task failed: {join_err}");
             return Rejection::Internal("build task failed".to_string()).into_response();
@@ -864,6 +882,33 @@ async fn compile_real(
         "compile-real: verdict"
     );
     (StatusCode::OK, Json(real_response(graded))).into_response()
+}
+
+/// Player-facing text of a setup failure (S-3). The error chain names job
+/// dirs, sockets, binaries and toolchain paths, so it goes to the log only,
+/// under a request id the player can quote; the client gets this generic
+/// line (no path, no internal detail).
+pub fn setup_failure_message(request_id: &str) -> String {
+    format!(
+        "internal error: the server could not build or run your program (request id \
+         {request_id}). Please try again; if it keeps happening, report the request id."
+    )
+}
+
+/// 500 for a grading setup failure: full chain logged with a fresh request
+/// id, generic body to the client.
+fn setup_failure_response(e: &anyhow::Error) -> Response {
+    let request_id = uuid::Uuid::new_v4().simple().to_string();
+    tracing::error!(request_id, "compile-real: setup failure: {e:#}");
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(CompileResponse::basic(
+            false,
+            "[real]",
+            setup_failure_message(&request_id),
+        )),
+    )
+        .into_response()
 }
 
 /// Build the `/compile-real` body from a grading result. `stdout` keeps

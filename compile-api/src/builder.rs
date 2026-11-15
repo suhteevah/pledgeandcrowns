@@ -44,8 +44,16 @@ use crate::wasm_builder::{self, BuildSettings, DEFAULT_RUN_MAX_MEMORY_BYTES, Run
 pub const BUILDER_SUBCOMMAND: &str = "builder";
 /// Subcommand for `deploy/verify-sandbox.sh`.
 pub const SANDBOX_VERIFY_SUBCOMMAND: &str = "sandbox-verify";
+/// Subcommand for `deploy/verify-sandbox.sh`: the native probe in the run
+/// sandbox.
+pub const SANDBOX_VERIFY_RUN_SUBCOMMAND: &str = "sandbox-verify-run";
 /// Exit code when a job's process tree could not be killed.
 pub const EXIT_SURVIVORS: u8 = 70;
+/// Exit code when the listening socket was replaced or removed under the
+/// running builder.
+pub const EXIT_SOCKET_REPLACED: u8 = 71;
+/// How often the builder checks that its socket path is still its own.
+pub const SOCKET_WATCH_INTERVAL: Duration = Duration::from_secs(1);
 /// Default concurrent jobs (matches the API's default build slots).
 pub const DEFAULT_MAX_JOBS: usize = 2;
 const MAX_JOBS_CAP: usize = 64;
@@ -307,6 +315,14 @@ pub fn handle_connection<S: IpcStream>(stream: &mut S, ctx: &BuilderCtx) -> Conn
         free_slots = ctx.slots.available(),
         "builder: job accepted"
     );
+    // Tell the client the job is starting, so it can tell a slow job from
+    // a builder that never answers (see `ipc`). No job runs for a client
+    // that is already gone.
+    if let Err(e) = ipc::write_ack(stream, Instant::now() + ctx.reply_deadline) {
+        tracing::warn!("builder: could not acknowledge the request; dropping it: {e}");
+        drop(slot);
+        return ConnOutcome::ClientError(e.to_string());
+    }
     let envelope = JobEnvelope {
         settings: ctx.settings.clone(),
         request,
@@ -412,6 +428,26 @@ pub fn run_builder(cfg: BuilderConfig) -> anyhow::Result<()> {
     let listener = UnixListener::bind(&cfg.socket)?;
     // Created under UMask=0077 (0600), then opened to the pnc-ipc group.
     std::fs::set_permissions(&cfg.socket, std::fs::Permissions::from_mode(0o660))?;
+    // Live-socket takeover (third security review, S-1): the startup check
+    // above only covers a builder started next to a live one. Anything
+    // running as this uid could later unlink the path and bind its own
+    // listener there. Watch the path; if it stops being OUR socket, exit:
+    // systemd then kills every process left in this unit's cgroup (an
+    // impostor started by a job is in it), removes the RuntimeDirectory
+    // and restarts us on a clean path.
+    let identity = socket_identity(&cfg.socket)?;
+    watch_socket(
+        cfg.socket.clone(),
+        identity,
+        SOCKET_WATCH_INTERVAL,
+        |reason| {
+            tracing::error!(
+                "builder: {reason}; exiting so systemd kills this unit's cgroup and restarts \
+                 the builder on a clean socket"
+            );
+            std::process::exit(i32::from(EXIT_SOCKET_REPLACED));
+        },
+    )?;
     tracing::info!(
         socket = %cfg.socket.display(),
         max_jobs = cfg.max_jobs,
@@ -451,6 +487,48 @@ pub fn run_builder(cfg: BuilderConfig) -> anyhow::Result<()> {
 #[cfg(not(unix))]
 pub fn run_builder(_cfg: BuilderConfig) -> anyhow::Result<()> {
     anyhow::bail!("the builder service needs Linux (Unix domain sockets + bubblewrap)")
+}
+
+/// `(device, inode)` of the socket at `path`; an error if it is not a
+/// socket.
+#[cfg(unix)]
+pub fn socket_identity(path: &Path) -> std::io::Result<(u64, u64)> {
+    use std::os::unix::fs::{FileTypeExt, MetadataExt};
+    let m = std::fs::symlink_metadata(path)?;
+    if !m.file_type().is_socket() {
+        return Err(std::io::Error::other(format!(
+            "{} is not a socket",
+            path.display()
+        )));
+    }
+    Ok((m.dev(), m.ino()))
+}
+
+/// Check every `interval` that `path` is still the socket identified by
+/// `expected`; call `on_replaced` (once, then stop) when it was removed or
+/// replaced. The thread runs for the life of the process.
+#[cfg(unix)]
+pub fn watch_socket(
+    path: PathBuf,
+    expected: (u64, u64),
+    interval: Duration,
+    on_replaced: impl Fn(&str) + Send + 'static,
+) -> std::io::Result<std::thread::JoinHandle<()>> {
+    std::thread::Builder::new()
+        .name("pnc-socket-watch".to_string())
+        .spawn(move || {
+            loop {
+                std::thread::sleep(interval);
+                let reason = match socket_identity(&path) {
+                    Ok(id) if id == expected => continue,
+                    Ok(_) => format!("{} was replaced by another socket", path.display()),
+                    Err(e) => format!("{} is no longer our socket: {e}", path.display()),
+                };
+                tracing::error!("builder: socket watch: {reason}");
+                on_replaced(&reason);
+                return;
+            }
+        })
 }
 
 /// Output of `sandbox-verify`.
@@ -503,6 +581,41 @@ fn sandbox_verify() -> anyhow::Result<String> {
         stdout: outcome.stdout,
         stderr: outcome.stderr,
     })?)
+}
+
+/// `pledge_compile_api sandbox-verify-run`: run the native probe
+/// (`run-probe`) inside the run sandbox built from the builder's settings,
+/// with the probe request read from stdin, and print the probe's result
+/// lines. Like `sandbox-verify`: no listener, refuses a token in its
+/// environment and refuses `PNC_BUILD_SANDBOX=none`.
+pub fn sandbox_verify_run_main() -> ExitCode {
+    match sandbox_verify_run() {
+        Ok(lines) => {
+            print!("{lines}");
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            tracing::error!("sandbox-verify-run: {e:#}");
+            eprintln!("sandbox-verify-run: {e:#}");
+            ExitCode::from(2)
+        }
+    }
+}
+
+fn sandbox_verify_run() -> anyhow::Result<String> {
+    let cfg = BuilderConfig::from_env()?;
+    sandbox_verify_check(&cfg)?;
+    let mut input = Vec::new();
+    std::io::stdin()
+        .lock()
+        .take(crate::run_sandbox::MAX_PROBE_REQUEST_BYTES as u64 + 1)
+        .read_to_end(&mut input)?;
+    let request = crate::run_sandbox::decode_probe_request(&input)?;
+    tracing::info!(
+        paths = request.paths.len(),
+        "sandbox-verify-run: probing the run sandbox"
+    );
+    crate::run_sandbox::run_probe_sandboxed(&cfg.settings.sandbox, &request)
 }
 
 /// `sandbox-verify` only ever verifies bwrap.
@@ -596,6 +709,47 @@ mod tests {
         );
         assert!(socket_path_ok(Path::new("/run/pnc-builder/builder.sock")));
         assert!(!socket_path_ok(Path::new("builder.sock")));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn socket_watch_fires_when_the_socket_is_replaced_or_removed() {
+        use std::os::unix::net::UnixListener;
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        let dir = std::env::temp_dir().join(format!(
+            "pnc-s3-watch-{}-{}",
+            std::process::id(),
+            uuid::Uuid::new_v4().simple()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        for replace in [true, false] {
+            let path = dir.join(if replace { "a.sock" } else { "b.sock" });
+            let _orig = UnixListener::bind(&path).unwrap();
+            let id = socket_identity(&path).unwrap();
+            let fired = Arc::new(AtomicBool::new(false));
+            let f = Arc::clone(&fired);
+            watch_socket(path.clone(), id, Duration::from_millis(50), move |_| {
+                f.store(true, Ordering::SeqCst)
+            })
+            .unwrap();
+            std::thread::sleep(Duration::from_millis(300));
+            assert!(
+                !fired.load(Ordering::SeqCst),
+                "unchanged socket must not fire"
+            );
+            std::fs::remove_file(&path).unwrap();
+            let _impostor = replace.then(|| UnixListener::bind(&path).unwrap());
+            let started = Instant::now();
+            while !fired.load(Ordering::SeqCst) && started.elapsed() < Duration::from_secs(10) {
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            assert!(
+                fired.load(Ordering::SeqCst),
+                "replace={replace}: watch did not fire"
+            );
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

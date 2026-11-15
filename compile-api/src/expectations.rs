@@ -486,11 +486,71 @@ pub fn harness_module_source(h: &Harness, nonce: &str) -> String {
 }
 
 /// Source of the server entry crate root for harness builds.
+///
+/// `#![forbid(unsafe_code)]` (third security review, C-1): the checker's
+/// nonce is a constant in the program's own memory, so `unsafe` player code
+/// could scan linear memory for it, print forged checker lines and exit.
+/// `forbid` at the crate root covers every module, the player's `main`
+/// module included, and cannot be relaxed by an inner `#![allow]` there.
+/// It lives in this server file, so `src/main.rs` (and the client's
+/// `SERVER_PREAMBLE_LINES = 1`) is unchanged.
 pub const HARNESS_ENTRY_SOURCE: &str = "// Server-owned entry point (pledge_compile_api). The player's code is\n\
 // the `main` module, src/main.rs.\n\
+#![forbid(unsafe_code)]\n\
 #[allow(special_module_name)]\n\
 mod main;\n\
 fn main() {\n    main::__pnc_harness::run();\n}\n";
+
+/// First line of the compile error shown when a harness mission's code
+/// uses `unsafe`.
+pub const UNSAFE_REFUSED_MESSAGE: &str = "error: this mission is checked by calling your code, \
+     and its checker does not allow `unsafe` code. Remove the `unsafe` block, function, impl or \
+     attribute: every mission before Act 9 can be solved in safe Rust.";
+
+/// True if rustc refused the build because of the `unsafe_code` lint
+/// (`#![forbid(unsafe_code)]` in [`HARNESS_ENTRY_SOURCE`]).
+pub fn refused_for_unsafe(stderr: &str) -> bool {
+    stderr.contains("forbid(unsafe_code)")
+        || stderr.lines().any(|l| {
+            l.starts_with("error: usage of an `unsafe`")
+                || l.starts_with("error: declaration of an `unsafe`")
+                || l.starts_with("error: implementation of an `unsafe`")
+        })
+}
+
+/// Make an `unsafe_code` refusal readable: lead with
+/// [`UNSAFE_REFUSED_MESSAGE`] and drop rustc's notes that point into the
+/// server's entry file (`the lint level is defined here --> src/pnc_entry.rs`),
+/// which a learner cannot see. Player diagnostics (`--> src/main.rs:L:C`)
+/// are kept verbatim, so their line numbers are unchanged.
+pub fn explain_unsafe_refusal(stderr: &str) -> String {
+    let mut kept: Vec<&str> = Vec::new();
+    let mut lines = stderr.lines().peekable();
+    while let Some(l) = lines.next() {
+        let t = l.trim_start();
+        // The lint note (`--> src/pnc_entry.rs`), and E0453's secondary
+        // span (`::: src/pnc_entry.rs`, "`forbid` level set here").
+        if t.starts_with("note: the lint level is defined here")
+            || (t.starts_with(":::") && t.contains("pnc_entry.rs"))
+        {
+            // Skip the note and its snippet (`-->`, gutter, caret lines).
+            while let Some(next) = lines.peek() {
+                let n = next.trim_start();
+                let snippet = n.starts_with("-->")
+                    || n.starts_with('|')
+                    || n.starts_with('^')
+                    || n.chars().next().is_some_and(|c| c.is_ascii_digit());
+                if !snippet {
+                    break;
+                }
+                lines.next();
+            }
+            continue;
+        }
+        kept.push(l);
+    }
+    format!("{UNSAFE_REFUSED_MESSAGE}\n{}", kept.join("\n"))
+}
 
 /// Fresh per-request nonce.
 fn new_nonce() -> String {
@@ -788,6 +848,14 @@ fn grade_harness(
     outcome.stdout = transcript.program.clone();
 
     if !outcome.compiled {
+        if refused_for_unsafe(&outcome.stderr) {
+            tracing::info!("expectations: harness build refused: player code uses `unsafe`");
+            let (filtered, _) = filter_harness_diagnostics(&outcome.stderr);
+            outcome.stderr = explain_unsafe_refusal(&filtered);
+            let mut g = GradedRun::unchecked(outcome, "did not build: `unsafe` is not allowed");
+            g.expected = Some(h.contract.to_string());
+            return Ok(g);
+        }
         let (filtered, removed) = filter_harness_diagnostics(&outcome.stderr);
         if removed {
             tracing::debug!("expectations: checker could not compile against player code");
@@ -913,6 +981,60 @@ fn static_check_failed(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn harness_entry_forbids_unsafe_without_touching_the_player_file() {
+        // The lint is a crate-level inner attribute of the SERVER entry...
+        let attrs: Vec<&str> = HARNESS_ENTRY_SOURCE
+            .lines()
+            .filter(|l| l.starts_with("#!["))
+            .collect();
+        assert_eq!(attrs, ["#![forbid(unsafe_code)]"]);
+        // ...placed before any item (inner attributes must be).
+        let first_item = HARNESS_ENTRY_SOURCE
+            .lines()
+            .position(|l| !l.starts_with("//") && !l.starts_with("#!["))
+            .unwrap();
+        let forbid = HARNESS_ENTRY_SOURCE
+            .lines()
+            .position(|l| l == "#![forbid(unsafe_code)]")
+            .unwrap();
+        assert!(forbid < first_item);
+        // The player's file still gets exactly the one-line preamble.
+        assert_eq!(PLAYER_PREAMBLE_LINES, 1);
+        assert_eq!(wasm_builder::PLAYER_PREAMBLE.lines().count(), 1);
+        assert!(!wasm_builder::PLAYER_PREAMBLE.contains("unsafe"));
+    }
+
+    #[test]
+    fn unsafe_refusal_is_detected_and_explained_with_player_lines_intact() {
+        // rustc 1.99's shape for an `unsafe` block under the entry's forbid.
+        let stderr = "error: usage of an `unsafe` block\n \
+                      --> src/main.rs:4:5\n  \
+                      |\n\
+                      4 |     unsafe { core::ptr::read_volatile(p) }\n  \
+                      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  \
+                      |\n\
+                      note: the lint level is defined here\n \
+                      --> src/pnc_entry.rs:3:11\n  \
+                      |\n\
+                      3 | #![forbid(unsafe_code)]\n  \
+                      |           ^^^^^^^^^^^\n\n\
+                      error: could not compile `player_submission` (bin \"player_submission\") due to 1 previous error";
+        assert!(refused_for_unsafe(stderr));
+        let shown = explain_unsafe_refusal(stderr);
+        assert!(shown.starts_with(UNSAFE_REFUSED_MESSAGE), "{shown}");
+        assert!(
+            shown.contains("--> src/main.rs:4:5"),
+            "player location kept: {shown}"
+        );
+        assert!(!shown.contains("pnc_entry"), "server file hidden: {shown}");
+        assert!(!shown.contains("forbid(unsafe_code)"), "{shown}");
+        // An ordinary type error is not an unsafe refusal.
+        assert!(!refused_for_unsafe(
+            "error[E0308]: mismatched types\n --> src/main.rs:3:9\n"
+        ));
+    }
 
     #[test]
     fn normalize_unifies_line_endings_and_trailing_space() {

@@ -327,13 +327,19 @@ pub fn run_wasm_with_compile_timeout(
     let module = match compile_bounded(&engine, bytes, compile_timeout)? {
         Some(m) => m,
         None => {
+            let budget = if compile_timeout.subsec_millis() == 0 {
+                format!("{}s", compile_timeout.as_secs())
+            } else {
+                format!("{}ms", compile_timeout.as_millis())
+            };
+            tracing::warn!(
+                ?compile_timeout,
+                "wasm_runner: module compile budget exceeded"
+            );
             return Ok(RunVerdict {
                 ok: false,
                 stdout: String::new(),
-                stderr: format!(
-                    "module compile exceeded {}s; program too large to run",
-                    compile_timeout.as_secs()
-                ),
+                stderr: format!("module compile exceeded {budget}; program too large to run"),
             });
         }
     };

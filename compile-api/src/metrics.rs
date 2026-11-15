@@ -30,10 +30,12 @@ pub enum RejectReason {
     Input,
     /// Body read timeout or whole-request deadline.
     Timeout,
+    /// The builder service could not be reached or never took the request.
+    Unavailable,
 }
 
 impl RejectReason {
-    const ALL: [RejectReason; 7] = [
+    const ALL: [RejectReason; 8] = [
         Self::Auth,
         Self::Rate,
         Self::Queue,
@@ -41,6 +43,7 @@ impl RejectReason {
         Self::SourcePolicy,
         Self::Input,
         Self::Timeout,
+        Self::Unavailable,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -52,6 +55,7 @@ impl RejectReason {
             Self::SourcePolicy => "source_policy",
             Self::Input => "input",
             Self::Timeout => "timeout",
+            Self::Unavailable => "unavailable",
         }
     }
 

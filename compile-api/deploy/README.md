@@ -9,15 +9,16 @@
 | `verify-sandbox.sh` | Operator proof: positive-evidence sandbox probes, config refusals, exact HTTP checks |
 
 **Status: verified on one real Linux host** (openSUSE Leap Micro 6.2,
-kernel 6.12, systemd 257, bubblewrap 0.11, SELinux permissive; 2026-11-14
-and again 2026-11-15 after the wasmtime 50 upgrade and the run-timeout fix;
-evidence in `.claude/reviews/linux-verification-2026-11-14.md` and
-`-2026-11-15.md`). **Not yet run on Debian/Ubuntu** (AppArmor's
+kernel 6.12, systemd 257, bubblewrap 0.11, SELinux permissive; 2026-11-14,
+again 2026-11-15 after the wasmtime 50 upgrade and the run-timeout fix,
+and a third time after the run sandbox; evidence in
+`.claude/reviews/linux-verification-2026-11-14.md`, `-2026-11-15.md` and
+`-2026-11-15b.md`). **Not yet run on Debian/Ubuntu** (AppArmor's
 unprivileged-userns restriction is unverified) **nor under SELinux
 enforcing** (see "SELinux and AppArmor" below). Every install is still a
 verification pass: both services run fail-closed self-tests at startup,
 and `verify-sandbox.sh` must print `PASS`. **Do not expose the service
-until step 9 passes.**
+until steps 5b and 9 pass.**
 
 ## How it fits together
 
@@ -25,7 +26,9 @@ until step 9 passes.**
 internet --TLS--> Caddy --> 127.0.0.1:7878  pnc-compile-api.service  (user pnc-api, reads /etc/pnc-compile/env)
 Prometheus -------------> 127.0.0.1:9878  same process, /metrics only, never proxied
 pnc-compile-api --unix socket /run/pnc-builder/builder.sock--> pnc-builder.service (user pnc-builder, no secrets)
-pnc-builder --per request--> `pledge_compile_api job` --> prlimit -> bwrap -> cargo/rustc ; then wasmtime run
+pnc-builder --per request--> `pledge_compile_api job` (supervisor, no player code)
+    build: prlimit -> bwrap [/usr minus /usr/local, toolchain, job dir] -> cargo/rustc
+    run:   prlimit -> bwrap [server binary + its libs only] -> `pledge_compile_api run-wasm` (wasmtime)
 ```
 
 - rustc evaluates `include_str!`, `include_bytes!` and `#[path]` with the
@@ -33,9 +36,40 @@ pnc-builder --per request--> `pledge_compile_api job` --> prlimit -> bwrap -> ca
   bubblewrap and see only `/usr` (with an empty `/usr/local`), the
   toolchain and their own job dir: no `/etc`, no `/proc`, no network, a
   cleared environment, per-build rlimits.
-- The builder holds no secret, so a rustc or wasmtime escape lands in a
-  process with nothing worth stealing. The API holds the tokens and keeps
-  full systemd hardening because it never builds or runs player code.
+- The built program runs in wasmtime inside a **second, smaller bwrap
+  sandbox** (the `run-wasm` child; `src/run_sandbox.rs`). The job process
+  hands it the module and limits on a pipe and reads one JSON verdict back
+  (both capped); fuel, epoch interruption, the 5 s async timeout, the
+  memory limiter and the backstop all apply inside it, and the job process
+  kills its whole tree at its own deadline.
+- **What a wasmtime escape reaches** (machine code running as the
+  `pnc-builder` uid inside the run sandbox): its own memory, the module
+  and limits it was given, its stdout (so it can forge the verdict for its
+  OWN submission, which it could do by cheating anyway) and its stderr
+  (logged at debug, capped); read-only copies of the server binary,
+  `ld-linux`, `libc`, `libm` and `libgcc_s`; a loopback-only network
+  namespace. It does **not** see `/etc`, `/usr`, `/usr/local`, `/opt`,
+  `/var`, `/home`, `/tmp`, `/proc`, `/dev` or `/run`: no host file, no
+  token (the builder holds none anyway), no builder socket, no D-Bus or
+  journald socket, no other job's files. It runs in its own PID
+  namespace with no capabilities, so `setsid`/double-fork does not escape
+  the kill: the namespace dies with its init when the job process kills
+  the sandbox. What it can still do: use CPU until `RLIMIT_CPU` (30 s) or
+  the run child's 19 s deadline, memory up to the builder unit's
+  `MemoryMax` (shared with the other job; the cgroup OOM killer then
+  stops the run with a "stopped by the server" verdict) and tasks up to
+  `TasksMax`. Getting further needs a second, independent escape: a Linux
+  kernel bug reachable from an unprivileged user namespace, or a bug in
+  the job process's strict, size-capped JSON decoding of its reply.
+  `verify-sandbox.sh` proves the run sandbox's view on the deployed host
+  with a native probe (step 9).
+- The builder holds no secret. The API holds the tokens and keeps full
+  systemd hardening because it never builds or runs player code. The
+  builder unit additionally hides `/usr/local` (except the binary), `/opt`
+  (except `/opt/pnc`), `/run` (except its own socket dir), `/var/lib`,
+  `/var/log` and similar from the builder itself, and the builder exits if
+  its socket is ever replaced (systemd then kills the unit's cgroup and
+  restarts it on a clean path).
 - Each job is its own process, killed with its whole process tree at a
   50 s deadline. If a job's processes cannot be killed, the builder exits
   (status 70) and systemd kills its whole cgroup and restarts it.
@@ -114,19 +148,24 @@ with exactly one rustc. The version lives in one place,
 TC="$(pledge_compile_api toolchain)"      # e.g. 1.99.0
 sudo env RUSTUP_HOME=/opt/rust/rustup CARGO_HOME=/opt/rust/cargo \
   /opt/rust/cargo/bin/rustup toolchain install "$TC" --profile minimal --target wasm32-wasip1
-sudo chmod -R a+rX /opt/rust
-ls -d /opt/rust/rustup/toolchains/"$TC"-*     # this is PNC_TOOLCHAIN_DIR
+sudo install -d -m 0755 /opt/pnc/toolchains
+sudo cp -a /opt/rust/rustup/toolchains/"$TC"-* /opt/pnc/toolchains/
+sudo chmod -R a+rX /opt/pnc
+ls -d /opt/pnc/toolchains/"$TC"-*     # this is PNC_TOOLCHAIN_DIR
 ```
 
 The builder runs `<PNC_TOOLCHAIN_DIR>/bin/rustc --version` at startup and
 refuses to start on any other version. `wasm32-wasip1` is required.
 
-Where the toolchain (and the binary) may live: the builder unit has
-`PrivateTmp=yes` (which privatises `/var/tmp` as well as `/tmp`) and
-`ProtectHome=yes`, so anything under `/tmp`, `/var/tmp` or `/home` is
-invisible to it. `/opt` (as above) or `/usr/local` work. A toolchain dir
-is relocatable: `cp -a` of `toolchains/<TC>-<triple>` to another path
-works.
+Where the toolchain (and the binary) must live: **the toolchain under
+`/opt/pnc`, the binary at `/usr/local/bin/pledge_compile_api`.** The
+builder unit replaces `/opt` and `/usr/local` with empty read-only tmpfs
+mounts and binds back only `/opt/pnc` and the binary
+(`TemporaryFileSystem=`/`BindReadOnlyPaths=`); it also has `PrivateTmp=yes`
+(which privatises `/var/tmp` as well as `/tmp`) and `ProtectHome=yes`. A
+toolchain anywhere else is invisible to the builder, which then fails its
+startup self-test (closed). A toolchain dir is relocatable: `cp -a` of
+`toolchains/<TC>-<triple>` to another path works, as above.
 
 ## 5. Configuration files
 
@@ -152,6 +191,35 @@ In `/etc/pnc-compile/env` set at least `PNC_AUTH_TOKENS`,
 Leave `PNC_BIND=127.0.0.1:7878` and `PNC_METRICS_BIND=127.0.0.1:9878`. The
 unit sets `PNC_BUILDER_SOCKET`; with it unset the API refuses to start
 whenever a token is configured.
+
+## 5b. Check the host for world-readable secrets (before deploying)
+
+Player code never sees the host directly, but what the layers DO see is
+"world-readable": the build sandbox binds `/usr` (minus `/usr/local`), and
+the builder and job processes themselves (no player code, but the first
+thing a sandbox escape would land in) can read anything world-readable
+outside the paths the builder unit hides: chiefly `/etc`, `/usr` and
+`/opt/pnc`. A credential in a world-readable file there is one escape
+away from a player. List candidates by NAME and MODE only (this prints
+no file contents; do not `cat` what it finds on a shared box, fix the
+mode or move the file):
+
+```bash
+sudo find /etc /usr /opt/pnc -xdev -type f -perm -o+r \
+  \( -iname '*secret*' -o -iname '*token*' -o -iname '*passw*' -o -iname '*credential*' \
+     -o -iname '*.env' -o -iname '.env*' -o -iname '*.pem' -o -iname '*.key' -o -iname '*.p12' \
+     -o -iname 'id_rsa*' -o -iname 'id_ed25519*' -o -iname '*.kdbx' -o -iname '*apikey*' \) \
+  -printf '%m %u:%g %p\n' 2>/dev/null | sort -k3
+```
+
+Expected: only public material (CA bundles, `*.pem` certificates without
+keys, package docs). For each real secret: `chmod o-r` (or move it out of
+those trees). Names do not catch everything: on a shared host also skim
+`sudo find /usr/local /opt -xdev -type f -perm -o+r -printf '%m %u %p\n'`
+(paths only). The first verification host had dozens of world-readable
+files with credentials under `/usr/local`; the builder now hides
+`/usr/local`, but the rule stands: no world-readable secrets anywhere a
+service user could look.
 
 ## 6. Install and check both units
 
@@ -223,6 +291,9 @@ If the builder exits instead, the log names the failing step:
 | `SIGSYS` / `Operation not permitted` on another syscall | find it with `journalctl -k`, check the group with `systemd-analyze syscall-filter`, add that one syscall to the allow line |
 | `loopback: Failed RTM_NEWADDR` | `AF_NETLINK` missing from `RestrictAddressFamilies=` |
 | `does not match the pinned 1.99.0` | step 4: wrong toolchain or `PNC_TOOLCHAIN_DIR` |
+| toolchain check: `No such file or directory` for a toolchain that exists | it is not under `/opt/pnc` (the unit hides the rest of `/opt`): step 4 |
+| self-test: `run child: exited with ...` / `could not locate the server binary or its libraries` | the run sandbox could not start: check `journalctl -u pnc-builder` for the `bwrap:` line; a binary replaced on disk while the builder runs shows `(deleted)`: restart the builder after every install |
+| `builder: socket watch: ... was replaced` then exit status 71 | something unlinked or re-bound `/run/pnc-builder/builder.sock`; systemd killed the cgroup and restarted the builder. Investigate: nothing but the builder should touch that path |
 | allocation error in the self-test | raise `PNC_BUILD_ADDRESS_SPACE_MIB` (max 1408) |
 
 ### Linux-only behaviour (fixed on the first Linux host, 2026-11-14)
@@ -248,6 +319,33 @@ operator recognises them:
    often live there; on the first host `include_bytes!` of
    `/usr/local/bin/pledge_compile_api` compiled before the fix). A
    toolchain under `/usr/local` is bound back on top.
+
+Added after the third security review (verified on the same host,
+`linux-verification-2026-11-15b.md`):
+
+4. **The run phase has its own sandbox.** wasmtime runs in a
+   `pledge_compile_api run-wasm` child under
+   `prlimit --cpu=30 --fsize=0 --nofile=64 --core=0 -- bwrap --unshare-all
+   --die-with-parent --cap-drop ALL --clearenv`, with only the binary
+   (at `/pnc/pledge_compile_api`) and the shared objects it maps
+   (`ld-linux`, `libc`, `libm`, `libgcc_s`, read from the job process's
+   own `/proc/self/maps`) bound read-only, started through the loader with
+   `LD_LIBRARY_PATH` (there is no `/etc/ld.so.cache` inside). The JIT needs
+   nothing more: compiled code is anonymous memory made executable with
+   `mprotect`, which `noexec`/`NoExecPaths=` do not affect, bwrap adds no
+   seccomp filter, and the unit leaves `MemoryDenyWriteExecute=` off.
+   Under SELinux the domain must allow `execmem` (unconfined does).
+5. **Stray sweep after every run.** The builder and each job process are
+   child subreapers, so a process that left its group (`setsid`) and
+   outlived its parent is re-parented to them; after every run, normal
+   exit or timeout, it is SIGKILLed with its descendants and reaped. The
+   journal line is `processes outlived their parent and were re-parented
+   to this supervisor`.
+6. **Bounded builder connect.** The API connects to the socket without
+   blocking (2 s) and needs the builder's ack within 10 s; otherwise the
+   request gets `503 builder_unavailable` with `Retry-After` and its slot
+   back at once (before: a stopped builder with a leftover socket could
+   hold an API slot for 65 s).
 
 Hardening tried on the first Linux host (2026-11-14): `ProcSubset=pid` on
 the builder breaks bwrap (`Can't read /proc/sys/kernel/overflowuid`), so it
@@ -283,7 +381,7 @@ curl -s http://127.0.0.1:9878/metrics | head -3   # (with -H "Authorization: Bea
 Prometheus scrapes `127.0.0.1:9878` directly (add
 `authorization: { type: Bearer, credentials: <PNC_METRICS_TOKENS value> }`
 if set). Series: `pnc_http_requests_total{route,status}`,
-`pnc_rejections_total{reason=auth|rate|queue|body|source_policy|input|timeout}`,
+`pnc_rejections_total{reason=auth|rate|queue|body|source_policy|input|timeout|unavailable}`,
 `pnc_rate_limit_fail_open_total`, `pnc_rate_limit_tracked_clients{limiter}`,
 `pnc_rate_limit_evictions_total{limiter}`, `pnc_builds_in_flight`,
 `pnc_builds_queued`, `pnc_build_duration_seconds`, `pnc_run_duration_seconds`.
@@ -312,10 +410,24 @@ the default; `runuser` or `unit` for one):
   probes: it applies the deny-list to every request, by design.)
 
 What it proves is listed at the top of the script; in short:
-rustc inside the sandbox reports `couldn't read \`<path>\`: No such file
-or directory` for the env files, `/etc/passwd`, the builder socket and the
-API's `/proc` entry (all of which exist on the host), while an in-sandbox
-file is readable through the same mechanism.
+
+- **Shipped values**: every key security line of the builder unit
+  (`SHIPPED` table) is present in the installed unit file and reported by
+  `systemctl show` for the running builder; `ProcSubset=`, `PrivateUsers=`
+  and `MemoryDenyWriteExecute=` are unset. Loosening the unit (edit or
+  drop-in) fails here.
+- **Build sandbox**: rustc inside it reports `couldn't read \`<path>\`: No
+  such file or directory` for the env files, `/etc/passwd`, the builder
+  socket, `/proc/sys/kernel/overflowuid` (which the `[unit]` pass first
+  shows the unit itself CAN read, so only bwrap hides it) and, in the
+  `[runuser]` pass, the API's `/proc/<pid>/environ`; an in-sandbox file is
+  readable through the same mechanism (positive control).
+- **Run sandbox**: `sandbox-verify-run` starts the exact run sandbox with
+  the native `run-probe` in place of wasmtime. It must see its own binary
+  and its stdin and get "refused" from a loopback port (positive
+  controls), and find none of the probed host paths, no builder socket,
+  no route out (`network_unreachable`), a fresh PID namespace, the
+  builder's uid, the run rlimits and an environment without the canary.
 
 ## 10. Negative test: the API must refuse unsandboxed builds with tokens
 
@@ -378,8 +490,13 @@ targeted policy does not confine it. After the full flow (startup
 self-tests, both `verify-sandbox.sh` passes, HTTP builds, run timeouts,
 the cgroup OOM kill) the audit log held **no AVC, USER_AVC or SELINUX_ERR
 record for `pledge_compile_api`, `bwrap`, `prlimit`, `cargo`, `rustc` or
-`rust-lld`**, so an enforcing host with the same labels would block nothing
-the services do. (The only AVCs seen were four from an early version of
+`rust-lld`**. That says only that an enforcing host would block nothing
+the services do **while they run in the unconfined `unconfined_service_t`
+domain**; a policy that confines them (or a binary installed where it
+gets a confined label) is a different matter: `deny_execmem` would stop
+the wasmtime JIT in the run sandbox, and user-namespace or `mount`
+denials would stop bwrap. All of these fail closed (startup self-test).
+Never "fix" a denial with `setenforce 0`. (The only AVCs seen were four from an early version of
 `verify-sandbox.sh`: PID 1, `init_t`, writing a probe's stderr file
 labelled `user_tmp_t` that `systemd-run --pipe` had handed it. Enforcing
 mode would have denied that; the script now passes pipes, and the rerun
@@ -404,8 +521,14 @@ domain. Operator rules:
 **Debian/Ubuntu (AppArmor): unverified.** Ubuntu 24.04+ restricts
 unprivileged user namespaces through AppArmor
 (`kernel.apparmor_restrict_unprivileged_userns=1`); bwrap then needs its
-profile (step 1). Nothing in this repository has run on such a host yet:
-treat the first Ubuntu/Debian install as a verification pass (startup
+profile (step 1), and whether that profile still attaches to a bwrap
+started under `NoNewPrivileges=yes` is untested. Debian 12 ships systemd
+252, which groups some syscalls differently from 257 (re-run the step 6
+expansion check and read the journal for `SIGSYS`), and its `systemctl
+show` may format some values differently from the script's `SHIPPED`
+table (a mismatch there fails closed: compare by hand before adjusting
+the table). Nothing in this repository has run on such a host yet: treat
+the first Ubuntu/Debian install as a verification pass (startup
 self-test, then step 9 must print `PASS`).
 
 ## Updating

@@ -54,6 +54,42 @@
 //! Not covered: `RLIMIT_NPROC` is per-*user* (it would count the server's
 //! own threads), so process count is bounded by the unit's `TasksMax`
 //! and the PID namespace instead.
+//!
+//! # The run sandbox (third security review, S-1)
+//!
+//! The built module is executed by wasmtime, and wasmtime is a JIT: a bug
+//! in it would put player-controlled machine code in whatever process runs
+//! it. In `bwrap` mode that process is a separate `pledge_compile_api
+//! run-wasm` child started inside its own bubblewrap sandbox
+//! ([`run_bwrap_spec`], used by [`crate::run_sandbox`]). The job process
+//! stays the supervisor (outside, with the deadlines and the process-tree
+//! kill) and the two talk over pipes only: module bytes and limits in on
+//! stdin, one JSON verdict out on stdout, both capped. Inside, the run sees
+//! only:
+//!
+//! - the server binary, read-only, at [`SANDBOX_RUN_EXE`];
+//! - the shared objects that binary is linked against (the dynamic loader,
+//!   libc, libm, libgcc_s), each bound read-only at its own path, found
+//!   from the job process's own `/proc/self/maps` ([`parse_mapped_objects`]);
+//! - nothing else: no `/usr`, no `/etc`, no `/proc`, no `/dev`, no `/tmp`,
+//!   no `/run` (so no builder socket and no host Unix socket), no job dir,
+//!   no toolchain; an empty network namespace (loopback only), new PID,
+//!   IPC, UTS, cgroup and user namespaces, no capabilities, an environment
+//!   with only `LD_LIBRARY_PATH` (and `RUST_LOG` when the job has it), and
+//!   it dies with its parent.
+//!
+//! `prlimit` adds `RLIMIT_CPU`, `RLIMIT_NOFILE`, `RLIMIT_FSIZE=0` and no
+//! core dumps. There is deliberately no `RLIMIT_AS`: wasmtime reserves
+//! several GiB of address space per linear memory (guard regions) and the
+//! job process never had one either; real memory stays bounded by the
+//! store limiter and the unit's `MemoryMax`.
+//!
+//! The JIT needs nothing extra from the sandbox: compiled code lives in
+//! anonymous memory that wasmtime maps writable, fills and then
+//! `mprotect`s executable. Mount flags (`noexec`, `NoExecPaths=`) apply
+//! to file mappings only, bubblewrap installs no seccomp filter of its own,
+//! and the builder unit leaves `MemoryDenyWriteExecute=` off (verified on
+//! Linux: the startup self-test runs a module through this sandbox).
 
 use std::ffi::{OsStr, OsString};
 use std::fmt;
@@ -546,6 +582,190 @@ pub fn cargo_build_spec(
     }
 }
 
+// ---- run sandbox ---------------------------------------------------------------
+
+/// Where the server binary appears inside the run sandbox.
+pub const SANDBOX_RUN_EXE: &str = "/pnc/pledge_compile_api";
+/// `RLIMIT_CPU` of the run child, seconds. Module compile (10 s budget)
+/// plus the run (5 s) across wasmtime's helper threads, with headroom;
+/// the wall-clock deadlines are far tighter.
+pub const RUN_CPU_SECS: u64 = 30;
+/// `RLIMIT_NOFILE` of the run child: stdio plus the runtime's few fds.
+pub const RUN_NOFILE: u64 = 64;
+
+/// What the run sandbox binds from the host: the server binary and the
+/// shared objects it is linked against.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunImage {
+    /// The server binary on the host.
+    pub exe: PathBuf,
+    /// The dynamic loader (`ld-linux-*.so*`), when the binary has one. The
+    /// sandbox runs `<loader> /pnc/pledge_compile_api ...`, so the binary's
+    /// own interpreter path (`PT_INTERP`) need not exist inside.
+    pub loader: Option<PathBuf>,
+    /// Every other mapped shared object, in map order.
+    pub libs: Vec<PathBuf>,
+}
+
+/// Host prefixes a mapped object may never come from (it would be bound
+/// into the run sandbox).
+const FORBIDDEN_RUN_BIND_PREFIXES: &[&str] = &[
+    "/etc", "/proc", "/sys", "/dev", "/run", "/tmp", "/var", "/home", "/root",
+];
+
+/// Validate one path the run sandbox would bind (pure).
+pub fn validate_run_bind(p: &Path) -> Result<(), String> {
+    let s = p.to_string_lossy();
+    if !s.starts_with('/') {
+        return Err(format!("{s} is not absolute"));
+    }
+    if s.contains("/../") || s.ends_with("/..") || s.contains("/./") || s.contains("//") {
+        return Err(format!("{s} has `.`/`..`/empty components"));
+    }
+    if s.ends_with(" (deleted)") {
+        return Err(format!("{s} was deleted after it was mapped"));
+    }
+    for bad in FORBIDDEN_RUN_BIND_PREFIXES {
+        if s.as_ref() == *bad || s.starts_with(&format!("{bad}/")) {
+            return Err(format!("{s} is under {bad}"));
+        }
+    }
+    Ok(())
+}
+
+/// Pure: the file-backed, executable mappings in a `/proc/<pid>/maps` text,
+/// split into the loader and the other shared objects (excluding `exe`).
+///
+/// Line format: `start-end perms offset dev inode path`; the path may hold
+/// spaces. Only mappings with `x` in `perms`, a non-zero inode and an
+/// absolute path count (`[vdso]`, `[stack]`, anonymous memory and the JIT's
+/// own code pages do not). Every path is checked with
+/// [`validate_run_bind`].
+pub fn parse_mapped_objects(maps: &str, exe: &Path) -> Result<RunImage, String> {
+    let exe_s = exe.to_string_lossy();
+    let mut loader: Option<PathBuf> = None;
+    let mut libs: Vec<PathBuf> = Vec::new();
+    for line in maps.lines() {
+        let mut fields = line.splitn(6, ' ');
+        let (Some(_range), Some(perms), Some(_off), Some(_dev), Some(inode)) = (
+            fields.next(),
+            fields.next(),
+            fields.next(),
+            fields.next(),
+            fields.next(),
+        ) else {
+            continue;
+        };
+        let path = fields.next().unwrap_or("").trim_start();
+        if !perms.contains('x') || inode == "0" || !path.starts_with('/') {
+            continue;
+        }
+        if path == exe_s || path.strip_suffix(" (deleted)") == Some(exe_s.as_ref()) {
+            continue;
+        }
+        let p = PathBuf::from(path);
+        validate_run_bind(&p)?;
+        let is_loader = p
+            .file_name()
+            .and_then(OsStr::to_str)
+            .is_some_and(|n| n.starts_with("ld-linux") || n.starts_with("ld-musl"));
+        if is_loader {
+            if loader.as_ref().is_some_and(|l| l != &p) {
+                return Err(format!(
+                    "two dynamic loaders mapped: {:?} and {p:?}",
+                    loader
+                ));
+            }
+            loader = Some(p);
+        } else if !libs.contains(&p) {
+            libs.push(p);
+        }
+    }
+    if loader.is_none() && !libs.is_empty() {
+        return Err("shared objects are mapped but no dynamic loader was found".to_string());
+    }
+    Ok(RunImage {
+        exe: exe.to_path_buf(),
+        loader,
+        libs,
+    })
+}
+
+/// Pure: the `prlimit ... -- bwrap ... -- [loader] /pnc/pledge_compile_api
+/// <subcommand>` command for the run sandbox. See the module docs for what
+/// is (not) visible inside. `inner_env` is added to the sandbox's (cleared)
+/// environment after `LD_LIBRARY_PATH`.
+pub fn run_bwrap_spec(
+    settings: &SandboxSettings,
+    image: &RunImage,
+    subcommand: &str,
+    inner_env: &[(&str, OsString)],
+) -> CommandSpec {
+    let mut args: Vec<OsString> = vec![
+        os(format!("--cpu={RUN_CPU_SECS}")),
+        // The run writes no files at all: stdout/stderr are pipes.
+        os("--fsize=0"),
+        os(format!("--nofile={RUN_NOFILE}")),
+        os("--core=0"),
+        os("--"),
+        settings.bwrap_path.clone().into_os_string(),
+        // user, ipc, pid, net, uts, cgroup (and mount) namespaces.
+        os("--unshare-all"),
+        os("--die-with-parent"),
+        os("--cap-drop"),
+        os("ALL"),
+        os("--clearenv"),
+    ];
+    // Loader and libraries, each a single read-only file at its own path.
+    for lib in image.loader.iter().chain(image.libs.iter()) {
+        args.push(os("--ro-bind"));
+        args.push(lib.as_os_str().to_os_string());
+        args.push(lib.as_os_str().to_os_string());
+    }
+    args.push(os("--ro-bind"));
+    args.push(image.exe.as_os_str().to_os_string());
+    args.push(os(SANDBOX_RUN_EXE));
+    args.push(os("--chdir"));
+    args.push(os("/"));
+    // The loader finds the libraries here (there is no ld.so.cache: /etc
+    // is not in the sandbox).
+    let mut lib_dirs: Vec<&Path> = Vec::new();
+    for lib in image.loader.iter().chain(image.libs.iter()) {
+        if let Some(dir) = lib.parent()
+            && !lib_dirs.contains(&dir)
+        {
+            lib_dirs.push(dir);
+        }
+    }
+    if !lib_dirs.is_empty() {
+        let joined = lib_dirs
+            .iter()
+            .map(|d| d.to_string_lossy().replace('\\', "/"))
+            .collect::<Vec<_>>()
+            .join(":");
+        args.push(os("--setenv"));
+        args.push(os("LD_LIBRARY_PATH"));
+        args.push(os(joined));
+    }
+    for (k, v) in inner_env {
+        args.push(os("--setenv"));
+        args.push(os(k));
+        args.push(v.clone());
+    }
+    args.push(os("--"));
+    if let Some(loader) = &image.loader {
+        args.push(loader.as_os_str().to_os_string());
+    }
+    args.push(os(SANDBOX_RUN_EXE));
+    args.push(os(subcommand));
+    CommandSpec {
+        program: settings.prlimit_path.clone().into_os_string(),
+        args,
+        env: Vec::new(),
+        cwd: None,
+    }
+}
+
 /// Startup self-test for `bwrap` mode. Refuse to serve if any step fails:
 ///
 /// 1. `prlimit` and `bwrap` exist and run.
@@ -904,6 +1124,195 @@ mod tests {
             );
         }
         assert!(s.args.iter().any(|a| a == "--offline"));
+    }
+
+    // ---- run sandbox ----------------------------------------------------
+
+    const EXE: &str = "/usr/local/bin/pledge_compile_api";
+    /// Trimmed real `/proc/self/maps` shape (openSUSE, glibc 2.40).
+    const MAPS: &str = "\
+55d0c0a00000-55d0c0b00000 r--p 00000000 00:2a 1234 /usr/local/bin/pledge_compile_api
+55d0c0b00000-55d0c1500000 r-xp 00100000 00:2a 1234 /usr/local/bin/pledge_compile_api
+7f1e00000000-7f1e00021000 rw-p 00000000 00:00 0
+7f1e10000000-7f1e10200000 r-xp 00000000 00:00 0
+7f1e20000000-7f1e20028000 r--p 00000000 00:2a 99 /usr/lib64/libc.so.6
+7f1e20028000-7f1e201a0000 r-xp 00028000 00:2a 99 /usr/lib64/libc.so.6
+7f1e20400000-7f1e20480000 r-xp 00010000 00:2a 98 /usr/lib64/libm.so.6
+7f1e20500000-7f1e20520000 r-xp 00003000 00:2a 97 /usr/lib64/libgcc_s.so.1
+7f1e20600000-7f1e20601000 r--p 00000000 00:2a 95 /usr/lib/locale/locale archive
+7f1e20700000-7f1e20730000 r-xp 00001000 00:2a 96 /usr/lib64/ld-linux-x86-64.so.2
+7ffd1a000000-7ffd1a021000 rw-p 00000000 00:00 0 [stack]
+7ffd1a1fe000-7ffd1a200000 r-xp 00000000 00:00 0 [vdso]
+";
+
+    fn image() -> RunImage {
+        parse_mapped_objects(MAPS, Path::new(EXE)).expect("maps parse")
+    }
+
+    fn run_spec() -> CommandSpec {
+        run_bwrap_spec(
+            &settings(),
+            &image(),
+            "run-wasm",
+            &[("RUST_LOG", os("warn"))],
+        )
+    }
+
+    #[test]
+    fn maps_parser_finds_exactly_the_loader_and_libraries() {
+        let img = image();
+        assert_eq!(img.exe, PathBuf::from(EXE));
+        assert_eq!(
+            img.loader,
+            Some(PathBuf::from("/usr/lib64/ld-linux-x86-64.so.2"))
+        );
+        assert_eq!(
+            img.libs,
+            [
+                "/usr/lib64/libc.so.6",
+                "/usr/lib64/libm.so.6",
+                "/usr/lib64/libgcc_s.so.1"
+            ]
+            .map(PathBuf::from)
+        );
+        // Non-executable file maps (the locale archive), anonymous memory,
+        // JIT pages, [stack] and [vdso] are not bound.
+        let all: Vec<_> = img.libs.iter().chain(img.loader.iter()).collect();
+        assert!(!all.iter().any(|p| p.to_string_lossy().contains("locale")));
+        // A statically linked binary maps nothing else: no loader, no libs.
+        let static_maps = "1000-2000 r-xp 00000000 00:2a 1 /usr/local/bin/pledge_compile_api\n";
+        let s = parse_mapped_objects(static_maps, Path::new(EXE)).unwrap();
+        assert!(s.loader.is_none() && s.libs.is_empty());
+    }
+
+    #[test]
+    fn maps_parser_refuses_objects_from_host_areas_or_deleted_files() {
+        for bad in [
+            "1000-2000 r-xp 0 00:2a 5 /tmp/evil.so",
+            "1000-2000 r-xp 0 00:2a 5 /etc/ld.so.preload.so",
+            "1000-2000 r-xp 0 00:2a 5 /home/x/lib.so",
+            "1000-2000 r-xp 0 00:2a 5 /usr/lib64/libc.so.6 (deleted)",
+            "1000-2000 r-xp 0 00:2a 5 /usr/lib64/../../etc/x.so",
+            "1000-2000 r-xp 0 00:2a 5 /run/user/1/x.so",
+        ] {
+            let maps = format!("{bad}\n1000-2000 r-xp 0 00:2a 6 /usr/lib64/ld-linux-x86-64.so.2\n");
+            assert!(
+                parse_mapped_objects(&maps, Path::new(EXE)).is_err(),
+                "{bad}"
+            );
+        }
+        // Libraries without a loader cannot be started.
+        assert!(
+            parse_mapped_objects(
+                "1000-2000 r-xp 0 00:2a 5 /usr/lib64/libc.so.6\n",
+                Path::new(EXE)
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn run_sandbox_outer_is_prlimit_then_bwrap_with_empty_env_and_run_rlimits() {
+        let s = run_spec();
+        assert_eq!(s.program, OsString::from(DEFAULT_PRLIMIT_PATH));
+        assert!(s.env.is_empty(), "outer env must be empty: {:?}", s.env);
+        let argv = s.argv_lossy();
+        let sep = argv.iter().position(|a| a == "--").unwrap();
+        assert_eq!(argv[sep + 1], DEFAULT_BWRAP_PATH);
+        let pre = &argv[..sep];
+        assert!(pre.contains(&format!("--cpu={RUN_CPU_SECS}")));
+        assert!(pre.contains(&"--fsize=0".to_string()));
+        assert!(pre.contains(&format!("--nofile={RUN_NOFILE}")));
+        assert!(pre.contains(&"--core=0".to_string()));
+    }
+
+    #[test]
+    fn run_sandbox_binds_only_the_binary_and_its_libraries_read_only() {
+        let argv = run_spec().argv_lossy();
+        let b = binds(&argv);
+        assert!(
+            b.iter().all(|(flag, _, _)| flag == "--ro-bind"),
+            "every bind is read-only: {b:?}"
+        );
+        let mut srcs: Vec<String> = b.iter().map(|(_, s, _)| norm(s)).collect();
+        srcs.sort();
+        let mut want = vec![
+            EXE.to_string(),
+            "/usr/lib64/ld-linux-x86-64.so.2".to_string(),
+            "/usr/lib64/libc.so.6".to_string(),
+            "/usr/lib64/libgcc_s.so.1".to_string(),
+            "/usr/lib64/libm.so.6".to_string(),
+        ];
+        want.sort();
+        assert_eq!(srcs, want, "exactly the binary and its libraries");
+        // Libraries at their own path; the binary at the fixed in-sandbox path.
+        for (_, src, dst) in &b {
+            if norm(src) == EXE {
+                assert_eq!(dst, SANDBOX_RUN_EXE);
+            } else {
+                assert_eq!(norm(src), *dst);
+            }
+        }
+        let bw = bwrap_args(&argv);
+        // No directory of the host at all: no /usr, /etc, /proc, /dev,
+        // /tmp, /run, job dir or toolchain.
+        for flag in [
+            "--proc",
+            "--dev",
+            "--tmpfs",
+            "--bind",
+            "--dev-bind",
+            "--symlink",
+        ] {
+            assert!(!bw.iter().any(|a| a == flag), "{flag} in {bw:?}");
+        }
+        for host in ["/usr", "/etc", "/run", "/tmp", TOOLCHAIN, JOB] {
+            assert!(
+                !b.iter().any(|(_, s, _)| norm(s) == host),
+                "{host} bound: {b:?}"
+            );
+        }
+        assert!(!argv.iter().any(|a| a.contains("builder.sock")));
+    }
+
+    #[test]
+    fn run_sandbox_unshares_everything_and_runs_the_subcommand_via_the_loader() {
+        let argv = run_spec().argv_lossy();
+        let b = bwrap_args(&argv);
+        for flag in ["--unshare-all", "--die-with-parent", "--clearenv"] {
+            assert!(b.iter().any(|a| a == flag), "{flag}");
+        }
+        assert!(b.windows(2).any(|w| w == ["--cap-drop", "ALL"]));
+        assert!(!b.iter().any(|a| a == "--share-net"));
+        let set: Vec<(&str, &str)> = b
+            .windows(3)
+            .filter(|w| w[0] == "--setenv")
+            .map(|w| (w[1].as_str(), w[2].as_str()))
+            .collect();
+        assert_eq!(
+            set,
+            [("LD_LIBRARY_PATH", "/usr/lib64"), ("RUST_LOG", "warn")],
+            "only the loader path and the log filter"
+        );
+        let inner_start = argv.iter().rposition(|a| a == "--").unwrap() + 1;
+        assert_eq!(
+            &argv[inner_start..],
+            [
+                "/usr/lib64/ld-linux-x86-64.so.2".to_string(),
+                SANDBOX_RUN_EXE.to_string(),
+                "run-wasm".to_string()
+            ]
+        );
+        // Statically linked: the binary runs directly.
+        let img = RunImage {
+            exe: PathBuf::from(EXE),
+            loader: None,
+            libs: Vec::new(),
+        };
+        let argv = run_bwrap_spec(&settings(), &img, "run-probe", &[]).argv_lossy();
+        let inner_start = argv.iter().rposition(|a| a == "--").unwrap() + 1;
+        assert_eq!(&argv[inner_start..], [SANDBOX_RUN_EXE, "run-probe"]);
+        assert!(!argv.iter().any(|a| a == "LD_LIBRARY_PATH"));
     }
 
     #[test]

@@ -203,6 +203,112 @@ fn verify_script_requires_positive_evidence() {
     assert!(!VERIFY.contains("systemctl restart"));
 }
 
+/// The verify script's SHIPPED table (third review): every exact unit-file
+/// line it requires is in the shipped builder unit, and it covers the key
+/// properties, so the script fails when the installed unit is loosened.
+#[test]
+fn verify_script_shipped_table_matches_the_builder_unit() {
+    let script = VERIFY.replace("\r\n", "\n");
+    let table: Vec<&str> = script
+        .split("SHIPPED=(\n")
+        .nth(1)
+        .and_then(|rest| rest.split("\n)\n").next())
+        .expect("SHIPPED=( ... ) table in verify-sandbox.sh")
+        .lines()
+        .map(|l| l.trim().trim_matches('"'))
+        .filter(|l| !l.is_empty())
+        .collect();
+    let unit_lines: Vec<&str> = BUILDER_UNIT
+        .lines()
+        .map(str::trim_end)
+        .filter(|l| !l.trim_start().starts_with('#'))
+        .collect();
+    let mut props = Vec::new();
+    for entry in &table {
+        let mut parts = entry.splitn(3, '|');
+        let (Some(prop), Some(line), Some(_show)) = (parts.next(), parts.next(), parts.next())
+        else {
+            panic!("malformed SHIPPED entry {entry:?}");
+        };
+        assert!(
+            unit_lines.contains(&line),
+            "SHIPPED requires `{line}`, which is not in deploy/pnc-builder.service"
+        );
+        props.push(prop);
+    }
+    for key in [
+        "ProtectSystem",
+        "ProtectHome",
+        "PrivateTmp",
+        "PrivateNetwork",
+        "PrivateDevices",
+        "ProtectProc",
+        "ProtectKernelTunables",
+        "NoNewPrivileges",
+        "CapabilityBoundingSet",
+        "RestrictNamespaces",
+        "SystemCallFilter",
+        "RestrictAddressFamilies",
+        "IPAddressDeny",
+        "NoExecPaths",
+        "MemoryMax",
+        "TasksMax",
+        "TemporaryFileSystem",
+        "BindReadOnlyPaths",
+        "InaccessiblePaths",
+        "User",
+    ] {
+        assert!(props.contains(&key), "SHIPPED does not check {key}");
+    }
+    // Run-phase probes and the ProtectProc-proof /proc probe are present.
+    for needle in [
+        "sandbox-verify-run",
+        "/proc/sys/kernel/overflowuid",
+        "\"check\":\"self\"",
+        "network_unreachable",
+        "tcp-control",
+        "unit_controls",
+        "FragmentPath",
+    ] {
+        assert!(
+            script.contains(needle),
+            "verify-sandbox.sh lacks `{needle}`"
+        );
+    }
+}
+
+/// The builder unit hides the host areas the third review named, binds back
+/// only what it needs, and keeps the run sandbox's JIT workable.
+#[test]
+fn builder_unit_hides_host_areas_it_never_needs() {
+    for (k, v) in [
+        ("TemporaryFileSystem", "/usr/local:ro"),
+        ("TemporaryFileSystem", "/opt:ro"),
+        ("TemporaryFileSystem", "/run:ro"),
+        ("BindReadOnlyPaths", "/usr/local/bin/pledge_compile_api"),
+        ("BindReadOnlyPaths", "/opt/pnc"),
+        ("BindPaths", "/run/pnc-builder"),
+    ] {
+        assert!(has(BUILDER_UNIT, k, v), "builder unit must set {k}={v}");
+    }
+    let hidden = values(BUILDER_UNIT, "InaccessiblePaths").join(" ");
+    for area in ["/srv", "/mnt", "/media", "/var/lib", "/var/log", "/boot"] {
+        assert!(hidden.contains(area), "{area} not hidden: {hidden}");
+    }
+    assert!(
+        has(BUILDER_UNIT, "ProtectHome", "yes"),
+        "/home, /root, /run/user"
+    );
+    // wasmtime's JIT maps pages executable after writing them.
+    assert!(values(BUILDER_UNIT, "MemoryDenyWriteExecute").is_empty());
+    assert!(README.contains("What a wasmtime escape reaches"));
+    assert!(
+        README.contains("-perm -o+r"),
+        "README must have the world-readable secrets check"
+    );
+    assert!(README.contains("/opt/pnc/toolchains"));
+}
+
 const MANIFEST: &str = include_str!("../Cargo.toml");
 const LOCKFILE: &str = include_str!("../../Cargo.lock");
 

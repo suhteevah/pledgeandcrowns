@@ -73,11 +73,14 @@ http-body-util = "0.1"
 # Unix only: safe wrappers for kill(-pgid, SIGKILL), kill(-pgid, 0),
 # geteuid (process-tree kill in `proc_tree`, build-root owner check in
 # `build_root`) and open(O_NOFOLLOW) (`wasm_builder::read_artifact`, the
-# `fs` feature). Already in the lock tree via wasmtime/cap-std/tempfile,
-# so this adds zero new crates; it lets us avoid writing any `unsafe`
-# libc FFI ourselves. Not compiled on Windows.
+# `fs` feature), PR_SET_CHILD_SUBREAPER + waitpid (`proc_tree` stray
+# sweep), and a non-blocking AF_UNIX connect for the bounded builder
+# connect (`ipc::connect_builder`, the `net` feature). Already in the lock
+# tree via wasmtime/cap-std/tempfile, so this adds zero new crates; it
+# lets us avoid writing any `unsafe` libc FFI ourselves. Not compiled on
+# Windows.
 [target.'cfg(unix)'.dependencies]
-rustix = { version = "1.1", features = ["process", "fs", "std"] }
+rustix = { version = "1.1", features = ["process", "fs", "net", "std"] }
 
 [dev-dependencies]
 reqwest = { workspace = true }

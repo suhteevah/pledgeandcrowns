@@ -254,6 +254,56 @@ fn module_compile_timeout_fails_the_run() {
     assert!(v.stderr.contains("module compile exceeded"), "{v:?}");
 }
 
+/// A valid module that is genuinely slow for Cranelift: one function with
+/// many locals and a long straight-line body mixing them (register
+/// allocation work grows with both), well under the 4 MiB module cap.
+fn slow_to_compile_module() -> Vec<u8> {
+    const LOCALS: usize = 400;
+    const OPS: usize = 40_000;
+    let mut body = String::with_capacity(OPS * 48);
+    for i in 0..OPS {
+        let (a, b, c) = (i % LOCALS, (i * 7 + 3) % LOCALS, (i * 13 + 5) % LOCALS);
+        body.push_str(&format!(
+            "local.get {a} local.get {b} i64.mul local.get {c} i64.xor local.set {a}\n"
+        ));
+    }
+    let wat = format!(
+        "(module (memory (export \"memory\") 1)\n\
+           (func $heavy (param i64) (result i64) (local {locals})\n{body} local.get 0)\n\
+           (func (export \"_start\")))",
+        locals = "i64 ".repeat(LOCALS)
+    );
+    let bytes = compile_wat(&wat);
+    assert!(bytes.len() < MAX_WASM_BYTES, "{} bytes", bytes.len());
+    bytes
+}
+
+#[test]
+fn slow_module_compile_exceeds_a_small_nonzero_budget() {
+    // Third review, P1-C note: the compile-budget path was only ever hit
+    // with a ZERO budget. Here a real module needs real compile time.
+    let bytes = slow_to_compile_module();
+    // Positive control: with the shipped budget it compiles and runs, and
+    // the time it took is measured.
+    let started = std::time::Instant::now();
+    let full = run_wasm(&bytes, FAST_TIMEOUT_MS, DEFAULT_FUEL, DEFAULT_MEM).expect("verdict");
+    let full_time = started.elapsed();
+    assert!(full.ok, "the module is valid and runs: {full:?}");
+    // A small, non-zero budget well below that compile time must trip
+    // the timeout path (not an Err, and not a run).
+    let budget = (full_time / 10).clamp(Duration::from_millis(1), Duration::from_millis(50));
+    assert!(
+        full_time > budget * 4,
+        "module compiled too fast ({full_time:?}) to test a {budget:?} budget"
+    );
+    let v =
+        run_wasm_with_compile_timeout(&bytes, FAST_TIMEOUT_MS, DEFAULT_FUEL, DEFAULT_MEM, budget)
+            .expect("compile timeout is a verdict, not an Err");
+    assert!(!v.ok, "{v:?}");
+    assert!(v.stderr.contains("module compile exceeded"), "{v:?}");
+    assert!(v.stdout.is_empty(), "nothing ran: {v:?}");
+}
+
 #[test]
 fn table_growth_is_capped_by_the_resource_limiter() {
     // table.grow by 1M elements must fail (-1) under the element cap,

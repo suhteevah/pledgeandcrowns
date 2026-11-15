@@ -130,6 +130,75 @@ fn fast_command_returns_output_without_waiting_for_timeout() {
     assert!(started.elapsed() < Duration::from_secs(30));
 }
 
+/// Third review, P1-2 gap: a run that EXITS CLEANLY but leaves behind a
+/// descendant that left the process group (`setsid`) and outlived its
+/// parent must not leave a survivor. The descendant is re-parented to the
+/// supervisor (child subreaper) and swept.
+#[cfg(target_os = "linux")]
+#[test]
+fn clean_exit_leaves_no_setsid_descendant_behind() {
+    let pidfile = std::env::temp_dir().join(format!(
+        "pnc-proc-tree-setsid-{}-{}.pid",
+        std::process::id(),
+        uuid_like()
+    ));
+    let _ = std::fs::remove_file(&pidfile);
+    let p = pidfile.display().to_string();
+    let script = format!(
+        "setsid sh -c 'echo $$ > {p}; exec sleep 300' </dev/null >/dev/null 2>&1 &\n\
+         while [ ! -s {p} ]; do sleep 0.05; done\n\
+         echo started"
+    );
+    let mut cmd = Command::new("/bin/sh");
+    cmd.args(["-c", &script]);
+    let out = run_captured(cmd, Duration::from_secs(30), 4096, "test setsid").expect("supervision");
+    assert!(!out.timed_out, "{out:?}");
+    assert!(out.status.success(), "{out:?}");
+    assert!(out.stdout.contains("started"), "{out:?}");
+    let escaped: u32 = std::fs::read_to_string(&pidfile)
+        .expect("descendant wrote its pid")
+        .trim()
+        .parse()
+        .expect("pid");
+    let _ = std::fs::remove_file(&pidfile);
+    // run_captured confirmed the sweep before returning: no waiting here.
+    assert!(
+        !pid_alive(escaped),
+        "setsid descendant {escaped} survived a clean exit"
+    );
+}
+
+/// The same through two levels: the escaped process has a child of its
+/// own in yet another session; both must go.
+#[cfg(target_os = "linux")]
+#[test]
+fn clean_exit_sweeps_the_whole_escaped_subtree() {
+    let dir = std::env::temp_dir().join(format!(
+        "pnc-proc-tree-subtree-{}-{}",
+        std::process::id(),
+        uuid_like()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let (a, b) = (dir.join("a.pid"), dir.join("b.pid"));
+    let (a_s, b_s) = (a.display().to_string(), b.display().to_string());
+    let script = format!(
+        "setsid sh -c 'echo $$ > {a_s}; setsid sh -c \"echo \\$\\$ > {b_s}; exec sleep 300\" & exec sleep 300' \
+         </dev/null >/dev/null 2>&1 &\n\
+         while [ ! -s {a_s} ] || [ ! -s {b_s} ]; do sleep 0.05; done\n\
+         echo started"
+    );
+    let mut cmd = Command::new("/bin/sh");
+    cmd.args(["-c", &script]);
+    let out =
+        run_captured(cmd, Duration::from_secs(30), 4096, "test subtree").expect("supervision");
+    assert!(out.status.success() && !out.timed_out, "{out:?}");
+    for f in [&a, &b] {
+        let pid: u32 = std::fs::read_to_string(f).unwrap().trim().parse().unwrap();
+        assert!(!pid_alive(pid), "{} ({pid}) survived", f.display());
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 fn uuid_like() -> u128 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

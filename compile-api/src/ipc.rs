@@ -26,6 +26,18 @@
 //!   ([`JobRequest::validate`]) and re-applies the source deny-list
 //!   itself; the API caps and validates every reply field
 //!   ([`JobReply::validate`]).
+//! - A dead or wedged builder costs the API seconds, not a slot for a
+//!   minute (third security review, S-2): the API connects without
+//!   blocking ([`connect_builder`], bounded by [`BUILDER_CONNECT_TIMEOUT`];
+//!   a Unix-socket connect to a full backlog would otherwise block), and
+//!   once the builder has read and accepted a request it sends an
+//!   [`ACK_PAYLOAD`] frame before starting the job. The API waits only
+//!   [`ACK_DEADLINE`] for that first frame (the ack, or an immediate
+//!   Busy/Rejected reply); the long [`REPLY_DEADLINE`] applies only after
+//!   the ack. A socket file with no listener, a full backlog, a builder
+//!   that accepts and never answers, or one that closes the connection
+//!   before acknowledging are all "builder unavailable"
+//!   ([`IpcError::is_unavailable`]), which the API answers with a 503.
 //!
 //! Everything here is generic over [`IpcStream`], so the same code runs
 //! over `UnixStream` in production and over loopback `TcpStream` in the
@@ -60,9 +72,18 @@ const MAX_REPLY_MILLIS: u64 = 10 * 60 * 1000;
 pub const REQUEST_IO_DEADLINE: Duration = Duration::from_secs(5);
 /// Total time for the builder to send its reply once the job is done.
 pub const REPLY_WRITE_DEADLINE: Duration = Duration::from_secs(5);
-/// Total time the API waits for a reply after sending its request: the
-/// job deadline plus slack for process start and the write.
+/// Total time the API waits for a reply after the builder acknowledged the
+/// request: the job deadline plus slack for process start and the write.
 pub const REPLY_DEADLINE: Duration = Duration::from_secs(crate::jobs::JOB_DEADLINE.as_secs() + 15);
+/// How long the API tries to connect to the builder socket.
+pub const BUILDER_CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
+/// How long the API waits, after sending its request, for the builder's
+/// first frame (the ack, or an immediate reply). The builder reads the
+/// request under its own [`REQUEST_IO_DEADLINE`] and answers at once.
+pub const ACK_DEADLINE: Duration = Duration::from_secs(REQUEST_IO_DEADLINE.as_secs() + 5);
+/// Payload of the builder's "request accepted, job starting" frame. Not a
+/// valid [`JobReply`] encoding, so it can never be mistaken for one.
+pub const ACK_PAYLOAD: &[u8] = b"\"accepted\"";
 
 /// A byte stream with settable timeouts (TCP or Unix socket).
 pub trait IpcStream: Read + Write {
@@ -110,6 +131,21 @@ pub enum IpcError {
     Decode(String),
     #[error("ipc payload is invalid: {0}")]
     Invalid(String),
+}
+
+impl IpcError {
+    /// True when the builder could not be reached or never took the
+    /// request (connect failed or timed out, the request could not be
+    /// written, no ack in time, closed or reset before acknowledging): the
+    /// API reports "builder unavailable" (503), not a server error. After
+    /// the ack, failures are server errors (the job may have run).
+    pub fn is_unavailable(&self) -> bool {
+        const BEFORE_ACK: [&str; 3] = ["connect", "request write", "ack read"];
+        match self {
+            Self::Io { op, .. } | Self::Timeout(op) | Self::Closed(op) => BEFORE_ACK.contains(op),
+            _ => false,
+        }
+    }
 }
 
 fn remaining(deadline: Instant, what: &'static str) -> Result<Duration, IpcError> {
@@ -476,11 +512,39 @@ pub fn decode_request(payload: &[u8]) -> Result<JobRequest, IpcError> {
     Ok(req)
 }
 
-/// Client side of one exchange: send `req`, wait up to `reply_deadline`
-/// for the reply, decode and validate it.
+/// Builder side: tell the client the request was accepted and the job is
+/// starting (see the module docs).
+pub fn write_ack<S: IpcStream>(stream: &mut S, deadline: Instant) -> Result<(), IpcError> {
+    write_frame(
+        stream,
+        ACK_PAYLOAD,
+        MAX_REPLY_FRAME_BYTES,
+        deadline,
+        "ack write",
+    )
+}
+
+/// Client side of one exchange: send `req`, wait up to [`ACK_DEADLINE`]
+/// (or `reply_deadline`, if shorter) for the builder's first frame, then
+/// up to `reply_deadline` for the reply; decode and validate it.
 pub fn exchange<S: IpcStream>(
     stream: &mut S,
     req: &JobRequest,
+    reply_deadline: Duration,
+) -> Result<JobReply, IpcError> {
+    exchange_with(
+        stream,
+        req,
+        ACK_DEADLINE.min(reply_deadline),
+        reply_deadline,
+    )
+}
+
+/// [`exchange`] with an explicit ack deadline (tests).
+pub fn exchange_with<S: IpcStream>(
+    stream: &mut S,
+    req: &JobRequest,
+    ack_deadline: Duration,
     reply_deadline: Duration,
 ) -> Result<JobReply, IpcError> {
     req.validate()?;
@@ -492,30 +556,98 @@ pub fn exchange<S: IpcStream>(
         Instant::now() + REQUEST_IO_DEADLINE,
         "request write",
     )?;
-    let reply = read_frame(
+    let first = read_frame(
         stream,
         MAX_REPLY_FRAME_BYTES,
-        Instant::now() + reply_deadline,
-        "reply read",
-    )?;
+        Instant::now() + ack_deadline,
+        "ack read",
+    )
+    .inspect_err(|e| tracing::warn!("ipc: builder did not acknowledge the request: {e}"))?;
+    let reply = if first == ACK_PAYLOAD {
+        tracing::debug!("ipc: builder accepted the request");
+        read_frame(
+            stream,
+            MAX_REPLY_FRAME_BYTES,
+            Instant::now() + reply_deadline,
+            "reply read",
+        )?
+    } else {
+        first
+    };
     let reply = decode_reply(&reply)?;
     tracing::debug!(kind = reply.kind(), "ipc: reply received");
     Ok(reply)
 }
 
-/// Connect to the builder socket and run one [`exchange`].
+/// Connect to the builder's Unix socket within `timeout`.
+///
+/// `UnixStream::connect` has no timeout, and a connect to a listener whose
+/// backlog is full (a stopped or wedged builder) blocks. So the socket is
+/// created non-blocking: an `AF_UNIX` connect then either completes at
+/// once, fails at once (`ECONNREFUSED`: socket file without a listener,
+/// `ENOENT`), or reports `EAGAIN` (backlog full), which is retried until
+/// `timeout`. The connected stream is switched back to blocking mode
+/// (reads and writes use socket timeouts from [`exchange`]).
 #[cfg(unix)]
-pub fn call_builder(socket: &std::path::Path, req: &JobRequest) -> Result<JobReply, IpcError> {
-    let mut stream = std::os::unix::net::UnixStream::connect(socket).map_err(|source| {
-        tracing::error!(
-            "ipc: cannot connect to builder at {}: {source}",
-            socket.display()
-        );
-        IpcError::Io {
+pub fn connect_builder(
+    socket: &std::path::Path,
+    timeout: Duration,
+) -> Result<std::os::unix::net::UnixStream, IpcError> {
+    use rustix::io::Errno;
+    use rustix::net::{AddressFamily, SocketAddrUnix, SocketFlags, SocketType};
+
+    let io_err = |e: Errno| IpcError::Io {
+        op: "connect",
+        source: io::Error::from(e),
+    };
+    let addr = SocketAddrUnix::new(socket).map_err(io_err)?;
+    let fd = rustix::net::socket_with(
+        AddressFamily::UNIX,
+        SocketType::STREAM,
+        SocketFlags::NONBLOCK | SocketFlags::CLOEXEC,
+        None,
+    )
+    .map_err(io_err)?;
+    let deadline = Instant::now() + timeout;
+    loop {
+        match rustix::net::connect(&fd, &addr) {
+            Ok(()) => break,
+            Err(e) if e == Errno::ISCONN => break,
+            Err(e) if e == Errno::INTR => continue,
+            Err(e) if e == Errno::AGAIN || e == Errno::INPROGRESS || e == Errno::ALREADY => {
+                if Instant::now() >= deadline {
+                    tracing::error!(
+                        ?timeout,
+                        "ipc: builder at {} did not accept a connection in time (backlog full?)",
+                        socket.display()
+                    );
+                    return Err(IpcError::Timeout("connect"));
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            Err(e) => {
+                tracing::error!(
+                    "ipc: cannot connect to builder at {}: {e}",
+                    socket.display()
+                );
+                return Err(io_err(e));
+            }
+        }
+    }
+    let stream = std::os::unix::net::UnixStream::from(fd);
+    stream
+        .set_nonblocking(false)
+        .map_err(|source| IpcError::Io {
             op: "connect",
             source,
-        }
-    })?;
+        })?;
+    Ok(stream)
+}
+
+/// Connect to the builder socket (bounded) and run one [`exchange`].
+#[cfg(unix)]
+pub fn call_builder(socket: &std::path::Path, req: &JobRequest) -> Result<JobReply, IpcError> {
+    let mut stream = connect_builder(socket, BUILDER_CONNECT_TIMEOUT)?;
     exchange(&mut stream, req, REPLY_DEADLINE)
 }
 

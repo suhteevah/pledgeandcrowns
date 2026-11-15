@@ -9,38 +9,52 @@
 //! | `serve` (default) | `pnc-compile-api.service` | HTTP API; holds the tokens; never builds player code in production |
 //! | `builder` | `pnc-builder.service` | builds + runs player code, one process per job; no secrets |
 //! | `job` | the builder (internal) | one job: envelope on stdin, reply on stdout |
+//! | `run-wasm` | a job, inside the run sandbox (internal) | runs one module: limits + bytes on stdin, verdict on stdout |
 //! | `sandbox-verify` | `deploy/verify-sandbox.sh` | one probe build with the deny-list off, bwrap only |
+//! | `sandbox-verify-run` | `deploy/verify-sandbox.sh` | runs the native `run-probe` inside the run sandbox, bwrap only |
+//! | `run-probe` | `sandbox-verify-run`, inside the run sandbox | reports what exists/connects there (never contents) |
 //! | `toolchain` | the deploy README | prints the pinned rustc version |
 //!
 //! Configuration comes from `PNC_*` environment variables (see
 //! `config.rs` and `deploy/env.example`).
 
+use std::io::IsTerminal;
 use std::process::ExitCode;
 
 use pledge_compile_api::build_sandbox::SandboxMode;
 use pledge_compile_api::builder::{self, BuilderConfig};
-use pledge_compile_api::jobs;
 use pledge_compile_api::toolchain::PINNED_RUSTC_VERSION;
 use pledge_compile_api::wasm_builder::{self, BuildSettings};
 use pledge_compile_api::{
-    AppState, Config, Executor, build_metrics_router, build_root, build_router, serve_with,
+    AppState, Config, Executor, build_metrics_router, build_root, build_router, jobs, run_sandbox,
+    serve_with,
 };
 use tracing_subscriber::{EnvFilter, fmt};
 
 const DEFAULT_FILTER: &str = "pledge_compile_api=debug,tower_http=info,axum::rejection=trace";
+const USAGE: &str = "usage: pledge_compile_api \
+                     [serve|builder|job|run-wasm|sandbox-verify|sandbox-verify-run|run-probe|toolchain]";
 
+/// `to_stderr`: the internal/one-shot commands, whose stdout carries data
+/// (job reply, verdict, probe JSON). Colour only on a terminal: services
+/// log to the journal and child processes to a pipe that is re-logged, so
+/// ANSI escapes would end up as junk in the journal.
 fn init_logging(to_stderr: bool) {
     let filter =
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(DEFAULT_FILTER));
     if to_stderr {
-        // stdout carries data (job reply / probe JSON).
         fmt()
             .with_env_filter(filter)
             .with_target(true)
+            .with_ansi(std::io::stderr().is_terminal())
             .with_writer(std::io::stderr)
             .init();
     } else {
-        fmt().with_env_filter(filter).with_target(true).init();
+        fmt()
+            .with_env_filter(filter)
+            .with_target(true)
+            .with_ansi(std::io::stdout().is_terminal())
+            .init();
     }
 }
 
@@ -48,7 +62,7 @@ fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let cmd = args.first().map(String::as_str).unwrap_or("serve");
     if args.len() > 1 {
-        eprintln!("usage: pledge_compile_api [serve|builder|job|sandbox-verify|toolchain]");
+        eprintln!("{USAGE}");
         return ExitCode::from(64);
     }
     match cmd {
@@ -60,9 +74,21 @@ fn main() -> ExitCode {
             init_logging(true);
             jobs::job_main()
         }
+        run_sandbox::RUN_WASM_SUBCOMMAND => {
+            init_logging(true);
+            run_sandbox::run_wasm_main()
+        }
+        run_sandbox::RUN_PROBE_SUBCOMMAND => {
+            init_logging(true);
+            run_sandbox::run_probe_main()
+        }
         builder::SANDBOX_VERIFY_SUBCOMMAND => {
             init_logging(true);
             builder::sandbox_verify_main()
+        }
+        builder::SANDBOX_VERIFY_RUN_SUBCOMMAND => {
+            init_logging(true);
+            builder::sandbox_verify_run_main()
         }
         builder::BUILDER_SUBCOMMAND => {
             init_logging(false);
@@ -98,10 +124,7 @@ fn main() -> ExitCode {
             }
         }
         other => {
-            eprintln!(
-                "unknown command {other:?}; usage: pledge_compile_api \
-                 [serve|builder|job|sandbox-verify|toolchain]"
-            );
+            eprintln!("unknown command {other:?}; {USAGE}");
             ExitCode::from(64)
         }
     }

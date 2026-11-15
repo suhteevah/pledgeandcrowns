@@ -52,6 +52,12 @@ const _: () = assert!(
             + RUN_TIMEOUT_MS / 1000
             + RUN_TIMEOUT_MARGIN.as_secs()
 );
+// The run child's own deadline (bwrap mode) fits too.
+const _: () = assert!(
+    JOB_DEADLINE.as_secs()
+        >= CARGO_BUILD_TIMEOUT.as_secs()
+            + crate::run_sandbox::run_child_deadline(RUN_TIMEOUT_MS).as_secs()
+);
 
 /// Cap on captured child stdout/stderr (each).
 pub const JOB_OUTPUT_CAP: usize = MAX_REPLY_FRAME_BYTES;
@@ -94,6 +100,10 @@ pub enum ExecError {
     /// The builder has no free job slot (maps to 503 + Retry-After).
     #[error("builder is busy")]
     Busy,
+    /// The builder could not be reached or never took the request (maps
+    /// to 503 + Retry-After). The detail is for the log only.
+    #[error("builder is unavailable: {0}")]
+    Unavailable(String),
     #[error("builder rejected the request: {0}")]
     Rejected(String),
     #[error("builder failed: {0}")]
@@ -178,7 +188,12 @@ pub fn run_job_subprocess(
     let out =
         proc_tree::run_captured_with_input(cmd, Some(input), deadline, JOB_OUTPUT_CAP, "job")?;
     if !out.stderr.is_empty() {
-        let shown: String = out.stderr.chars().take(16 * 1024).collect();
+        // The job logs without colour; strip anyway so a child that does
+        // emit ANSI escapes cannot put them in the journal.
+        let shown: String = proc_tree::strip_ansi(&out.stderr)
+            .chars()
+            .take(16 * 1024)
+            .collect();
         tracing::debug!(pid = out.pid, "jobs: job process log:\n{shown}");
     }
     if out.timed_out {

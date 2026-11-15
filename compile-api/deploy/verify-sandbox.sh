@@ -15,7 +15,12 @@
 #      service users; the builder unit and its env file hold no tokens.
 #   2. Units: both are active; the builder journal (current run) shows
 #      "isolation checks passed" and "build self-test passed"; the API
-#      journal shows it hands builds to the builder.
+#      journal shows it hands builds to the builder. The builder unit's key
+#      security properties have their SHIPPED values (table SHIPPED below):
+#      each exact line is in the installed unit file AND `systemctl show`
+#      of the running builder reports the shipped value, so a loosened unit
+#      (edited file or drop-in) fails here, not only a mismatch between the
+#      probe service and the builder.
 #   3. Sandbox probes through `pledge_compile_api sandbox-verify` (deny-list
 #      OFF for that one CLI build; it has no listener, refuses to run with a
 #      token in its environment and refuses PNC_BUILD_SANDBOX=none, so it
@@ -44,9 +49,38 @@
 #          #[path] to a file the builder user CAN read on the host,
 #          "couldn't find file `<path>`"; for env!, "not defined at
 #          compile time"), not merely fail.
+#        - `/proc/sys/kernel/overflowuid` is a path ProtectProc= does NOT
+#          hide (bwrap itself reads it) but the sandbox (no procfs) does:
+#          the [unit] pass first shows, with no bwrap, that the unit can
+#          read it, so "No such file" in the sandbox can only come from
+#          bwrap. (The API's /proc/<pid>/environ is hidden by ProtectProc
+#          even without bwrap, so it is probed in the [runuser] pass only,
+#          where it is not.)
+#      RUN PHASE (the wasmtime run happens in a second, smaller bwrap
+#      sandbox). A guest cannot be the prober, wasmtime confines it, so
+#      `pledge_compile_api sandbox-verify-run` starts that exact sandbox with
+#      the server-owned native probe `run-probe` in place of `run-wasm`, and
+#      the probe reports (existence and connect results only, never file
+#      contents):
+#        - positive controls: it received its request on stdin; its own
+#          binary is visible at /pnc/pledge_compile_api; a loopback connect
+#          gets "refused" (it can make connections at all);
+#        - every probed host path (both env files, /etc, /etc/passwd, /run,
+#          the builder socket, /proc/self, /proc/sys/kernel/overflowuid,
+#          the installed binary's host path, /usr/local, /usr/bin/bwrap, the
+#          toolchain, /tmp, /var, /home, /root) is "not_found" (each EXISTS
+#          on the host); the builder socket cannot be connected to; an
+#          outside address is "network_unreachable";
+#        - a new PID namespace (pid <= 3), the builder's uid, the run
+#          rlimits (cpu 30, nofile 64, fsize 0, core 0), and an environment
+#          with nothing but LD_LIBRARY_PATH, PWD (set by bwrap) and RUST_LOG
+#          - not the canary;
+#        - a listing of every file reachable from / (names only): exactly
+#          the binary and its shared libraries (ld-linux, libc, libm,
+#          libgcc_s).
 #   4. Config refusals (no network): `serve` with a token and
 #      PNC_BUILD_SANDBOX=none, `builder` with a token, and `sandbox-verify`
-#      with a token must all refuse to start.
+#      / `sandbox-verify-run` with a token must all refuse to start.
 #   5. HTTP through the real API with exact status codes: /health 200,
 #      no token 401, an end-to-end build 200 with the program's output,
 #      a deny-listed probe 400 source_policy, /metrics on the API
@@ -77,7 +111,7 @@ fail() { FAILED=$((FAILED + 1)); echo "FAIL - $*" >&2; }
 die()  { echo "FAIL - $*" >&2; echo "RESULT: FAIL (aborted)" >&2; exit 1; }
 
 [ "$(id -u)" -eq 0 ] || die "run as root (sudo)"
-for tool in curl runuser systemctl systemd-run journalctl grep sed awk mktemp stat install head od tr timeout; do
+for tool in curl runuser systemctl systemd-run journalctl busctl grep sed awk mktemp stat install head od tr timeout id; do
     command -v "$tool" >/dev/null || die "$tool is required"
 done
 [ -x "$BIN" ] || die "$BIN is not executable"
@@ -137,6 +171,100 @@ else
 fi
 if [ -S "$SOCKET" ]; then ok "builder socket $SOCKET exists"; else fail "builder socket $SOCKET missing"; fi
 
+# Shipped values of the builder unit's key security properties:
+#   "<systemctl show property>|<exact line in the unit file>|<show value>"
+# A show value of `-` skips the show comparison (the property is checked by
+# its unit-file line only, e.g. the expanded syscall list). Calibrated with
+# systemd 257 (openSUSE Leap Micro 6.2); tests/deploy_files.rs checks that
+# every line here is in deploy/pnc-builder.service.
+SHIPPED=(
+    "User|User=pnc-builder|pnc-builder"
+    "Group|Group=pnc-ipc|pnc-ipc"
+    "PrivateTmp|PrivateTmp=yes|yes"
+    "NoExecPaths|NoExecPaths=/tmp|/tmp"
+    "UMask|UMask=0077|0077"
+    "TemporaryFileSystem|TemporaryFileSystem=/usr/local:ro|-"
+    "TemporaryFileSystem|TemporaryFileSystem=/opt:ro|-"
+    "TemporaryFileSystem|TemporaryFileSystem=/run:ro|/usr/local:ro /opt:ro /run:ro"
+    "BindReadOnlyPaths|BindReadOnlyPaths=/usr/local/bin/pledge_compile_api|-"
+    "BindReadOnlyPaths|BindReadOnlyPaths=/opt/pnc|/usr/local/bin/pledge_compile_api:/usr/local/bin/pledge_compile_api:rbind /opt/pnc:/opt/pnc:rbind"
+    "BindPaths|BindPaths=/run/pnc-builder|/run/pnc-builder:/run/pnc-builder:rbind"
+    "InaccessiblePaths|InaccessiblePaths=-/srv -/mnt -/media -/boot -/var/lib -/var/log -/var/cache -/var/spool -/var/mail -/var/opt -/var/www -/var/backups -/var/local|-/srv -/mnt -/media -/boot -/var/lib -/var/log -/var/cache -/var/spool -/var/mail -/var/opt -/var/www -/var/backups -/var/local"
+    "ProtectSystem|ProtectSystem=strict|strict"
+    "ProtectHome|ProtectHome=yes|yes"
+    "PrivateDevices|PrivateDevices=yes|yes"
+    "PrivateNetwork|PrivateNetwork=yes|yes"
+    "ProtectKernelModules|ProtectKernelModules=yes|yes"
+    "ProtectControlGroups|ProtectControlGroups=yes|yes"
+    "ProtectClock|ProtectClock=yes|yes"
+    "ProtectHostname|ProtectHostname=yes|yes"
+    "ProtectKernelTunables|ProtectKernelTunables=yes|yes"
+    "ProtectKernelLogs|ProtectKernelLogs=yes|yes"
+    "ProtectProc|ProtectProc=invisible|invisible"
+    "NoNewPrivileges|NoNewPrivileges=yes|yes"
+    "CapabilityBoundingSet|CapabilityBoundingSet=|"
+    "AmbientCapabilities|AmbientCapabilities=|"
+    "RestrictSUIDSGID|RestrictSUIDSGID=yes|yes"
+    "RestrictNamespaces|RestrictNamespaces=user mnt pid net ipc uts cgroup|-"
+    "RestrictRealtime|RestrictRealtime=yes|yes"
+    "LockPersonality|LockPersonality=yes|yes"
+    "RemoveIPC|RemoveIPC=yes|yes"
+    "SystemCallArchitectures|SystemCallArchitectures=native|native"
+    "SystemCallFilter|SystemCallFilter=@system-service @mount|-"
+    "SystemCallFilter|SystemCallFilter=~@clock @cpu-emulation @debug @module @obsolete @raw-io @reboot @swap|-"
+    "SystemCallErrorNumber|SystemCallErrorNumber=EPERM|1"
+    "RestrictAddressFamilies|RestrictAddressFamilies=AF_UNIX AF_NETLINK|AF_NETLINK AF_UNIX"
+    "IPAddressDeny|IPAddressDeny=any|0.0.0.0/0 ::/0"
+    "MemoryMax|MemoryMax=1536M|1610612736"
+    "MemorySwapMax|MemorySwapMax=0|0"
+    "OOMPolicy|OOMPolicy=continue|continue"
+    "TasksMax|TasksMax=256|256"
+    "LimitNOFILE|LimitNOFILE=4096|4096"
+    "LimitCORE|LimitCORE=0|0"
+    "CPUQuotaPerSecUSec|CPUQuota=200%|2s"
+)
+# Properties that must NOT be set on the builder (each would break bwrap or
+# was deliberately left off; see the unit comments): their unit-file key.
+NOT_SET=(ProcSubset PrivateUsers MemoryDenyWriteExecute)
+FRAGMENT="$(systemctl show -p FragmentPath --value "$BUILDER_UNIT")"
+if [ -z "$FRAGMENT" ] || [ ! -f "$FRAGMENT" ]; then
+    fail "cannot find the installed unit file of $BUILDER_UNIT"
+else
+    UNIT_LINES="$(grep -v '^[[:space:]]*#' "$FRAGMENT" | sed 's/[[:space:]]*$//')"
+    shipped_bad=0
+    for entry in "${SHIPPED[@]}"; do
+        prop="${entry%%|*}"; rest="${entry#*|}"; line="${rest%|*}"; want="${rest##*|}"
+        if ! grep -qxF -- "$line" <<<"$UNIT_LINES"; then
+            shipped_bad=1; fail "shipped value: '$line' is not in $FRAGMENT (edited or loosened?)"
+        fi
+        if [ "$want" != "-" ]; then
+            got="$(systemctl show -p "$prop" --value "$BUILDER_UNIT")"
+            if [ "$got" != "$want" ]; then
+                shipped_bad=1; fail "shipped value: running $BUILDER_UNIT has $prop='$got', shipped '$want' (drop-in or edit?)"
+            fi
+        fi
+    done
+    # `systemctl show` prints RestrictNamespaces= for "everything but time"
+    # as `no` (systemd 257), the same word as an unrestricted unit, so read
+    # the raw allow mask over D-Bus instead: CLONE_NEWNS|NEWCGROUP|NEWUTS|
+    # NEWIPC|NEWUSER|NEWPID|NEWNET = 0x7E020000 = 2114060288 (no NEWTIME).
+    unit_path="$(busctl call org.freedesktop.systemd1 /org/freedesktop/systemd1 \
+        org.freedesktop.systemd1.Manager GetUnit s "$BUILDER_UNIT.service" 2>/dev/null | awk '{print $2}' | tr -d '"')"
+    ns="$(busctl get-property org.freedesktop.systemd1 "$unit_path" org.freedesktop.systemd1.Service \
+        RestrictNamespaces 2>/dev/null | awk '{print $2}')"
+    if [ "$ns" != "2114060288" ]; then
+        shipped_bad=1; fail "shipped value: running $BUILDER_UNIT has RestrictNamespaces mask '$ns', shipped 2114060288 (user mnt pid net ipc uts cgroup)"
+    fi
+    for key in "${NOT_SET[@]}"; do
+        if systemctl cat "$BUILDER_UNIT" | grep -v '^[[:space:]]*#' | grep -q "^$key="; then
+            shipped_bad=1; fail "shipped value: $key= is set on $BUILDER_UNIT but must not be (see the unit comments)"
+        fi
+    done
+    if [ "$shipped_bad" -eq 0 ]; then
+        ok "builder unit has its shipped values (${#SHIPPED[@]} lines in $FRAGMENT and in systemctl show; ${#NOT_SET[@]} properties unset)"
+    fi
+fi
+
 # ---- 3. sandbox probes -------------------------------------------------------------
 mapfile -t BENV < <(grep -E '^[A-Z_][A-Z0-9_]*=' "$BUILDER_ENV")
 PROC_MODE="$(sed -n 's/^PNC_BWRAP_PROC=//p' "$BUILDER_ENV" | tail -n 1)"
@@ -167,7 +295,7 @@ load_unit_props() {
 
 # Security-relevant properties that must be identical in the running
 # builder and in the transient probe service.
-COMPARE_PROPS="User Group SystemCallFilter SystemCallErrorNumber SystemCallArchitectures RestrictNamespaces ProtectProc ProcSubset PrivateTmp PrivateNetwork PrivateDevices ProtectSystem ProtectHome ProtectKernelTunables ProtectKernelLogs ProtectKernelModules ProtectControlGroups ProtectClock ProtectHostname NoNewPrivileges CapabilityBoundingSet AmbientCapabilities RestrictAddressFamilies IPAddressDeny NoExecPaths RestrictSUIDSGID RestrictRealtime LockPersonality MemoryDenyWriteExecute MemoryMax MemorySwapMax TasksMax CPUQuotaPerSecUSec LimitNOFILE LimitCORE UMask EnvironmentFiles OOMPolicy"
+COMPARE_PROPS="User Group SystemCallFilter SystemCallErrorNumber SystemCallArchitectures RestrictNamespaces ProtectProc ProcSubset PrivateTmp PrivateNetwork PrivateDevices ProtectSystem ProtectHome ProtectKernelTunables ProtectKernelLogs ProtectKernelModules ProtectControlGroups ProtectClock ProtectHostname NoNewPrivileges CapabilityBoundingSet AmbientCapabilities RestrictAddressFamilies IPAddressDeny NoExecPaths RestrictSUIDSGID RestrictRealtime LockPersonality MemoryDenyWriteExecute MemoryMax MemorySwapMax TasksMax CPUQuotaPerSecUSec LimitNOFILE LimitCORE UMask EnvironmentFiles OOMPolicy TemporaryFileSystem BindReadOnlyPaths BindPaths InaccessiblePaths PrivateUsers"
 
 compare_unit_props() {
     local unit="pnc-verify-props-$$" prop a b same=1
@@ -252,11 +380,21 @@ probe_missing "builder env file" "$BUILDER_ENV" \
     "fn main() { print!(\"{}\", include_str!(\"$BUILDER_ENV\")); }"
 probe_missing "builder socket" "$SOCKET" \
     "fn main() { let b: &[u8] = include_bytes!(\"$SOCKET\"); println!(\"{}\", b.len()); }"
-if [ -n "$API_PID" ] && [ "$API_PID" != "0" ]; then
-    probe_missing "API process environ" "/proc/$API_PID/environ" \
-        "fn main() { let b: &[u8] = include_bytes!(\"/proc/$API_PID/environ\"); println!(\"{}\", b.len()); }"
-else
-    fail "no MainPID for $API_UNIT; cannot probe its /proc entry"
+# Visible under ProtectProc= (bwrap reads it at startup; the [unit] pass
+# proves the unit itself can read it), absent only because of bwrap.
+probe_missing "/proc/sys/kernel/overflowuid (not hidden by ProtectProc)" \
+    "/proc/sys/kernel/overflowuid" \
+    'fn main() { let b: &[u8] = include_bytes!("/proc/sys/kernel/overflowuid"); println!("{}", b.len()); }'
+if [ "$PROBE_MODE" = "runuser" ]; then
+    # Only meaningful without ProtectProc=, which hides it with or without
+    # bwrap: here the host answers "Permission denied", the sandbox "No such
+    # file or directory".
+    if [ -n "$API_PID" ] && [ "$API_PID" != "0" ]; then
+        probe_missing "API process environ" "/proc/$API_PID/environ" \
+            "fn main() { let b: &[u8] = include_bytes!(\"/proc/$API_PID/environ\"); println!(\"{}\", b.len()); }"
+    else
+        fail "no MainPID for $API_UNIT; cannot probe its /proc entry"
+    fi
 fi
 if [ "${PROC_MODE:-none}" = "none" ]; then
     probe_missing "/proc/self/environ (no procfs in the sandbox)" "/proc/self/environ" \
@@ -321,15 +459,144 @@ probe_missing() {
     fi
 }
 
+# ---- run phase -------------------------------------------------------------------
+TOOLCHAIN_DIR="$(sed -n 's/^PNC_TOOLCHAIN_DIR=//p' "$BUILDER_ENV" | tail -n 1)"
+RUN_PATHS=("$API_ENV" "$BUILDER_ENV" /etc /etc/passwd /run "$SOCKET" /proc/self
+           /proc/sys/kernel/overflowuid "$BIN" /usr/local /usr/bin/bwrap "$TOOLCHAIN_DIR"
+           /tmp /var /home /root)
+BUILDER_UID="$(id -u "$BUILDER_USER")"
+
+run_probe_request() {
+    local p sep="" json='{"paths":['
+    for p in "${RUN_PATHS[@]}"; do json="$json$sep\"$p\""; sep=","; done
+    printf '%s],"unix_socket":"%s","tcp_target":"1.1.1.1:443","tcp_control":"127.0.0.1:9","walk_root":true}' "$json" "$SOCKET"
+}
+
+# Run the native probe in the run sandbox; its result lines on stdout.
+run_phase_probe() {
+    local req err="$WORK/run-probe-$PROBE_MODE.err"
+    req="$(run_probe_request)"
+    if [ "$PROBE_MODE" = "unit" ]; then
+        printf '%s' "$req" | timeout 120 systemd-run --quiet --wait --pipe --collect \
+            --unit="pnc-verify-run-$$" "${UNIT_PROPS[@]}" -p RuntimeMaxSec=90 \
+            -E "$CANARY=$CANARY_VALUE" "$BIN" sandbox-verify-run 2> >(cat > "$err")
+    else
+        printf '%s' "$req" | runuser -u "$BUILDER_USER" -- env -i PATH=/usr/bin:/bin "${BENV[@]}" \
+            RUST_LOG=warn "$CANARY=$CANARY_VALUE" "$BIN" sandbox-verify-run 2> "$err"
+    fi
+    local rc=$?
+    wait 2>/dev/null
+    cp -f "$err" "$LAST_ERR" 2>/dev/null
+    return $rc
+}
+
+# expect_line <name> <exact JSON line fragment> <probe output>
+expect_line() {
+    if grep -qF -- "$2" <<<"$3"; then
+        ok "$PASS_LABEL run phase: $1"
+    else
+        fail "$PASS_LABEL run phase: $1: expected '$2' in: $(head -c 1200 <<<"$3")"
+    fi
+}
+
+run_phase_probes() {
+    local out p v
+    for p in "${RUN_PATHS[@]}"; do
+        [ -e "$p" ] || fail "host control: $p does not exist on the host, its run-phase probe would prove nothing"
+    done
+    if ! out="$(run_phase_probe)"; then
+        fail "$PASS_LABEL run phase: sandbox-verify-run failed: $(head -c 1200 "$LAST_ERR")"
+        return
+    fi
+    # Positive controls: the probe ran IN the sandbox and can observe it.
+    expect_line "positive control: the probe received its request" \
+        '{"check":"stdin","subject":"request","result":"ok"}' "$out"
+    expect_line "positive control: its own binary is visible at /pnc/pledge_compile_api" \
+        '{"check":"self","subject":"/pnc/pledge_compile_api","result":"present"}' "$out"
+    if [ "$PROBE_MODE" = "unit" ]; then
+        # Under the unit, RestrictAddressFamilies= refuses IP sockets
+        # outright (on top of bwrap's empty network namespace); AF_UNIX
+        # still works (the unix probe below gets "not_found", not this).
+        expect_line "IP sockets refused by the unit (loopback)" \
+            '{"check":"tcp-control","subject":"127.0.0.1:9","result":"af_refused"}' "$out"
+        expect_line "IP sockets refused by the unit (outside)" \
+            '{"check":"tcp","subject":"1.1.1.1:443","result":"af_refused"}' "$out"
+    else
+        expect_line "positive control: loopback connect is refused (networking works at all)" \
+            '{"check":"tcp-control","subject":"127.0.0.1:9","result":"refused"}' "$out"
+        expect_line "no network: an outside address is unreachable" \
+            '{"check":"tcp","subject":"1.1.1.1:443","result":"network_unreachable"}' "$out"
+    fi
+    for p in "${RUN_PATHS[@]}"; do
+        expect_line "$p is not in the run sandbox" "{\"check\":\"path\",\"subject\":\"$p\",\"result\":\"not_found\"}" "$out"
+    done
+    expect_line "the builder socket cannot be connected to" \
+        "{\"check\":\"unix\",\"subject\":\"$SOCKET\",\"result\":\"not_found\"}" "$out"
+    expect_line "runs as the builder uid ($BUILDER_UID)" \
+        "{\"check\":\"uid\",\"subject\":\"self\",\"result\":\"$BUILDER_UID\"}" "$out"
+    for v in "cpu|30/30" "nofile|64/64" "fsize|0/0" "core|0/0"; do
+        expect_line "rlimit ${v%%|*} = ${v#*|}" \
+            "{\"check\":\"rlimit\",\"subject\":\"${v%%|*}\",\"result\":\"${v#*|}\"}" "$out"
+    done
+    v="$(sed -n 's/.*"check":"pid","subject":"self","result":"\([0-9]*\)".*/\1/p' <<<"$out")"
+    if [ -n "$v" ] && [ "$v" -le 3 ]; then
+        ok "$PASS_LABEL run phase: own PID namespace (probe is pid $v)"
+    else
+        fail "$PASS_LABEL run phase: probe pid '$v': not in a fresh PID namespace"
+    fi
+    v="$(sed -n 's/.*"check":"env","subject":"keys","result":"\([^"]*\)".*/\1/p' <<<"$out")"
+    # bwrap itself sets PWD (for --chdir /).
+    case "$v" in
+        LD_LIBRARY_PATH,PWD|LD_LIBRARY_PATH,PWD,RUST_LOG) ok "$PASS_LABEL run phase: cleared environment ($v)" ;;
+        *) fail "$PASS_LABEL run phase: unexpected environment keys '$v' (canary or PNC_ leaked?)" ;;
+    esac
+    if grep -qF "$CANARY" <<<"$out"; then fail "$PASS_LABEL run phase: the environment canary is visible"; fi
+    # The whole filesystem, by name: the binary and its shared libraries,
+    # nothing else.
+    v="$(sed -n 's/.*"check":"tree","subject":"\/","result":"\([^"]*\)".*/\1/p' <<<"$out")"
+    local f bad="" seen_exe=0
+    IFS=',' read -r -a files <<<"$v"
+    for f in "${files[@]}"; do
+        case "$f" in
+            /pnc/pledge_compile_api) seen_exe=1 ;;
+            */ld-linux*.so*|*/libc.so.*|*/libm.so.*|*/libgcc_s.so.*) ;;
+            *) bad="$bad $f" ;;
+        esac
+    done
+    if [ "$seen_exe" -eq 1 ] && [ -z "$bad" ] && [ "${#files[@]}" -le 8 ]; then
+        ok "$PASS_LABEL run phase: the sandbox's whole filesystem is the binary and its libraries (${#files[@]} files: $v)"
+    else
+        fail "$PASS_LABEL run phase: unexpected files in the run sandbox:${bad:- (binary missing or too many files)} [$v]"
+    fi
+}
+
+# [unit] only: what the unit itself (no bwrap) can see, so that "absent in
+# the sandbox" can be attributed to bwrap, not to ProtectProc=/Temporary
+# FileSystem=. Each must be visible to a plain process under the unit.
+unit_controls() {
+    local p
+    for p in /proc/sys/kernel/overflowuid "$SOCKET" "$BIN" "$TOOLCHAIN_DIR"; do
+        if timeout 60 systemd-run --quiet --wait --pipe --collect --unit="pnc-verify-ctl-$$-$RANDOM" \
+            "${UNIT_PROPS[@]}" -p RuntimeMaxSec=30 /usr/bin/test -e "$p" </dev/null >/dev/null 2>&1; then
+            ok "[unit] control: $p IS visible to the unit without bwrap"
+        else
+            fail "[unit] control: $p is not visible to the unit itself; its sandbox probe would prove nothing"
+        fi
+    done
+}
+
 if [ "$VERIFY_PROBES" = "runuser" ] || [ "$VERIFY_PROBES" = "both" ]; then
     PROBE_MODE="runuser"; PASS_LABEL="[runuser]"
     sandbox_probes
+    run_phase_probes
 fi
 if [ "$VERIFY_PROBES" = "unit" ] || [ "$VERIFY_PROBES" = "both" ]; then
     PROBE_MODE="unit"; PASS_LABEL="[unit]"
     load_unit_props
     if compare_unit_props; then
+        unit_controls
         sandbox_probes
+        run_phase_probes
     else
         fail "[unit] probes skipped: the probe service would not match the running builder"
     fi
@@ -355,6 +622,8 @@ refuses "builder with a token" "must hold no secrets" \
     PNC_AUTH_TOKENS="$TOK" "${BENV[@]}" "$BIN" builder
 refuses "sandbox-verify with a token" "must hold no secrets" \
     PNC_AUTH_TOKENS="$TOK" "${BENV[@]}" "$BIN" sandbox-verify
+refuses "sandbox-verify-run with a token" "must hold no secrets" \
+    PNC_AUTH_TOKENS="$TOK" "${BENV[@]}" "$BIN" sandbox-verify-run
 
 # ---- 5. HTTP through the real API ----------------------------------------------------
 get_var() { sed -n "s/^$1=//p" "$API_ENV" | tail -n 1 | tr -d '[:space:]'; }

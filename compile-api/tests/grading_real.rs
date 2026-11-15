@@ -313,3 +313,70 @@ async fn http_response_carries_the_additive_fields() {
     let typed: CompileResponse = serde_json::from_value(v).unwrap();
     assert!(typed.ok);
 }
+
+/// Third security review, C-1: the checker's nonce sits in the program's
+/// own memory, so `unsafe` player code could find it, print forged checker
+/// lines and exit. Harness missions are built under the server entry's
+/// `#![forbid(unsafe_code)]`, so such a program never compiles; the error
+/// is readable and points at the player's own line (preamble + 1).
+#[test]
+#[ignore = "slow: real wasm build"]
+fn harness_mission_refuses_an_unsafe_memory_scan_at_compile_time() {
+    // Player line 3 holds the `unsafe` block: src/main.rs:4 with the
+    // one-line preamble.
+    let cheat = "fn find_nonce() -> Option<String> {
+    let base = 1024usize as *const u8;
+    let mem: &[u8] = unsafe { core::slice::from_raw_parts(base, 1 << 20) };
+    mem.windows(35)
+        .find(|w| w.starts_with(b\"PNC\") && w[3..].iter().all(|c| c.is_ascii_hexdigit()))
+        .map(|w| String::from_utf8_lossy(w).into_owned())
+}
+fn sign(_n: i32) -> &'static str {
+    if let Some(n) = find_nonce() {
+        println!(\"{n} sign(-3) = \\\"neg\\\"\");
+        println!(\"{n} <done>\");
+        std::process::exit(0);
+    }
+    \"zero\"
+}
+fn main() {}
+";
+    let g = grade("if_else_sign", cheat);
+    assert_eq!(g.state, GradeState::CompileError, "{g:?}");
+    assert!(!g.ok() && !g.outcome.compiled, "{g:?}");
+    assert!(
+        g.outcome
+            .stderr
+            .starts_with(expectations::UNSAFE_REFUSED_MESSAGE),
+        "{}",
+        g.outcome.stderr
+    );
+    assert_eq!(
+        main_rs_error_lines(&g.outcome.stderr),
+        vec![4],
+        "{}",
+        g.outcome.stderr
+    );
+    assert_no_checker_internals(&g.outcome.stderr);
+    assert_no_checker_internals(&g.outcome.stdout);
+
+    // Switching the lint off from the player's own file fails too.
+    let allow = format!("#![allow(unsafe_code)]\n{cheat}");
+    let g = grade("if_else_sign", &allow);
+    assert_eq!(g.state, GradeState::CompileError, "{g:?}");
+    assert!(
+        g.outcome
+            .stderr
+            .starts_with(expectations::UNSAFE_REFUSED_MESSAGE),
+        "{}",
+        g.outcome.stderr
+    );
+    assert_no_checker_internals(&g.outcome.stderr);
+
+    // The honest solution still passes under the same entry.
+    let pass = grade(
+        "if_else_sign",
+        "fn sign(n: i32) -> &'static str { if n < 0 { \"neg\" } else if n == 0 { \"zero\" } else { \"pos\" } }",
+    );
+    assert_eq!(pass.state, GradeState::Passed, "{pass:?}");
+}

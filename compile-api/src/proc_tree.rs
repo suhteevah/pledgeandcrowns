@@ -22,11 +22,23 @@
 //!   gives cargo a new group): the child's group is SIGSTOPped, every
 //!   descendant's group is found through `/proc/*/stat` parent links, and
 //!   all of them are SIGKILLed and confirmed empty.
-//!   Limitation: a process that deliberately leaves the group (`setsid`)
-//!   escapes the sweep. No player code runs during a dependency-free build
-//!   (no `build.rs`, no proc-macros), and under `PNC_BUILD_SANDBOX=bwrap`
-//!   the build runs in its own PID namespace that the kernel tears down
-//!   when the sandbox's init exits, which covers that case.
+//!   Processes that left the group (`setsid`, `setpgid`) and outlived
+//!   their parent (third security review, P1-2 gap): on Linux the
+//!   supervising process makes itself a *child subreaper*
+//!   (`PR_SET_CHILD_SUBREAPER`), so every orphaned descendant of a run is
+//!   re-parented to it instead of to init. After every run, normal exit
+//!   and timeout alike, [`run_captured`] sweeps those strays: each child of
+//!   this process that is not a live supervised leader (a registry, filled
+//!   under a lock at spawn time) and not in this process's own group is
+//!   SIGKILLed together with the process groups of all its descendants,
+//!   then reaped, until none is left (bounded by [`TREE_DEATH_TIMEOUT`],
+//!   else [`ProcError::Survivors`]). Zombies of killed group members are
+//!   reaped inside every "group empty?" wait, because a group whose last
+//!   members are unreaped zombies still exists for `kill(-pgid, 0)`.
+//!   Under `PNC_BUILD_SANDBOX=bwrap` the build and the run also live in
+//!   PID namespaces that the kernel tears down when the sandbox's init
+//!   exits. Residual: a descendant that joins THIS process's own group
+//!   (possible only within the same session) is not swept.
 //! - **Windows (dev only):** on timeout we run `taskkill /T /F /PID <pid>`,
 //!   which kills the child and every descendant it can find by parent PID.
 //!   That needs no `unsafe` (a Job Object with kill-on-close would, via
@@ -167,7 +179,21 @@ pub fn run_captured_with_input(
 
     let started = Instant::now();
     let deadline = started + timeout;
-    let mut child = cmd.spawn().map_err(|source| {
+    #[cfg(target_os = "linux")]
+    reaper::ensure_subreaper();
+    // Spawn while holding the leader registry, so a concurrent stray sweep
+    // can never see this child before it is registered.
+    let spawned = {
+        #[cfg(target_os = "linux")]
+        let mut leaders = reaper::leaders();
+        let r = cmd.spawn();
+        #[cfg(target_os = "linux")]
+        if let Ok(c) = &r {
+            leaders.push(c.id());
+        }
+        r
+    };
+    let mut child = spawned.map_err(|source| {
         tracing::error!(label, "proc_tree: spawn failed: {source}");
         ProcError::Spawn {
             label: label.to_string(),
@@ -175,6 +201,9 @@ pub fn run_captured_with_input(
         }
     })?;
     let pid = child.id();
+    // Unregisters the leader on every return path (after it was reaped, or
+    // as a survivor that later sweeps may then kill).
+    let _registration = Registration(pid);
     tracing::debug!(label, pid, "proc_tree: spawned");
 
     let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
@@ -279,9 +308,12 @@ pub fn run_captured_with_input(
     let status = match exited {
         Some(status) => {
             // Normal exit: sweep any straggler that kept running after the
-            // leader exited, then confirm.
+            // leader exited, then confirm; then the same descendant sweep
+            // as the timeout path for anything that left the group (it was
+            // re-parented to us, see the module docs).
             sweep_group_after_exit(&child, label);
             confirm_tree_dead(&child, label)?;
+            sweep_strays(label)?;
             status
         }
         None => {
@@ -306,6 +338,7 @@ pub fn run_captured_with_input(
             };
             confirm_tree_dead(&child, label)?;
             confirm_groups_dead(&nested, label)?;
+            sweep_strays(label)?;
             status
         }
     };
@@ -474,18 +507,7 @@ fn descendant_groups(root: u32) -> Vec<u32> {
             let Some(pid) = entry.file_name().to_str().and_then(|s| s.parse().ok()) else {
                 continue;
             };
-            let Ok(stat) = std::fs::read_to_string(entry.path().join("stat")) else {
-                continue;
-            };
-            // "pid (comm) state ppid pgrp ...": comm may hold spaces and
-            // parentheses, so split after the LAST ')'.
-            let Some((_, rest)) = stat.rsplit_once(')') else {
-                continue;
-            };
-            let mut fields = rest.split_whitespace().skip(1);
-            let ppid = fields.next().and_then(|v| v.parse().ok());
-            let pgrp = fields.next().and_then(|v| v.parse().ok());
-            if let (Some(ppid), Some(pgrp)) = (ppid, pgrp) {
+            if let Some((ppid, pgrp)) = proc_stat(pid) {
                 procs.push((pid, ppid, pgrp));
             }
         }
@@ -513,6 +535,234 @@ fn descendant_groups(root: u32) -> Vec<u32> {
     groups
 }
 
+/// `(ppid, pgrp)` from `/proc/<pid>/stat`.
+#[cfg(target_os = "linux")]
+fn proc_stat(pid: u32) -> Option<(u32, u32)> {
+    let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+    parse_stat(&stat)
+}
+
+/// Pure: `(ppid, pgrp)` from a `/proc/<pid>/stat` line. `comm` may hold
+/// spaces and parentheses, so fields are split after the LAST `)`.
+#[doc(hidden)]
+pub fn parse_stat(stat: &str) -> Option<(u32, u32)> {
+    let (_, rest) = stat.rsplit_once(')')?;
+    let mut fields = rest.split_whitespace().skip(1);
+    let ppid = fields.next()?.parse().ok()?;
+    let pgrp = fields.next()?.parse().ok()?;
+    Some((ppid, pgrp))
+}
+
+/// Linux subreaper state: the registry of live supervised leaders.
+#[cfg(target_os = "linux")]
+mod reaper {
+    use std::sync::{Mutex, MutexGuard, Once};
+
+    static LEADERS: Mutex<Vec<u32>> = Mutex::new(Vec::new());
+    static SUBREAPER: Once = Once::new();
+
+    /// The live leaders (direct children spawned by `run_captured` and not
+    /// yet finished). Held while spawning and while sweeping.
+    pub(super) fn leaders() -> MutexGuard<'static, Vec<u32>> {
+        LEADERS.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    /// Make this process a child subreaper (once).
+    pub(super) fn ensure_subreaper() {
+        SUBREAPER.call_once(|| {
+            match rustix::process::set_child_subreaper(Some(rustix::process::getpid())) {
+                Ok(()) => tracing::debug!("proc_tree: this process is a child subreaper"),
+                Err(e) => tracing::warn!(
+                    "proc_tree: could not become a child subreaper ({e}); orphans of finished \
+                     runs go to init and are not swept"
+                ),
+            }
+        });
+    }
+}
+
+/// Removes a leader from the registry when its run is over.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+struct Registration(u32);
+
+impl Drop for Registration {
+    fn drop(&mut self) {
+        #[cfg(target_os = "linux")]
+        reaper::leaders().retain(|&p| p != self.0);
+    }
+}
+
+/// This process's children (all threads' `children` lists; falls back to
+/// a `/proc` scan where that file does not exist).
+#[cfg(target_os = "linux")]
+fn own_children() -> Vec<u32> {
+    let me = std::process::id();
+    let mut kids: Vec<u32> = Vec::new();
+    let mut have_children_files = false;
+    if let Ok(tasks) = std::fs::read_dir("/proc/self/task") {
+        for t in tasks.flatten() {
+            if let Ok(s) = std::fs::read_to_string(t.path().join("children")) {
+                have_children_files = true;
+                for p in s.split_whitespace().filter_map(|p| p.parse().ok()) {
+                    if !kids.contains(&p) {
+                        kids.push(p);
+                    }
+                }
+            }
+        }
+    }
+    if !have_children_files && let Ok(entries) = std::fs::read_dir("/proc") {
+        for entry in entries.flatten() {
+            let Some(pid) = entry.file_name().to_str().and_then(|s| s.parse().ok()) else {
+                continue;
+            };
+            if proc_stat(pid).is_some_and(|(ppid, _)| ppid == me) {
+                kids.push(pid);
+            }
+        }
+    }
+    kids
+}
+
+/// Children of this process that are not live leaders and not in this
+/// process's own group, as `(pid, pgrp)`: descendants of runs that were
+/// re-parented to us.
+#[cfg(target_os = "linux")]
+fn strays(leaders: &[u32]) -> Vec<(u32, u32)> {
+    let own = u32::try_from(rustix::process::getpgrp().as_raw_pid()).unwrap_or(0);
+    own_children()
+        .into_iter()
+        .filter(|p| !leaders.contains(p))
+        .filter_map(|p| proc_stat(p).map(|(_, g)| (p, g)))
+        .filter(|&(_, g)| g != own)
+        .collect()
+}
+
+/// Reap stray zombies (never a live leader: std reaps those itself).
+#[cfg(target_os = "linux")]
+fn reap_strays(leaders: &[u32]) {
+    use rustix::process::{Pid, WaitOptions, waitpid};
+    for (pid, _) in strays(leaders) {
+        if let Some(p) = i32::try_from(pid).ok().and_then(Pid::from_raw) {
+            match waitpid(Some(p), WaitOptions::NOHANG) {
+                Ok(Some(_)) => tracing::debug!(pid, "proc_tree: reaped a stray"),
+                Ok(None) => {}
+                Err(e) => tracing::debug!(pid, "proc_tree: waitpid on a stray: {e}"),
+            }
+        }
+    }
+}
+
+/// Reap zombies re-parented to us, so `kill(-pgid, 0)` can report a group
+/// empty (no-op off Linux).
+#[cfg(unix)]
+fn reap_now() {
+    #[cfg(target_os = "linux")]
+    {
+        let leaders = reaper::leaders();
+        reap_strays(&leaders);
+    }
+}
+
+/// Kill and reap every stray (and the groups of all its descendants) until
+/// none is left. See the module docs.
+fn sweep_strays(label: &str) -> Result<(), ProcError> {
+    #[cfg(target_os = "linux")]
+    {
+        use rustix::process::{Pid, Signal, kill_process, kill_process_group};
+        let own = u32::try_from(rustix::process::getpgrp().as_raw_pid()).unwrap_or(0);
+        let started = Instant::now();
+        let mut announced = false;
+        loop {
+            let leaders = reaper::leaders();
+            let found = strays(&leaders);
+            if found.is_empty() {
+                return Ok(());
+            }
+            if !announced {
+                tracing::warn!(
+                    label,
+                    strays = ?found,
+                    "proc_tree: processes outlived their parent and were re-parented to this \
+                     supervisor; SIGKILLing them and their descendants"
+                );
+                announced = true;
+            }
+            for &(pid, pgrp) in &found {
+                let mut groups = descendant_groups(pid);
+                groups.push(pgrp);
+                for g in groups {
+                    if g <= 1 || g == own || leaders.contains(&g) {
+                        continue;
+                    }
+                    if let Some(p) = i32::try_from(g).ok().and_then(Pid::from_raw) {
+                        let _ = kill_process_group(p, Signal::KILL);
+                    }
+                }
+                if let Some(p) = i32::try_from(pid).ok().and_then(Pid::from_raw) {
+                    let _ = kill_process(p, Signal::KILL);
+                }
+            }
+            reap_strays(&leaders);
+            drop(leaders);
+            let waited = started.elapsed();
+            if waited >= TREE_DEATH_TIMEOUT {
+                let pgid = found.first().map_or(0, |&(p, _)| p);
+                tracing::error!(label, ?found, ?waited, "proc_tree: strays survived SIGKILL");
+                return Err(ProcError::Survivors {
+                    label: label.to_string(),
+                    pgid,
+                    waited,
+                });
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = label;
+        Ok(())
+    }
+}
+
+/// Remove ANSI escape sequences (CSI `ESC [ ... final`, OSC `ESC ] ...
+/// BEL|ESC \`, and two-byte `ESC x`) from captured child output before it
+/// is logged. Everything else, newlines included, is kept unchanged.
+pub fn strip_ansi(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '\u{1b}' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('[') => {
+                for n in chars.by_ref() {
+                    if ('\u{40}'..='\u{7e}').contains(&n) {
+                        break;
+                    }
+                }
+            }
+            Some(']') => {
+                while let Some(n) = chars.next() {
+                    if n == '\u{7}' {
+                        break;
+                    }
+                    if n == '\u{1b}' {
+                        if chars.peek() == Some(&'\\') {
+                            chars.next();
+                        }
+                        break;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
 /// Poll until every group in `groups` is empty (bounded like
 /// [`confirm_tree_dead`]).
 fn confirm_groups_dead(groups: &[u32], label: &str) -> Result<(), ProcError> {
@@ -525,6 +775,7 @@ fn confirm_groups_dead(groups: &[u32], label: &str) -> Result<(), ProcError> {
                 continue;
             };
             while !matches!(test_kill_process_group(pgid), Err(e) if e == rustix::io::Errno::SRCH) {
+                reap_now();
                 let waited = started.elapsed();
                 if waited >= TREE_DEATH_TIMEOUT {
                     tracing::error!(
@@ -585,6 +836,9 @@ fn confirm_tree_dead(child: &Child, label: &str) -> Result<(), ProcError> {
                 // EPERM would mean a member changed uid; treat as alive.
                 _ => {}
             }
+            // Members whose parent died were re-parented to us: reap the
+            // zombies, or the group never reads as empty.
+            reap_now();
             let waited = started.elapsed();
             if waited >= TREE_DEATH_TIMEOUT {
                 tracing::error!(
@@ -673,6 +927,33 @@ pub fn read_capped<R: Read>(mut r: R, cap: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn strip_ansi_removes_escapes_and_keeps_text() {
+        let coloured = "\u{1b}[2m2026-11-15T10:00:00Z\u{1b}[0m \u{1b}[32m INFO\u{1b}[0m \
+                        \u{1b}[2mpledge_compile_api::jobs\u{1b}[0m\u{1b}[2m:\u{1b}[0m job: grading\n\
+                        error[E0308]: mismatched types\n --> src/main.rs:3:9\n\u{1b}]0;title\u{7}tail";
+        let plain = strip_ansi(coloured);
+        assert!(!plain.contains('\u{1b}'), "{plain:?}");
+        assert_eq!(
+            plain,
+            "2026-11-15T10:00:00Z  INFO pledge_compile_api::jobs: job: grading\n\
+             error[E0308]: mismatched types\n --> src/main.rs:3:9\ntail"
+        );
+        assert_eq!(
+            strip_ansi("no escapes: src/main.rs:12:5"),
+            "no escapes: src/main.rs:12:5"
+        );
+    }
+
+    #[test]
+    fn stat_parser_handles_hostile_comm() {
+        assert_eq!(
+            parse_stat("4242 (a) b) c (d) S 17 4242 4242 0 -1 4194560 ..."),
+            Some((17, 4242))
+        );
+        assert_eq!(parse_stat("garbage"), None);
+    }
 
     #[test]
     fn read_capped_truncates_and_marks() {

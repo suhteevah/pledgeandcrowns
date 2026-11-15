@@ -27,6 +27,9 @@
 //!   ([`crate::proc_tree`]) and returns only once it is confirmed dead;
 //!   output capture is bounded.
 //! - The built module is size-capped before it is read into memory.
+//! - In `bwrap` mode the module then runs in its own run sandbox, a
+//!   separate `run-wasm` child that sees only the server binary and its
+//!   libraries ([`crate::run_sandbox`]); in `none` mode it runs in-process.
 //! - Job dir auto-cleanup via a Drop guard on every exit path, after the
 //!   process tree is dead.
 //!
@@ -350,12 +353,19 @@ pub fn compile_and_run_layout(
 
     wasm_runner::announce_run_phase();
     let run_started = Instant::now();
-    let RunVerdict { ok, stdout, stderr } = wasm_runner::run_wasm(
-        &bytes,
-        limits.timeout_ms,
-        limits.fuel,
-        limits.max_memory_bytes,
-    )?;
+    // bwrap mode: wasmtime runs in its own run sandbox (a separate
+    // `run-wasm` child, see `run_sandbox`), never with this process's view
+    // of the host. `none` (dev/tests/Windows): in-process.
+    let RunVerdict { ok, stdout, stderr } = if settings.sandbox.mode == SandboxMode::Bwrap {
+        crate::run_sandbox::run_wasm_sandboxed(&bytes, limits, &settings.sandbox)?
+    } else {
+        wasm_runner::run_wasm(
+            &bytes,
+            limits.timeout_ms,
+            limits.fuel,
+            limits.max_memory_bytes,
+        )?
+    };
     let run_time = run_started.elapsed();
     tracing::debug!(
         "wasm_builder: run complete ok={ok} build={build_time:?} run={run_time:?} mem_cap={}",
