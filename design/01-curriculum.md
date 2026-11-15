@@ -117,6 +117,8 @@ When the player finally passes, the Checker bows: "You may cross. The Old Tongue
 
 **Code status (2026-06-18).** The Act 3 *concepts* the prelude skipped now ship as 6 missions in the mission-tutorial loop (the RPG layer — party tab, combat, the Variant Wraith boss — is still future work): `impl_method` (The Guildmaster), `assoc_new` (The Recruiter), `if_let` (The Locksmith), `while_let` (The Porter), `tuple_struct` (The Surveyor), `enum_data_match` (The Armorer). Basic struct/enum/match/derive were already covered by the prelude (Herald/Heraldic Sage/Oracle/Chronicler). Design: `docs/superpowers/specs/2026-06-18-act3-guildhall-missions-design.md`.
 
+**Code status (2026-11-15).** The Variant Wraith ships as a *trial* (the Bridge's mechanism, `game/src/plugins/trial.rs`): three staged missions owned by the Guildmaster, after `enum_data_match`; `impl_method` stays his prologue. Stages: `wraith_forms` (a `_` arm answers the Shadow wrongly; name every variant, and dropping `_` without naming Shadow is E0004), `wraith_essence` (struct-like variants `Solid { armor }`, `Mist { density }` bound in the pattern; a bare `Wraith::Solid` pattern is E0533), `wraith_possessed` (a fourth form `Possessed { will }` makes the match non-exhaustive, E0004; its damage depends on `will`, so a blanket `_` arm cannot pass). Every compiler error he names is compiled in `game/tests/mission_text.rs`.
+
 ---
 
 # Act 4 — The Trait Mage's Tower
@@ -141,6 +143,8 @@ When the player finally passes, the Checker bows: "You may cross. The Old Tongue
 
 **Code status (2026-06-18).** The Act 4 *concepts* ship as 6 missions in the mission-tutorial loop (the RPG layer — Vexis's tower, the Grimoire, the Chimera boss — is future work): `trait_def` (Vexis the Archmage), `generic_fn` (The Wandwright), `generic_struct` (The Conjurer), `dyn_trait` (The Familiar), `lifetimes` (The Lanternkeeper — the doc's Lifetime Lantern, deferred from Act 2), `assoc_type` (The Loremaster). Default methods / blanket impls / supertraits / the Iterator impl are taught in tutorials but not their own missions (hard to pattern-grade cleanly). Design: `docs/superpowers/specs/2026-06-18-act4-trait-tower-missions-design.md`.
 
+**Code status (2026-11-15).** The Chimera of Vexis ships as a trial owned by Vexis, after `assoc_type`; `trait_def` stays his prologue. Stages: `chimera_heads` (implement `trait Enemy` for the Frost and Storm heads; a head without the impl has no such method, E0599), `chimera_bound` (a generic `volley<T: Enemy>`; without the bound `head.name()` is E0599; the server checker calls it with a head type of its own), `chimera_plasma` (`fn battle(heads: &[Box<dyn Enemy>]) -> u32` replaces a `match` on a `Head` enum; the starter's `battle(&heads)` is E0308 once the heads arrive as trait objects with the fourth head, `Plasma`; the checker sends a head it never saw). Every compiler error he names is compiled in `game/tests/mission_text.rs`.
+
 ---
 
 # Act 5 — The Tavern of Tribulations
@@ -164,6 +168,8 @@ When the player finally passes, the Checker bows: "You may cross. The Old Tongue
 **Estimated playtime:** 3 hours.
 
 **Code status (2026-06-18).** The Act 5 *concepts* the prelude skipped ship as 6 missions (the prelude already had `match_option`/`option_unwrap_or`/`result_question_mark`): `result_match` (The Barkeep), `custom_error` (The Bouncer), `from_error` (The Interpreter), `option_map` (The Mixologist), `and_then` (The Tabkeeper), `unwrap_or_else` (The Cellarer). Custom errors are taught as a hand-written `enum` (the grading sandbox is dependency-free); `thiserror` is mentioned in the tutorial as the production shortcut. Design: `docs/superpowers/specs/2026-06-18-act5-tavern-missions-design.md`.
+
+**Code status (2026-11-15).** The Tavernkeeper's Wager ships as a trial owned by the Barkeep (no separate Tavernkeeper NPC exists; the Barkeep keeps the Crooked Cask), after `unwrap_or_else`; `result_match` stays his prologue. Stages: `wager_stake` (`?` in a function returning `u32` is E0277; return `Result<u32, ParseIntError>`), `wager_from` (`impl From<ParseIntError>` and `impl From<Short>` for `WagerError`, so `?` converts; without them E0277, "`?` couldn't convert the error"), `wager_quest` (`fn quest(map, key) -> Result<Reward, QuestError>` chaining three steps with `?`; the starter's `.unwrap()` panics on the first failed step). The server rejects `match`, `unwrap`, `expect` and `panic!` in the last stage (`MissionCheck::forbids`) and checks the step order. The style-points / `panic!` damage idea is not implemented (no combat layer). Every compiler error he names is compiled in `game/tests/mission_text.rs`.
 
 ---
 

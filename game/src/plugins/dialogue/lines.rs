@@ -71,12 +71,14 @@ pub const NOT_YET_NOTHING: &str = "I'm not ready for you yet. Come back another 
 /// - `cleared`: only the final stage (a trial NPC is Cleared only once
 ///   every stage is); its lines close the trial.
 /// - `not_yet`: only stage 1 of a trial whose owner has no prologue
-///   mission. The Borrow Checker has one (`borrow_preview`) and talks as a
-///   cleared villager until the Bridge opens, so his stages leave
-///   `not_yet` empty.
+///   mission. Every trial owner so far has one (the Borrow Checker's
+///   `borrow_preview`, the Guildmaster's `impl_method`, Vexis's
+///   `trait_def`, the Barkeep's `result_match`) and talks as a cleared
+///   villager until the trial opens, so their stages leave `not_yet`
+///   empty.
 ///
 /// Every compiler error named here is compiled in
-/// `tests/mission_text.rs` (`BORROW_CHECKER_CLAIMS`), hard rule 3.
+/// `tests/mission_text.rs` (`trial_claims`), hard rule 3.
 pub const TRIAL_STAGES: &[NpcLines] = &[
     NpcLines {
         npc_id: "bridge_toll",
@@ -122,6 +124,153 @@ pub const TRIAL_STAGES: &[NpcLines] = &[
             cleared: &[
                 "Three tolls, paid in full. \"...acceptable.\"",
                 "Lend, do not give. One writer or many readers. Say what your answer borrows. Remember the Bridge.",
+            ],
+        },
+    },
+    // ── The Guildmaster: The Variant Wraith (Act 3) ──────────────────
+    NpcLines {
+        npc_id: "wraith_forms",
+        lines: StatusLines {
+            not_yet: &[],
+            offer: &[
+                "One last assessment for this quarter: the Variant Wraith. Three forms, three stages.",
+                "First, its forms. Your `counter` lets `_` answer the Shadow with steel. Steel passes through it.",
+                "Give every form its own arm. A member is defined by their duties, and so is a `match`.",
+            ],
+            in_progress: &[
+                "Strike the `_` arm and write `Wraith::Shadow => \"light\"`. Then every form is answered by name.",
+            ],
+            cleared: &[],
+        },
+    },
+    NpcLines {
+        npc_id: "wraith_essence",
+        lines: StatusLines {
+            not_yet: &[],
+            offer: &[
+                "Second stage. The forms carry something now: armor on the Solid, density in the Mist.",
+                "Your arms name the forms but never open them. The compiler calls that E0533.",
+                "Open each one in its pattern, `Wraith::Solid { armor }`, and put what you find to work.",
+            ],
+            in_progress: &[
+                "Bind the field in the pattern itself. Then `armor` is a local, ready for `blow - armor`.",
+            ],
+            cleared: &[],
+        },
+    },
+    NpcLines {
+        npc_id: "wraith_possessed",
+        lines: StatusLines {
+            not_yet: &[],
+            offer: &[
+                "Final stage. Mid-fight the Wraith takes a fourth form, `Possessed`. Your `match` has no arm for it.",
+                "E0004, non-exhaustive patterns. That error is the Guild's ledger doing its duty.",
+                "Answer the new form by name. A blanket `_` would let the next form in unseen.",
+            ],
+            in_progress: &[
+                "A possessed host fights back: `blow + will`. Give `Wraith::Possessed { will }` its own arm.",
+            ],
+            cleared: &[
+                "Four forms, four arms, none left to chance. The Wraith is unmade.",
+                "Name every variant, and the compiler keeps the roll for you. The Guild is proud to count you a member.",
+            ],
+        },
+    },
+    // ── Vexis the Archmage: The Chimera of Vexis (Act 4) ─────────────
+    NpcLines {
+        npc_id: "chimera_heads",
+        lines: StatusLines {
+            not_yet: &[],
+            offer: &[
+                "You have climbed my tower. Now meet what guards its top: the Chimera. Three heads, three stages.",
+                "First, the heads themselves. Only Fire has been granted the `Enemy` trait. Frost and Storm have not.",
+                "Call a trait method on them and the compiler answers E0599: no such method. Grant the trait.",
+            ],
+            in_progress: &[
+                "A capability named once, granted to a type. Write `impl Enemy for Frost`, then the same for Storm.",
+            ],
+            cleared: &[],
+        },
+    },
+    NpcLines {
+        npc_id: "chimera_bound",
+        lines: StatusLines {
+            not_yet: &[],
+            offer: &[
+                "Second stage. One spell, `volley`, cast at any head: generic over `T`, as a good spell should be.",
+                "But nothing promises that `T` can breathe, so the compiler refuses `head.name()` with E0599.",
+                "Bind the parameter: `T: Enemy`. Then every head that holds the trait may answer.",
+            ],
+            in_progress: &[
+                "Write `: Enemy` after the `T` in `volley<T>`. The bound is a promise, and the compiler holds you to it.",
+            ],
+            cleared: &[],
+        },
+    },
+    NpcLines {
+        npc_id: "chimera_plasma",
+        lines: StatusLines {
+            not_yet: &[],
+            offer: &[
+                "Final stage. The Chimera shows a fourth head, `Plasma`. Your `battle` knows only three.",
+                "It matches on a list of heads fixed in advance, and today the heads arrive as trait objects.",
+                "Take `&[Box<dyn Enemy>]` and call the trait. Then any head, known or not, can be fought.",
+            ],
+            in_progress: &[
+                "`battle` still expects `&[Head]`: E0308, mismatched types. Let it take `&[Box<dyn Enemy>]`.",
+            ],
+            cleared: &[
+                "Four heads, one `battle`, and not one arm per head. The Chimera falls silent.",
+                "Generics when you know the type, trait objects when you do not. The top of the tower is yours.",
+            ],
+        },
+    },
+    // ── The Barkeep: The Tavernkeeper's Wager (Act 5) ────────────────
+    NpcLines {
+        npc_id: "wager_stake",
+        lines: StatusLines {
+            not_yet: &[],
+            offer: &[
+                "Fancy a wager? The Tavernkeeper's game: three rounds, and the house collects on every slip.",
+                "First round, the stake. `?` can hand a bad stake back, but only from a function that returns `Result`.",
+                "Yours returns a plain `u32`, so the compiler says E0277. Let the signature admit it might fail.",
+            ],
+            in_progress: &[
+                "Return `Result<u32, ParseIntError>` and wrap the doubled stake in `Ok`. Poured or spilled, both go back.",
+            ],
+            cleared: &[],
+        },
+    },
+    NpcLines {
+        npc_id: "wager_from",
+        lines: StatusLines {
+            not_yet: &[],
+            offer: &[
+                "Second round. Two things go wrong at this table: a stake that is no number, and a purse too light.",
+                "Your `?` must turn both into a `WagerError`, and it does not know how. E0277 again.",
+                "Teach it with `From`, one impl per error. Then `?` converts as it pours.",
+            ],
+            in_progress: &[
+                "`impl From<ParseIntError> for WagerError`, and another for `Short`. Leave `place_bet` alone.",
+            ],
+            cleared: &[],
+        },
+    },
+    NpcLines {
+        npc_id: "wager_quest",
+        lines: StatusLines {
+            not_yet: &[],
+            offer: &[
+                "Last round, the wager proper. A quest of three steps, and any one of them can go wrong.",
+                "Your `quest` unwraps every step. One bad map and the whole tavern goes down with it.",
+                "Chain them with `?` instead. No `match`, no `unwrap`, no `expect`, no `panic!`. The house is watching.",
+            ],
+            in_progress: &[
+                "`read_map(map)?`, then `open_vault(key)?`, then `pay_guide(gold, leagues)?`. The first failure pays out.",
+            ],
+            cleared: &[
+                "Every step chained, every failure handed back, and not one broken glass. The wager is yours.",
+                "A `Result` tells the truth about failure. Keep it, and a bad night ends in an `Err`, not a crash.",
             ],
         },
     },

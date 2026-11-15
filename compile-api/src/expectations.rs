@@ -27,6 +27,9 @@
 //! (failing them gives [`GradeState::StaticCheckFailed`]). They close the
 //! "print the expected lines as literals" shortcut for missions whose
 //! output is short, without claiming more than a token check proves.
+//! It may also list [`MissionCheck::forbids`]: tokens that must not appear
+//! (whole words, comments and strings removed), for a mission whose text
+//! rules a construct out.
 //!
 //! An id with no entry keeps the old behaviour (built + ran = ok) and the
 //! response says no output check was applied.
@@ -219,6 +222,14 @@ pub struct MissionCheck {
     /// evidence (not proof) that the mission's construct produced it.
     /// Empty for every other check kind.
     pub uses: &'static [&'static [&'static str]],
+    /// Tokens that must NOT appear in the code (comments and string
+    /// literals removed), checked after a passing behaviour check, like
+    /// [`MissionCheck::uses`]. For a mission whose text rules a construct
+    /// out (the Barkeep's last trial stage: no `match`, `unwrap`, `expect`
+    /// or `panic!`). A token that starts or ends with an identifier
+    /// character only matches as a whole word (`match` does not match
+    /// `matches!`). Empty for almost every mission.
+    pub forbids: &'static [&'static str],
 }
 
 /// Every mission with a check, in registry order.
@@ -753,6 +764,12 @@ pub fn grade_in(
         }
         _ => graded,
     };
+    let graded = match spec {
+        Some(m) if graded.state == GradeState::Passed && !m.forbids.is_empty() => {
+            apply_forbids(source, graded, m.forbids)
+        }
+        _ => graded,
+    };
     tracing::info!(
         encounter = encounter_id,
         state = ?graded.state,
@@ -952,6 +969,53 @@ fn apply_uses(
                 "output matched, but the code does not use the mission's construct".to_string(),
             )
         }
+    }
+}
+
+/// The first token of `forbids` present in the code of `source` (comments
+/// and string literals removed). An edge of a token that is an identifier
+/// character must sit next to a non-identifier character (or the end of
+/// the code), so `match` is found in `match x {` but not in `matches!`
+/// or `rematch`.
+pub fn forbidden_token(source: &str, forbids: &'static [&'static str]) -> Option<&'static str> {
+    let code = strip_comments_and_strings(source);
+    let ident = |c: char| c.is_alphanumeric() || c == '_';
+    forbids.iter().copied().find(|tok| {
+        let starts_ident = tok.chars().next().is_some_and(ident);
+        let ends_ident = tok.chars().last().is_some_and(ident);
+        code.match_indices(tok).any(|(at, _)| {
+            let before_ok = !starts_ident || !code[..at].chars().next_back().is_some_and(ident);
+            let after_ok = !ends_ident || !code[at + tok.len()..].chars().next().is_some_and(ident);
+            before_ok && after_ok
+        })
+    })
+}
+
+fn apply_forbids(source: &str, graded: GradedRun, forbids: &'static [&'static str]) -> GradedRun {
+    let Some(tok) = forbidden_token(source, forbids) else {
+        tracing::debug!("expectations: no forbidden tokens");
+        return graded;
+    };
+    tracing::debug!(
+        tok,
+        "expectations: output matched but a forbidden token is used"
+    );
+    let mut outcome = graded.outcome;
+    let banned = forbids
+        .iter()
+        .map(|t| format!("`{t}`"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    outcome.stderr = format!(
+        "Your code works, but this mission rules out {banned}, and it uses `{tok}` \
+         (comments and strings do not count)."
+    );
+    GradedRun {
+        outcome,
+        state: GradeState::StaticCheckFailed,
+        expected: Some(format!("no {banned} in your code")),
+        actual: None,
+        note: format!("output matched, but the code uses `{tok}`, which this mission rules out"),
     }
 }
 
@@ -1186,6 +1250,14 @@ error: could not compile `player_submission` (bin \"player_submission\") due to 
                 );
                 assert!(m.uses.iter().all(|g| !g.is_empty()), "{}", m.id);
             }
+            if !m.forbids.is_empty() {
+                assert!(
+                    matches!(m.check, Check::Stdout { .. } | Check::Harness(_)),
+                    "{}: `forbids` only applies to behaviour checks",
+                    m.id
+                );
+                assert!(m.forbids.iter().all(|t| !t.trim().is_empty()), "{}", m.id);
+            }
             match m.check {
                 Check::Stdout { matchers } => assert!(!matchers.is_empty(), "{}", m.id),
                 Check::Harness(h) => {
@@ -1203,7 +1275,38 @@ error: could not compile `player_submission` (bin \"player_submission\") due to 
                 }
             }
         }
-        assert_eq!(all().len(), 60, "one entry per registry mission");
+        assert_eq!(all().len(), 69, "one entry per registry mission");
+    }
+
+    #[test]
+    fn forbidden_tokens_match_whole_words_in_code_only() {
+        const BANNED: &[&str] = &["match", ".unwrap(", ".expect(", "panic!"];
+        let found = |src: &str| forbidden_token(src, BANNED);
+        assert_eq!(found("fn f() { match x { _ => 1 } }"), Some("match"));
+        assert_eq!(
+            found("fn f() { let n = s.parse::<u32>().unwrap(); }"),
+            Some(".unwrap(")
+        );
+        assert_eq!(found("fn f() { o.expect(\"x\"); }"), Some(".expect("));
+        assert_eq!(found("fn f() { panic!(\"no\"); }"), Some("panic!"));
+        // Whole words only, and never inside comments or strings.
+        assert_eq!(
+            found("fn f() { assert!(matches!(x, Some(_))); let rematch = 1; }"),
+            None
+        );
+        assert_eq!(
+            found("fn f() { o.unwrap_or(0); o.unwrap_or_else(|| 1); }"),
+            None
+        );
+        assert_eq!(
+            found("// match x.unwrap() panic!\nfn f() { let s = \"match\"; }"),
+            None
+        );
+        assert_eq!(found("fn f() { let x = r#\"panic!\"#; }"), None);
+        // Every passing wager_quest check uses `?` and none of the banned tokens.
+        let quest = lookup("wager_quest").expect("wager_quest check");
+        assert_eq!(quest.forbids, BANNED);
+        assert_eq!(quest.uses, &[&["?"][..]]);
     }
 
     /// The headline numbers in `docs/mission-audit.md`. Change both together.
@@ -1215,7 +1318,7 @@ error: could not compile `player_submission` (bin \"player_submission\") due to 
         let unverified = count(|c| matches!(c, Check::RunOnly { .. }));
         assert_eq!(
             (behaviour, static_only, unverified),
-            (57, 3, 0),
+            (66, 3, 0),
             "behaviour-checked / static-only / run-only"
         );
     }

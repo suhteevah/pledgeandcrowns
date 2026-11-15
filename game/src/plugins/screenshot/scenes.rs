@@ -438,6 +438,42 @@ fn trial_scenes(v: &mut Vec<Scene>) {
         0.4,
         boxed(reset_trial_scene),
     ));
+    // The Act 3-5 trials: each owner's offer of stage 1, the same way.
+    for (name, npc, stage1) in [
+        ("trial-offer-wraith", "impl_method", "wraith_forms"),
+        ("trial-offer-chimera", "trait_def", "chimera_heads"),
+        ("trial-offer-wager", "result_match", "wager_stake"),
+    ] {
+        v.push(scene(
+            name,
+            vec![
+                enter(),
+                act(move |w| {
+                    reset_trial_scene(w);
+                    clear_before(w, stage1);
+                }),
+                beside_npc(npc),
+                Action::Wait(0.4),
+                Action::Tap(KeyCode::KeyF),
+                Action::Wait(0.3),
+                Action::Tap(KeyCode::KeyF),
+                act(move |w| {
+                    let open = w.resource::<Dialogue>().active.as_ref().map(|a| {
+                        (
+                            a.mission_id,
+                            a.status,
+                            a.stage.as_ref().map(|s| s.label.clone()),
+                        )
+                    });
+                    let line = format!("{name} dialogue: {open:?}");
+                    tracing::info!("{line}");
+                    w.resource_mut::<ShotLog>().0.push(line);
+                }),
+            ],
+            0.4,
+            boxed(reset_trial_scene),
+        ));
+    }
     for (name, stage) in [
         ("trial-panel-stage1", "bridge_toll"),
         ("trial-panel-stage2", "bridge_quill"),

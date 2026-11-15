@@ -1941,6 +1941,166 @@
   },
   {
     "case": "canonical",
+    "id": "wraith_forms",
+    "input": "#[derive(Debug, Clone, Copy)]\nenum Wraith { Solid, Mist, Shadow }\nfn counter(form: Wraith) -> &'static str {\n    match form {\n        Wraith::Solid => \"steel\",\n        Wraith::Mist => \"wind\",\n        Wraith::Shadow => \"light\",\n    }\n}\nfn main() {\n    for form in [Wraith::Solid, Wraith::Mist, Wraith::Shadow] {\n        println!(\"{form:?}: {}\", counter(form));\n    }\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Guildmaster ticks the ledger. \"three forms, three arms. first stage passed.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "wraith_forms",
+    "input": "#[derive(Debug, Clone, Copy)]\nenum Wraith {\n    Solid,\n    Mist,\n    Shadow,\n}\n\nfn counter(form: Wraith) -> &'static str {\n    match form {\n        Wraith::Solid => \"steel\",\n        Wraith::Mist => \"wind\",\n        // this runs, but `_` answers a form it never looked at\n        _ => \"steel\",\n    }\n}\n\nfn main() {\n    let forms = [Wraith::Solid, Wraith::Mist, Wraith::Shadow];\n    for form in forms {\n        println!(\"{form:?}: {}\", counter(form));\n    }\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Guildmaster raises the ledger — give the Shadow its own arm: `Wraith::Shadow => \"light\"`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "wraith_forms",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Guildmaster raises the ledger — give the Shadow its own arm: `Wraith::Shadow => \"light\"`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_2",
+    "id": "wraith_forms",
+    "input": "#[derive(Debug, Clone, \nenum Wraith { Solid, Mist, Shadow }\nfn counter(form: Wraith) -> &'static str {\n    match form {\n        Wraith::Solid => \"steel\",\n        Wraith::Mist => \"wind\",\n        Wraith::Shadow => \"light\",\n    }\n}\nfn main() {\n    for form in [Wraith::Solid, Wraith::Mist, Wraith::Shadow] {\n        println!(\"{form:?}: {}\", counter(form));\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Guildmaster raises the ledger — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_26",
+    "id": "wraith_forms",
+    "input": "#[derive(Debug, Clone, Copy)]\nenum Wraith { Solid, Mist, Shadow }\nfn counter(form: Wraith) -> &'static str {\n    match form {\n        Wraith::Solid => \"steel\",\n        Wraith::Mist => \"wind\",\n         => \"light\",\n    }\n}\nfn main() {\n    for form in [Wraith::Solid, Wraith::Mist, Wraith::Shadow] {\n        println!(\"{form:?}: {}\", counter(form));\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Guildmaster raises the ledger — give the Shadow its own arm: `Wraith::Shadow => \"light\"`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "wraith_essence",
+    "input": "#[derive(Debug, Clone, Copy)]\nenum Wraith { Solid { armor: u32 }, Mist { density: u32 }, Shadow }\nfn damage(form: Wraith, blow: u32) -> u32 {\n    match form {\n        Wraith::Solid { armor } => blow - armor,\n        Wraith::Mist { density } => blow / density,\n        Wraith::Shadow => 0,\n    }\n}\nfn main() {\n    for form in [Wraith::Solid { armor: 3 }, Wraith::Mist { density: 2 }, Wraith::Shadow] {\n        println!(\"{form:?} takes {}\", damage(form, 10));\n    }\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Guildmaster nods. \"each form opened, each measure used. second stage passed.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "wraith_essence",
+    "input": "#[derive(Debug, Clone, Copy)]\nenum Wraith {\n    Solid { armor: u32 },\n    Mist { density: u32 },\n    Shadow,\n}\n\nfn damage(form: Wraith, blow: u32) -> u32 {\n    // this won't compile yet: open each form to reach what it carries\n    match form {\n        Wraith::Solid => blow,\n        Wraith::Mist => blow,\n        Wraith::Shadow => 0,\n    }\n}\n\nfn main() {\n    let forms = [\n        Wraith::Solid { armor: 3 },\n        Wraith::Mist { density: 2 },\n        Wraith::Shadow,\n    ];\n    for form in forms {\n        println!(\"{form:?} takes {}\", damage(form, 10));\n    }\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Guildmaster taps the ledger — open the Solid form and use its armor: `Wraith::Solid { armor } => blow - armor`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "wraith_essence",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Guildmaster taps the ledger — open the Solid form and use its armor: `Wraith::Solid { armor } => blow - armor`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_2",
+    "id": "wraith_essence",
+    "input": "#[derive(Debug, Clone, \nenum Wraith { Solid { armor: u32 }, Mist { density: u32 }, Shadow }\nfn damage(form: Wraith, blow: u32) -> u32 {\n    match form {\n        Wraith::Solid { armor } => blow - armor,\n        Wraith::Mist { density } => blow / density,\n        Wraith::Shadow => 0,\n    }\n}\nfn main() {\n    for form in [Wraith::Solid { armor: 3 }, Wraith::Mist { density: 2 }, Wraith::Shadow] {\n        println!(\"{form:?} takes {}\", damage(form, 10));\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Guildmaster taps the ledger — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_29",
+    "id": "wraith_essence",
+    "input": "#[derive(Debug, Clone, Copy)]\nenum Wraith { Solid { armor: u32 }, Mist { density: u32 }, Shadow }\nfn damage(form: Wraith, blow: u32) -> u32 {\n    match form {\n         { armor } => blow - armor,\n        Wraith::Mist { density } => blow / density,\n        Wraith::Shadow => 0,\n    }\n}\nfn main() {\n    for form in [Wraith::Solid { armor: 3 }, Wraith::Mist { density: 2 }, Wraith::Shadow] {\n        println!(\"{form:?} takes {}\", damage(form, 10));\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Guildmaster taps the ledger — open the Solid form and use its armor: `Wraith::Solid { armor } => blow - armor`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_37",
+    "id": "wraith_essence",
+    "input": "#[derive(Debug, Clone, Copy)]\nenum Wraith { Solid { armor: u32 }, Mist { density: u32 }, Shadow }\nfn damage(form: Wraith, blow: u32) -> u32 {\n    match form {\n        Wraith::Solid { armor } => blow - armor,\n         { density } => blow / density,\n        Wraith::Shadow => 0,\n    }\n}\nfn main() {\n    for form in [Wraith::Solid { armor: 3 }, Wraith::Mist { density: 2 }, Wraith::Shadow] {\n        println!(\"{form:?} takes {}\", damage(form, 10));\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Guildmaster taps the ledger — open the Mist and use its density: `Wraith::Mist { density } => blow / density`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "wraith_possessed",
+    "input": "#[derive(Debug, Clone, Copy)]\nenum Wraith { Solid { armor: u32 }, Mist { density: u32 }, Shadow, Possessed { will: u32 } }\nfn damage(form: Wraith, blow: u32) -> u32 {\n    match form {\n        Wraith::Solid { armor } => blow - armor,\n        Wraith::Mist { density } => blow / density,\n        Wraith::Shadow => 0,\n        Wraith::Possessed { will } => blow + will,\n    }\n}\nfn main() {\n    let forms = [Wraith::Solid { armor: 3 }, Wraith::Mist { density: 2 }, Wraith::Shadow, Wraith::Possessed { will: 4 }];\n    for form in forms {\n        println!(\"{form:?} takes {}\", damage(form, 10));\n    }\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Guildmaster closes the ledger. \"four forms, every one named. the Wraith is unmade.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "wraith_possessed",
+    "input": "#[derive(Debug, Clone, Copy)]\nenum Wraith {\n    Solid { armor: u32 },\n    Mist { density: u32 },\n    Shadow,\n    Possessed { will: u32 },\n}\n\nfn damage(form: Wraith, blow: u32) -> u32 {\n    // this won't compile yet: the new form has no arm\n    match form {\n        Wraith::Solid { armor } => blow - armor,\n        Wraith::Mist { density } => blow / density,\n        Wraith::Shadow => 0,\n    }\n}\n\nfn main() {\n    let forms = [\n        Wraith::Solid { armor: 3 },\n        Wraith::Mist { density: 2 },\n        Wraith::Shadow,\n        Wraith::Possessed { will: 4 },\n    ];\n    for form in forms {\n        println!(\"{form:?} takes {}\", damage(form, 10));\n    }\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Guildmaster holds the ledger shut — name the new form and add its will: `Wraith::Possessed { will } => blow + will`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "wraith_possessed",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Guildmaster holds the ledger shut — name the new form and add its will: `Wraith::Possessed { will } => blow + will`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_2",
+    "id": "wraith_possessed",
+    "input": "#[derive(Debug, Clone, \nenum Wraith { Solid { armor: u32 }, Mist { density: u32 }, Shadow, Possessed { will: u32 } }\nfn damage(form: Wraith, blow: u32) -> u32 {\n    match form {\n        Wraith::Solid { armor } => blow - armor,\n        Wraith::Mist { density } => blow / density,\n        Wraith::Shadow => 0,\n        Wraith::Possessed { will } => blow + will,\n    }\n}\nfn main() {\n    let forms = [Wraith::Solid { armor: 3 }, Wraith::Mist { density: 2 }, Wraith::Shadow, Wraith::Possessed { will: 4 }];\n    for form in forms {\n        println!(\"{form:?} takes {}\", damage(form, 10));\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Guildmaster holds the ledger shut — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_53",
+    "id": "wraith_possessed",
+    "input": "#[derive(Debug, Clone, Copy)]\nenum Wraith { Solid { armor: u32 }, Mist { density: u32 }, Shadow, Possessed { will: u32 } }\nfn damage(form: Wraith, blow: u32) -> u32 {\n    match form {\n        Wraith::Solid { armor } => blow - armor,\n        Wraith::Mist { density } => blow / density,\n        Wraith::Shadow => 0,\n         { will } => blow + will,\n    }\n}\nfn main() {\n    let forms = [Wraith::Solid { armor: 3 }, Wraith::Mist { density: 2 }, Wraith::Shadow, Wraith::Possessed { will: 4 }];\n    for form in forms {\n        println!(\"{form:?} takes {}\", damage(form, 10));\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Guildmaster holds the ledger shut — name the new form and add its will: `Wraith::Possessed { will } => blow + will`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
     "id": "trait_def",
     "input": "trait Element {\n    fn name(&self) -> &str;\n}\nstruct Fire;\nimpl Element for Fire {\n    fn name(&self) -> &str { \"fire\" }\n}\nfn main() {\n    let f = Fire;\n    println!(\"{}\", f.name());\n}",
     "verdict": {
@@ -2276,6 +2436,166 @@
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Loremaster turns the page — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "chimera_heads",
+    "input": "trait Enemy { fn name(&self) -> &'static str; fn breath(&self) -> u32; }\nstruct Fire;\nstruct Frost;\nstruct Storm;\nimpl Enemy for Fire { fn name(&self) -> &'static str { \"fire\" } fn breath(&self) -> u32 { 7 } }\nimpl Enemy for Frost { fn name(&self) -> &'static str { \"frost\" } fn breath(&self) -> u32 { 5 } }\nimpl Enemy for Storm { fn name(&self) -> &'static str { \"storm\" } fn breath(&self) -> u32 { 9 } }\nfn main() {\n    println!(\"{} breathes {}\", Fire.name(), Fire.breath());\n    println!(\"{} breathes {}\", Frost.name(), Frost.breath());\n    println!(\"{} breathes {}\", Storm.name(), Storm.breath());\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] Vexis lowers his staff. \"three heads, one trait. first stage passed.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "chimera_heads",
+    "input": "trait Enemy {\n    fn name(&self) -> &'static str;\n    fn breath(&self) -> u32;\n}\n\nstruct Fire;\nstruct Frost;\nstruct Storm;\n\nimpl Enemy for Fire {\n    fn name(&self) -> &'static str {\n        \"fire\"\n    }\n    fn breath(&self) -> u32 {\n        7\n    }\n}\n\nfn main() {\n    // this won't compile yet: only one head has learned the trait\n    println!(\"{} breathes {}\", Fire.name(), Fire.breath());\n    println!(\"{} breathes {}\", Frost.name(), Frost.breath());\n    println!(\"{} breathes {}\", Storm.name(), Storm.breath());\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] Vexis raises his staff — teach the Frost head the trait: `impl Enemy for Frost`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "chimera_heads",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] Vexis raises his staff — teach the Frost head the trait: `impl Enemy for Frost`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_12",
+    "id": "chimera_heads",
+    "input": "trait Enemy { fn name(&self) -> &'static str; fn breath(&self) -> u32; \nstruct Fire;\nstruct Frost;\nstruct Storm;\nimpl Enemy for Fire { fn name(&self) -> &'static str { \"fire\" } fn breath(&self) -> u32 { 7 } }\nimpl Enemy for Frost { fn name(&self) -> &'static str { \"frost\" } fn breath(&self) -> u32 { 5 } }\nimpl Enemy for Storm { fn name(&self) -> &'static str { \"storm\" } fn breath(&self) -> u32 { 9 } }\nfn main() {\n    println!(\"{} breathes {}\", Fire.name(), Fire.breath());\n    println!(\"{} breathes {}\", Frost.name(), Frost.breath());\n    println!(\"{} breathes {}\", Storm.name(), Storm.breath());\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] Vexis raises his staff — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_40",
+    "id": "chimera_heads",
+    "input": "trait Enemy { fn name(&self) -> &'static str; fn breath(&self) -> u32; }\nstruct Fire;\nstruct Frost;\nstruct Storm;\nimpl Enemy for Fire { fn name(&self) -> &'static str { \"fire\" } fn breath(&self) -> u32 { 7 } }\n Enemy for Frost { fn name(&self) -> &'static str { \"frost\" } fn breath(&self) -> u32 { 5 } }\nimpl Enemy for Storm { fn name(&self) -> &'static str { \"storm\" } fn breath(&self) -> u32 { 9 } }\nfn main() {\n    println!(\"{} breathes {}\", Fire.name(), Fire.breath());\n    println!(\"{} breathes {}\", Frost.name(), Frost.breath());\n    println!(\"{} breathes {}\", Storm.name(), Storm.breath());\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] Vexis raises his staff — teach the Frost head the trait: `impl Enemy for Frost`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_61",
+    "id": "chimera_heads",
+    "input": "trait Enemy { fn name(&self) -> &'static str; fn breath(&self) -> u32; }\nstruct Fire;\nstruct Frost;\nstruct Storm;\nimpl Enemy for Fire { fn name(&self) -> &'static str { \"fire\" } fn breath(&self) -> u32 { 7 } }\nimpl Enemy for Frost { fn name(&self) -> &'static str { \"frost\" } fn breath(&self) -> u32 { 5 } }\n Enemy for Storm { fn name(&self) -> &'static str { \"storm\" } fn breath(&self) -> u32 { 9 } }\nfn main() {\n    println!(\"{} breathes {}\", Fire.name(), Fire.breath());\n    println!(\"{} breathes {}\", Frost.name(), Frost.breath());\n    println!(\"{} breathes {}\", Storm.name(), Storm.breath());\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] Vexis raises his staff — teach the Storm head the trait: `impl Enemy for Storm`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "chimera_bound",
+    "input": "trait Enemy { fn name(&self) -> &'static str; fn breath(&self) -> u32; }\nstruct Fire;\nimpl Enemy for Fire { fn name(&self) -> &'static str { \"fire\" } fn breath(&self) -> u32 { 7 } }\nfn volley<T: Enemy>(head: &T, rounds: u32) -> String {\n    format!(\"{} x{rounds} = {}\", head.name(), head.breath() * rounds)\n}\nfn main() {\n    println!(\"{}\", volley(&Fire, 3));\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] Vexis traces the bound. \"any head that holds the trait may answer. second stage passed.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "chimera_bound",
+    "input": "trait Enemy {\n    fn name(&self) -> &'static str;\n    fn breath(&self) -> u32;\n}\n\nstruct Fire;\nstruct Frost;\nstruct Storm;\n\nimpl Enemy for Fire {\n    fn name(&self) -> &'static str { \"fire\" }\n    fn breath(&self) -> u32 { 7 }\n}\nimpl Enemy for Frost {\n    fn name(&self) -> &'static str { \"frost\" }\n    fn breath(&self) -> u32 { 5 }\n}\nimpl Enemy for Storm {\n    fn name(&self) -> &'static str { \"storm\" }\n    fn breath(&self) -> u32 { 9 }\n}\n\n// this won't compile yet: nothing promises that T can breathe\nfn volley<T>(head: &T, rounds: u32) -> String {\n    format!(\"{} x{rounds} = {}\", head.name(), head.breath() * rounds)\n}\n\nfn main() {\n    println!(\"{}\", volley(&Fire, 3));\n    println!(\"{}\", volley(&Frost, 3));\n    println!(\"{}\", volley(&Storm, 3));\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] Vexis studies the spell — bound the type parameter: `fn volley<T: Enemy>(head: &T, rounds: u32)`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "chimera_bound",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] Vexis studies the spell — bound the type parameter: `fn volley<T: Enemy>(head: &T, rounds: u32)`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_12",
+    "id": "chimera_bound",
+    "input": "trait Enemy { fn name(&self) -> &'static str; fn breath(&self) -> u32; \nstruct Fire;\nimpl Enemy for Fire { fn name(&self) -> &'static str { \"fire\" } fn breath(&self) -> u32 { 7 } }\nfn volley<T: Enemy>(head: &T, rounds: u32) -> String {\n    format!(\"{} x{rounds} = {}\", head.name(), head.breath() * rounds)\n}\nfn main() {\n    println!(\"{}\", volley(&Fire, 3));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] Vexis studies the spell — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_36",
+    "id": "chimera_bound",
+    "input": "trait Enemy { fn name(&self) -> &'static str; fn breath(&self) -> u32; }\nstruct Fire;\nimpl Enemy for Fire { fn name(&self) -> &'static str { \"fire\" } fn breath(&self) -> u32 { 7 } }\n volley<T: Enemy>(head: &T, rounds: u32) -> String {\n    format!(\"{} x{rounds} = {}\", head.name(), head.breath() * rounds)\n}\nfn main() {\n    println!(\"{}\", volley(&Fire, 3));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] Vexis studies the spell — bound the type parameter: `fn volley<T: Enemy>(head: &T, rounds: u32)`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "chimera_plasma",
+    "input": "trait Enemy { fn name(&self) -> &'static str; fn breath(&self) -> u32; }\nstruct Fire;\nstruct Plasma;\nimpl Enemy for Fire { fn name(&self) -> &'static str { \"fire\" } fn breath(&self) -> u32 { 7 } }\nimpl Enemy for Plasma { fn name(&self) -> &'static str { \"plasma\" } fn breath(&self) -> u32 { 12 } }\nfn battle(heads: &[Box<dyn Enemy>]) -> u32 {\n    let mut total = 0;\n    for head in heads {\n        println!(\"{} breathes {}\", head.name(), head.breath());\n        total += head.breath();\n    }\n    total\n}\nfn main() {\n    let heads: Vec<Box<dyn Enemy>> = vec![Box::new(Fire), Box::new(Plasma)];\n    println!(\"total: {}\", battle(&heads));\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] Vexis steps aside. \"any head, known or not. the Chimera falls.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "chimera_plasma",
+    "input": "trait Enemy {\n    fn name(&self) -> &'static str;\n    fn breath(&self) -> u32;\n}\n\nstruct Fire;\nstruct Frost;\nstruct Storm;\nstruct Plasma;\n\nimpl Enemy for Fire {\n    fn name(&self) -> &'static str { \"fire\" }\n    fn breath(&self) -> u32 { 7 }\n}\nimpl Enemy for Frost {\n    fn name(&self) -> &'static str { \"frost\" }\n    fn breath(&self) -> u32 { 5 }\n}\nimpl Enemy for Storm {\n    fn name(&self) -> &'static str { \"storm\" }\n    fn breath(&self) -> u32 { 9 }\n}\nimpl Enemy for Plasma {\n    fn name(&self) -> &'static str { \"plasma\" }\n    fn breath(&self) -> u32 { 12 }\n}\n\n// The old plan: one arm per head the Chimera had yesterday.\nenum Head {\n    Fire,\n    Frost,\n    Storm,\n}\n\nfn battle(heads: &[Head]) -> u32 {\n    let mut total = 0;\n    for head in heads {\n        let (name, breath) = match head {\n            Head::Fire => (Fire.name(), Fire.breath()),\n            Head::Frost => (Frost.name(), Frost.breath()),\n            Head::Storm => (Storm.name(), Storm.breath()),\n        };\n        println!(\"{name} breathes {breath}\");\n        total += breath;\n    }\n    total\n}\n\nfn main() {\n    let heads: Vec<Box<dyn Enemy>> = vec![\n        Box::new(Fire),\n        Box::new(Frost),\n        Box::new(Storm),\n        Box::new(Plasma),\n    ];\n    // this won't compile yet: battle only knows yesterday's heads\n    println!(\"total: {}\", battle(&heads));\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] Vexis bars the stair — battle takes trait objects: `fn battle(heads: &[Box<dyn Enemy>]) -> u32`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "chimera_plasma",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] Vexis bars the stair — battle takes trait objects: `fn battle(heads: &[Box<dyn Enemy>]) -> u32`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_12",
+    "id": "chimera_plasma",
+    "input": "trait Enemy { fn name(&self) -> &'static str; fn breath(&self) -> u32; \nstruct Fire;\nstruct Plasma;\nimpl Enemy for Fire { fn name(&self) -> &'static str { \"fire\" } fn breath(&self) -> u32 { 7 } }\nimpl Enemy for Plasma { fn name(&self) -> &'static str { \"plasma\" } fn breath(&self) -> u32 { 12 } }\nfn battle(heads: &[Box<dyn Enemy>]) -> u32 {\n    let mut total = 0;\n    for head in heads {\n        println!(\"{} breathes {}\", head.name(), head.breath());\n        total += head.breath();\n    }\n    total\n}\nfn main() {\n    let heads: Vec<Box<dyn Enemy>> = vec![Box::new(Fire), Box::new(Plasma)];\n    println!(\"total: {}\", battle(&heads));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] Vexis bars the stair — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_59",
+    "id": "chimera_plasma",
+    "input": "trait Enemy { fn name(&self) -> &'static str; fn breath(&self) -> u32; }\nstruct Fire;\nstruct Plasma;\nimpl Enemy for Fire { fn name(&self) -> &'static str { \"fire\" } fn breath(&self) -> u32 { 7 } }\nimpl Enemy for Plasma { fn name(&self) -> &'static str { \"plasma\" } fn breath(&self) -> u32 { 12 } }\n battle(heads: &[Box<dyn Enemy>]) -> u32 {\n    let mut total = 0;\n    for head in heads {\n        println!(\"{} breathes {}\", head.name(), head.breath());\n        total += head.breath();\n    }\n    total\n}\nfn main() {\n    let heads: Vec<Box<dyn Enemy>> = vec![Box::new(Fire), Box::new(Plasma)];\n    println!(\"total: {}\", battle(&heads));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] Vexis bars the stair — battle takes trait objects: `fn battle(heads: &[Box<dyn Enemy>]) -> u32`",
       "stdout": ""
     }
   },
@@ -2626,6 +2946,196 @@
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Cellarer waits — missing required: `.unwrap_or_else(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "wager_stake",
+    "input": "use std::num::ParseIntError;\nfn read_stake(text: &str) -> Result<u32, ParseIntError> { text.trim().parse::<u32>() }\nfn double_stake(text: &str) -> Result<u32, ParseIntError> {\n    let stake = read_stake(text)?;\n    Ok(stake * 2)\n}\nfn main() {\n    println!(\"{:?}\", double_stake(\"20\"));\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Barkeep pockets the stake. \"poured or spilled, it comes back to the table. first round yours.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "wager_stake",
+    "input": "use std::num::ParseIntError;\n\nfn read_stake(text: &str) -> Result<u32, ParseIntError> {\n    text.trim().parse::<u32>()\n}\n\nfn double_stake(text: &str) -> u32 {\n    // this won't compile yet: `?` needs a function that can fail\n    let stake = read_stake(text)?;\n    stake * 2\n}\n\nfn main() {\n    println!(\"{:?}\", double_stake(\"20\"));\n    println!(\"{:?}\", double_stake(\"twenty\"));\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Barkeep holds the stake — let it fail out loud: `fn double_stake(text: &str) -> Result<u32, ParseIntError>`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "wager_stake",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Barkeep holds the stake — let it fail out loud: `fn double_stake(text: &str) -> Result<u32, ParseIntError>`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_4",
+    "id": "wager_stake",
+    "input": "use std::num::ParseIntError;\nfn read_stake(text:  -> Result<u32, ParseIntError> { text.trim().parse::<u32>() }\nfn double_stake(text: &str) -> Result<u32, ParseIntError> {\n    let stake = read_stake(text)?;\n    Ok(stake * 2)\n}\nfn main() {\n    println!(\"{:?}\", double_stake(\"20\"));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Barkeep holds the stake — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_11",
+    "id": "wager_stake",
+    "input": "use std::num::ParseIntError;\nfn read_stake(text: &str) -> Result<u32, ParseIntError> { text.trim().parse::<u32>() }\n double_stake(text: &str) -> Result<u32, ParseIntError> {\n    let stake = read_stake(text)?;\n    Ok(stake * 2)\n}\nfn main() {\n    println!(\"{:?}\", double_stake(\"20\"));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Barkeep holds the stake — let it fail out loud: `fn double_stake(text: &str) -> Result<u32, ParseIntError>`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_22",
+    "id": "wager_stake",
+    "input": "use std::num::ParseIntError;\nfn read_stake(text: &str) -> Result<u32, ParseIntError> { text.trim().parse::<u32>() }\nfn double_stake(text: &str) -> Result<u32, ParseIntError> {\n    let stake = read_stake(text)?;\n     * 2)\n}\nfn main() {\n    println!(\"{:?}\", double_stake(\"20\"));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Barkeep holds the stake — hand back the doubled stake wrapped in `Ok(...)`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "wager_from",
+    "input": "use std::num::ParseIntError;\n#[derive(Debug)]\nstruct Short;\nfn pay(purse: u32, stake: u32) -> Result<u32, Short> {\n    if stake > purse { Err(Short) } else { Ok(purse - stake) }\n}\n#[derive(Debug)]\nenum WagerError { BadStake, TooPoor }\nimpl From<ParseIntError> for WagerError { fn from(_: ParseIntError) -> Self { WagerError::BadStake } }\nimpl From<Short> for WagerError { fn from(_: Short) -> Self { WagerError::TooPoor } }\nfn place_bet(text: &str, purse: u32) -> Result<u32, WagerError> {\n    let stake = text.trim().parse::<u32>()?;\n    let left = pay(purse, stake)?;\n    Ok(left)\n}\nfn main() {\n    println!(\"{:?}\", place_bet(\"15\", 50));\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Barkeep chalks the tally. \"every error in the house's coin. second round yours.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "wager_from",
+    "input": "use std::num::ParseIntError;\n\n#[derive(Debug)]\nstruct Short;\n\nfn pay(purse: u32, stake: u32) -> Result<u32, Short> {\n    if stake > purse { Err(Short) } else { Ok(purse - stake) }\n}\n\n#[derive(Debug)]\nenum WagerError {\n    BadStake,\n    TooPoor,\n}\n\nfn place_bet(text: &str, purse: u32) -> Result<u32, WagerError> {\n    // this won't compile yet: `?` has no way to make a WagerError\n    let stake = text.trim().parse::<u32>()?;\n    let left = pay(purse, stake)?;\n    Ok(left)\n}\n\nfn main() {\n    println!(\"{:?}\", place_bet(\"15\", 50));\n    println!(\"{:?}\", place_bet(\"lots\", 50));\n    println!(\"{:?}\", place_bet(\"80\", 50));\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Barkeep taps the tally — teach `?` the bad stake: `impl From<ParseIntError> for WagerError`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "wager_from",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Barkeep taps the tally — teach `?` the bad stake: `impl From<ParseIntError> for WagerError`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_9",
+    "id": "wager_from",
+    "input": "use std::num::ParseIntError;\n#[derive(Debug)]\nstruct Short;\nfn pay(purse: u32, stake:  -> Result<u32, Short> {\n    if stake > purse { Err(Short) } else { Ok(purse - stake) }\n}\n#[derive(Debug)]\nenum WagerError { BadStake, TooPoor }\nimpl From<ParseIntError> for WagerError { fn from(_: ParseIntError) -> Self { WagerError::BadStake } }\nimpl From<Short> for WagerError { fn from(_: Short) -> Self { WagerError::TooPoor } }\nfn place_bet(text: &str, purse: u32) -> Result<u32, WagerError> {\n    let stake = text.trim().parse::<u32>()?;\n    let left = pay(purse, stake)?;\n    Ok(left)\n}\nfn main() {\n    println!(\"{:?}\", place_bet(\"15\", 50));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Barkeep taps the tally — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_35",
+    "id": "wager_from",
+    "input": "use std::num::ParseIntError;\n#[derive(Debug)]\nstruct Short;\nfn pay(purse: u32, stake: u32) -> Result<u32, Short> {\n    if stake > purse { Err(Short) } else { Ok(purse - stake) }\n}\n#[derive(Debug)]\nenum WagerError { BadStake, TooPoor }\n From<ParseIntError> for WagerError { fn from(_: ParseIntError) -> Self { WagerError::BadStake } }\nimpl From<Short> for WagerError { fn from(_: Short) -> Self { WagerError::TooPoor } }\nfn place_bet(text: &str, purse: u32) -> Result<u32, WagerError> {\n    let stake = text.trim().parse::<u32>()?;\n    let left = pay(purse, stake)?;\n    Ok(left)\n}\nfn main() {\n    println!(\"{:?}\", place_bet(\"15\", 50));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Barkeep taps the tally — teach `?` the bad stake: `impl From<ParseIntError> for WagerError`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_49",
+    "id": "wager_from",
+    "input": "use std::num::ParseIntError;\n#[derive(Debug)]\nstruct Short;\nfn pay(purse: u32, stake: u32) -> Result<u32, Short> {\n    if stake > purse { Err(Short) } else { Ok(purse - stake) }\n}\n#[derive(Debug)]\nenum WagerError { BadStake, TooPoor }\nimpl From<ParseIntError> for WagerError { fn from(_: ParseIntError) -> Self { WagerError::BadStake } }\n From<Short> for WagerError { fn from(_: Short) -> Self { WagerError::TooPoor } }\nfn place_bet(text: &str, purse: u32) -> Result<u32, WagerError> {\n    let stake = text.trim().parse::<u32>()?;\n    let left = pay(purse, stake)?;\n    Ok(left)\n}\nfn main() {\n    println!(\"{:?}\", place_bet(\"15\", 50));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Barkeep taps the tally — teach `?` the light purse: `impl From<Short> for WagerError`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "wager_quest",
+    "input": "use std::num::ParseIntError;\n#[derive(Debug)]\nstruct WrongKey;\n#[derive(Debug)]\nstruct Short;\nstruct Reward { gold: u32 }\n#[derive(Debug)]\nenum QuestError { BadMap, Locked, Broke }\nimpl From<ParseIntError> for QuestError { fn from(_: ParseIntError) -> Self { QuestError::BadMap } }\nimpl From<WrongKey> for QuestError { fn from(_: WrongKey) -> Self { QuestError::Locked } }\nimpl From<Short> for QuestError { fn from(_: Short) -> Self { QuestError::Broke } }\nfn read_map(map: &str) -> Result<u32, ParseIntError> { map.trim().parse::<u32>() }\nfn open_vault(key: &str) -> Result<u32, WrongKey> { if key == \"brass\" { Ok(30) } else { Err(WrongKey) } }\nfn pay_guide(gold: u32, leagues: u32) -> Result<u32, Short> {\n    let fee = leagues * 2;\n    if fee > gold { Err(Short) } else { Ok(gold - fee) }\n}\nfn quest(map: &str, key: &str) -> Result<Reward, QuestError> {\n    let leagues = read_map(map)?;\n    let gold = open_vault(key)?;\n    let left = pay_guide(gold, leagues)?;\n    Ok(Reward { gold: left })\n}\nfn main() {\n    println!(\"{:?}\", quest(\"4\", \"brass\").map(|r| r.gold));\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Barkeep pays out. \"every step chained, every failure handed back. the wager is yours.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "wager_quest",
+    "input": "use std::num::ParseIntError;\n\n#[derive(Debug)]\nstruct WrongKey;\n\n#[derive(Debug)]\nstruct Short;\n\n#[derive(Debug)]\nstruct Reward {\n    gold: u32,\n}\n\n#[derive(Debug)]\nenum QuestError {\n    BadMap,\n    Locked,\n    Broke,\n}\n\nimpl From<ParseIntError> for QuestError {\n    fn from(_: ParseIntError) -> Self {\n        QuestError::BadMap\n    }\n}\nimpl From<WrongKey> for QuestError {\n    fn from(_: WrongKey) -> Self {\n        QuestError::Locked\n    }\n}\nimpl From<Short> for QuestError {\n    fn from(_: Short) -> Self {\n        QuestError::Broke\n    }\n}\n\n// Step 1: the map says how many leagues to walk.\nfn read_map(map: &str) -> Result<u32, ParseIntError> {\n    map.trim().parse::<u32>()\n}\n\n// Step 2: only the brass key opens the vault. It holds 30 gold.\nfn open_vault(key: &str) -> Result<u32, WrongKey> {\n    if key == \"brass\" { Ok(30) } else { Err(WrongKey) }\n}\n\n// Step 3: the guide charges 2 gold a league.\nfn pay_guide(gold: u32, leagues: u32) -> Result<u32, Short> {\n    let fee = leagues * 2;\n    if fee > gold { Err(Short) } else { Ok(gold - fee) }\n}\n\nfn quest(map: &str, key: &str) -> Result<Reward, QuestError> {\n    // this runs, but the first failed step brings the tavern down\n    let leagues = read_map(map).unwrap();\n    let gold = open_vault(key).unwrap();\n    let left = pay_guide(gold, leagues).unwrap();\n    Ok(Reward { gold: left })\n}\n\nfn main() {\n    println!(\"{:?}\", quest(\"4\", \"brass\").map(|r| r.gold));\n    println!(\"{:?}\", quest(\"far\", \"brass\").map(|r| r.gold));\n    println!(\"{:?}\", quest(\"4\", \"bone\").map(|r| r.gold));\n    println!(\"{:?}\", quest(\"20\", \"brass\").map(|r| r.gold));\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Barkeep keeps the purse — chain step 1 with `?`: `read_map(map)?`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "wager_quest",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Barkeep keeps the purse — chain step 1 with `?`: `read_map(map)?`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_13",
+    "id": "wager_quest",
+    "input": "use std::num::ParseIntError;\n#[derive(Debug)]\nstruct WrongKey;\n#[derive(Debug)]\nstruct Short;\nstruct Reward { gold: u32 \n#[derive(Debug)]\nenum QuestError { BadMap, Locked, Broke }\nimpl From<ParseIntError> for QuestError { fn from(_: ParseIntError) -> Self { QuestError::BadMap } }\nimpl From<WrongKey> for QuestError { fn from(_: WrongKey) -> Self { QuestError::Locked } }\nimpl From<Short> for QuestError { fn from(_: Short) -> Self { QuestError::Broke } }\nfn read_map(map: &str) -> Result<u32, ParseIntError> { map.trim().parse::<u32>() }\nfn open_vault(key: &str) -> Result<u32, WrongKey> { if key == \"brass\" { Ok(30) } else { Err(WrongKey) } }\nfn pay_guide(gold: u32, leagues: u32) -> Result<u32, Short> {\n    let fee = leagues * 2;\n    if fee > gold { Err(Short) } else { Ok(gold - fee) }\n}\nfn quest(map: &str, key: &str) -> Result<Reward, QuestError> {\n    let leagues = read_map(map)?;\n    let gold = open_vault(key)?;\n    let left = pay_guide(gold, leagues)?;\n    Ok(Reward { gold: left })\n}\nfn main() {\n    println!(\"{:?}\", quest(\"4\", \"brass\").map(|r| r.gold));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Barkeep keeps the purse — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_133",
+    "id": "wager_quest",
+    "input": "use std::num::ParseIntError;\n#[derive(Debug)]\nstruct WrongKey;\n#[derive(Debug)]\nstruct Short;\nstruct Reward { gold: u32 }\n#[derive(Debug)]\nenum QuestError { BadMap, Locked, Broke }\nimpl From<ParseIntError> for QuestError { fn from(_: ParseIntError) -> Self { QuestError::BadMap } }\nimpl From<WrongKey> for QuestError { fn from(_: WrongKey) -> Self { QuestError::Locked } }\nimpl From<Short> for QuestError { fn from(_: Short) -> Self { QuestError::Broke } }\nfn read_map(map: &str) -> Result<u32, ParseIntError> { map.trim().parse::<u32>() }\nfn open_vault(key: &str) -> Result<u32, WrongKey> { if key == \"brass\" { Ok(30) } else { Err(WrongKey) } }\nfn pay_guide(gold: u32, leagues: u32) -> Result<u32, Short> {\n    let fee = leagues * 2;\n    if fee > gold { Err(Short) } else { Ok(gold - fee) }\n}\nfn quest(map: &str, key: &str) -> Result<Reward, QuestError> {\n    let leagues = \n    let gold = open_vault(key)?;\n    let left = pay_guide(gold, leagues)?;\n    Ok(Reward { gold: left })\n}\nfn main() {\n    println!(\"{:?}\", quest(\"4\", \"brass\").map(|r| r.gold));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Barkeep keeps the purse — chain step 1 with `?`: `read_map(map)?`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_137",
+    "id": "wager_quest",
+    "input": "use std::num::ParseIntError;\n#[derive(Debug)]\nstruct WrongKey;\n#[derive(Debug)]\nstruct Short;\nstruct Reward { gold: u32 }\n#[derive(Debug)]\nenum QuestError { BadMap, Locked, Broke }\nimpl From<ParseIntError> for QuestError { fn from(_: ParseIntError) -> Self { QuestError::BadMap } }\nimpl From<WrongKey> for QuestError { fn from(_: WrongKey) -> Self { QuestError::Locked } }\nimpl From<Short> for QuestError { fn from(_: Short) -> Self { QuestError::Broke } }\nfn read_map(map: &str) -> Result<u32, ParseIntError> { map.trim().parse::<u32>() }\nfn open_vault(key: &str) -> Result<u32, WrongKey> { if key == \"brass\" { Ok(30) } else { Err(WrongKey) } }\nfn pay_guide(gold: u32, leagues: u32) -> Result<u32, Short> {\n    let fee = leagues * 2;\n    if fee > gold { Err(Short) } else { Ok(gold - fee) }\n}\nfn quest(map: &str, key: &str) -> Result<Reward, QuestError> {\n    let leagues = read_map(map)?;\n    let gold = \n    let left = pay_guide(gold, leagues)?;\n    Ok(Reward { gold: left })\n}\nfn main() {\n    println!(\"{:?}\", quest(\"4\", \"brass\").map(|r| r.gold));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Barkeep keeps the purse — chain step 2 with `?`: `open_vault(key)?`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_141",
+    "id": "wager_quest",
+    "input": "use std::num::ParseIntError;\n#[derive(Debug)]\nstruct WrongKey;\n#[derive(Debug)]\nstruct Short;\nstruct Reward { gold: u32 }\n#[derive(Debug)]\nenum QuestError { BadMap, Locked, Broke }\nimpl From<ParseIntError> for QuestError { fn from(_: ParseIntError) -> Self { QuestError::BadMap } }\nimpl From<WrongKey> for QuestError { fn from(_: WrongKey) -> Self { QuestError::Locked } }\nimpl From<Short> for QuestError { fn from(_: Short) -> Self { QuestError::Broke } }\nfn read_map(map: &str) -> Result<u32, ParseIntError> { map.trim().parse::<u32>() }\nfn open_vault(key: &str) -> Result<u32, WrongKey> { if key == \"brass\" { Ok(30) } else { Err(WrongKey) } }\nfn pay_guide(gold: u32, leagues: u32) -> Result<u32, Short> {\n    let fee = leagues * 2;\n    if fee > gold { Err(Short) } else { Ok(gold - fee) }\n}\nfn quest(map: &str, key: &str) -> Result<Reward, QuestError> {\n    let leagues = read_map(map)?;\n    let gold = open_vault(key)?;\n    let left =  leagues)?;\n    Ok(Reward { gold: left })\n}\nfn main() {\n    println!(\"{:?}\", quest(\"4\", \"brass\").map(|r| r.gold));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Barkeep keeps the purse — chain step 3 with `?`: `pay_guide(gold, leagues)?`",
       "stdout": ""
     }
   },

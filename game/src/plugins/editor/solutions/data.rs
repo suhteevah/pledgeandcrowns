@@ -460,6 +460,96 @@ fn main() {
 }
 "#,
     ),
+    // ── Act 3 boss: the Guildmaster's trial, The Variant Wraith ──────
+    (
+        "wraith_forms",
+        r#"#[derive(Debug, Clone, Copy)]
+enum Wraith {
+    Solid,
+    Mist,
+    Shadow,
+}
+
+// One arm per form and no `_`: the compiler checks none is missed.
+fn counter(form: Wraith) -> &'static str {
+    match form {
+        Wraith::Solid => "steel",
+        Wraith::Mist => "wind",
+        Wraith::Shadow => "light",
+    }
+}
+
+fn main() {
+    let forms = [Wraith::Solid, Wraith::Mist, Wraith::Shadow];
+    for form in forms {
+        println!("{form:?}: {}", counter(form));
+    }
+}
+"#,
+    ),
+    (
+        "wraith_essence",
+        r#"#[derive(Debug, Clone, Copy)]
+enum Wraith {
+    Solid { armor: u32 },
+    Mist { density: u32 },
+    Shadow,
+}
+
+// Each pattern opens its variant and binds the data it carries.
+fn damage(form: Wraith, blow: u32) -> u32 {
+    match form {
+        Wraith::Solid { armor } => blow - armor,
+        Wraith::Mist { density } => blow / density,
+        Wraith::Shadow => 0,
+    }
+}
+
+fn main() {
+    let forms = [
+        Wraith::Solid { armor: 3 },
+        Wraith::Mist { density: 2 },
+        Wraith::Shadow,
+    ];
+    for form in forms {
+        println!("{form:?} takes {}", damage(form, 10));
+    }
+}
+"#,
+    ),
+    (
+        "wraith_possessed",
+        r#"#[derive(Debug, Clone, Copy)]
+enum Wraith {
+    Solid { armor: u32 },
+    Mist { density: u32 },
+    Shadow,
+    Possessed { will: u32 },
+}
+
+fn damage(form: Wraith, blow: u32) -> u32 {
+    match form {
+        Wraith::Solid { armor } => blow - armor,
+        Wraith::Mist { density } => blow / density,
+        Wraith::Shadow => 0,
+        // The new form, named. A fifth form would need its own arm too.
+        Wraith::Possessed { will } => blow + will,
+    }
+}
+
+fn main() {
+    let forms = [
+        Wraith::Solid { armor: 3 },
+        Wraith::Mist { density: 2 },
+        Wraith::Shadow,
+        Wraith::Possessed { will: 4 },
+    ];
+    for form in forms {
+        println!("{form:?} takes {}", damage(form, 10));
+    }
+}
+"#,
+    ),
     // ── Act 4: The Trait Mage's Tower ────────────────────────────────
     (
         "trait_def",
@@ -566,6 +656,140 @@ impl Producer for Coiner {
 fn main() {
     let c = Coiner;
     println!("{}", c.make());
+}
+"#,
+    ),
+    // ── Act 4 boss: Vexis's trial, The Chimera of Vexis ──────────────
+    (
+        "chimera_heads",
+        r#"trait Enemy {
+    fn name(&self) -> &'static str;
+    fn breath(&self) -> u32;
+}
+
+struct Fire;
+struct Frost;
+struct Storm;
+
+impl Enemy for Fire {
+    fn name(&self) -> &'static str {
+        "fire"
+    }
+    fn breath(&self) -> u32 {
+        7
+    }
+}
+
+// Each head opts in with its own `impl Enemy for ...` block.
+impl Enemy for Frost {
+    fn name(&self) -> &'static str {
+        "frost"
+    }
+    fn breath(&self) -> u32 {
+        5
+    }
+}
+
+impl Enemy for Storm {
+    fn name(&self) -> &'static str {
+        "storm"
+    }
+    fn breath(&self) -> u32 {
+        9
+    }
+}
+
+fn main() {
+    println!("{} breathes {}", Fire.name(), Fire.breath());
+    println!("{} breathes {}", Frost.name(), Frost.breath());
+    println!("{} breathes {}", Storm.name(), Storm.breath());
+}
+"#,
+    ),
+    (
+        "chimera_bound",
+        r#"trait Enemy {
+    fn name(&self) -> &'static str;
+    fn breath(&self) -> u32;
+}
+
+struct Fire;
+struct Frost;
+struct Storm;
+
+impl Enemy for Fire {
+    fn name(&self) -> &'static str { "fire" }
+    fn breath(&self) -> u32 { 7 }
+}
+impl Enemy for Frost {
+    fn name(&self) -> &'static str { "frost" }
+    fn breath(&self) -> u32 { 5 }
+}
+impl Enemy for Storm {
+    fn name(&self) -> &'static str { "storm" }
+    fn breath(&self) -> u32 { 9 }
+}
+
+// `T: Enemy` promises that every T has the trait's methods.
+fn volley<T: Enemy>(head: &T, rounds: u32) -> String {
+    format!("{} x{rounds} = {}", head.name(), head.breath() * rounds)
+}
+
+fn main() {
+    println!("{}", volley(&Fire, 3));
+    println!("{}", volley(&Frost, 3));
+    println!("{}", volley(&Storm, 3));
+}
+"#,
+    ),
+    (
+        "chimera_plasma",
+        r#"trait Enemy {
+    fn name(&self) -> &'static str;
+    fn breath(&self) -> u32;
+}
+
+struct Fire;
+struct Frost;
+struct Storm;
+struct Plasma;
+
+impl Enemy for Fire {
+    fn name(&self) -> &'static str { "fire" }
+    fn breath(&self) -> u32 { 7 }
+}
+impl Enemy for Frost {
+    fn name(&self) -> &'static str { "frost" }
+    fn breath(&self) -> u32 { 5 }
+}
+impl Enemy for Storm {
+    fn name(&self) -> &'static str { "storm" }
+    fn breath(&self) -> u32 { 9 }
+}
+impl Enemy for Plasma {
+    fn name(&self) -> &'static str { "plasma" }
+    fn breath(&self) -> u32 { 12 }
+}
+
+// Every call goes through the trait object, so any head that
+// implements `Enemy` works here, even one added after this was written.
+fn battle(heads: &[Box<dyn Enemy>]) -> u32 {
+    let mut total = 0;
+    for head in heads {
+        println!("{} breathes {}", head.name(), head.breath());
+        total += head.breath();
+    }
+    total
+}
+
+fn main() {
+    let heads: Vec<Box<dyn Enemy>> = vec![
+        Box::new(Fire),
+        Box::new(Frost),
+        Box::new(Storm),
+        Box::new(Plasma),
+    ];
+    println!("total: {}", battle(&heads));
 }
 "#,
     ),
@@ -695,6 +919,141 @@ fn main() {
 fn main() {
     println!("{}", value(Some(3)));
     println!("{}", value(None));
+}
+"#,
+    ),
+    // ── Act 5 boss: the Barkeep's trial, The Tavernkeeper's Wager ────
+    (
+        "wager_stake",
+        r#"use std::num::ParseIntError;
+
+fn read_stake(text: &str) -> Result<u32, ParseIntError> {
+    text.trim().parse::<u32>()
+}
+
+// The return type says it can fail, so `?` may hand an error back.
+fn double_stake(text: &str) -> Result<u32, ParseIntError> {
+    let stake = read_stake(text)?;
+    Ok(stake * 2)
+}
+
+fn main() {
+    println!("{:?}", double_stake("20"));
+    println!("{:?}", double_stake("twenty"));
+}
+"#,
+    ),
+    (
+        "wager_from",
+        r#"use std::num::ParseIntError;
+
+#[derive(Debug)]
+struct Short;
+
+fn pay(purse: u32, stake: u32) -> Result<u32, Short> {
+    if stake > purse { Err(Short) } else { Ok(purse - stake) }
+}
+
+#[derive(Debug)]
+enum WagerError {
+    BadStake,
+    TooPoor,
+}
+
+// One `From` per error type that `?` must turn into a WagerError.
+impl From<ParseIntError> for WagerError {
+    fn from(_: ParseIntError) -> Self {
+        WagerError::BadStake
+    }
+}
+
+impl From<Short> for WagerError {
+    fn from(_: Short) -> Self {
+        WagerError::TooPoor
+    }
+}
+
+fn place_bet(text: &str, purse: u32) -> Result<u32, WagerError> {
+    let stake = text.trim().parse::<u32>()?;
+    let left = pay(purse, stake)?;
+    Ok(left)
+}
+
+fn main() {
+    println!("{:?}", place_bet("15", 50));
+    println!("{:?}", place_bet("lots", 50));
+    println!("{:?}", place_bet("80", 50));
+}
+"#,
+    ),
+    (
+        "wager_quest",
+        r#"use std::num::ParseIntError;
+
+#[derive(Debug)]
+struct WrongKey;
+
+#[derive(Debug)]
+struct Short;
+
+#[derive(Debug)]
+struct Reward {
+    gold: u32,
+}
+
+#[derive(Debug)]
+enum QuestError {
+    BadMap,
+    Locked,
+    Broke,
+}
+
+impl From<ParseIntError> for QuestError {
+    fn from(_: ParseIntError) -> Self {
+        QuestError::BadMap
+    }
+}
+impl From<WrongKey> for QuestError {
+    fn from(_: WrongKey) -> Self {
+        QuestError::Locked
+    }
+}
+impl From<Short> for QuestError {
+    fn from(_: Short) -> Self {
+        QuestError::Broke
+    }
+}
+
+// Step 1: the map says how many leagues to walk.
+fn read_map(map: &str) -> Result<u32, ParseIntError> {
+    map.trim().parse::<u32>()
+}
+
+// Step 2: only the brass key opens the vault. It holds 30 gold.
+fn open_vault(key: &str) -> Result<u32, WrongKey> {
+    if key == "brass" { Ok(30) } else { Err(WrongKey) }
+}
+
+// Step 3: the guide charges 2 gold a league.
+fn pay_guide(gold: u32, leagues: u32) -> Result<u32, Short> {
+    let fee = leagues * 2;
+    if fee > gold { Err(Short) } else { Ok(gold - fee) }
+}
+
+// Each `?` either unwraps its step's value or returns the step's error,
+// converted to a QuestError by its `From` impl. The first failure wins.
+fn quest(map: &str, key: &str) -> Result<Reward, QuestError> {
+    let leagues = read_map(map)?;
+    let gold = open_vault(key)?;
+    let left = pay_guide(gold, leagues)?;
+    Ok(Reward { gold: left })
+}
+
+fn main() {
+    println!("{:?}", quest("4", "brass").map(|r| r.gold));
+    println!("{:?}", quest("far", "brass").map(|r| r.gold));
+    println!("{:?}", quest("4", "bone").map(|r| r.gold));
+    println!("{:?}", quest("20", "brass").map(|r| r.gold));
 }
 "#,
     ),

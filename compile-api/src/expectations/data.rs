@@ -18,7 +18,8 @@
 //! C = `CompileOnly` (cannot be run meaningfully on wasm32-wasip1).
 //! No entry is `RunOnly`: every runnable mission's text pins its output.
 //! Entries built with `mu` also carry construct tokens (`uses`) checked
-//! after the behaviour matched.
+//! after the behaviour matched; `muf` adds tokens the code must not
+//! contain (`forbids`).
 
 use super::Check::{CompileOnly, Harness as H, Stdout};
 use super::Matcher::*;
@@ -29,6 +30,7 @@ const fn m(id: &'static str, check: super::Check) -> MissionCheck {
         id,
         check,
         uses: &[],
+        forbids: &[],
     }
 }
 
@@ -40,7 +42,29 @@ const fn mu(
     check: super::Check,
     uses: &'static [&'static [&'static str]],
 ) -> MissionCheck {
-    MissionCheck { id, check, uses }
+    MissionCheck {
+        id,
+        check,
+        uses,
+        forbids: &[],
+    }
+}
+
+/// [`mu`] plus tokens the code must not contain
+/// ([`MissionCheck::forbids`]), for a mission whose text rules a construct
+/// out.
+const fn muf(
+    id: &'static str,
+    check: super::Check,
+    uses: &'static [&'static [&'static str]],
+    forbids: &'static [&'static str],
+) -> MissionCheck {
+    MissionCheck {
+        id,
+        check,
+        uses,
+        forbids,
+    }
 }
 
 const NO_THREADS: &str = "wasm32-wasip1 has no threads (std::thread::spawn panics there), \
@@ -414,6 +438,74 @@ pub(super) const CHECKS: &[MissionCheck] = &[
             main_matchers: &[],
         }),
     ),
+    // ── Act 3 boss: the Guildmaster's trial, The Variant Wraith ──────
+    // The checker names every variant, so the enum's shape is pinned;
+    // each stage pins `counter`/`damage` and calls it on fixed forms. In
+    // stage 3 the Possessed result depends on its `will`, which a blanket
+    // `_` arm cannot read.
+    m(
+        "wraith_forms",
+        H(Harness {
+            contract: "`enum Wraith { Solid, Mist, Shadow }`, `fn counter(form: Wraith) -> &'static str` and a `fn main`",
+            run_main: true,
+            body: "    let _sig: fn(super::Wraith) -> &'static str = super::counter;
+    emit(\"counter(Wraith::Solid)\", super::counter(super::Wraith::Solid));
+    emit(\"counter(Wraith::Mist)\", super::counter(super::Wraith::Mist));
+    emit(\"counter(Wraith::Shadow)\", super::counter(super::Wraith::Shadow));",
+            expected: &[
+                "counter(Wraith::Solid) = \"steel\"",
+                "counter(Wraith::Mist) = \"wind\"",
+                "counter(Wraith::Shadow) = \"light\"",
+            ],
+            main_matchers: &[Exact("Solid: steel\nMist: wind\nShadow: light")],
+        }),
+    ),
+    m(
+        "wraith_essence",
+        H(Harness {
+            contract: "`enum Wraith { Solid { armor: u32 }, Mist { density: u32 }, Shadow }`, `fn damage(form: Wraith, blow: u32) -> u32` and a `fn main`",
+            run_main: true,
+            body: "    let _sig: fn(super::Wraith, u32) -> u32 = super::damage;
+    emit(\"damage(Solid { armor: 3 }, 10)\", super::damage(super::Wraith::Solid { armor: 3 }, 10));
+    emit(\"damage(Solid { armor: 1 }, 6)\", super::damage(super::Wraith::Solid { armor: 1 }, 6));
+    emit(\"damage(Mist { density: 2 }, 10)\", super::damage(super::Wraith::Mist { density: 2 }, 10));
+    emit(\"damage(Mist { density: 3 }, 12)\", super::damage(super::Wraith::Mist { density: 3 }, 12));
+    emit(\"damage(Shadow, 99)\", super::damage(super::Wraith::Shadow, 99));",
+            expected: &[
+                "damage(Solid { armor: 3 }, 10) = 7",
+                "damage(Solid { armor: 1 }, 6) = 5",
+                "damage(Mist { density: 2 }, 10) = 5",
+                "damage(Mist { density: 3 }, 12) = 4",
+                "damage(Shadow, 99) = 0",
+            ],
+            main_matchers: &[Exact(
+                "Solid { armor: 3 } takes 7\nMist { density: 2 } takes 5\nShadow takes 0",
+            )],
+        }),
+    ),
+    m(
+        "wraith_possessed",
+        H(Harness {
+            contract: "`enum Wraith { Solid { armor: u32 }, Mist { density: u32 }, Shadow, Possessed { will: u32 } }`, `fn damage(form: Wraith, blow: u32) -> u32` and a `fn main`",
+            run_main: true,
+            body: "    let _sig: fn(super::Wraith, u32) -> u32 = super::damage;
+    emit(\"damage(Possessed { will: 4 }, 10)\", super::damage(super::Wraith::Possessed { will: 4 }, 10));
+    emit(\"damage(Possessed { will: 1 }, 2)\", super::damage(super::Wraith::Possessed { will: 1 }, 2));
+    emit(\"damage(Solid { armor: 3 }, 10)\", super::damage(super::Wraith::Solid { armor: 3 }, 10));
+    emit(\"damage(Mist { density: 2 }, 10)\", super::damage(super::Wraith::Mist { density: 2 }, 10));
+    emit(\"damage(Shadow, 99)\", super::damage(super::Wraith::Shadow, 99));",
+            expected: &[
+                "damage(Possessed { will: 4 }, 10) = 14",
+                "damage(Possessed { will: 1 }, 2) = 3",
+                "damage(Solid { armor: 3 }, 10) = 7",
+                "damage(Mist { density: 2 }, 10) = 5",
+                "damage(Shadow, 99) = 0",
+            ],
+            main_matchers: &[Exact(
+                "Solid { armor: 3 } takes 7\nMist { density: 2 } takes 5\nShadow takes 0\nPossessed { will: 4 } takes 14",
+            )],
+        }),
+    ),
     // ── Act 4: The Trait Mage's Tower ────────────────────────────────
     m(
         "trait_def",
@@ -498,6 +590,81 @@ pub(super) const CHECKS: &[MissionCheck] = &[
             main_matchers: &[],
         }),
     ),
+    // ── Act 4 boss: Vexis's trial, The Chimera of Vexis ──────────────
+    // Stage 1 calls the methods through `<Head as Enemy>`, so inherent
+    // methods do not count. Stages 2 and 3 implement the player's trait
+    // for a checker-owned head (`Wisp`) and pass it in: only a bounded
+    // generic (stage 2) or trait-object code (stage 3) accepts a head the
+    // player never saw.
+    m(
+        "chimera_heads",
+        H(Harness {
+            contract: "`trait Enemy { fn name(&self) -> &'static str; fn breath(&self) -> u32; }` implemented for `Fire`, `Frost` and `Storm`, and a `fn main`",
+            run_main: true,
+            body: "    let _frost: fn(&super::Frost) -> u32 = <super::Frost as super::Enemy>::breath;
+    let _storm: fn(&super::Storm) -> u32 = <super::Storm as super::Enemy>::breath;
+    emit(\"Frost name\", <super::Frost as super::Enemy>::name(&super::Frost));
+    emit(\"Frost breath\", <super::Frost as super::Enemy>::breath(&super::Frost));
+    emit(\"Storm name\", <super::Storm as super::Enemy>::name(&super::Storm));
+    emit(\"Storm breath\", <super::Storm as super::Enemy>::breath(&super::Storm));
+    emit(\"Fire breath\", <super::Fire as super::Enemy>::breath(&super::Fire));",
+            expected: &[
+                "Frost name = \"frost\"",
+                "Frost breath = 5",
+                "Storm name = \"storm\"",
+                "Storm breath = 9",
+                "Fire breath = 7",
+            ],
+            main_matchers: &[Exact("fire breathes 7\nfrost breathes 5\nstorm breathes 9")],
+        }),
+    ),
+    m(
+        "chimera_bound",
+        H(Harness {
+            contract: "`trait Enemy { fn name(&self) -> &'static str; fn breath(&self) -> u32; }`, a generic `fn volley<T: Enemy>(head: &T, rounds: u32) -> String` and a `fn main`",
+            run_main: true,
+            body: "    struct Wisp;
+    impl super::Enemy for Wisp {
+        fn name(&self) -> &'static str { \"wisp\" }
+        fn breath(&self) -> u32 { 2 }
+    }
+    let _sig: fn(&super::Fire, u32) -> ::std::string::String = super::volley;
+    emit(\"volley(&Fire, 3)\", super::volley(&super::Fire, 3));
+    emit(\"volley(&Storm, 2)\", super::volley(&super::Storm, 2));
+    emit(\"volley(&Wisp, 4)\", super::volley(&Wisp, 4));",
+            expected: &[
+                "volley(&Fire, 3) = \"fire x3 = 21\"",
+                "volley(&Storm, 2) = \"storm x2 = 18\"",
+                "volley(&Wisp, 4) = \"wisp x4 = 8\"",
+            ],
+            main_matchers: &[Exact("fire x3 = 21\nfrost x3 = 15\nstorm x3 = 27")],
+        }),
+    ),
+    m(
+        "chimera_plasma",
+        H(Harness {
+            contract: "`trait Enemy { fn name(&self) -> &'static str; fn breath(&self) -> u32; }`, `fn battle(heads: &[Box<dyn Enemy>]) -> u32` and a `fn main`",
+            run_main: true,
+            body: "    struct Wisp;
+    impl super::Enemy for Wisp {
+        fn name(&self) -> &'static str { \"wisp\" }
+        fn breath(&self) -> u32 { 2 }
+    }
+    let _sig: fn(&[::std::boxed::Box<dyn super::Enemy>]) -> u32 = super::battle;
+    let none: ::std::vec::Vec<::std::boxed::Box<dyn super::Enemy>> = ::std::vec::Vec::new();
+    emit(\"battle(no heads)\", super::battle(&none));
+    let mixed: ::std::vec::Vec<::std::boxed::Box<dyn super::Enemy>> = ::std::vec![
+        ::std::boxed::Box::new(Wisp),
+        ::std::boxed::Box::new(super::Plasma),
+        ::std::boxed::Box::new(Wisp),
+    ];
+    emit(\"battle(wisp, plasma, wisp)\", super::battle(&mixed));",
+            expected: &["battle(no heads) = 0", "battle(wisp, plasma, wisp) = 16"],
+            main_matchers: &[Exact(
+                "fire breathes 7\nfrost breathes 5\nstorm breathes 9\nplasma breathes 12\ntotal: 33",
+            )],
+        }),
+    ),
     // ── Act 5: The Tavern of Tribulations ────────────────────────────
     m(
         "result_match",
@@ -575,6 +742,84 @@ pub(super) const CHECKS: &[MissionCheck] = &[
             expected: &["value(Some(3)) = 3", "value(Some(-8)) = -8"],
             main_matchers: &[],
         }),
+    ),
+    // ── Act 5 boss: the Barkeep's trial, The Tavernkeeper's Wager ────
+    // Every stage calls the player's function on failing inputs too: an
+    // `unwrap`/`expect`/`panic!` on a failing step crashes the checker. The
+    // `From` impls of stage 2 are pinned by their own signatures. Stage 3
+    // checks the step order (a bad map wins over a wrong key) and, once the
+    // behaviour matched, needs a `?` and rules out `match`, `unwrap`,
+    // `expect` and `panic!`, as its Task says.
+    m(
+        "wager_stake",
+        H(Harness {
+            contract: "`fn double_stake(text: &str) -> Result<u32, ParseIntError>` and a `fn main`",
+            run_main: true,
+            body: "    let _sig: fn(&str) -> ::core::result::Result<u32, ::std::num::ParseIntError> = super::double_stake;
+    emit(\"double_stake(\\\"20\\\")\", super::double_stake(\"20\"));
+    emit(\"double_stake(\\\" 7 \\\")\", super::double_stake(\" 7 \"));
+    emit(\"double_stake(\\\"x\\\")\", super::double_stake(\"x\"));
+    emit(\"double_stake(\\\"\\\")\", super::double_stake(\"\"));",
+            expected: &[
+                "double_stake(\"20\") = Ok(40)",
+                "double_stake(\" 7 \") = Ok(14)",
+                "double_stake(\"x\") = Err(ParseIntError { kind: InvalidDigit })",
+                "double_stake(\"\") = Err(ParseIntError { kind: Empty })",
+            ],
+            main_matchers: &[Exact("Ok(40)\nErr(ParseIntError { kind: InvalidDigit })")],
+        }),
+    ),
+    m(
+        "wager_from",
+        H(Harness {
+            contract: "`enum WagerError { BadStake, TooPoor }`, `impl From<ParseIntError> for WagerError`, `impl From<Short> for WagerError`, `fn place_bet(text: &str, purse: u32) -> Result<u32, WagerError>` and a `fn main`",
+            run_main: true,
+            body: "    let _sig: fn(&str, u32) -> ::core::result::Result<u32, super::WagerError> = super::place_bet;
+    let _parse: fn(::std::num::ParseIntError) -> super::WagerError = <super::WagerError as ::core::convert::From<::std::num::ParseIntError>>::from;
+    let _short: fn(super::Short) -> super::WagerError = <super::WagerError as ::core::convert::From<super::Short>>::from;
+    emit(\"WagerError::from(a ParseIntError)\", \"x\".parse::<u32>().err().map(_parse));
+    emit(\"WagerError::from(Short)\", _short(super::Short));
+    emit(\"place_bet(\\\"15\\\", 50)\", super::place_bet(\"15\", 50));
+    emit(\"place_bet(\\\"50\\\", 50)\", super::place_bet(\"50\", 50));
+    emit(\"place_bet(\\\"lots\\\", 50)\", super::place_bet(\"lots\", 50));
+    emit(\"place_bet(\\\"80\\\", 50)\", super::place_bet(\"80\", 50));",
+            expected: &[
+                "WagerError::from(a ParseIntError) = Some(BadStake)",
+                "WagerError::from(Short) = TooPoor",
+                "place_bet(\"15\", 50) = Ok(35)",
+                "place_bet(\"50\", 50) = Ok(0)",
+                "place_bet(\"lots\", 50) = Err(BadStake)",
+                "place_bet(\"80\", 50) = Err(TooPoor)",
+            ],
+            main_matchers: &[Exact("Ok(35)\nErr(BadStake)\nErr(TooPoor)")],
+        }),
+    ),
+    muf(
+        "wager_quest",
+        H(Harness {
+            contract: "`struct Reward { gold: u32 }`, `enum QuestError { BadMap, Locked, Broke }`, `fn quest(map: &str, key: &str) -> Result<Reward, QuestError>` and a `fn main`",
+            run_main: true,
+            body: "    let _sig: fn(&str, &str) -> ::core::result::Result<super::Reward, super::QuestError> = super::quest;
+    emit(\"quest(\\\"4\\\", \\\"brass\\\")\", super::quest(\"4\", \"brass\").map(|r| r.gold));
+    emit(\"quest(\\\"15\\\", \\\"brass\\\")\", super::quest(\"15\", \"brass\").map(|r| r.gold));
+    emit(\"quest(\\\"far\\\", \\\"brass\\\")\", super::quest(\"far\", \"brass\").map(|r| r.gold));
+    emit(\"quest(\\\"4\\\", \\\"bone\\\")\", super::quest(\"4\", \"bone\").map(|r| r.gold));
+    emit(\"quest(\\\"20\\\", \\\"brass\\\")\", super::quest(\"20\", \"brass\").map(|r| r.gold));
+    emit(\"quest(\\\"far\\\", \\\"bone\\\")\", super::quest(\"far\", \"bone\").map(|r| r.gold));
+    emit(\"quest(\\\"99\\\", \\\"bone\\\")\", super::quest(\"99\", \"bone\").map(|r| r.gold));",
+            expected: &[
+                "quest(\"4\", \"brass\") = Ok(22)",
+                "quest(\"15\", \"brass\") = Ok(0)",
+                "quest(\"far\", \"brass\") = Err(BadMap)",
+                "quest(\"4\", \"bone\") = Err(Locked)",
+                "quest(\"20\", \"brass\") = Err(Broke)",
+                "quest(\"far\", \"bone\") = Err(BadMap)",
+                "quest(\"99\", \"bone\") = Err(Locked)",
+            ],
+            main_matchers: &[Exact("Ok(22)\nErr(BadMap)\nErr(Locked)\nErr(Broke)")],
+        }),
+        &[&["?"]],
+        &["match", ".unwrap(", ".expect(", "panic!"],
     ),
     // ── Act 6: The Iterator Forge ────────────────────────────────────
     mu(

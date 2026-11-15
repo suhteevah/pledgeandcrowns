@@ -243,6 +243,57 @@ fn main() {
     let _ = value(Item::Weapon { damage: 10 });
 }"#
         }
+        // ── Act 3 boss: the Variant Wraith.
+        "wraith_forms" => {
+            r#"#[derive(Debug, Clone, Copy)]
+enum Wraith { Solid, Mist, Shadow }
+fn counter(form: Wraith) -> &'static str {
+    match form {
+        Wraith::Solid => "steel",
+        Wraith::Mist => "wind",
+        Wraith::Shadow => "light",
+    }
+}
+fn main() {
+    for form in [Wraith::Solid, Wraith::Mist, Wraith::Shadow] {
+        println!("{form:?}: {}", counter(form));
+    }
+}"#
+        }
+        "wraith_essence" => {
+            r#"#[derive(Debug, Clone, Copy)]
+enum Wraith { Solid { armor: u32 }, Mist { density: u32 }, Shadow }
+fn damage(form: Wraith, blow: u32) -> u32 {
+    match form {
+        Wraith::Solid { armor } => blow - armor,
+        Wraith::Mist { density } => blow / density,
+        Wraith::Shadow => 0,
+    }
+}
+fn main() {
+    for form in [Wraith::Solid { armor: 3 }, Wraith::Mist { density: 2 }, Wraith::Shadow] {
+        println!("{form:?} takes {}", damage(form, 10));
+    }
+}"#
+        }
+        "wraith_possessed" => {
+            r#"#[derive(Debug, Clone, Copy)]
+enum Wraith { Solid { armor: u32 }, Mist { density: u32 }, Shadow, Possessed { will: u32 } }
+fn damage(form: Wraith, blow: u32) -> u32 {
+    match form {
+        Wraith::Solid { armor } => blow - armor,
+        Wraith::Mist { density } => blow / density,
+        Wraith::Shadow => 0,
+        Wraith::Possessed { will } => blow + will,
+    }
+}
+fn main() {
+    let forms = [Wraith::Solid { armor: 3 }, Wraith::Mist { density: 2 }, Wraith::Shadow, Wraith::Possessed { will: 4 }];
+    for form in forms {
+        println!("{form:?} takes {}", damage(form, 10));
+    }
+}"#
+        }
         // ── Act 4: Trait Mage's Tower.
         "trait_def" => {
             r#"trait Element {
@@ -317,6 +368,51 @@ fn main() {
     let _ = c.make();
 }"#
         }
+        // ── Act 4 boss: the Chimera of Vexis.
+        "chimera_heads" => {
+            r#"trait Enemy { fn name(&self) -> &'static str; fn breath(&self) -> u32; }
+struct Fire;
+struct Frost;
+struct Storm;
+impl Enemy for Fire { fn name(&self) -> &'static str { "fire" } fn breath(&self) -> u32 { 7 } }
+impl Enemy for Frost { fn name(&self) -> &'static str { "frost" } fn breath(&self) -> u32 { 5 } }
+impl Enemy for Storm { fn name(&self) -> &'static str { "storm" } fn breath(&self) -> u32 { 9 } }
+fn main() {
+    println!("{} breathes {}", Fire.name(), Fire.breath());
+    println!("{} breathes {}", Frost.name(), Frost.breath());
+    println!("{} breathes {}", Storm.name(), Storm.breath());
+}"#
+        }
+        "chimera_bound" => {
+            r#"trait Enemy { fn name(&self) -> &'static str; fn breath(&self) -> u32; }
+struct Fire;
+impl Enemy for Fire { fn name(&self) -> &'static str { "fire" } fn breath(&self) -> u32 { 7 } }
+fn volley<T: Enemy>(head: &T, rounds: u32) -> String {
+    format!("{} x{rounds} = {}", head.name(), head.breath() * rounds)
+}
+fn main() {
+    println!("{}", volley(&Fire, 3));
+}"#
+        }
+        "chimera_plasma" => {
+            r#"trait Enemy { fn name(&self) -> &'static str; fn breath(&self) -> u32; }
+struct Fire;
+struct Plasma;
+impl Enemy for Fire { fn name(&self) -> &'static str { "fire" } fn breath(&self) -> u32 { 7 } }
+impl Enemy for Plasma { fn name(&self) -> &'static str { "plasma" } fn breath(&self) -> u32 { 12 } }
+fn battle(heads: &[Box<dyn Enemy>]) -> u32 {
+    let mut total = 0;
+    for head in heads {
+        println!("{} breathes {}", head.name(), head.breath());
+        total += head.breath();
+    }
+    total
+}
+fn main() {
+    let heads: Vec<Box<dyn Enemy>> = vec![Box::new(Fire), Box::new(Plasma)];
+    println!("total: {}", battle(&heads));
+}"#
+        }
         // ── Act 5: Tavern of Tribulations.
         "result_match" => {
             r#"fn describe(r: Result<i32, String>) -> i32 {
@@ -383,6 +479,66 @@ fn main() {
 }
 fn main() {
     let _ = value(None);
+}"#
+        }
+        // ── Act 5 boss: the Tavernkeeper's Wager.
+        "wager_stake" => {
+            r#"use std::num::ParseIntError;
+fn read_stake(text: &str) -> Result<u32, ParseIntError> { text.trim().parse::<u32>() }
+fn double_stake(text: &str) -> Result<u32, ParseIntError> {
+    let stake = read_stake(text)?;
+    Ok(stake * 2)
+}
+fn main() {
+    println!("{:?}", double_stake("20"));
+}"#
+        }
+        "wager_from" => {
+            r#"use std::num::ParseIntError;
+#[derive(Debug)]
+struct Short;
+fn pay(purse: u32, stake: u32) -> Result<u32, Short> {
+    if stake > purse { Err(Short) } else { Ok(purse - stake) }
+}
+#[derive(Debug)]
+enum WagerError { BadStake, TooPoor }
+impl From<ParseIntError> for WagerError { fn from(_: ParseIntError) -> Self { WagerError::BadStake } }
+impl From<Short> for WagerError { fn from(_: Short) -> Self { WagerError::TooPoor } }
+fn place_bet(text: &str, purse: u32) -> Result<u32, WagerError> {
+    let stake = text.trim().parse::<u32>()?;
+    let left = pay(purse, stake)?;
+    Ok(left)
+}
+fn main() {
+    println!("{:?}", place_bet("15", 50));
+}"#
+        }
+        "wager_quest" => {
+            r#"use std::num::ParseIntError;
+#[derive(Debug)]
+struct WrongKey;
+#[derive(Debug)]
+struct Short;
+struct Reward { gold: u32 }
+#[derive(Debug)]
+enum QuestError { BadMap, Locked, Broke }
+impl From<ParseIntError> for QuestError { fn from(_: ParseIntError) -> Self { QuestError::BadMap } }
+impl From<WrongKey> for QuestError { fn from(_: WrongKey) -> Self { QuestError::Locked } }
+impl From<Short> for QuestError { fn from(_: Short) -> Self { QuestError::Broke } }
+fn read_map(map: &str) -> Result<u32, ParseIntError> { map.trim().parse::<u32>() }
+fn open_vault(key: &str) -> Result<u32, WrongKey> { if key == "brass" { Ok(30) } else { Err(WrongKey) } }
+fn pay_guide(gold: u32, leagues: u32) -> Result<u32, Short> {
+    let fee = leagues * 2;
+    if fee > gold { Err(Short) } else { Ok(gold - fee) }
+}
+fn quest(map: &str, key: &str) -> Result<Reward, QuestError> {
+    let leagues = read_map(map)?;
+    let gold = open_vault(key)?;
+    let left = pay_guide(gold, leagues)?;
+    Ok(Reward { gold: left })
+}
+fn main() {
+    println!("{:?}", quest("4", "brass").map(|r| r.gold));
 }"#
         }
         // ── Act 6: Iterator Forge.
@@ -854,6 +1010,14 @@ fn graded_ok(id: &str, src: &str) -> bool {
     server.ok
 }
 
+/// Everything of the Wager's last stage except `quest`, shared by trial
+/// programs in `CORRECT` and `WRONG` (mirrors `expectations_proof.rs`).
+macro_rules! quest_items {
+    () => {
+        "use std::num::ParseIntError;\n#[derive(Debug)]\nstruct WrongKey;\n#[derive(Debug)]\nstruct Short;\n#[derive(Debug)]\nstruct Reward { gold: u32 }\n#[derive(Debug)]\nenum QuestError { BadMap, Locked, Broke }\nimpl From<ParseIntError> for QuestError { fn from(_: ParseIntError) -> Self { QuestError::BadMap } }\nimpl From<WrongKey> for QuestError { fn from(_: WrongKey) -> Self { QuestError::Locked } }\nimpl From<Short> for QuestError { fn from(_: Short) -> Self { QuestError::Broke } }\nfn read_map(map: &str) -> Result<u32, ParseIntError> { map.trim().parse::<u32>() }\nfn open_vault(key: &str) -> Result<u32, WrongKey> { if key == \"brass\" { Ok(30) } else { Err(WrongKey) } }\nfn pay_guide(gold: u32, leagues: u32) -> Result<u32, Short> { let fee = leagues * 2; if fee > gold { Err(Short) } else { Ok(gold - fee) } }\nfn main() { for (m, k) in [(\"4\", \"brass\"), (\"far\", \"brass\"), (\"4\", \"bone\"), (\"20\", \"brass\")] { println!(\"{:?}\", quest(m, k).map(|r| r.gold)); } }\n"
+    };
+}
+
 /// Correct programs, each a complete program that builds with `rustc` at
 /// the server's edition (`PLAYER_EDITION`). `(mission, why it is here, source)`.
 const CORRECT: &[(&str, &str, &str)] = &[
@@ -1086,6 +1250,61 @@ const CORRECT: &[(&str, &str, &str)] = &[
         "trial alt: two named lifetimes, split",
         "fn before<'a, 'b>(line: &'a str, sep: &'b str) -> &'a str {\n    line.split(sep).next().unwrap_or(line)\n}\nfn main() {\n    let lantern = String::from(\"oil:wick:glass\");\n    let part;\n    {\n        let sep = String::from(\":\");\n        part = before(&lantern, &sep);\n    }\n    println!(\"first: {part}\");\n    println!(\"whole: {}\", before(\"glass\", \":\"));\n}\n",
     ),
+    // ── the Act 3-5 trials: realistic alternatives (the same programs
+    // pass the server check in `expectations_proof.rs`) ──
+    (
+        "wraith_forms",
+        "trial alt: arms in another order, {:?} with an argument",
+        "#[derive(Debug, Clone, Copy)]\nenum Wraith {\n    Solid,\n    Mist,\n    Shadow,\n}\nfn counter(form: Wraith) -> &'static str {\n    match form {\n        Wraith::Shadow => \"light\",\n        Wraith::Mist => \"wind\",\n        Wraith::Solid => \"steel\",\n    }\n}\nfn main() {\n    for form in [Wraith::Solid, Wraith::Mist, Wraith::Shadow] {\n        println!(\"{:?}: {}\", form, counter(form));\n    }\n}\n",
+    ),
+    (
+        "wraith_essence",
+        "trial alt: fields bound to other names",
+        "#[derive(Debug, Clone, Copy)]\nenum Wraith {\n    Solid { armor: u32 },\n    Mist { density: u32 },\n    Shadow,\n}\nfn damage(form: Wraith, blow: u32) -> u32 {\n    match form {\n        Wraith::Solid { armor: a } => blow - a,\n        Wraith::Mist { density: d } => blow / d,\n        Wraith::Shadow => 0,\n    }\n}\nfn main() {\n    let forms = [Wraith::Solid { armor: 3 }, Wraith::Mist { density: 2 }, Wraith::Shadow];\n    for f in forms.iter() {\n        println!(\"{:?} takes {}\", f, damage(*f, 10));\n    }\n}\n",
+    ),
+    (
+        "wraith_possessed",
+        "trial alt: new arm first, will renamed",
+        "#[derive(Debug, Clone, Copy)]\nenum Wraith {\n    Solid { armor: u32 },\n    Mist { density: u32 },\n    Shadow,\n    Possessed { will: u32 },\n}\nfn damage(form: Wraith, blow: u32) -> u32 {\n    match form {\n        Wraith::Possessed { will: w } => w + blow,\n        Wraith::Solid { armor } => blow - armor,\n        Wraith::Mist { density } => blow / density,\n        Wraith::Shadow => 0,\n    }\n}\nfn main() {\n    let forms = [\n        Wraith::Solid { armor: 3 },\n        Wraith::Mist { density: 2 },\n        Wraith::Shadow,\n        Wraith::Possessed { will: 4 },\n    ];\n    for form in forms {\n        println!(\"{form:?} takes {}\", damage(form, 10));\n    }\n}\n",
+    ),
+    (
+        "chimera_heads",
+        "trial alt: heads printed through &dyn Enemy",
+        "trait Enemy {\n    fn name(&self) -> &'static str;\n    fn breath(&self) -> u32;\n}\nstruct Fire;\nstruct Frost;\nstruct Storm;\nimpl Enemy for Fire {\n    fn name(&self) -> &'static str { \"fire\" }\n    fn breath(&self) -> u32 { 7 }\n}\nimpl Enemy for Frost {\n    fn name(&self) -> &'static str { \"frost\" }\n    fn breath(&self) -> u32 { 5 }\n}\nimpl Enemy for Storm {\n    fn name(&self) -> &'static str { \"storm\" }\n    fn breath(&self) -> u32 { 9 }\n}\nfn main() {\n    let heads: [&dyn Enemy; 3] = [&Fire, &Frost, &Storm];\n    for h in heads {\n        println!(\"{} breathes {}\", h.name(), h.breath());\n    }\n}\n",
+    ),
+    (
+        "chimera_bound",
+        "trial alt: `&impl Enemy` argument",
+        "trait Enemy {\n    fn name(&self) -> &'static str;\n    fn breath(&self) -> u32;\n}\nstruct Fire;\nstruct Frost;\nstruct Storm;\nimpl Enemy for Fire {\n    fn name(&self) -> &'static str { \"fire\" }\n    fn breath(&self) -> u32 { 7 }\n}\nimpl Enemy for Frost {\n    fn name(&self) -> &'static str { \"frost\" }\n    fn breath(&self) -> u32 { 5 }\n}\nimpl Enemy for Storm {\n    fn name(&self) -> &'static str { \"storm\" }\n    fn breath(&self) -> u32 { 9 }\n}\nfn volley(head: &impl Enemy, rounds: u32) -> String {\n    let total = head.breath() * rounds;\n    format!(\"{} x{} = {}\", head.name(), rounds, total)\n}\nfn main() {\n    println!(\"{}\", volley(&Fire, 3));\n    println!(\"{}\", volley(&Frost, 3));\n    println!(\"{}\", volley(&Storm, 3));\n}\n",
+    ),
+    (
+        "chimera_bound",
+        "trial alt: `where H: Enemy` clause",
+        "trait Enemy {\n    fn name(&self) -> &'static str;\n    fn breath(&self) -> u32;\n}\nstruct Fire;\nstruct Frost;\nstruct Storm;\nimpl Enemy for Fire {\n    fn name(&self) -> &'static str { \"fire\" }\n    fn breath(&self) -> u32 { 7 }\n}\nimpl Enemy for Frost {\n    fn name(&self) -> &'static str { \"frost\" }\n    fn breath(&self) -> u32 { 5 }\n}\nimpl Enemy for Storm {\n    fn name(&self) -> &'static str { \"storm\" }\n    fn breath(&self) -> u32 { 9 }\n}\nfn volley<H>(head: &H, rounds: u32) -> String\nwhere\n    H: Enemy,\n{\n    format!(\"{} x{rounds} = {}\", head.name(), head.breath() * rounds)\n}\nfn main() {\n    println!(\"{}\", volley(&Fire, 3));\n    println!(\"{}\", volley(&Frost, 3));\n    println!(\"{}\", volley(&Storm, 3));\n}\n",
+    ),
+    (
+        "chimera_plasma",
+        "trial alt: iterator map and sum",
+        "trait Enemy {\n    fn name(&self) -> &'static str;\n    fn breath(&self) -> u32;\n}\nstruct Fire;\nstruct Frost;\nstruct Storm;\nstruct Plasma;\nimpl Enemy for Fire {\n    fn name(&self) -> &'static str { \"fire\" }\n    fn breath(&self) -> u32 { 7 }\n}\nimpl Enemy for Frost {\n    fn name(&self) -> &'static str { \"frost\" }\n    fn breath(&self) -> u32 { 5 }\n}\nimpl Enemy for Storm {\n    fn name(&self) -> &'static str { \"storm\" }\n    fn breath(&self) -> u32 { 9 }\n}\nimpl Enemy for Plasma {\n    fn name(&self) -> &'static str { \"plasma\" }\n    fn breath(&self) -> u32 { 12 }\n}\nfn battle(enemies: &[Box<dyn Enemy>]) -> u32 {\n    enemies\n        .iter()\n        .map(|e| {\n            println!(\"{} breathes {}\", e.name(), e.breath());\n            e.breath()\n        })\n        .sum()\n}\nfn main() {\n    let heads: Vec<Box<dyn Enemy>> =\n        vec![Box::new(Fire), Box::new(Frost), Box::new(Storm), Box::new(Plasma)];\n    let total = battle(&heads);\n    println!(\"total: {total}\");\n}\n",
+    ),
+    (
+        "wager_stake",
+        "trial alt: full std path, `?` inside Ok(..)",
+        "fn read_stake(text: &str) -> Result<u32, std::num::ParseIntError> {\n    text.trim().parse::<u32>()\n}\nfn double_stake(text: &str) -> Result<u32, std::num::ParseIntError> {\n    Ok(read_stake(text)? * 2)\n}\nfn main() {\n    for stake in [\"20\", \"twenty\"] {\n        println!(\"{:?}\", double_stake(stake));\n    }\n}\n",
+    ),
+    (
+        "wager_from",
+        "trial alt: full std path, Self:: variants, inferred parse",
+        "#[derive(Debug)]\nstruct Short;\nfn pay(purse: u32, stake: u32) -> Result<u32, Short> {\n    if stake > purse { Err(Short) } else { Ok(purse - stake) }\n}\n#[derive(Debug)]\nenum WagerError {\n    BadStake,\n    TooPoor,\n}\nimpl From<std::num::ParseIntError> for WagerError {\n    fn from(_e: std::num::ParseIntError) -> WagerError {\n        Self::BadStake\n    }\n}\nimpl From<Short> for WagerError {\n    fn from(_e: Short) -> WagerError {\n        Self::TooPoor\n    }\n}\nfn place_bet(text: &str, purse: u32) -> Result<u32, WagerError> {\n    let stake: u32 = text.trim().parse()?;\n    Ok(pay(purse, stake)?)\n}\nfn main() {\n    println!(\"{:?}\", place_bet(\"15\", 50));\n    println!(\"{:?}\", place_bet(\"lots\", 50));\n    println!(\"{:?}\", place_bet(\"80\", 50));\n}\n",
+    ),
+    (
+        "wager_quest",
+        "trial alt: steps 2 and 3 nested in one expression",
+        concat!(
+            quest_items!(),
+            "fn quest(map: &str, key: &str) -> Result<Reward, QuestError> {\n    let leagues = read_map(map)?;\n    Ok(Reward { gold: pay_guide(open_vault(key)?, leagues)? })\n}\n"
+        ),
+    ),
 ];
 
 /// Wrong programs the old substring grader ACCEPTED and a token-level
@@ -1106,6 +1325,35 @@ const WRONG: &[(&str, &str, &str)] = &[
         "bridge_lantern",
         "trial: ties the answer to both inputs (rustc's suggestion; E0597 in main)",
         "fn before<'a>(line: &'a str, sep: &'a str) -> &'a str { match line.find(sep) { Some(i) => &line[..i], None => line } }\nfn main() { println!(\"{}\", before(\"oil:wick\", \":\")); }\n",
+    ),
+    // ── the Act 3-5 trials: the shortcuts their hints name ──
+    (
+        "wraith_essence",
+        "trial: rustc's help, fields bound to `_` and ignored",
+        "#[derive(Debug, Clone, Copy)]\nenum Wraith { Solid { armor: u32 }, Mist { density: u32 }, Shadow }\nfn damage(form: Wraith, blow: u32) -> u32 { match form { Wraith::Solid { armor: _ } => blow, Wraith::Mist { density: _ } => blow, Wraith::Shadow => 0 } }\nfn main() { println!(\"{}\", damage(Wraith::Solid { armor: 3 }, 10)); }\n",
+    ),
+    (
+        "wraith_possessed",
+        "trial: a blanket `_ => 0` arm for the new form",
+        "#[derive(Debug, Clone, Copy)]\nenum Wraith { Solid { armor: u32 }, Mist { density: u32 }, Shadow, Possessed { will: u32 } }\nfn damage(form: Wraith, blow: u32) -> u32 { match form { Wraith::Solid { armor } => blow - armor, Wraith::Mist { density } => blow / density, Wraith::Shadow => 0, _ => 0 } }\nfn main() { println!(\"{}\", damage(Wraith::Possessed { will: 4 }, 10)); }\n",
+    ),
+    (
+        "chimera_heads",
+        "trial: plain `impl Frost` blocks, no trait",
+        "trait Enemy { fn name(&self) -> &'static str; fn breath(&self) -> u32; }\nstruct Fire;\nstruct Frost;\nstruct Storm;\nimpl Enemy for Fire { fn name(&self) -> &'static str { \"fire\" } fn breath(&self) -> u32 { 7 } }\nimpl Frost { fn name(&self) -> &'static str { \"frost\" } fn breath(&self) -> u32 { 5 } }\nimpl Storm { fn name(&self) -> &'static str { \"storm\" } fn breath(&self) -> u32 { 9 } }\nfn main() { println!(\"{} {} {}\", Fire.breath(), Frost.breath(), Storm.breath()); let _ = (Fire.name(), Frost.name(), Storm.name()); }\n",
+    ),
+    (
+        "chimera_bound",
+        "trial: a trait object instead of a bounded generic",
+        "trait Enemy { fn name(&self) -> &'static str; fn breath(&self) -> u32; }\nstruct Fire;\nimpl Enemy for Fire { fn name(&self) -> &'static str { \"fire\" } fn breath(&self) -> u32 { 7 } }\nfn volley(head: &dyn Enemy, rounds: u32) -> String { format!(\"{} x{rounds} = {}\", head.name(), head.breath() * rounds) }\nfn main() { println!(\"{}\", volley(&Fire, 3)); }\n",
+    ),
+    (
+        "wager_quest",
+        "trial: the nested `match` the Tavernkeeper grades against",
+        concat!(
+            quest_items!(),
+            "fn quest(map: &str, key: &str) -> Result<Reward, QuestError> { match read_map(map) { Ok(leagues) => match open_vault(key) { Ok(gold) => match pay_guide(gold, leagues) { Ok(left) => Ok(Reward { gold: left }), Err(e) => Err(e.into()) }, Err(e) => Err(e.into()) }, Err(e) => Err(e.into()) } }\n"
+        ),
     ),
     (
         "if_else_sign",

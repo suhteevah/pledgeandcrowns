@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: MIT
 //! Audit: mission starter code and progression gating.
 //!
-//! - Every starter must itself compile, except the one mission whose
-//!   lesson is a compile error (`lifetimes`, which must fail with
-//!   exactly `E0106`). Checked with plain `rustc` at the server's edition
+//! - Every starter must itself compile, except the missions whose lesson
+//!   is a compile error (`STARTERS_THAT_MUST_FAIL`: `lifetimes` and most
+//!   boss-trial stages), which must fail with exactly their one error
+//!   code. Checked with plain `rustc` at the server's edition
 //!   (`common::PLAYER_EDITION`; `--ignored`, slow).
+//! - Hard rule 3 for the boss trials: every error code a trial owner
+//!   names, and every compiler message they quote, is a claim compiled
+//!   against real rustc (`trial_claims`; the fast test fails on a named
+//!   but unclaimed code, the `--ignored` one runs rustc).
 //! - Progression is strict-linear: mission N+1 is locked until mission N
 //!   is cleared.
 //! - With the `demo` feature, nothing past the demo boundary is playable.
@@ -29,7 +34,14 @@ const STARTERS_THAT_MUST_FAIL: &[(&str, &str)] = &[
     ("bridge_toll", "E0382"),
     ("bridge_quill", "E0502"),
     ("bridge_lantern", "E0106"),
+    ("wraith_essence", "E0533"),
+    ("wraith_possessed", "E0004"),
+    ("chimera_heads", "E0599"),
+    ("chimera_bound", "E0599"),
+    ("chimera_plasma", "E0308"),
     ("lifetimes", "E0106"),
+    ("wager_stake", "E0277"),
+    ("wager_from", "E0277"),
 ];
 
 /// Fresh per-test, per-process scratch dir (the slow tests run in
@@ -115,7 +127,37 @@ const PINNED_OUTPUT: &[(&str, &str)] = &[
         "reader one: north road\nreader two: north road\nscroll: north road, east road",
     ),
     ("bridge_lantern", "first: oil\nwhole: glass"),
+    ("wraith_forms", "Solid: steel\nMist: wind\nShadow: light"),
+    (
+        "wraith_essence",
+        "Solid { armor: 3 } takes 7\nMist { density: 2 } takes 5\nShadow takes 0",
+    ),
+    (
+        "wraith_possessed",
+        "Solid { armor: 3 } takes 7\nMist { density: 2 } takes 5\nShadow takes 0\nPossessed { will: 4 } takes 14",
+    ),
+    (
+        "chimera_heads",
+        "fire breathes 7\nfrost breathes 5\nstorm breathes 9",
+    ),
+    (
+        "chimera_bound",
+        "fire x3 = 21\nfrost x3 = 15\nstorm x3 = 27",
+    ),
+    (
+        "chimera_plasma",
+        "fire breathes 7\nfrost breathes 5\nstorm breathes 9\nplasma breathes 12\ntotal: 33",
+    ),
     ("and_then", "Some(2)\nNone"),
+    (
+        "wager_stake",
+        "Ok(40)\nErr(ParseIntError { kind: InvalidDigit })",
+    ),
+    ("wager_from", "Ok(35)\nErr(BadStake)\nErr(TooPoor)"),
+    (
+        "wager_quest",
+        "Ok(22)\nErr(BadMap)\nErr(Locked)\nErr(Broke)",
+    ),
     ("hashmap_basic", "Some(7)\nNone"),
     ("arc_mutex", "5"),
     ("mpsc_channel", "7\n11"),
@@ -183,12 +225,86 @@ fn pinned_output_lines_are_shown_in_the_task() {
             );
         }
     }
-    for (id, _, _) in HINT_CLAIMS {
+    let trial_ids: Vec<&str> = trial_hint_claims().iter().map(|(id, _, _)| *id).collect();
+    for id in HINT_CLAIMS.iter().map(|(id, _, _)| *id).chain(trial_ids) {
         assert!(
-            PINNED_OUTPUT.iter().any(|(p, _)| p == id),
+            PINNED_OUTPUT.iter().any(|(p, _)| *p == id),
             "{id} is not pinned"
         );
     }
+}
+
+/// The real starter of `id` with each `(from, to)` replacement applied
+/// (each `from` must occur in it), the way a tutorial or hint describes.
+fn edited_starter(id: &str, edits: &[(&str, &str)]) -> String {
+    let reg = MissionRegistry::default();
+    let mut s = reg
+        .find(id)
+        .unwrap_or_else(|| panic!("`{id}` is not a mission"))
+        .starter_code
+        .to_string();
+    for (from, to) in edits {
+        assert!(
+            s.contains(from),
+            "`{id}` starter no longer contains {from:?}"
+        );
+        s = s.replacen(from, to, 1);
+    }
+    s
+}
+
+/// `(mission, program, stdout)` like [`HINT_CLAIMS`], for the trial
+/// stages: the programs are the real starters, edited the way the hint
+/// says.
+fn trial_hint_claims() -> Vec<(&'static str, String, &'static str)> {
+    vec![
+        (
+            // "The compiler's help writes `Wraith::Solid { armor: _ }`. That
+            // compiles, but ... the program then prints
+            // `Solid { armor: 3 } takes 10`."
+            "wraith_essence",
+            edited_starter(
+                "wraith_essence",
+                &[
+                    (
+                        "Wraith::Solid => blow",
+                        "Wraith::Solid { armor: _ } => blow",
+                    ),
+                    (
+                        "Wraith::Mist => blow",
+                        "Wraith::Mist { density: _ } => blow",
+                    ),
+                ],
+            ),
+            "Solid { armor: 3 } takes 10\nMist { density: 2 } takes 10\nShadow takes 0",
+        ),
+        (
+            // "A `_ => 0` arm compiles, but the program then prints
+            // `Possessed { will: 4 } takes 0`."
+            "wraith_possessed",
+            edited_starter(
+                "wraith_possessed",
+                &[(
+                    "        Wraith::Shadow => 0,\n",
+                    "        Wraith::Shadow => 0,\n        _ => 0,\n",
+                )],
+            ),
+            "Solid { armor: 3 } takes 7\nMist { density: 2 } takes 5\nShadow takes 0\nPossessed { will: 4 } takes 0",
+        ),
+        (
+            // "The same methods in a plain `impl Frost` block print the same
+            // lines."
+            "chimera_heads",
+            edited_starter(
+                "chimera_heads",
+                &[(
+                    "\nfn main() {",
+                    "\nimpl Frost {\n    fn name(&self) -> &'static str {\n        \"frost\"\n    }\n    fn breath(&self) -> u32 {\n        5\n    }\n}\n\nimpl Storm {\n    fn name(&self) -> &'static str {\n        \"storm\"\n    }\n    fn breath(&self) -> u32 {\n        9\n    }\n}\n\nfn main() {",
+                )],
+            ),
+            "fire breathes 7\nfrost breathes 5\nstorm breathes 9",
+        ),
+    ]
 }
 
 /// Build `src` with rustc (warnings allowed: the mistakes are deliberate)
@@ -235,9 +351,18 @@ fn pinned_outputs_and_hint_claims_are_true() {
             ));
         }
     }
-    for (n, (id, src, want)) in HINT_CLAIMS.iter().enumerate() {
+    let trial = trial_hint_claims();
+    let all_hints = HINT_CLAIMS
+        .iter()
+        .map(|(id, src, want)| (*id, *src, *want))
+        .chain(
+            trial
+                .iter()
+                .map(|(id, src, want)| (*id, src.as_str(), *want)),
+        );
+    for (n, (id, src, want)) in all_hints.enumerate() {
         let got = run_native(&dir, &format!("hint_{n}_{id}"), src);
-        if got != *want {
+        if got != want {
             problems.push(format!(
                 "`{id}` hint claim prints {got:?}, expected {want:?}"
             ));
@@ -306,9 +431,10 @@ fn demo_boundary_is_the_last_act_2_mission() {
     assert_eq!(reg.missions[idx + 1].id, "impl_method");
     assert_eq!(
         reg.missions.len() - (idx + 1),
-        36,
+        45,
         "missions after the demo"
     );
+    assert_eq!(reg.missions.len(), 69, "missions in the full game");
 }
 
 #[test]
@@ -350,82 +476,264 @@ fn demo_completion_flag() {
     assert!(!reg.demo_complete(&progress));
 }
 
-// ── Hard rule 3: what the Borrow Checker says about the compiler ─────
+// ── Hard rule 3: what trial owners say about the compiler ────────────
 
 use pledge_and_crown::plugins::dialogue::lines::{AUTHORED, TRIAL_STAGES};
 use pledge_and_crown::plugins::stub_grader::MISSION_RULES;
 use pledge_and_crown::plugins::trial::TRIALS;
 
-/// What a claim says rustc does with its program.
+/// What a claim says rustc (or the built program) does.
 enum Claimed {
     /// Fails with only this error code, and stderr contains every piece
-    /// (the first piece is the wording the Borrow Checker quotes).
+    /// (the first piece is the wording the owner quotes).
     Error(&'static str, &'static [&'static str]),
     /// Compiles (the claim is "this also compiles").
     Compiles,
+    /// Compiles, prints exactly `stdout`, then panics: exits unsuccessfully
+    /// with `stderr` in its standard error.
+    Panics {
+        stdout: &'static str,
+        stderr: &'static str,
+    },
 }
 
-/// Every statement the Borrow Checker makes about compiler behaviour in
-/// his trial (tutorials, hints, dialogue), with the program it is about.
-/// `(label, program, claim)`. Programs are the real starters, edited the
-/// way the text describes.
-fn borrow_checker_claims() -> Vec<(&'static str, String, Claimed)> {
-    let reg = MissionRegistry::default();
-    let starter = |id: &str| {
-        reg.find(id)
-            .unwrap_or_else(|| panic!("`{id}` is not a mission"))
-            .starter_code
-            .to_string()
-    };
-    let edit = |id: &str, from: &str, to: &str| {
-        let s = starter(id);
-        assert!(
-            s.contains(from),
-            "`{id}` starter no longer contains {from:?}"
-        );
-        s.replace(from, to)
-    };
-    vec![
-        (
-            "bridge_toll starter: E0382, borrow of moved value",
-            starter("bridge_toll"),
-            Claimed::Error("E0382", &["borrow of moved value: `cargo`"]),
-        ),
-        (
-            "bridge_toll hint: `weigh(cargo.clone())` also compiles",
-            edit("bridge_toll", "weigh(cargo)", "weigh(cargo.clone())"),
-            Claimed::Compiles,
-        ),
-        (
-            "bridge_quill starter: E0502 with the quoted wording",
-            starter("bridge_quill"),
-            Claimed::Error(
-                "E0502",
-                &["cannot borrow `scroll` as mutable because it is also borrowed as immutable"],
+/// Every statement the owner of trial `trial` makes about compiler
+/// behaviour in it (tutorials, hints, dialogue, grader messages), with the
+/// program it is about. `(label, program, claim)`. Programs are the real
+/// starters, edited the way the text describes.
+fn trial_claims(trial: &str) -> Vec<(&'static str, String, Claimed)> {
+    let s = |id: &str| edited_starter(id, &[]);
+    match trial {
+        "bridge" => vec![
+            (
+                "bridge_toll starter: E0382, borrow of moved value",
+                s("bridge_toll"),
+                Claimed::Error("E0382", &["borrow of moved value: `cargo`"]),
             ),
-        ),
-        (
-            "bridge_lantern starter: E0106, and rustc's help ties `sep` to 'a too",
-            starter("bridge_lantern"),
-            Claimed::Error(
-                "E0106",
-                &[
-                    "missing lifetime specifier",
-                    "fn before<'a>(line: &'a str, sep: &'a str) -> &'a str",
-                ],
+            (
+                "bridge_toll hint: `weigh(cargo.clone())` also compiles",
+                edited_starter("bridge_toll", &[("weigh(cargo)", "weigh(cargo.clone())")]),
+                Claimed::Compiles,
             ),
-        ),
-        (
-            "bridge_lantern: following that help makes `main` fail with E0597",
-            edit(
-                "bridge_lantern",
-                "fn before(line: &str, sep: &str) -> &str",
-                "fn before<'a>(line: &'a str, sep: &'a str) -> &'a str",
+            (
+                "bridge_quill starter: E0502 with the quoted wording",
+                s("bridge_quill"),
+                Claimed::Error(
+                    "E0502",
+                    &["cannot borrow `scroll` as mutable because it is also borrowed as immutable"],
+                ),
             ),
-            Claimed::Error("E0597", &["`sep` does not live long enough"]),
-        ),
-    ]
+            (
+                "bridge_lantern starter: E0106, and rustc's help ties `sep` to 'a too",
+                s("bridge_lantern"),
+                Claimed::Error(
+                    "E0106",
+                    &[
+                        "missing lifetime specifier",
+                        "fn before<'a>(line: &'a str, sep: &'a str) -> &'a str",
+                    ],
+                ),
+            ),
+            (
+                "bridge_lantern: following that help makes `main` fail with E0597",
+                edited_starter(
+                    "bridge_lantern",
+                    &[(
+                        "fn before(line: &str, sep: &str) -> &str",
+                        "fn before<'a>(line: &'a str, sep: &'a str) -> &'a str",
+                    )],
+                ),
+                Claimed::Error("E0597", &["`sep` does not live long enough"]),
+            ),
+        ],
+        "variant_wraith" => vec![
+            (
+                "wraith_forms: without the `_` arm and no Shadow arm, E0004",
+                edited_starter(
+                    "wraith_forms",
+                    &[(
+                        "        // this runs, but `_` answers a form it never looked at\n        _ => \"steel\",\n",
+                        "",
+                    )],
+                ),
+                Claimed::Error(
+                    "E0004",
+                    &["non-exhaustive patterns: `Wraith::Shadow` not covered"],
+                ),
+            ),
+            (
+                "wraith_essence starter: E0533, and rustc's help binds `armor: _`",
+                s("wraith_essence"),
+                Claimed::Error(
+                    "E0533",
+                    &[
+                        "expected unit struct, unit variant or constant, found struct variant `Wraith::Solid`",
+                        "Wraith::Solid { armor: _ }",
+                    ],
+                ),
+            ),
+            (
+                "wraith_essence hint: following that help compiles",
+                edited_starter(
+                    "wraith_essence",
+                    &[
+                        (
+                            "Wraith::Solid => blow",
+                            "Wraith::Solid { armor: _ } => blow",
+                        ),
+                        (
+                            "Wraith::Mist => blow",
+                            "Wraith::Mist { density: _ } => blow",
+                        ),
+                    ],
+                ),
+                Claimed::Compiles,
+            ),
+            (
+                "wraith_possessed starter: E0004 names the new form",
+                s("wraith_possessed"),
+                Claimed::Error(
+                    "E0004",
+                    &["non-exhaustive patterns: `Wraith::Possessed { .. }` not covered"],
+                ),
+            ),
+            (
+                "wraith_possessed: a blanket `_ => 0` arm compiles",
+                edited_starter(
+                    "wraith_possessed",
+                    &[(
+                        "        Wraith::Shadow => 0,\n",
+                        "        Wraith::Shadow => 0,\n        _ => 0,\n",
+                    )],
+                ),
+                Claimed::Compiles,
+            ),
+            (
+                "wraith_possessed: with `_`, the next new form compiles unnamed too",
+                edited_starter(
+                    "wraith_possessed",
+                    &[
+                        (
+                            "        Wraith::Shadow => 0,\n",
+                            "        Wraith::Shadow => 0,\n        _ => 0,\n",
+                        ),
+                        (
+                            "    Possessed { will: u32 },\n",
+                            "    Possessed { will: u32 },\n    Bound,\n",
+                        ),
+                        (
+                            "        Wraith::Possessed { will: 4 },\n",
+                            "        Wraith::Possessed { will: 4 },\n        Wraith::Bound,\n",
+                        ),
+                    ],
+                ),
+                Claimed::Compiles,
+            ),
+        ],
+        "chimera" => vec![
+            (
+                "chimera_heads starter: E0599 on a head without the trait",
+                s("chimera_heads"),
+                Claimed::Error(
+                    "E0599",
+                    &["no method named `name` found for struct `Frost` in the current scope"],
+                ),
+            ),
+            (
+                "chimera_bound starter: E0599 on an unbounded T, help suggests the bound",
+                s("chimera_bound"),
+                Claimed::Error(
+                    "E0599",
+                    &[
+                        "no method named `name` found for reference `&T` in the current scope",
+                        "fn volley<T: Enemy>(head: &T, rounds: u32) -> String",
+                    ],
+                ),
+            ),
+            (
+                "chimera_plasma starter: E0308, battle expects `&[Head]`",
+                s("chimera_plasma"),
+                Claimed::Error(
+                    "E0308",
+                    &[
+                        "mismatched types",
+                        "expected `&[Head]`, found `&Vec<Box<dyn Enemy>>`",
+                    ],
+                ),
+            ),
+        ],
+        "wager" => vec![
+            (
+                "wager_stake starter: E0277, `?` in a function returning u32",
+                s("wager_stake"),
+                Claimed::Error(
+                    "E0277",
+                    &[
+                        "the `?` operator can only be used in a function that returns `Result` or `Option`",
+                    ],
+                ),
+            ),
+            (
+                "wager_stake hint: `.unwrap()` compiles with the old signature, then panics on `twenty`",
+                edited_starter(
+                    "wager_stake",
+                    &[("read_stake(text)?", "read_stake(text).unwrap()")],
+                ),
+                Claimed::Panics {
+                    stdout: "40",
+                    stderr: "called `Result::unwrap()` on an `Err` value",
+                },
+            ),
+            (
+                "wager_from starter: E0277, `?` cannot convert without `From`",
+                s("wager_from"),
+                Claimed::Error(
+                    "E0277",
+                    &[
+                        "`?` couldn't convert the error to `WagerError`",
+                        "the trait `From<ParseIntError>` is not implemented for `WagerError`",
+                    ],
+                ),
+            ),
+            (
+                "wager_from hint: `.map_err(..)` before each `?` also compiles",
+                edited_starter(
+                    "wager_from",
+                    &[
+                        (
+                            "text.trim().parse::<u32>()?",
+                            "text.trim().parse::<u32>().map_err(|_| WagerError::BadStake)?",
+                        ),
+                        (
+                            "pay(purse, stake)?",
+                            "pay(purse, stake).map_err(|_| WagerError::TooPoor)?",
+                        ),
+                    ],
+                ),
+                Claimed::Compiles,
+            ),
+            (
+                "wager_quest starter: prints Ok(22), then the unwrap panics",
+                s("wager_quest"),
+                Claimed::Panics {
+                    stdout: "Ok(22)",
+                    stderr: "called `Result::unwrap()` on an `Err` value",
+                },
+            ),
+        ],
+        other => panic!("no claims table for trial `{other}`: add one"),
+    }
 }
+
+/// The error codes each trial owner names, in order. A code added to any
+/// owner's text fails `every_error_a_trial_owner_names_is_a_compiled_claim`
+/// until it is claimed (and compiled) here.
+const NAMED_CODES: &[(&str, &[&str])] = &[
+    ("bridge", &["E0106", "E0382", "E0502", "E0597"]),
+    ("variant_wraith", &["E0004", "E0533"]),
+    ("chimera", &["E0308", "E0599"]),
+    ("wager", &["E0277"]),
+];
 
 /// Error codes in `text` (`E` followed by exactly four digits).
 fn error_codes(text: &str) -> Vec<String> {
@@ -437,15 +745,11 @@ fn error_codes(text: &str) -> Vec<String> {
         .collect()
 }
 
-/// Everything the Borrow Checker says: his prologue and trial missions'
-/// prompts and tutorials, his dialogue rows, his grader messages, the
-/// trial-complete line.
-fn borrow_checker_texts() -> Vec<String> {
+/// Everything the owner of `trial` says: their prologue and stage
+/// missions' prompts and tutorials, their dialogue rows, their grader
+/// messages, the trial-complete line.
+fn owner_texts(trial: &pledge_and_crown::plugins::trial::Trial) -> Vec<String> {
     let reg = MissionRegistry::default();
-    let trial = TRIALS
-        .iter()
-        .find(|t| t.npc == "borrow_preview")
-        .expect("the Borrow Checker has a trial");
     let ids: Vec<&str> = std::iter::once(trial.npc)
         .chain(trial.stages.iter().copied())
         .collect();
@@ -479,84 +783,181 @@ fn borrow_checker_texts() -> Vec<String> {
 }
 
 #[test]
-fn every_error_the_borrow_checker_names_is_a_compiled_claim() {
-    let claims = borrow_checker_claims();
-    let claimed: Vec<&str> = claims
-        .iter()
-        .filter_map(|(_, _, c)| match c {
-            Claimed::Error(code, _) => Some(*code),
-            Claimed::Compiles => None,
-        })
-        .collect();
-    let texts = borrow_checker_texts();
-    let mut named = std::collections::BTreeSet::new();
-    for t in &texts {
-        for code in error_codes(t) {
-            assert!(
-                claimed.contains(&code.as_str()),
-                "the Borrow Checker names {code} with no compiled claim:\n{t}"
-            );
-            named.insert(code);
-        }
-    }
-    // No stale claims: every claimed code and quoted wording is said.
-    for (label, _, c) in &claims {
-        if let Claimed::Error(code, pieces) = c {
-            assert!(named.contains(*code), "{label}: {code} is never said");
-            assert!(
-                texts.iter().any(|t| t.contains(pieces[0])),
-                "{label}: wording {:?} is never said",
-                pieces[0]
-            );
-        }
-    }
+fn every_error_a_trial_owner_names_is_a_compiled_claim() {
     assert_eq!(
-        named.into_iter().collect::<Vec<_>>(),
-        ["E0106", "E0382", "E0502", "E0597"],
-        "codes the Borrow Checker names"
+        TRIALS.iter().map(|t| t.id).collect::<Vec<_>>(),
+        NAMED_CODES.iter().map(|(t, _)| *t).collect::<Vec<_>>(),
+        "every trial has a claims table"
+    );
+    for trial in TRIALS {
+        let claims = trial_claims(trial.id);
+        let claimed: Vec<&str> = claims
+            .iter()
+            .filter_map(|(_, _, c)| match c {
+                Claimed::Error(code, _) => Some(*code),
+                Claimed::Compiles | Claimed::Panics { .. } => None,
+            })
+            .collect();
+        let texts = owner_texts(trial);
+        let mut named = std::collections::BTreeSet::new();
+        for t in &texts {
+            for code in error_codes(t) {
+                assert!(
+                    claimed.contains(&code.as_str()),
+                    "{}: the owner names {code} with no compiled claim:\n{t}",
+                    trial.id
+                );
+                named.insert(code);
+            }
+        }
+        // No stale claims: every claimed code and quoted wording is said.
+        for (label, _, c) in &claims {
+            match c {
+                Claimed::Error(code, pieces) => {
+                    assert!(named.contains(*code), "{label}: {code} is never said");
+                    assert!(
+                        texts.iter().any(|t| t.contains(pieces[0])),
+                        "{label}: wording {:?} is never said",
+                        pieces[0]
+                    );
+                }
+                Claimed::Panics { stderr, .. } => assert!(
+                    texts.iter().any(|t| t.contains("panic")),
+                    "{label}: a panic ({stderr}) is claimed but never said"
+                ),
+                Claimed::Compiles => {}
+            }
+        }
+        let want = NAMED_CODES
+            .iter()
+            .find(|(t, _)| *t == trial.id)
+            .map(|(_, codes)| *codes)
+            .unwrap_or_default();
+        assert_eq!(
+            named.into_iter().collect::<Vec<_>>(),
+            want,
+            "codes the owner of `{}` names",
+            trial.id
+        );
+    }
+}
+
+/// The code pane shows 72 columns before it scrolls: every line of a trial
+/// stage's starter, solution and tutorial code blocks fits.
+#[test]
+fn trial_code_lines_fit_the_code_pane() {
+    const PANE_COLUMNS: usize = 72;
+    /// Bridge lines that predate this check. Shortening the starter line
+    /// changes the grader snapshots' starter case, so these wait for the
+    /// next Bridge text pass; no other line may join them.
+    const KNOWN_LONG: &[&str] = &[
+        "    // this won't compile yet: weigh takes the cargo, then main reaches for it",
+        "// `&mut` is the one exclusive borrow: only `inscribe` may write while it runs.",
+        "    } // `sep` is dropped here, but `part` borrows from `lantern`, not `sep`.",
+    ];
+    let reg = MissionRegistry::default();
+    let mut long = Vec::new();
+    for trial in TRIALS {
+        for id in trial.stages {
+            let m = reg.find(id).expect("stage");
+            let fenced: Vec<&str> = m
+                .tutorial
+                .split("```")
+                .skip(1)
+                .step_by(2)
+                .flat_map(str::lines)
+                .collect();
+            let solution = canonical_solution(id).unwrap_or_default();
+            for (what, line) in m
+                .starter_code
+                .lines()
+                .map(|l| ("starter", l))
+                .chain(solution.lines().map(|l| ("solution", l)))
+                .chain(fenced.into_iter().map(|l| ("tutorial", l)))
+            {
+                if line.chars().count() > PANE_COLUMNS && !KNOWN_LONG.contains(&line) {
+                    long.push(format!("{id} {what} ({}): {line}", line.chars().count()));
+                }
+            }
+        }
+    }
+    assert!(
+        long.is_empty(),
+        "lines wider than the code pane:\n{}",
+        long.join("\n")
     );
 }
 
 #[test]
 #[ignore = "slow: runs rustc once per claim"]
-fn borrow_checker_claims_are_what_rustc_emits() {
-    let dir = scratch_dir("bc-claims");
+fn trial_claims_are_what_rustc_emits() {
+    let dir = scratch_dir("trial-claims");
     let version = Command::new("rustc")
         .arg("--version")
         .output()
         .expect("rustc --version");
     println!("{}", String::from_utf8_lossy(&version.stdout).trim());
     let mut problems = Vec::new();
-    for (n, (label, src, claim)) in borrow_checker_claims().into_iter().enumerate() {
-        let path = dir.join(format!("claim{n}.rs"));
-        std::fs::write(&path, &src).expect("write claim");
-        let out = Command::new("rustc")
-            .args(["--edition", PLAYER_EDITION, "--crate-type", "bin", "-o"])
-            .arg(dir.join(format!("claim{n}.out")))
-            .arg(&path)
-            .output()
-            .expect("spawn rustc");
-        let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
-        let codes: Vec<&str> = stderr
-            .match_indices("error[")
-            .map(|(i, _)| &stderr[i + 6..i + 11])
-            .collect();
-        match claim {
-            Claimed::Compiles if out.status.success() => println!("ok  {label}: compiles"),
-            Claimed::Compiles => problems.push(format!("{label}: does not compile\n{stderr}")),
-            Claimed::Error(code, pieces) => {
-                let wording = pieces.iter().all(|p| stderr.contains(p));
-                let only = !codes.is_empty() && codes.iter().all(|c| *c == code);
-                if !out.status.success() && only && wording {
-                    println!("ok  {label}: {codes:?}");
-                } else {
-                    problems.push(format!(
-                        "{label}: expected only {code} with {pieces:?}, got {codes:?}\n{stderr}"
-                    ));
+    let mut checked = 0usize;
+    for trial in TRIALS {
+        for (n, (label, src, claim)) in trial_claims(trial.id).into_iter().enumerate() {
+            checked += 1;
+            let path = dir.join(format!("{}_{n}.rs", trial.id));
+            let exe = dir.join(format!("{}_{n}.exe", trial.id));
+            std::fs::write(&path, &src).expect("write claim");
+            let out = Command::new("rustc")
+                .args(["--edition", PLAYER_EDITION, "--crate-type", "bin", "-o"])
+                .arg(&exe)
+                .arg(&path)
+                .output()
+                .expect("spawn rustc");
+            let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+            let codes: Vec<&str> = stderr
+                .match_indices("error[")
+                .map(|(i, _)| &stderr[i + 6..i + 11])
+                .collect();
+            match claim {
+                Claimed::Compiles if out.status.success() => println!("ok  {label}: compiles"),
+                Claimed::Compiles => problems.push(format!("{label}: does not compile\n{stderr}")),
+                Claimed::Error(code, pieces) => {
+                    let wording = pieces.iter().all(|p| stderr.contains(p));
+                    let only = !codes.is_empty() && codes.iter().all(|c| *c == code);
+                    if !out.status.success() && only && wording {
+                        println!("ok  {label}: {codes:?}");
+                    } else {
+                        problems.push(format!(
+                            "{label}: expected only {code} with {pieces:?}, got {codes:?}\n{stderr}"
+                        ));
+                    }
+                }
+                Claimed::Panics {
+                    stdout,
+                    stderr: piece,
+                } => {
+                    if !out.status.success() {
+                        problems.push(format!("{label}: does not compile\n{stderr}"));
+                        continue;
+                    }
+                    let run = Command::new(&exe).output().expect("run claim");
+                    let run_out = String::from_utf8_lossy(&run.stdout).replace("\r\n", "\n");
+                    let run_err = String::from_utf8_lossy(&run.stderr).into_owned();
+                    if !run.status.success()
+                        && run_out.trim_end() == stdout
+                        && run_err.contains(piece)
+                    {
+                        println!("ok  {label}: panics after {stdout:?}");
+                    } else {
+                        problems.push(format!(
+                            "{label}: expected {stdout:?} then a panic with {piece:?}; \
+                             exit {:?}, stdout {run_out:?}, stderr {run_err}",
+                            run.status.code()
+                        ));
+                    }
                 }
             }
         }
     }
     let _ = std::fs::remove_dir_all(&dir);
+    println!("{checked} claims checked");
     assert!(problems.is_empty(), "{}", problems.join("\n\n"));
 }

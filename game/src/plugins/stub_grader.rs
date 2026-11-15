@@ -935,6 +935,32 @@ pub static MISSION_RULES: &[MissionRule] = &[
         ],
         pass: "the Armorer lays out the rack. \"weapon or potion — name every kind, miss none.\"",
     },
+    // ── Act 3 boss: the Guildmaster's trial, The Variant Wraith (stages 1-3).
+    MissionRule {
+        id: "wraith_forms",
+        npc: "the Guildmaster raises the ledger",
+        checks: &[
+            check(&["Wraith::Shadow =>"], "give the Shadow its own arm: `Wraith::Shadow => \"light\"`"),
+        ],
+        pass: "the Guildmaster ticks the ledger. \"three forms, three arms. first stage passed.\"",
+    },
+    MissionRule {
+        id: "wraith_essence",
+        npc: "the Guildmaster taps the ledger",
+        checks: &[
+            check(&["Wraith::Solid { armor } => $.. - armor", "Wraith::Solid { armor: $A } => $.. - $A"], "open the Solid form and use its armor: `Wraith::Solid { armor } => blow - armor`"),
+            check(&["Wraith::Mist { density } => $.. / density", "Wraith::Mist { density: $D } => $.. / $D"], "open the Mist and use its density: `Wraith::Mist { density } => blow / density`"),
+        ],
+        pass: "the Guildmaster nods. \"each form opened, each measure used. second stage passed.\"",
+    },
+    MissionRule {
+        id: "wraith_possessed",
+        npc: "the Guildmaster holds the ledger shut",
+        checks: &[
+            check(&["Wraith::Possessed { will } => $.. + will", "Wraith::Possessed { will: $W } => $.. + $W", "Wraith::Possessed { will } => will +", "Wraith::Possessed { will: $W } => $W +"], "name the new form and add its will: `Wraith::Possessed { will } => blow + will`"),
+        ],
+        pass: "the Guildmaster closes the ledger. \"four forms, every one named. the Wraith is unmade.\"",
+    },
     // ── Act 4 (Trait Mage's Tower).
     MissionRule {
         id: "trait_def",
@@ -991,6 +1017,32 @@ pub static MISSION_RULES: &[MissionRule] = &[
             check(&["Self::Output"], "refer to it as `Self::Output` in the method"),
         ],
         pass: "the Loremaster turns the page. \"each producer names its own yield — the type follows the trait.\"",
+    },
+    // ── Act 4 boss: Vexis's trial, The Chimera of Vexis (stages 1-3).
+    MissionRule {
+        id: "chimera_heads",
+        npc: "Vexis raises his staff",
+        checks: &[
+            check(&["impl Enemy for Frost"], "teach the Frost head the trait: `impl Enemy for Frost`"),
+            check(&["impl Enemy for Storm"], "teach the Storm head the trait: `impl Enemy for Storm`"),
+        ],
+        pass: "Vexis lowers his staff. \"three heads, one trait. first stage passed.\"",
+    },
+    MissionRule {
+        id: "chimera_bound",
+        npc: "Vexis studies the spell",
+        checks: &[
+            check(&["fn volley<$T: Enemy>", "fn volley<$T>($..) -> String where $T: Enemy", "fn volley($_: &impl Enemy"], "bound the type parameter: `fn volley<T: Enemy>(head: &T, rounds: u32)`"),
+        ],
+        pass: "Vexis traces the bound. \"any head that holds the trait may answer. second stage passed.\"",
+    },
+    MissionRule {
+        id: "chimera_plasma",
+        npc: "Vexis bars the stair",
+        checks: &[
+            check(&["fn battle($_: &[Box<dyn Enemy>])"], "battle takes trait objects: `fn battle(heads: &[Box<dyn Enemy>]) -> u32`"),
+        ],
+        pass: "Vexis steps aside. \"any head, known or not. the Chimera falls.\"",
     },
     // ── Act 5 (Tavern of Tribulations).
     MissionRule {
@@ -1049,6 +1101,35 @@ pub static MISSION_RULES: &[MissionRule] = &[
             check(&["||"], "the lazy default is a closure `|| ...`"),
         ],
         pass: "the Cellarer taps the cask. \"a fresh draught — drawn only when the old runs dry.\"",
+    },
+    // ── Act 5 boss: the Barkeep's trial, The Tavernkeeper's Wager (stages 1-3).
+    MissionRule {
+        id: "wager_stake",
+        npc: "the Barkeep holds the stake",
+        checks: &[
+            check(&["fn double_stake($_: &str) -> Result<u32, ParseIntError>", "fn double_stake($_: &str) -> Result<u32, std::num::ParseIntError>"], "let it fail out loud: `fn double_stake(text: &str) -> Result<u32, ParseIntError>`"),
+            check(&["Ok("], "hand back the doubled stake wrapped in `Ok(...)`"),
+        ],
+        pass: "the Barkeep pockets the stake. \"poured or spilled, it comes back to the table. first round yours.\"",
+    },
+    MissionRule {
+        id: "wager_from",
+        npc: "the Barkeep taps the tally",
+        checks: &[
+            check(&["impl From<ParseIntError> for WagerError", "impl From<std::num::ParseIntError> for WagerError"], "teach `?` the bad stake: `impl From<ParseIntError> for WagerError`"),
+            check(&["impl From<Short> for WagerError"], "teach `?` the light purse: `impl From<Short> for WagerError`"),
+        ],
+        pass: "the Barkeep chalks the tally. \"every error in the house's coin. second round yours.\"",
+    },
+    MissionRule {
+        id: "wager_quest",
+        npc: "the Barkeep keeps the purse",
+        checks: &[
+            check(&["read_map($..)?"], "chain step 1 with `?`: `read_map(map)?`"),
+            check(&["open_vault($..)?"], "chain step 2 with `?`: `open_vault(key)?`"),
+            check(&["pay_guide($..)?"], "chain step 3 with `?`: `pay_guide(gold, leagues)?`"),
+        ],
+        pass: "the Barkeep pays out. \"every step chained, every failure handed back. the wager is yours.\"",
     },
     // ── Act 6 (Iterator Forge).
     MissionRule {

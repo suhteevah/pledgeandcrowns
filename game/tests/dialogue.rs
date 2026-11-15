@@ -806,3 +806,67 @@ fn trial_stays_locked_until_its_prereq_and_gates_act_3() {
     // In the demo build Act 3 is not in the build at all.
     assert_eq!(unlocked(&p, "impl_method"), !cfg!(feature = "demo"));
 }
+
+// --- boss trials of Acts 3-5: same mechanism, prologue owners -------------
+
+/// `(speaker, roster key, mission before stage 1, stage 1, label)`.
+const ACT_3_TO_5_TRIALS: &[(&str, &str, &str, &str, &str)] = &[
+    (
+        "The Guildmaster",
+        "impl_method",
+        "enum_data_match",
+        "wraith_forms",
+        "Trial: The Variant Wraith - stage 1 of 3",
+    ),
+    (
+        "Vexis the Archmage",
+        "trait_def",
+        "assoc_type",
+        "chimera_heads",
+        "Trial: The Chimera of Vexis - stage 1 of 3",
+    ),
+    (
+        "The Barkeep",
+        "result_match",
+        "unwrap_or_else",
+        "wager_stake",
+        "Trial: The Tavernkeeper's Wager - stage 1 of 3",
+    ),
+];
+
+#[test]
+#[cfg_attr(feature = "demo", ignore = "Acts 3-5 are not in the demo build")]
+fn act_3_to_5_owners_talk_as_cleared_villagers_until_their_trial_opens() {
+    for (speaker, npc, _, _, _) in ACT_3_TO_5_TRIALS {
+        let mut app = app_with_nearby(speaker, npc);
+        clear_through(&mut app, npc);
+        tap(&mut app, KeyCode::KeyF);
+        assert_eq!(
+            open_dialogue(&app),
+            Some((*npc, MissionStatus::Cleared, None)),
+            "{speaker} after the prologue"
+        );
+    }
+}
+
+#[test]
+#[cfg_attr(feature = "demo", ignore = "Acts 3-5 are not in the demo build")]
+fn act_3_to_5_trials_offer_stage_one_with_their_header() {
+    for (speaker, npc, before, stage1, label) in ACT_3_TO_5_TRIALS {
+        let mut app = app_with_nearby(speaker, npc);
+        clear_through(&mut app, before);
+        tap(&mut app, KeyCode::KeyF);
+        assert_eq!(
+            open_dialogue(&app),
+            Some((*stage1, MissionStatus::Offer, Some(label.to_string()))),
+            "{speaker} offers stage 1"
+        );
+        finish_dialogue(&mut app);
+        assert!(editor_open(&app), "{speaker}: the offer opens the editor");
+        assert_eq!(app.world().resource::<EditorState>().encounter_id, *stage1);
+        assert!(
+            app.world().resource::<MissionProgress>().is_opened(stage1),
+            "{stage1}: the offer is saved as heard"
+        );
+    }
+}

@@ -299,6 +299,94 @@ fn pre_trial_v2_save_loads_unchanged_and_offers_the_trial() {
     assert_eq!(unlocked("assoc_new"), !cfg!(feature = "demo"));
 }
 
+/// A v2 save written before the Act 3-5 trials existed, cleared past the
+/// end of Act 5 (every mission of the 60-mission registry up to and
+/// including `hashmap_basic`, Act 6's first), loads unchanged. Each trial
+/// stage is an ordinary mission keyed by id, so no format change was
+/// needed: every trial's stage 1 is unlocked and is what its owner offers,
+/// stage 2 stays locked, and the Act 6 progress already made stays usable.
+#[test]
+fn save_cleared_past_acts_3_to_5_offers_each_new_trial() {
+    use pledge_and_crown::plugins::mission::MissionRegistry;
+    use pledge_and_crown::plugins::trial;
+
+    #[derive(Serialize)]
+    struct S {
+        a: u8,
+        b: u8,
+        c: u8,
+    }
+    #[derive(Serialize)]
+    struct V2 {
+        version: u32,
+        cleared: Vec<String>,
+        settings: S,
+        player_position: Option<[f32; 2]>,
+    }
+    let reg = MissionRegistry::default();
+    let new_stage = |id: &str| trial::trial_of(id).is_some_and(|(t, _)| t.id != "bridge");
+    // The old registry order: every current mission except the new stages.
+    let mut cleared = Vec::new();
+    for m in reg.missions.iter().filter(|m| !new_stage(m.id)) {
+        cleared.push(m.id.to_string());
+        if m.id == "hashmap_basic" {
+            break;
+        }
+    }
+    assert_eq!(
+        cleared.len(),
+        43,
+        "the old Acts 1-5 plus Act 6's first mission"
+    );
+    let bytes = bincode::serde::encode_to_vec(
+        &V2 {
+            version: 2,
+            cleared: cleared.clone(),
+            settings: S {
+                a: 80,
+                b: 60,
+                c: 40,
+            },
+            player_position: Some([-4.0, 9.5]),
+        },
+        bincode::config::standard(),
+    )
+    .unwrap();
+
+    let data = SaveData::decode(&bytes).expect("pre-trial v2 save must load");
+    let p = &data.progress;
+    assert_eq!(p.cleared_count(), cleared.len());
+    for id in &cleared {
+        assert!(p.is_cleared(id), "lost {id}");
+    }
+    assert_eq!(data.player_position, Some(Vec2::new(-4.0, 9.5)));
+    assert_eq!(SaveData::decode(&data.encode().unwrap()).unwrap(), data);
+
+    let unlocked = |id: &str| reg.find(id).is_some_and(|m| m.is_unlocked(p));
+    let full = !cfg!(feature = "demo");
+    for (owner, stage1, stage2) in [
+        ("impl_method", "wraith_forms", "wraith_essence"),
+        ("trait_def", "chimera_heads", "chimera_bound"),
+        ("result_match", "wager_stake", "wager_from"),
+    ] {
+        let offered = trial::current_mission(&reg, p, owner).map(|m| m.id);
+        if full {
+            assert_eq!(offered, Some(stage1), "{owner} offers its trial");
+        } else {
+            // The demo has none of these missions: the owner stays its prologue.
+            assert_eq!(offered, Some(owner), "{owner} in the demo");
+        }
+        assert_eq!(unlocked(stage1), full, "{stage1}");
+        assert!(!unlocked(stage2), "{stage2} waits for {stage1}");
+    }
+    // The earliest unfinished mission is the first new trial.
+    if full {
+        assert_eq!(reg.next_locked(p).map(|m| m.id), Some("wraith_forms"));
+    }
+    // Progress already made in Act 6 stays usable.
+    assert_eq!(unlocked("iter_filter"), full);
+}
+
 #[test]
 fn has_progress_reflects_clears_or_position() {
     let mut d = SaveData::default();

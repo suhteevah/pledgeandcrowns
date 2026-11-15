@@ -893,6 +893,98 @@ both kinds — a non-exhaustive match won't compile.",
                 available: true,
                 starter_code: "fn value(item: i32) -> i32 {\n    // define an `Item` type with two kinds (a weapon carrying damage, a potion carrying heal),\n    // take an Item here instead of an i32, and handle every kind to return its number\n    item\n}\n\nfn main() {\n    let _ = value(0);\n}\n",
             },
+            // ── Act 3 boss: the Guildmaster's trial, The Variant Wraith ─
+            // Three stages owned by the Guildmaster (`trial::TRIALS`), after
+            // his prologue `impl_method`: name every variant in a `match`,
+            // open variants that carry data, then a new variant makes the
+            // old match non-exhaustive. Every compiler error he names is
+            // compiled in `tests/mission_text.rs` (hard rule 3).
+            Mission {
+                id: "wraith_forms",
+                npc_name: "The Guildmaster",
+                prompt: "Give every form of the Wraith its own arm, so `counter` answers each one.",
+                tutorial: "## Concept\n\
+The Variant Wraith shifts between three forms, and the Guild answers each \
+one by name. A `match` on an enum must cover every variant or it does not \
+compile. A `_` arm covers \"everything else\", so it meets that rule \
+without naming anything: here it answers the Shadow with steel, which \
+passes straight through it. Take the `_` arm away without naming the \
+Shadow and the compiler refuses with E0004, \"non-exhaustive patterns: \
+`Wraith::Shadow` not covered\". Name every form, and the compiler checks \
+the list for you.\n\n\
+## Syntax\n\
+```\nenum Gate { Open, Shut }\nfn sign(g: Gate) -> &'static str {\n    match g {\n        Gate::Open => \"pass\",\n        Gate::Shut => \"halt\",\n    }\n}\n```\n\
+One arm per variant: no `_`, nothing left unnamed.\n\n\
+## Task\n\
+`counter` answers the Shadow through `_ => \"steel\"`. Replace that arm \
+with `Wraith::Shadow => \"light\"`. Your program should print \
+`Solid: steel`, `Mist: wind`, then `Shadow: light`.\n\n\
+## Hint\n\
+The grader needs an arm that starts `Wraith::Shadow =>`. The Shadow is \
+driven off by light alone: any other answer fails the check.",
+                prereq: None,
+                available: true,
+                starter_code: "#[derive(Debug, Clone, Copy)]\nenum Wraith {\n    Solid,\n    Mist,\n    Shadow,\n}\n\nfn counter(form: Wraith) -> &'static str {\n    match form {\n        Wraith::Solid => \"steel\",\n        Wraith::Mist => \"wind\",\n        // this runs, but `_` answers a form it never looked at\n        _ => \"steel\",\n    }\n}\n\nfn main() {\n    let forms = [Wraith::Solid, Wraith::Mist, Wraith::Shadow];\n    for form in forms {\n        println!(\"{form:?}: {}\", counter(form));\n    }\n}\n",
+            },
+            Mission {
+                id: "wraith_essence",
+                npc_name: "The Guildmaster",
+                prompt: "Open each form in its `match` arm and use the data it carries.",
+                tutorial: "## Concept\n\
+Now the forms carry data: `Solid { armor: u32 }` and \
+`Mist { density: u32 }`. A pattern for a struct-like variant opens it with \
+braces and can bind each field to a name: in the arm \
+`Wraith::Solid { armor } => ...`, `armor` is a local. Written alone, \
+`Wraith::Solid` is a pattern for a unit variant, so the compiler stops \
+with E0533, \"expected unit struct, unit variant or constant, found struct \
+variant `Wraith::Solid`\".\n\n\
+## Syntax\n\
+```\nenum Coin { Gold { weight: u32 }, Copper }\nfn worth(c: Coin) -> u32 {\n    match c {\n        Coin::Gold { weight } => weight * 10,\n        Coin::Copper => 1,\n    }\n}\n```\n\
+`Coin::Gold { weight: w }` binds the same field to another name.\n\n\
+## Task\n\
+`damage` takes a form and the strength of a blow. Solid armor soaks part \
+of it: `blow - armor`. Mist spreads it thin: `blow / density`. The Shadow \
+takes `0`. The starter fails with E0533. Open each form and use what it \
+carries. Your program should print `Solid { armor: 3 } takes 7`, \
+`Mist { density: 2 } takes 5`, then `Shadow takes 0`.\n\n\
+## Hint\n\
+The grader needs `Wraith::Solid { armor } => blow - armor` and \
+`Wraith::Mist { density } => blow / density` (other binding names are \
+fine). The compiler's help writes `Wraith::Solid { armor: _ }`. That \
+compiles, but `_` throws the armor away: the program then prints \
+`Solid { armor: 3 } takes 10`.",
+                prereq: None,
+                available: true,
+                starter_code: "#[derive(Debug, Clone, Copy)]\nenum Wraith {\n    Solid { armor: u32 },\n    Mist { density: u32 },\n    Shadow,\n}\n\nfn damage(form: Wraith, blow: u32) -> u32 {\n    // this won't compile yet: open each form to reach what it carries\n    match form {\n        Wraith::Solid => blow,\n        Wraith::Mist => blow,\n        Wraith::Shadow => 0,\n    }\n}\n\nfn main() {\n    let forms = [\n        Wraith::Solid { armor: 3 },\n        Wraith::Mist { density: 2 },\n        Wraith::Shadow,\n    ];\n    for form in forms {\n        println!(\"{form:?} takes {}\", damage(form, 10));\n    }\n}\n",
+            },
+            Mission {
+                id: "wraith_possessed",
+                npc_name: "The Guildmaster",
+                prompt: "The Wraith has a fourth form. Give `Possessed` its own arm.",
+                tutorial: "## Concept\n\
+Mid-fight the Wraith takes a fourth form, `Possessed { will: u32 }`. A new \
+variant changes every `match` on the enum, and the compiler finds each \
+one: `damage` now stops with E0004, \"non-exhaustive patterns: \
+`Wraith::Possessed { .. }` not covered\". That error is the reward for \
+naming every form. A blanket `_ => 0` arm compiles too, and so would the \
+next new form after it: `_` answers it without anyone naming it.\n\n\
+## Syntax\n\
+```\nenum Gate { Open, Shut, Barred { bolts: u32 } }\nmatch g {\n    Gate::Open => 0,\n    Gate::Shut => 1,\n    Gate::Barred { bolts } => 1 + bolts,\n}\n```\n\
+## Task\n\
+A possessed Wraith's host fights back, so it takes `blow + will`. The \
+starter fails with E0004. Add an arm for `Wraith::Possessed { will }` and \
+keep the other three as they are. Your program should print \
+`Solid { armor: 3 } takes 7`, `Mist { density: 2 } takes 5`, \
+`Shadow takes 0`, then `Possessed { will: 4 } takes 14`.\n\n\
+## Hint\n\
+The grader needs `Wraith::Possessed { will } => blow + will` (another \
+name for `will` is fine). A `_ => 0` arm compiles, but the program then \
+prints `Possessed { will: 4 } takes 0`: the possessed form is struck for \
+nothing.",
+                prereq: None,
+                available: true,
+                starter_code: "#[derive(Debug, Clone, Copy)]\nenum Wraith {\n    Solid { armor: u32 },\n    Mist { density: u32 },\n    Shadow,\n    Possessed { will: u32 },\n}\n\nfn damage(form: Wraith, blow: u32) -> u32 {\n    // this won't compile yet: the new form has no arm\n    match form {\n        Wraith::Solid { armor } => blow - armor,\n        Wraith::Mist { density } => blow / density,\n        Wraith::Shadow => 0,\n    }\n}\n\nfn main() {\n    let forms = [\n        Wraith::Solid { armor: 3 },\n        Wraith::Mist { density: 2 },\n        Wraith::Shadow,\n        Wraith::Possessed { will: 4 },\n    ];\n    for form in forms {\n        println!(\"{form:?} takes {}\", damage(form, 10));\n    }\n}\n",
+            },
             // ── Act 4: The Trait Mage's Tower ─────────────────────────
             // Generics + traits + dyn + lifetimes + associated types. See
             // design/01-curriculum.md §Act 4 and
@@ -1050,6 +1142,99 @@ its own yield — the type follows the trait.",
                 available: true,
                 starter_code: "trait Producer {\n    fn make(&self) -> i32;\n}\n\nfn main() {\n    // change Producer so each implementor names its own output type (an associated type),\n    // then implement it for a Coiner that makes an i32\n    let _ = ();\n}\n",
             },
+            // ── Act 4 boss: Vexis's trial, The Chimera of Vexis ────────
+            // Three stages owned by Vexis (`trial::TRIALS`), after his
+            // prologue `trait_def`: a trait implemented per head type, a
+            // generic fn with a trait bound, then `&[Box<dyn Enemy>]`
+            // dispatch that a fourth head joins without new arms. Every
+            // compiler error he names is compiled in
+            // `tests/mission_text.rs` (hard rule 3).
+            Mission {
+                id: "chimera_heads",
+                npc_name: "Vexis the Archmage",
+                prompt: "Implement `Enemy` for the Frost and Storm heads.",
+                tutorial: "## Concept\n\
+The Chimera of Vexis has three heads, and each breathes a different \
+element. A trait names the behaviour they share. Each head is its own \
+type, and it gains the trait's methods only through its own \
+`impl Enemy for ...` block. Until then the methods do not exist for that \
+type: `Frost.name()` stops with E0599, \"no method named `name` found for \
+struct `Frost` in the current scope\".\n\n\
+## Syntax\n\
+```\ntrait Spell {\n    fn power(&self) -> u32;\n}\nstruct Spark;\nimpl Spell for Spark {\n    fn power(&self) -> u32 {\n        3\n    }\n}\n```\n\
+Every method the trait declares must appear in the `impl`.\n\n\
+## Task\n\
+`Fire` already implements `Enemy`. Implement it for `Frost` (name \
+`\"frost\"`, breath `5`) and for `Storm` (name `\"storm\"`, breath `9`). \
+Your program should print `fire breathes 7`, `frost breathes 5`, then \
+`storm breathes 9`.\n\n\
+## Hint\n\
+The grader needs `impl Enemy for Frost` and `impl Enemy for Storm`. The \
+same methods in a plain `impl Frost` block print the same lines, but then \
+Frost is still not an `Enemy`, and the checker asks for one.",
+                prereq: None,
+                available: true,
+                starter_code: "trait Enemy {\n    fn name(&self) -> &'static str;\n    fn breath(&self) -> u32;\n}\n\nstruct Fire;\nstruct Frost;\nstruct Storm;\n\nimpl Enemy for Fire {\n    fn name(&self) -> &'static str {\n        \"fire\"\n    }\n    fn breath(&self) -> u32 {\n        7\n    }\n}\n\nfn main() {\n    // this won't compile yet: only one head has learned the trait\n    println!(\"{} breathes {}\", Fire.name(), Fire.breath());\n    println!(\"{} breathes {}\", Frost.name(), Frost.breath());\n    println!(\"{} breathes {}\", Storm.name(), Storm.breath());\n}\n",
+            },
+            Mission {
+                id: "chimera_bound",
+                npc_name: "Vexis the Archmage",
+                prompt: "Bound `volley`'s type parameter with `T: Enemy`.",
+                tutorial: "## Concept\n\
+A generic function is written once for many types, but inside it `T` \
+could be anything: a number, a door, a `String`. So the compiler allows \
+only what every `T` can do, and `head.name()` stops with E0599, \"no \
+method named `name` found for reference `&T` in the current scope\". A \
+trait bound, `<T: Enemy>`, narrows `T` to types that implement `Enemy`, \
+and their methods become callable. Each call is compiled for its own \
+concrete type: static dispatch.\n\n\
+## Syntax\n\
+```\nfn power_of<T: Spell>(s: &T) -> u32 {\n    s.power()\n}\npower_of(&Spark);   // T = Spark\n```\n\
+`fn power_of(s: &impl Spell)` is a shorter way to write the same \
+bound.\n\n\
+## Task\n\
+`volley` reports one head breathing for several rounds. The starter fails \
+with E0599. Add the bound so `volley` accepts any `Enemy`. Your program \
+should print `fire x3 = 21`, `frost x3 = 15`, then `storm x3 = 27`.\n\n\
+## Hint\n\
+The grader needs `fn volley<T: Enemy>` (a `where T: Enemy` clause or \
+`head: &impl Enemy` also counts). The compiler's help suggests the same \
+bound. One `volley` per head type would not be generic: the checker calls \
+`volley` with a head of its own.",
+                prereq: None,
+                available: true,
+                starter_code: "trait Enemy {\n    fn name(&self) -> &'static str;\n    fn breath(&self) -> u32;\n}\n\nstruct Fire;\nstruct Frost;\nstruct Storm;\n\nimpl Enemy for Fire {\n    fn name(&self) -> &'static str { \"fire\" }\n    fn breath(&self) -> u32 { 7 }\n}\nimpl Enemy for Frost {\n    fn name(&self) -> &'static str { \"frost\" }\n    fn breath(&self) -> u32 { 5 }\n}\nimpl Enemy for Storm {\n    fn name(&self) -> &'static str { \"storm\" }\n    fn breath(&self) -> u32 { 9 }\n}\n\n// this won't compile yet: nothing promises that T can breathe\nfn volley<T>(head: &T, rounds: u32) -> String {\n    format!(\"{} x{rounds} = {}\", head.name(), head.breath() * rounds)\n}\n\nfn main() {\n    println!(\"{}\", volley(&Fire, 3));\n    println!(\"{}\", volley(&Frost, 3));\n    println!(\"{}\", volley(&Storm, 3));\n}\n",
+            },
+            Mission {
+                id: "chimera_plasma",
+                npc_name: "Vexis the Archmage",
+                prompt: "Rewrite `battle` to take `&[Box<dyn Enemy>]`, so the fourth head can join.",
+                tutorial: "## Concept\n\
+The Chimera grows a fourth head, `Plasma`. The old `battle` matched on an \
+enum of the heads it knew, so every new head meant a new variant and a \
+new arm. A trait object, `Box<dyn Enemy>`, holds any type that implements \
+`Enemy`, and each call through it finds that type's method at run time: \
+dynamic dispatch. The heads now arrive as a `Vec<Box<dyn Enemy>>`, and \
+`battle(&heads)` stops with E0308, \"mismatched types\": it expects \
+`&[Head]`.\n\n\
+## Syntax\n\
+```\nfn total(spells: &[Box<dyn Spell>]) -> u32 {\n    let mut sum = 0;\n    for s in spells {\n        sum += s.power();\n    }\n    sum\n}\n```\n\
+A `&Vec<Box<dyn Spell>>` is accepted where `&[Box<dyn Spell>]` is \
+expected.\n\n\
+## Task\n\
+Change `battle` to `fn battle(heads: &[Box<dyn Enemy>]) -> u32`: print \
+`{name} breathes {breath}` for each head and return the total. The `Head` \
+enum is then unused; delete it. Your program should print \
+`fire breathes 7`, `frost breathes 5`, `storm breathes 9`, \
+`plasma breathes 12`, then `total: 33`.\n\n\
+## Hint\n\
+The grader needs `fn battle(heads: &[Box<dyn Enemy>])`. Matching on \
+concrete head types cannot keep up: the checker sends `battle` a head it \
+has never seen.",
+                prereq: None,
+                available: true,
+                starter_code: "trait Enemy {\n    fn name(&self) -> &'static str;\n    fn breath(&self) -> u32;\n}\n\nstruct Fire;\nstruct Frost;\nstruct Storm;\nstruct Plasma;\n\nimpl Enemy for Fire {\n    fn name(&self) -> &'static str { \"fire\" }\n    fn breath(&self) -> u32 { 7 }\n}\nimpl Enemy for Frost {\n    fn name(&self) -> &'static str { \"frost\" }\n    fn breath(&self) -> u32 { 5 }\n}\nimpl Enemy for Storm {\n    fn name(&self) -> &'static str { \"storm\" }\n    fn breath(&self) -> u32 { 9 }\n}\nimpl Enemy for Plasma {\n    fn name(&self) -> &'static str { \"plasma\" }\n    fn breath(&self) -> u32 { 12 }\n}\n\n// The old plan: one arm per head the Chimera had yesterday.\nenum Head {\n    Fire,\n    Frost,\n    Storm,\n}\n\nfn battle(heads: &[Head]) -> u32 {\n    let mut total = 0;\n    for head in heads {\n        let (name, breath) = match head {\n            Head::Fire => (Fire.name(), Fire.breath()),\n            Head::Frost => (Frost.name(), Frost.breath()),\n            Head::Storm => (Storm.name(), Storm.breath()),\n        };\n        println!(\"{name} breathes {breath}\");\n        total += breath;\n    }\n    total\n}\n\nfn main() {\n    let heads: Vec<Box<dyn Enemy>> = vec![\n        Box::new(Fire),\n        Box::new(Frost),\n        Box::new(Storm),\n        Box::new(Plasma),\n    ];\n    // this won't compile yet: battle only knows yesterday's heads\n    println!(\"total: {}\", battle(&heads));\n}\n",
+            },
             // ── Act 5: The Tavern of Tribulations ─────────────────────
             // Error handling: Result/Option methods, custom errors, From
             // conversion. See design/01-curriculum.md §Act 5 and
@@ -1201,6 +1386,98 @@ a fresh cask only when the old one runs dry.",
                 prereq: None,
                 available: true,
                 starter_code: "fn value(o: Option<i32>) -> i32 {\n    // unwrap the option, computing the fallback lazily with a closure (only if needed)\n    let _ = o;\n    0\n}\n\nfn main() {\n    let _ = value(None);\n}\n",
+            },
+            // ── Act 5 boss: the Barkeep's trial, The Tavernkeeper's Wager ─
+            // Three stages owned by the Barkeep (`trial::TRIALS`), after his
+            // prologue `result_match`: `?` needs a function that returns
+            // `Result`, `From` impls let `?` convert errors, then a
+            // multi-step quest chained with `?` (no `match`, `unwrap`,
+            // `expect` or `panic!`). Every compiler error he names is
+            // compiled in `tests/mission_text.rs` (hard rule 3).
+            Mission {
+                id: "wager_stake",
+                npc_name: "The Barkeep",
+                prompt: "Let `double_stake` return a `Result`, so `?` can hand a bad stake back.",
+                tutorial: "## Concept\n\
+The Tavernkeeper's Wager opens with the stake. `read_stake` returns a \
+`Result`: `Ok` with the number, or `Err` when the text is not one. Inside \
+a function, `?` unwraps an `Ok`, and on an `Err` it returns that error to \
+the caller at once. That only works in a function that itself returns a \
+`Result` (or an `Option`). In a function that returns `u32`, the compiler \
+stops with E0277, \"the `?` operator can only be used in a function that \
+returns `Result` or `Option`\".\n\n\
+## Syntax\n\
+```\nfn half(text: &str) -> Result<u32, ParseIntError> {\n    let n = text.parse::<u32>()?; // an Err returns here\n    Ok(n / 2)\n}\n```\n\
+The success value goes back wrapped in `Ok`.\n\n\
+## Task\n\
+Change `double_stake` to return `Result<u32, ParseIntError>` and give \
+back `Ok(stake * 2)`. Your program should print `Ok(40)`, then \
+`Err(ParseIntError { kind: InvalidDigit })`.\n\n\
+## Hint\n\
+The grader needs `fn double_stake(text: &str) -> Result<u32, \
+ParseIntError>` and an `Ok(` around the doubled stake. Swapping `?` for \
+`.unwrap()` compiles with the old signature, but a stake of `twenty` then \
+panics: the Barkeep wants the error handed back, not a crash.",
+                prereq: None,
+                available: true,
+                starter_code: "use std::num::ParseIntError;\n\nfn read_stake(text: &str) -> Result<u32, ParseIntError> {\n    text.trim().parse::<u32>()\n}\n\nfn double_stake(text: &str) -> u32 {\n    // this won't compile yet: `?` needs a function that can fail\n    let stake = read_stake(text)?;\n    stake * 2\n}\n\nfn main() {\n    println!(\"{:?}\", double_stake(\"20\"));\n    println!(\"{:?}\", double_stake(\"twenty\"));\n}\n",
+            },
+            Mission {
+                id: "wager_from",
+                npc_name: "The Barkeep",
+                prompt: "Implement `From` for each step's error, so `?` can turn it into a `WagerError`.",
+                tutorial: "## Concept\n\
+`place_bet` has two steps that fail in different ways: parsing fails with \
+a `ParseIntError`, paying fails with `Short`. The function promises one \
+error type, `WagerError`. On an `Err`, `?` converts the error with \
+`From::from`, so each step's error needs an `impl From<...> for \
+WagerError`. Without them the compiler stops with E0277, \"`?` couldn't \
+convert the error to `WagerError`\".\n\n\
+## Syntax\n\
+```\nenum DiceError { Lost }\nstruct Spilled;\nimpl From<Spilled> for DiceError {\n    fn from(_: Spilled) -> Self {\n        DiceError::Lost\n    }\n}\n```\n\
+With this impl, `?` on a `Result<_, Spilled>` works in a function that \
+returns `Result<_, DiceError>`.\n\n\
+## Task\n\
+Write `impl From<ParseIntError> for WagerError` (giving \
+`WagerError::BadStake`) and `impl From<Short> for WagerError` (giving \
+`WagerError::TooPoor`). Leave `place_bet` as it is. Your program should \
+print `Ok(35)`, `Err(BadStake)`, then `Err(TooPoor)`.\n\n\
+## Hint\n\
+The grader needs `impl From<ParseIntError> for WagerError` and \
+`impl From<Short> for WagerError`. A `.map_err(|_| WagerError::BadStake)` \
+before each `?` also compiles, but then the conversion is repeated at \
+every call instead of written once.",
+                prereq: None,
+                available: true,
+                starter_code: "use std::num::ParseIntError;\n\n#[derive(Debug)]\nstruct Short;\n\nfn pay(purse: u32, stake: u32) -> Result<u32, Short> {\n    if stake > purse { Err(Short) } else { Ok(purse - stake) }\n}\n\n#[derive(Debug)]\nenum WagerError {\n    BadStake,\n    TooPoor,\n}\n\nfn place_bet(text: &str, purse: u32) -> Result<u32, WagerError> {\n    // this won't compile yet: `?` has no way to make a WagerError\n    let stake = text.trim().parse::<u32>()?;\n    let left = pay(purse, stake)?;\n    Ok(left)\n}\n\nfn main() {\n    println!(\"{:?}\", place_bet(\"15\", 50));\n    println!(\"{:?}\", place_bet(\"lots\", 50));\n    println!(\"{:?}\", place_bet(\"80\", 50));\n}\n",
+            },
+            Mission {
+                id: "wager_quest",
+                npc_name: "The Barkeep",
+                prompt: "Chain the quest's three steps with `?`: no `match`, `unwrap`, `expect` or `panic!`.",
+                tutorial: "## Concept\n\
+The wager itself: a quest of three steps, each of which can fail with its \
+own error. The `From` impls already turn each one into a `QuestError`. \
+With `?` after each step the function reads top to bottom: every step \
+either gives its value or ends the quest with its error, and the first \
+failure wins. `.unwrap()` does the opposite: on an `Err` it panics, and \
+the whole program stops, the quests after it included.\n\n\
+## Syntax\n\
+```\nfn trip(a: &str, b: &str) -> Result<u32, TripError> {\n    let x = step_one(a)?;\n    let y = step_two(b)?;\n    Ok(x + y)\n}\n```\n\
+No nested `match`: each `?` handles its own step's failure.\n\n\
+## Task\n\
+Replace each `.unwrap()` in `quest` with `?`. Use no `match`, `unwrap`, \
+`expect` or `panic!` anywhere in the program: the Tavernkeeper checks. \
+Your program should print `Ok(22)`, `Err(BadMap)`, `Err(Locked)`, then \
+`Err(Broke)`.\n\n\
+## Hint\n\
+The grader needs `read_map(map)?`, `open_vault(key)?` and \
+`pay_guide(gold, leagues)?`. As written, the starter prints `Ok(22)` and \
+then panics on the second quest: called `Result::unwrap()` on an `Err` \
+value.",
+                prereq: None,
+                available: true,
+                starter_code: "use std::num::ParseIntError;\n\n#[derive(Debug)]\nstruct WrongKey;\n\n#[derive(Debug)]\nstruct Short;\n\n#[derive(Debug)]\nstruct Reward {\n    gold: u32,\n}\n\n#[derive(Debug)]\nenum QuestError {\n    BadMap,\n    Locked,\n    Broke,\n}\n\nimpl From<ParseIntError> for QuestError {\n    fn from(_: ParseIntError) -> Self {\n        QuestError::BadMap\n    }\n}\nimpl From<WrongKey> for QuestError {\n    fn from(_: WrongKey) -> Self {\n        QuestError::Locked\n    }\n}\nimpl From<Short> for QuestError {\n    fn from(_: Short) -> Self {\n        QuestError::Broke\n    }\n}\n\n// Step 1: the map says how many leagues to walk.\nfn read_map(map: &str) -> Result<u32, ParseIntError> {\n    map.trim().parse::<u32>()\n}\n\n// Step 2: only the brass key opens the vault. It holds 30 gold.\nfn open_vault(key: &str) -> Result<u32, WrongKey> {\n    if key == \"brass\" { Ok(30) } else { Err(WrongKey) }\n}\n\n// Step 3: the guide charges 2 gold a league.\nfn pay_guide(gold: u32, leagues: u32) -> Result<u32, Short> {\n    let fee = leagues * 2;\n    if fee > gold { Err(Short) } else { Ok(gold - fee) }\n}\n\nfn quest(map: &str, key: &str) -> Result<Reward, QuestError> {\n    // this runs, but the first failed step brings the tavern down\n    let leagues = read_map(map).unwrap();\n    let gold = open_vault(key).unwrap();\n    let left = pay_guide(gold, leagues).unwrap();\n    Ok(Reward { gold: left })\n}\n\nfn main() {\n    println!(\"{:?}\", quest(\"4\", \"brass\").map(|r| r.gold));\n    println!(\"{:?}\", quest(\"far\", \"brass\").map(|r| r.gold));\n    println!(\"{:?}\", quest(\"4\", \"bone\").map(|r| r.gold));\n    println!(\"{:?}\", quest(\"20\", \"brass\").map(|r| r.gold));\n}\n",
             },
             // ── Act 6: The Iterator Forge ─────────────────────────────
             // Collections (HashMap), iterator adapters, closure capture.

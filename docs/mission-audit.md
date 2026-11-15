@@ -3,8 +3,9 @@
 Covers all 57 missions in `MissionRegistry::default()` (Acts 1-8) as of
 `finish/integration` 83f5daf. Every claim here comes from a command that
 was run, listed under **Evidence**. Since then the Borrow Checker's trial
-added three missions (60 missions, 57 NPCs); see **The Borrow Checker's
-trial** at the end.
+added three missions (60 missions, 57 NPCs), and the Act 3-5 boss trials
+nine more (69 missions, 57 NPCs); see **The Borrow Checker's trial** and
+**The Act 3-5 trials** at the end.
 
 Player-facing solutions live in
 `game/src/plugins/editor/solutions/data.rs`. The "Show solution" button
@@ -382,10 +383,11 @@ Task let the player choose the values, and 3 are compile-only. The 13
 Tasks now name the values and show every expected line in a code span,
 so one behaviour is specified.
 
-**Totals now: 57 of 60 behaviour-checked (29 output checks, 28 harness
+**Totals now: 66 of 69 behaviour-checked (29 output checks, 37 harness
 checks), 3 static-only, 0 unverified** (the Borrow Checker's trial,
-2026-11-14, added three harness-checked stages; see the section below).
-Before the trial: 54 of 57 (25 harness checks). The 3 static-only missions cannot
+2026-11-14, added three harness-checked stages and the Act 3-5 trials,
+2026-11-15, nine more; see the sections below). Before the trials: 54 of
+57 (25 harness checks). The 3 static-only missions cannot
 run on `wasm32-wasip1`: `thread_spawn` and `thread_scope` trap (asserted by
 `solutions_build_and_run_in_the_real_server_sandbox`), and `async_fn` has
 no executor. `expectations::tests::classification_totals` pins these
@@ -499,3 +501,57 @@ Evidence (rustc 1.99.0, edition 2024):
   wrong-but-compiling variants per stage fail (57 behaviour-checked
   missions proven).
 - Grader snapshots: 18 new cases per grader, 0 changed rows.
+
+## The Act 3-5 trials (2026-11-15)
+
+Nine stage missions on the same mechanism, each trial owned by its act's
+lead NPC, who keeps the act's first mission as a prologue:
+
+- **The Variant Wraith** (the Guildmaster, after `enum_data_match`):
+  `wraith_forms` (a `_` arm answers the Shadow wrongly; name every
+  variant), `wraith_essence` (bind struct-variant fields in the pattern),
+  `wraith_possessed` (a fourth variant makes the match non-exhaustive).
+- **The Chimera of Vexis** (Vexis, after `assoc_type`): `chimera_heads`
+  (`impl Enemy for` each head), `chimera_bound` (`volley<T: Enemy>`),
+  `chimera_plasma` (`battle(&[Box<dyn Enemy>])` instead of a `match` on a
+  `Head` enum).
+- **The Tavernkeeper's Wager** (the Barkeep, after `unwrap_or_else`):
+  `wager_stake` (`?` needs a `Result` return), `wager_from` (`From` impls
+  so `?` converts), `wager_quest` (three steps chained with `?`).
+
+69 missions, 57 NPCs. The demo is unchanged: 24 free missions, ending on
+`bridge_lantern`; 45 after.
+
+Server checks: all nine are harness checks pinning each signature. Stages
+2 and 3 of the Chimera implement the player's trait for a checker-owned
+head and pass it in, so only a bounded generic or trait-object code
+passes. `wraith_possessed`'s result depends on the variant's `will`, so a
+blanket `_` arm cannot pass. Every Wager stage calls the player's code on
+failing inputs (an `unwrap` on a failing step crashes the checker), and
+`wager_quest` checks the step order, needs a `?`, and rejects `match`,
+`unwrap`, `expect` and `panic!` through a new `MissionCheck::forbids` list
+(whole-word tokens in code, comments and strings removed).
+
+Evidence (rustc 1.99.0, edition 2024):
+
+- `mission_text -- --include-ignored`: 11/11. Seven stage starters fail
+  with exactly their one error (E0533, E0004, E0599 x2, E0308, E0277 x2);
+  `wraith_forms` and `wager_quest` starters compile and misbehave.
+  `trial_claims_are_what_rustc_emits`: 19 claims across the four trials,
+  including the quoted wording, rustc's help text where a hint cites it,
+  "also compiles" claims, and two runtime claims (`unwrap` panics after
+  the stated output). The fast test fails if any trial owner names an
+  uncompiled code; `trial_code_lines_fit_the_code_pane` holds every new
+  starter, solution and tutorial code line to 72 columns.
+- `solutions -- --include-ignored`: 69/69 native `-D warnings`, 69/69
+  `wasm32-wasip1`, 67/69 run cleanly in the sandbox (the two thread
+  missions trap, as before).
+- `contract -- --include-ignored`: grader corpus 69/69 (a, b, c, f), 55/55
+  correct (10 new trial alternatives), 21/21 wrong (5 new trial
+  shortcuts).
+- `expectations_proof -- --ignored`: 274 cases; for each new stage the
+  canonical and every alternative pass, the starter and at least three
+  wrong variants fail; `wager_quest` also has four forbidden-token variants
+  and one `?`-less combinator chain (all `StaticCheckFailed`). 66
+  behaviour-checked missions proven.
+- Grader snapshots: 51 new cases per grader, 0 changed rows.

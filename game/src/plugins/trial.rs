@@ -17,7 +17,10 @@
 //!   stages (the roster mission is not repeated when it is stage 1, which
 //!   is how a trial with no prologue, such as the Act 9 Librarian, is
 //!   written). The Borrow Checker keeps `borrow_preview` early in Act 2 as
-//!   his prologue and holds the Bridge trial at the end of Act 2.
+//!   his prologue and holds the Bridge trial at the end of Act 2. The Act
+//!   3 to 5 bosses have the same shape: the act's lead NPC (the
+//!   Guildmaster, Vexis, the Barkeep) keeps the act's first mission as a
+//!   prologue and holds a trial after the act's sixth mission.
 //!
 //! # The NPC's current mission
 //!
@@ -69,13 +72,40 @@ pub struct Trial {
 }
 
 /// Every trial in the game.
-pub const TRIALS: &[Trial] = &[Trial {
-    id: "bridge",
-    name: "The Bridge",
-    npc: "borrow_preview",
-    stages: &["bridge_toll", "bridge_quill", "bridge_lantern"],
-    complete_line: "\"You may cross. The Old Tongue speaks through you.\"",
-}];
+pub const TRIALS: &[Trial] = &[
+    Trial {
+        id: "bridge",
+        name: "The Bridge",
+        npc: "borrow_preview",
+        stages: &["bridge_toll", "bridge_quill", "bridge_lantern"],
+        complete_line: "\"You may cross. The Old Tongue speaks through you.\"",
+    },
+    // Act 3 boss. The Guildmaster's prologue is `impl_method`.
+    Trial {
+        id: "variant_wraith",
+        name: "The Variant Wraith",
+        npc: "impl_method",
+        stages: &["wraith_forms", "wraith_essence", "wraith_possessed"],
+        complete_line: "\"Every form answered by name. The Guild stands in your debt.\"",
+    },
+    // Act 4 boss. Vexis's prologue is `trait_def`.
+    Trial {
+        id: "chimera",
+        name: "The Chimera of Vexis",
+        npc: "trait_def",
+        stages: &["chimera_heads", "chimera_bound", "chimera_plasma"],
+        complete_line: "\"Any head, any element, one battle. My tower has nothing left to teach you.\"",
+    },
+    // Act 5 boss. The Barkeep keeps the Crooked Cask; his prologue is
+    // `result_match`.
+    Trial {
+        id: "wager",
+        name: "The Tavernkeeper's Wager",
+        npc: "result_match",
+        stages: &["wager_stake", "wager_from", "wager_quest"],
+        complete_line: "\"The house pays out. You played every round by the rules.\"",
+    },
+];
 
 /// The trial `mission_id` is a stage of, with its 0-based stage index.
 pub fn trial_of(mission_id: &str) -> Option<(&'static Trial, usize)> {
@@ -386,6 +416,75 @@ mod tests {
             ]
         );
         assert_eq!(owned_missions("mut_binding"), vec!["mut_binding"]);
+        assert_eq!(
+            owned_missions("impl_method"),
+            vec![
+                "impl_method",
+                "wraith_forms",
+                "wraith_essence",
+                "wraith_possessed"
+            ]
+        );
+    }
+
+    /// Each Act 3-5 trial sits after its act's sixth mission and before
+    /// the next act's first, and its owner's prologue is the act's first
+    /// mission.
+    #[test]
+    fn act_3_to_5_trials_close_their_acts() {
+        let reg = MissionRegistry::default();
+        let idx = |id: &str| {
+            reg.missions
+                .iter()
+                .position(|m| m.id == id)
+                .unwrap_or_else(|| panic!("{id} not in registry"))
+        };
+        for (trial, prologue, sixth, next_act) in [
+            (
+                "variant_wraith",
+                "impl_method",
+                "enum_data_match",
+                "trait_def",
+            ),
+            ("chimera", "trait_def", "assoc_type", "result_match"),
+            ("wager", "result_match", "unwrap_or_else", "hashmap_basic"),
+        ] {
+            let t = TRIALS
+                .iter()
+                .find(|t| t.id == trial)
+                .unwrap_or_else(|| panic!("{trial} missing"));
+            assert_eq!(t.npc, prologue, "{trial}: owner");
+            assert_eq!(
+                idx(prologue) + 6,
+                idx(t.stages[0]),
+                "{trial}: after the sixth"
+            );
+            assert_eq!(idx(sixth) + 1, idx(t.stages[0]), "{trial}: after {sixth}");
+            assert_eq!(
+                idx(t.stages[t.stages.len() - 1]) + 1,
+                idx(next_act),
+                "{trial}: before {next_act}"
+            );
+        }
+    }
+
+    #[test]
+    fn prologue_owner_waits_as_a_cleared_villager_then_offers_stage_one() {
+        let reg = MissionRegistry::default();
+        for (npc, before, stage1) in [
+            ("impl_method", "enum_data_match", "wraith_forms"),
+            ("trait_def", "assoc_type", "chimera_heads"),
+            ("result_match", "unwrap_or_else", "wager_stake"),
+        ] {
+            let cur = |p: &MissionProgress| current_mission(&reg, p, npc).map(|m| m.id);
+            assert_eq!(cur(&cleared_through(&reg, npc)), Some(npc));
+            if cfg!(feature = "demo") {
+                // Past the demo boundary nothing unlocks: still the prologue.
+                assert_eq!(cur(&cleared_through(&reg, before)), Some(npc));
+                continue;
+            }
+            assert_eq!(cur(&cleared_through(&reg, before)), Some(stage1));
+        }
     }
 
     fn cleared_through(reg: &MissionRegistry, last: &str) -> MissionProgress {

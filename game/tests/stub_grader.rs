@@ -227,6 +227,57 @@ fn main() {
     let _ = value(Item::Weapon { damage: 10 });
 }"#
         }
+        // ── Act 3 boss: the Variant Wraith (mirror of contract.rs).
+        "wraith_forms" => {
+            r#"#[derive(Debug, Clone, Copy)]
+enum Wraith { Solid, Mist, Shadow }
+fn counter(form: Wraith) -> &'static str {
+    match form {
+        Wraith::Solid => "steel",
+        Wraith::Mist => "wind",
+        Wraith::Shadow => "light",
+    }
+}
+fn main() {
+    for form in [Wraith::Solid, Wraith::Mist, Wraith::Shadow] {
+        println!("{form:?}: {}", counter(form));
+    }
+}"#
+        }
+        "wraith_essence" => {
+            r#"#[derive(Debug, Clone, Copy)]
+enum Wraith { Solid { armor: u32 }, Mist { density: u32 }, Shadow }
+fn damage(form: Wraith, blow: u32) -> u32 {
+    match form {
+        Wraith::Solid { armor } => blow - armor,
+        Wraith::Mist { density } => blow / density,
+        Wraith::Shadow => 0,
+    }
+}
+fn main() {
+    for form in [Wraith::Solid { armor: 3 }, Wraith::Mist { density: 2 }, Wraith::Shadow] {
+        println!("{form:?} takes {}", damage(form, 10));
+    }
+}"#
+        }
+        "wraith_possessed" => {
+            r#"#[derive(Debug, Clone, Copy)]
+enum Wraith { Solid { armor: u32 }, Mist { density: u32 }, Shadow, Possessed { will: u32 } }
+fn damage(form: Wraith, blow: u32) -> u32 {
+    match form {
+        Wraith::Solid { armor } => blow - armor,
+        Wraith::Mist { density } => blow / density,
+        Wraith::Shadow => 0,
+        Wraith::Possessed { will } => blow + will,
+    }
+}
+fn main() {
+    let forms = [Wraith::Solid { armor: 3 }, Wraith::Mist { density: 2 }, Wraith::Shadow, Wraith::Possessed { will: 4 }];
+    for form in forms {
+        println!("{form:?} takes {}", damage(form, 10));
+    }
+}"#
+        }
         // ── Act 4: Trait Mage's Tower (mirror of contract.rs).
         "trait_def" => {
             r#"trait Element {
@@ -301,6 +352,51 @@ fn main() {
     let _ = c.make();
 }"#
         }
+        // ── Act 4 boss: the Chimera of Vexis (mirror of contract.rs).
+        "chimera_heads" => {
+            r#"trait Enemy { fn name(&self) -> &'static str; fn breath(&self) -> u32; }
+struct Fire;
+struct Frost;
+struct Storm;
+impl Enemy for Fire { fn name(&self) -> &'static str { "fire" } fn breath(&self) -> u32 { 7 } }
+impl Enemy for Frost { fn name(&self) -> &'static str { "frost" } fn breath(&self) -> u32 { 5 } }
+impl Enemy for Storm { fn name(&self) -> &'static str { "storm" } fn breath(&self) -> u32 { 9 } }
+fn main() {
+    println!("{} breathes {}", Fire.name(), Fire.breath());
+    println!("{} breathes {}", Frost.name(), Frost.breath());
+    println!("{} breathes {}", Storm.name(), Storm.breath());
+}"#
+        }
+        "chimera_bound" => {
+            r#"trait Enemy { fn name(&self) -> &'static str; fn breath(&self) -> u32; }
+struct Fire;
+impl Enemy for Fire { fn name(&self) -> &'static str { "fire" } fn breath(&self) -> u32 { 7 } }
+fn volley<T: Enemy>(head: &T, rounds: u32) -> String {
+    format!("{} x{rounds} = {}", head.name(), head.breath() * rounds)
+}
+fn main() {
+    println!("{}", volley(&Fire, 3));
+}"#
+        }
+        "chimera_plasma" => {
+            r#"trait Enemy { fn name(&self) -> &'static str; fn breath(&self) -> u32; }
+struct Fire;
+struct Plasma;
+impl Enemy for Fire { fn name(&self) -> &'static str { "fire" } fn breath(&self) -> u32 { 7 } }
+impl Enemy for Plasma { fn name(&self) -> &'static str { "plasma" } fn breath(&self) -> u32 { 12 } }
+fn battle(heads: &[Box<dyn Enemy>]) -> u32 {
+    let mut total = 0;
+    for head in heads {
+        println!("{} breathes {}", head.name(), head.breath());
+        total += head.breath();
+    }
+    total
+}
+fn main() {
+    let heads: Vec<Box<dyn Enemy>> = vec![Box::new(Fire), Box::new(Plasma)];
+    println!("total: {}", battle(&heads));
+}"#
+        }
         // ── Act 5: Tavern of Tribulations (mirror of contract.rs).
         "result_match" => {
             r#"fn describe(r: Result<i32, String>) -> i32 {
@@ -367,6 +463,66 @@ fn main() {
 }
 fn main() {
     let _ = value(None);
+}"#
+        }
+        // ── Act 5 boss: the Tavernkeeper's Wager (mirror of contract.rs).
+        "wager_stake" => {
+            r#"use std::num::ParseIntError;
+fn read_stake(text: &str) -> Result<u32, ParseIntError> { text.trim().parse::<u32>() }
+fn double_stake(text: &str) -> Result<u32, ParseIntError> {
+    let stake = read_stake(text)?;
+    Ok(stake * 2)
+}
+fn main() {
+    println!("{:?}", double_stake("20"));
+}"#
+        }
+        "wager_from" => {
+            r#"use std::num::ParseIntError;
+#[derive(Debug)]
+struct Short;
+fn pay(purse: u32, stake: u32) -> Result<u32, Short> {
+    if stake > purse { Err(Short) } else { Ok(purse - stake) }
+}
+#[derive(Debug)]
+enum WagerError { BadStake, TooPoor }
+impl From<ParseIntError> for WagerError { fn from(_: ParseIntError) -> Self { WagerError::BadStake } }
+impl From<Short> for WagerError { fn from(_: Short) -> Self { WagerError::TooPoor } }
+fn place_bet(text: &str, purse: u32) -> Result<u32, WagerError> {
+    let stake = text.trim().parse::<u32>()?;
+    let left = pay(purse, stake)?;
+    Ok(left)
+}
+fn main() {
+    println!("{:?}", place_bet("15", 50));
+}"#
+        }
+        "wager_quest" => {
+            r#"use std::num::ParseIntError;
+#[derive(Debug)]
+struct WrongKey;
+#[derive(Debug)]
+struct Short;
+struct Reward { gold: u32 }
+#[derive(Debug)]
+enum QuestError { BadMap, Locked, Broke }
+impl From<ParseIntError> for QuestError { fn from(_: ParseIntError) -> Self { QuestError::BadMap } }
+impl From<WrongKey> for QuestError { fn from(_: WrongKey) -> Self { QuestError::Locked } }
+impl From<Short> for QuestError { fn from(_: Short) -> Self { QuestError::Broke } }
+fn read_map(map: &str) -> Result<u32, ParseIntError> { map.trim().parse::<u32>() }
+fn open_vault(key: &str) -> Result<u32, WrongKey> { if key == "brass" { Ok(30) } else { Err(WrongKey) } }
+fn pay_guide(gold: u32, leagues: u32) -> Result<u32, Short> {
+    let fee = leagues * 2;
+    if fee > gold { Err(Short) } else { Ok(gold - fee) }
+}
+fn quest(map: &str, key: &str) -> Result<Reward, QuestError> {
+    let leagues = read_map(map)?;
+    let gold = open_vault(key)?;
+    let left = pay_guide(gold, leagues)?;
+    Ok(Reward { gold: left })
+}
+fn main() {
+    println!("{:?}", quest("4", "brass").map(|r| r.gold));
 }"#
         }
         // ── Act 6: Iterator Forge (mirror of contract.rs).
