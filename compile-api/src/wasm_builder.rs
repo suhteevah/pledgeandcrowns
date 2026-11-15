@@ -348,6 +348,7 @@ pub fn compile_and_run_layout(
         });
     }
 
+    wasm_runner::announce_run_phase();
     let run_started = Instant::now();
     let RunVerdict { ok, stdout, stderr } = wasm_runner::run_wasm(
         &bytes,

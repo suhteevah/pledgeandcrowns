@@ -8,8 +8,8 @@
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::sync::Arc;
-use std::time::Duration;
+use std::sync::{Arc, Condvar, Mutex};
+use std::time::{Duration, Instant};
 
 use pledge_compile_api::config::{ConfigError, vars};
 use pledge_compile_api::wasm_builder::{RealOutcome, RunLimits};
@@ -61,6 +61,60 @@ fn stub_grader(delay: Duration) -> RealGrader {
             run_time: Some(Duration::from_millis(1)),
         })
     })
+}
+
+/// A stub build that holds its build slot until the test opens the gate.
+/// Replaces fixed sleeps ("the first request is surely running after
+/// 200 ms") that a loaded host can break: the test now waits for the
+/// state it needs (`wait_for_slots`) instead of for a time.
+#[derive(Clone, Default)]
+struct Gate(Arc<(Mutex<bool>, Condvar)>);
+
+impl Gate {
+    /// Hang guard only: no test keeps a gate shut this long.
+    const MAX_HOLD: Duration = Duration::from_secs(60);
+
+    fn open(&self) {
+        let (lock, cv) = &*self.0;
+        *lock.lock().unwrap_or_else(|p| p.into_inner()) = true;
+        cv.notify_all();
+    }
+
+    fn wait(&self) {
+        let (lock, cv) = &*self.0;
+        let guard = lock.lock().unwrap_or_else(|p| p.into_inner());
+        let _ = cv
+            .wait_timeout_while(guard, Self::MAX_HOLD, |open| !*open)
+            .unwrap_or_else(|p| p.into_inner());
+    }
+}
+
+fn gated_grader(gate: Gate) -> RealGrader {
+    Arc::new(move |_src: &str, _limits: &RunLimits| {
+        gate.wait();
+        Ok(RealOutcome {
+            compiled: true,
+            ran_ok: true,
+            stdout: "stub ran".to_string(),
+            stderr: String::new(),
+            build_time: Duration::from_millis(1),
+            run_time: Some(Duration::from_millis(1)),
+        })
+    })
+}
+
+/// Poll until `state` has exactly `want` free build slots. The bound is a
+/// hang guard (a loaded host is slow, not 30 s slow), not a timing claim.
+async fn wait_for_slots(state: &AppState, want: usize) {
+    let started = Instant::now();
+    while state.available_build_slots() != want {
+        assert!(
+            started.elapsed() < Duration::from_secs(30),
+            "free build slots stayed at {} (want {want})",
+            state.available_build_slots()
+        );
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
 }
 
 async fn spawn(state: AppState) -> SocketAddr {
@@ -366,15 +420,16 @@ async fn full_build_queue_returns_503_with_retry_after() {
         (vars::MAX_CONCURRENT_BUILDS, "1"),
         (vars::MAX_QUEUED_BUILDS, "0"),
     ]);
-    let addr = spawn(AppState::with_real_grader(
-        cfg,
-        stub_grader(Duration::from_millis(800)),
-    ))
-    .await;
+    let gate = Gate::default();
+    let state = AppState::with_real_grader(cfg, gated_grader(gate.clone()));
+    let probe = state.clone();
+    let addr = spawn(state).await;
 
     let first = tokio::spawn(async move { post(addr, "/compile-real", None, &[]).await });
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    // The first build now holds the only slot (and cannot finish).
+    wait_for_slots(&probe, 0).await;
     let second = post(addr, "/compile-real", None, &[]).await;
+    gate.open();
 
     assert_eq!(second.status(), StatusCode::SERVICE_UNAVAILABLE);
     assert!(second.headers().get("retry-after").is_some());
@@ -394,14 +449,19 @@ async fn queued_build_waits_for_a_slot_instead_of_failing() {
         (vars::MAX_CONCURRENT_BUILDS, "1"),
         (vars::MAX_QUEUED_BUILDS, "1"),
     ]);
-    let addr = spawn(AppState::with_real_grader(
-        cfg,
-        stub_grader(Duration::from_millis(300)),
-    ))
-    .await;
+    let gate = Gate::default();
+    let state = AppState::with_real_grader(cfg, gated_grader(gate.clone()));
+    let probe = state.clone();
+    let addr = spawn(state).await;
     let a = tokio::spawn(async move { post(addr, "/compile-real", None, &[]).await });
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    wait_for_slots(&probe, 0).await;
     let b = tokio::spawn(async move { post(addr, "/compile-real", None, &[]).await });
+    // `a` holds the slot and cannot finish, so `b` can only be waiting in
+    // the queue (a refused `b` would already be finished). This check can
+    // only fail on a real bug, never on a slow host.
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert!(!b.is_finished(), "b must wait for the slot, not be refused");
+    gate.open();
     assert_eq!(a.await.unwrap().status(), StatusCode::OK);
     assert_eq!(b.await.unwrap().status(), StatusCode::OK);
 }
@@ -959,14 +1019,19 @@ async fn slow_headers_are_cut_off_by_the_header_read_timeout() {
         .await
         .unwrap();
     let started = std::time::Instant::now();
-    let (_bytes, closed) = read_until_close(&mut s, Duration::from_secs(5)).await;
+    // Nothing else would ever close this connection (no request deadline
+    // applies before the headers are read), so a close within the read
+    // window is the header timeout. The window is generous because a
+    // loaded host fires timers late; the lower bound shows it was not
+    // closed early for some other reason.
+    let (_bytes, closed) = read_until_close(&mut s, Duration::from_secs(15)).await;
     assert!(
         closed,
         "server must drop a connection whose headers never end"
     );
     let waited = started.elapsed();
     assert!(
-        waited >= Duration::from_millis(800) && waited < Duration::from_secs(4),
+        waited >= Duration::from_millis(800) && waited < Duration::from_secs(10),
         "closed after {waited:?}"
     );
 }
@@ -982,7 +1047,9 @@ async fn slow_body_upload_gets_408_within_the_body_timeout() {
     s.write_all(head.as_bytes()).await.unwrap();
     // ...then stall with 960+ bytes still owed.
     let started = std::time::Instant::now();
-    let (bytes, _) = read_until_close(&mut s, Duration::from_secs(5)).await;
+    // The 408 itself proves the body timeout fired (nothing else answers
+    // 408); the time bound is a generous sanity check for a loaded host.
+    let (bytes, _) = read_until_close(&mut s, Duration::from_secs(15)).await;
     let text = String::from_utf8_lossy(&bytes);
     assert!(text.starts_with("HTTP/1.1 408"), "{text}");
     assert!(text.contains("request_timeout"), "{text}");
@@ -990,7 +1057,7 @@ async fn slow_body_upload_gets_408_within_the_body_timeout() {
         text.to_ascii_lowercase().contains("connection: close"),
         "{text}"
     );
-    assert!(started.elapsed() < Duration::from_secs(4));
+    assert!(started.elapsed() < Duration::from_secs(10));
 }
 
 #[tokio::test]
@@ -1000,19 +1067,18 @@ async fn whole_request_deadline_answers_503_but_keeps_the_slot_until_work_ends()
         (vars::MAX_QUEUED_BUILDS, "0"),
     ]);
     cfg.request_deadline = Duration::from_millis(500);
-    let state = AppState::with_real_grader(cfg, stub_grader(Duration::from_secs(2)));
+    let gate = Gate::default();
+    let state = AppState::with_real_grader(cfg, gated_grader(gate.clone()));
     let probe = state.clone();
     let addr = spawn(state).await;
     let resp = post(addr, "/compile-real", None, &[]).await;
     assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
     let body: RejectionBody = resp.json().await.unwrap();
     assert_eq!(body.error, "deadline_exceeded");
-    // The stub build is still running: its slot is still held.
+    // The stub build cannot finish until the gate opens: its slot is still
+    // held after the 503 (was: a 2 s sleep racing a 2 s check).
     assert_eq!(probe.available_build_slots(), 0);
-    tokio::time::sleep(Duration::from_millis(2_000)).await;
-    assert_eq!(
-        probe.available_build_slots(),
-        1,
-        "slot back once work ended"
-    );
+    gate.open();
+    // ...and comes back once the work ends.
+    wait_for_slots(&probe, 1).await;
 }

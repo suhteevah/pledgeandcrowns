@@ -250,12 +250,20 @@ fn unknown_and_run_only_missions_say_output_was_not_checked() {
     assert!(g.ok());
     assert!(g.note.contains("no output check"), "{}", g.note);
 
-    let g = grade(
-        "vec_iter",
-        "fn main() { let v = vec![1, 2]; println!(\"{}\", v.iter().sum::<i32>()); }",
-    );
-    assert_eq!(g.state, GradeState::RanNotChecked);
-    assert!(g.note.contains("output not checked"));
+    // Run-only missions: since 6642ca4 every runnable mission pins its
+    // output, so none may exist (this used `vec_iter`, which now checks
+    // for `60`). Grade one if the registry ever gains one again.
+    let run_only = expectations::all()
+        .iter()
+        .find(|m| matches!(m.check, expectations::Check::RunOnly { .. }));
+    match run_only {
+        Some(m) => {
+            let g = grade(m.id, "fn main() { println!(\"hi\"); }");
+            assert_eq!(g.state, GradeState::RanNotChecked, "{}", m.id);
+            assert!(g.note.contains("output not checked"));
+        }
+        None => println!("no run-only mission in the registry; that half is vacuous"),
+    }
 }
 
 #[tokio::test]

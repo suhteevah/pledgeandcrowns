@@ -12,46 +12,91 @@
 //!
 //! - `bytes` is treated as fully adversarial. The whole point of this
 //!   module is sandboxing.
-//! - WASI capabilities are restricted to stdio. No filesystem (no
-//!   `preopened_dir`), no network (no `inherit_network` / `allow_tcp`),
-//!   no env, no host args. Random/clocks come from defaults; we do not
-//!   add `inherit_env` or `inherit_args`.
-//! - Wall-clock timeout via [`Engine::increment_epoch`] from a watchdog
-//!   thread that is cancelled as soon as the run returns.
+//! - WASI capabilities are restricted to stdio: stdin closed (reads see
+//!   end-of-file at once), stdout/stderr captured. No filesystem (no
+//!   `preopened_dir`), no sockets (TCP, UDP and name lookup explicitly
+//!   denied, and WASIp1 has no call that creates a socket), no env, no
+//!   args. Clocks and random come from the host defaults.
+//! - The wasm proposals the engine accepts are an explicit allow-list
+//!   ([`allowed_wasm_features`]): the WebAssembly 2.0 baseline minus SIMD.
+//!   Everything else (SIMD, threads, GC, exceptions, tail calls, memory64,
+//!   multi-memory, components, ...) is refused at validation. GC, threads,
+//!   the pooling allocator, parallel compilation and the module cache are
+//!   also compiled out of wasmtime (`default-features = false` in
+//!   `Cargo.toml`, pinned by `tests/deploy_files.rs`).
 //! - Fuel exhaustion via [`wasmtime::Config::consume_fuel`] +
 //!   [`wasmtime::Store::set_fuel`].
-//! - Linear-memory cap via [`wasmtime::StoreLimitsBuilder::memory_size`].
+//! - Linear-memory cap, instance/table/memory counts and table growth via
+//!   the store's resource limiter ([`StoreLimitsBuilder`]).
 //! - stdout/stderr are captured to bounded in-memory pipes
 //!   ([`wasmtime_wasi::p2::pipe::MemoryOutputPipe`], capacity
 //!   [`PIPE_CAP_BYTES`]).
 //! - Fuel/timeout traps are NOT propagated as `Err` to the caller —
 //!   they are normal grading outcomes and surface as
 //!   `Ok(RunVerdict { ok: false, .. })` with a recognisable stderr
-//!   message ("fuel exhausted" or "timeout").
+//!   message ("fuel exhausted" or [`TIMEOUT_PREFIX`]).
 //! - Module size is capped at [`MAX_WASM_BYTES`] before anything is
-//!   parsed, and Cranelift compilation is single-threaded
-//!   (`parallel_compilation(false)`) so one module cannot occupy every
-//!   core.
-//! - Module compilation has a *verdict* deadline,
-//!   [`MODULE_COMPILE_TIMEOUT`]: it runs on a helper thread and the run is
-//!   failed if it does not finish in time. wasmtime cannot cancel a
-//!   compile, so what happens to the still-running compile depends on the
-//!   process (security re-review P1-C: work must never outlive its
-//!   accounting):
-//!   - in a long-lived process (the in-process dev executor, tests) the
-//!     caller waits for the helper to finish before returning, so the
-//!     build slot the caller holds covers the whole compile. The verdict is
-//!     still "compile exceeded the limit"; only the response is late.
-//!   - in a one-shot job process (`pledge_compile_api job`, see
-//!     [`crate::jobs`]) the helper is abandoned and the process exits right
-//!     after writing its reply, which ends the thread; the supervising
-//!     builder also kills the job's whole process tree at its deadline.
-//!     The job entry point opts in with [`set_process_exits_after_job`].
-//! - Instance/table/memory counts and table growth are capped through the
-//!   store's resource limiter, in addition to linear memory.
+//!   parsed, and Cranelift compilation is single-threaded (wasmtime's
+//!   `parallel-compilation` feature is not compiled in) so one module
+//!   cannot occupy every core.
 //! - Copy-on-write memory images are off (`memory_init_cow(false)`), so
 //!   wasmtime does not need `memfd_create` (smaller syscall surface under
 //!   the builder unit's seccomp filter).
+//!
+//! # Run timeout (Linux verification 2026-11-14, open item 1)
+//!
+//! The first version ran `_start` on a synchronous store and relied on
+//! epoch interruption alone. Epoch checks are compiled into *guest* code
+//! (function entries and loop back-edges), so they stop a busy loop, but
+//! a guest blocked inside a host call never reaches one: wasmtime-wasi's
+//! synchronous `poll_oneoff` (what `std::thread::sleep` lowers to) slept
+//! in the host for as long as the guest asked, and fuel is not consumed
+//! while the host runs. A `sleep(3600 s)` held its build slot until the
+//! 50 s job deadline killed the job process, which then reported it as a
+//! compile error.
+//!
+//! The run now has three independent bounds, all keyed to the run's
+//! timeout:
+//!
+//! 1. **Guest code**: epoch interruption. A watchdog thread bumps the
+//!    engine epoch at `timeout`; the store's 1-tick deadline traps the
+//!    guest at its next epoch check.
+//! 2. **Host calls**: the module runs on an *async* store
+//!    ([`wasmtime_wasi::p1::add_to_linker_async`], `call_async`) inside a
+//!    current-thread tokio runtime, wrapped in [`tokio::time::timeout`].
+//!    Every WASIp1 host call the guest can reach is a future awaited by
+//!    that runtime, so when the timer fires the call is dropped (cancelled)
+//!    wherever the guest is blocked. `allow_blocking_current_thread` stays
+//!    `false`: with it on, wasmtime-wasi would serve a relative sleep with
+//!    a real `std::thread::sleep` on the runtime thread and the timer could
+//!    not fire.
+//! 3. **Backstop**: the run itself executes on a helper thread and the
+//!    caller waits at most `timeout + RUN_TIMEOUT_MARGIN`. If (1) and (2)
+//!    both failed (a future wasmtime-wasi that blocks a thread inside a
+//!    host call), the one-shot job process abandons the run thread and
+//!    answers; it exits right after, which ends the thread. A long-lived
+//!    process (dev executor, tests) logs and waits instead, so no work
+//!    outlives the caller's build slot. The builder's job deadline
+//!    ([`crate::jobs::JOB_DEADLINE`]) remains the last line.
+//!
+//! WASIp1 host functions and whether they can block (wasmtime-wasi 50,
+//! with the context built here):
+//!
+//! | Function(s) | Can block? |
+//! |---|---|
+//! | `poll_oneoff` with a clock subscription (relative or absolute) | **yes**: sleeps until the deadline. Async future, cancelled by (2) |
+//! | `poll_oneoff` on fd 0/1/2 | no: closed stdin and the memory pipes are always ready |
+//! | `fd_read`/`fd_pread` on stdin | no: stdin is closed, reads return 0 bytes (EOF) at once |
+//! | `fd_write`/`fd_pwrite` on stdout/stderr | no: in-memory pipe, refuses writes past [`PIPE_CAP_BYTES`] |
+//! | `sched_yield`, `random_get`, `clock_time_get`, `clock_res_get` | no |
+//! | `args_*`, `environ_*` | no (both empty) |
+//! | `proc_exit` | no (unwinds the guest) |
+//! | `fd_*` on any other fd, `path_*` | no: no preopens, so `EBADF` before any I/O |
+//! | `sock_accept/recv/send/shutdown` | no: there is no socket fd to name |
+//!
+//! Only the clock wait can block, and every function is behind (2) and
+//! (3) anyway. `tests/wasm_runner.rs` pins sleep, absolute-time poll,
+//! multi-subscription poll, busy loop and stdin reads.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
@@ -65,12 +110,34 @@ use crate::helper_threads;
 static EXITS_AFTER_JOB: AtomicBool = AtomicBool::new(false);
 
 /// Declare that this process exits as soon as its single job is answered,
-/// so a timed-out module compile may be abandoned instead of awaited.
-/// Only `pledge_compile_api job` calls this.
+/// so a timed-out module compile or a stuck run may be abandoned instead
+/// of awaited. Only `pledge_compile_api job` calls this.
 pub fn set_process_exits_after_job() {
     EXITS_AFTER_JOB.store(true, Ordering::SeqCst);
 }
-use wasmtime::{Config, Engine, Linker, Module, Store, StoreLimits, StoreLimitsBuilder};
+
+/// True in the one-shot job process (see [`set_process_exits_after_job`]).
+pub fn process_exits_after_job() -> bool {
+    EXITS_AFTER_JOB.load(Ordering::SeqCst)
+}
+
+/// Line a job process writes to its stderr once the build is over and the
+/// run is about to start. If the builder later has to kill the job at its
+/// deadline, this tells it the program compiled (so the verdict is a
+/// runtime error, not a compile error). Never seen by the player.
+pub const JOB_RUN_PHASE_MARKER: &str = "pnc-job-phase: run";
+
+/// Called right before a built module is run. In the job process this
+/// writes [`JOB_RUN_PHASE_MARKER`] to stderr; elsewhere it does nothing.
+pub fn announce_run_phase() {
+    if process_exits_after_job() {
+        eprintln!("{JOB_RUN_PHASE_MARKER}");
+    }
+}
+
+use wasmtime::{
+    Config, Engine, Linker, Module, Store, StoreLimits, StoreLimitsBuilder, WasmFeatures,
+};
 use wasmtime_wasi::WasiCtxBuilder;
 use wasmtime_wasi::p1::WasiP1Ctx;
 use wasmtime_wasi::p2::pipe::MemoryOutputPipe;
@@ -86,15 +153,23 @@ pub const MAX_WASM_BYTES: usize = 4 * 1024 * 1024;
 /// Wall-clock budget for `Module::new` (Cranelift compile).
 pub const MODULE_COMPILE_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// How far past its timeout a run may go before the backstop answers for
+/// it. The epoch trap and the async timeout both fire AT the timeout;
+/// this only absorbs scheduling delay on a loaded host.
+pub const RUN_TIMEOUT_MARGIN: Duration = Duration::from_secs(2);
+
+/// First word of the stderr of a run stopped at its timeout.
+pub const TIMEOUT_PREFIX: &str = "timeout:";
+
 /// One instance per run (the player module; WASI p1 host functions are
 /// not instances).
-const MAX_INSTANCES: usize = 1;
+pub const MAX_INSTANCES: usize = 1;
 /// Rust emits one table and one memory.
-const MAX_TABLES: usize = 2;
-const MAX_MEMORIES: usize = 1;
+pub const MAX_TABLES: usize = 2;
+pub const MAX_MEMORIES: usize = 1;
 /// Elements per table. Rust's indirect-call table for a small program
 /// holds a few hundred entries.
-const MAX_TABLE_ELEMENTS: usize = 64 * 1024;
+pub const MAX_TABLE_ELEMENTS: usize = 64 * 1024;
 
 /// Floor on fuel; anything below this is rejected up front to catch
 /// caller mistakes (zero / one fuel will trap before the module body
@@ -132,6 +207,48 @@ struct StoreState {
     limits: StoreLimits,
 }
 
+/// The only wasm proposals the engine accepts: the WebAssembly 2.0
+/// baseline that rustc's `wasm32-wasip1` output uses, without SIMD.
+///
+/// `bulk_memory` and `reference_types` MUST stay (hard-won, 2026-06-18):
+/// rustc lowers `memcpy`/`memset` in std to `memory.copy`/`memory.fill`
+/// and emits the reference-types table encoding; without them wasmtime
+/// rejects EVERY real Rust module with a "zero byte expected" error. The
+/// sub-flags wasmparser folds into them (`bulk_memory_opt`,
+/// `call_indirect_overlong`) come along. `floats` is a wasmparser
+/// pseudo-feature (float types/instructions at all).
+///
+/// Everything else is refused: SIMD, relaxed SIMD, threads/shared memory,
+/// GC and GC types, function references, exceptions (both encodings),
+/// tail calls, multi-memory, memory64, extended-const, wide arithmetic,
+/// stack switching, custom page sizes, the component model.
+pub fn allowed_wasm_features() -> WasmFeatures {
+    WasmFeatures::MUTABLE_GLOBAL
+        | WasmFeatures::SATURATING_FLOAT_TO_INT
+        | WasmFeatures::SIGN_EXTENSION
+        | WasmFeatures::MULTI_VALUE
+        | WasmFeatures::BULK_MEMORY
+        | WasmFeatures::REFERENCE_TYPES
+        | WasmFeatures::FLOATS
+}
+
+/// The engine configuration every run uses. Public so tests can build an
+/// engine from exactly this and probe it.
+pub fn hardened_config() -> Config {
+    let mut config = Config::new();
+    config.consume_fuel(true);
+    config.epoch_interruption(true);
+    // Allow-list, not deny-list: start from nothing, add the baseline.
+    // A wasmtime upgrade that turns a new proposal on by default cannot
+    // reach player code this way (wasmtime 50 already defaults to the
+    // whole WebAssembly 3.0 set plus wide-arithmetic).
+    config.wasm_features(WasmFeatures::all(), false);
+    config.wasm_features(allowed_wasm_features(), true);
+    // No CoW memory images: avoids memfd_create (see module docs).
+    config.memory_init_cow(false);
+    config
+}
+
 /// Run `bytes` as a WASI preview1 module under a sandbox configured
 /// from the caller's resource budget.
 ///
@@ -164,6 +281,7 @@ pub fn run_wasm_with_compile_timeout(
     compile_timeout: Duration,
 ) -> Result<RunVerdict> {
     if bytes.is_empty() {
+        tracing::warn!("wasm_runner: rejected empty module");
         bail!("wasm_runner: bytes is empty");
     }
     if bytes.len() > MAX_WASM_BYTES {
@@ -178,15 +296,21 @@ pub fn run_wasm_with_compile_timeout(
         );
     }
     if fuel < MIN_FUEL {
+        tracing::warn!(fuel, "wasm_runner: rejected fuel budget below floor");
         bail!("wasm_runner: fuel={fuel} below floor {MIN_FUEL}; pick a saner budget");
     }
     if max_memory_bytes < MIN_MEMORY_BYTES {
+        tracing::warn!(
+            max_memory_bytes,
+            "wasm_runner: rejected memory cap below floor"
+        );
         bail!(
             "wasm_runner: max_memory_bytes={max_memory_bytes} below floor \
              {MIN_MEMORY_BYTES}"
         );
     }
     if timeout_ms < MIN_TIMEOUT_MS {
+        tracing::warn!(timeout_ms, "wasm_runner: rejected timeout below floor");
         bail!("wasm_runner: timeout_ms={timeout_ms} below floor {MIN_TIMEOUT_MS}");
     }
 
@@ -199,53 +323,7 @@ pub fn run_wasm_with_compile_timeout(
     );
 
     // ---- Engine ---------------------------------------------------------
-    let mut config = Config::new();
-    config.consume_fuel(true);
-    config.epoch_interruption(true);
-    // Defence-in-depth: deny the exotic / high-surface wasm proposals
-    // we don't need, while KEEPING the WebAssembly 2.0 baseline that the
-    // Rust `wasm32-wasip1` std actually emits.
-    //
-    // Hard-won correction (2026-06-18): `bulk_memory` and
-    // `reference_types` MUST stay enabled. Current rustc lowers `memcpy`/
-    // `memset` in std to `memory.copy`/`memory.fill` (bulk-memory) and
-    // emits the reference-types table encoding — both are baseline since
-    // the WebAssembly 2.0 spec. Disabling them makes wasmtime's decoder
-    // mis-parse and reject EVERY real Rust module with a "zero byte
-    // expected" translation error. The original "students use none of
-    // these" assumption was wrong: it's the std the linker pulls in, not
-    // the student snippet, that uses them. This file's first end-to-end
-    // build-and-run test (compile-api/tests/wasm_builder.rs) is what
-    // surfaced it.
-    //
-    // Dependency chain (per wasmtime 44 Config docs):
-    //   reference_types depends on bulk_memory
-    //   function_references depends on reference_types
-    //   gc depends on function_references
-    // We enable bulk_memory + reference_types (baseline, required) and
-    // stop the chain there: function_references / gc stay off. The
-    // genuinely exotic or concurrency-bearing proposals — SIMD,
-    // relaxed-SIMD, multi-memory, memory64, tail-call, threads (shared
-    // memory + atomics) — remain disabled; the curriculum needs none of
-    // them and each is real attack surface. sign-extension, multi-value
-    // and non-trapping float-to-int are left at wasmtime's defaults
-    // (on): they're baseline and harmless, and rustc emits them too.
-    config.wasm_bulk_memory(true);
-    config.wasm_reference_types(true);
-    config.wasm_simd(false);
-    config.wasm_relaxed_simd(false);
-    config.wasm_multi_memory(false);
-    config.wasm_memory64(false);
-    config.wasm_function_references(false);
-    config.wasm_gc(false);
-    config.wasm_tail_call(false);
-    config.wasm_threads(false);
-    // One core per compile: a large module must not starve the server.
-    config.parallel_compilation(false);
-    // No CoW memory images: avoids memfd_create (see module docs).
-    config.memory_init_cow(false);
-
-    let engine = Engine::new(&config)?;
+    let engine = Engine::new(&hardened_config())?;
     let module = match compile_bounded(&engine, bytes, compile_timeout)? {
         Some(m) => m,
         None => {
@@ -260,15 +338,175 @@ pub fn run_wasm_with_compile_timeout(
         }
     };
 
-    // ---- WASI ctx -------------------------------------------------------
-    // No env, no args, no preopens, no network. Stdio only, captured to
-    // bounded memory pipes. stdin is left as the default (closed).
+    let timeout = Duration::from_millis(timeout_ms);
     let stdout_pipe = MemoryOutputPipe::new(PIPE_CAP_BYTES);
     let stderr_pipe = MemoryOutputPipe::new(PIPE_CAP_BYTES);
 
+    // ---- Watchdog (bound 1: guest code) ---------------------------------
+    // A thread blocks on `recv_timeout(timeout)`. If the run finishes
+    // first we drop `cancel_tx`, the receive returns `Disconnected`
+    // immediately and the thread exits without ticking — so a 2 ms run
+    // joins in ~2 ms instead of parking a thread for the full timeout. On
+    // `Timeout` it bumps the engine epoch once, which trips the store's
+    // 1-epoch deadline. The engine is per-run, so the tick can never
+    // interrupt another submission.
+    let (cancel_tx, cancel_rx) = mpsc::channel::<()>();
+    let watchdog_engine = engine.clone();
+    let watchdog = helper_threads::spawn("wasm-watchdog", move || {
+        if let Err(mpsc::RecvTimeoutError::Timeout) = cancel_rx.recv_timeout(timeout) {
+            tracing::debug!("wasm_runner: watchdog tick (run timeout reached)");
+            watchdog_engine.increment_epoch();
+        }
+    })?;
+
+    // ---- Run thread (bound 2: host calls) + backstop (bound 3) ----------
+    let (done_tx, done_rx) = mpsc::channel::<Result<RunEnd>>();
+    let run_engine = engine.clone();
+    let out_pipe = stdout_pipe.clone();
+    let err_pipe = stderr_pipe.clone();
+    let runner = helper_threads::spawn("wasm-run", move || {
+        let end = run_on_current_thread(
+            &run_engine,
+            &module,
+            out_pipe,
+            err_pipe,
+            fuel,
+            max_memory_bytes,
+            timeout,
+        );
+        let _ = done_tx.send(end);
+    });
+    let runner = match runner {
+        Ok(h) => h,
+        Err(e) => {
+            drop(cancel_tx);
+            let _ = watchdog.join();
+            return Err(e.into());
+        }
+    };
+
+    let backstop = timeout + RUN_TIMEOUT_MARGIN;
+    let end = match done_rx.recv_timeout(backstop) {
+        Ok(end) => {
+            if runner.join().is_err() {
+                tracing::warn!("wasm_runner: run thread panicked after sending");
+            }
+            end
+        }
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            if process_exits_after_job() {
+                tracing::error!(
+                    ?backstop,
+                    "wasm_runner: run did not stop at its timeout; abandoning the run thread \
+                     (job process exits next)"
+                );
+            } else {
+                tracing::error!(
+                    ?backstop,
+                    "wasm_runner: run did not stop at its timeout; waiting for it so no work \
+                     outlives the caller's build slot"
+                );
+                if runner.join().is_err() {
+                    tracing::warn!("wasm_runner: run thread panicked");
+                }
+            }
+            Ok(RunEnd::Backstop)
+        }
+        Err(mpsc::RecvTimeoutError::Disconnected) => {
+            let _ = runner.join();
+            drop(cancel_tx);
+            let _ = watchdog.join();
+            bail!("wasm_runner: run thread exited without a result")
+        }
+    };
+
+    // Cancel the watchdog (disconnects its receiver) and join.
+    drop(cancel_tx);
+    if watchdog.join().is_err() {
+        tracing::warn!("wasm_runner: watchdog thread panicked");
+    }
+
+    // ---- Drain pipes ----------------------------------------------------
+    // contents() returns the bytes accumulated so far; the pipe refuses
+    // writes past its PIPE_CAP_BYTES capacity.
+    let captured_stdout = String::from_utf8_lossy(&stdout_pipe.contents()).into_owned();
+    let captured_stderr = String::from_utf8_lossy(&stderr_pipe.contents()).into_owned();
+
+    match end? {
+        RunEnd::Returned => {
+            tracing::debug!("wasm_runner: _start returned Ok");
+            Ok(RunVerdict {
+                ok: true,
+                stdout: captured_stdout,
+                stderr: captured_stderr,
+            })
+        }
+        RunEnd::Trapped(err) => Ok(classify_trap(
+            &err,
+            timeout_ms,
+            captured_stdout,
+            captured_stderr,
+        )),
+        RunEnd::HostTimeout => {
+            tracing::info!(
+                timeout_ms,
+                "wasm_runner: run timeout while the guest was blocked in a host call"
+            );
+            Ok(timeout_verdict(
+                timeout_ms,
+                captured_stdout,
+                captured_stderr,
+            ))
+        }
+        RunEnd::Backstop => {
+            tracing::warn!(timeout_ms, "wasm_runner: run stopped by the backstop");
+            Ok(timeout_verdict(
+                timeout_ms,
+                captured_stdout,
+                captured_stderr,
+            ))
+        }
+    }
+}
+
+/// How a run ended (before classification).
+enum RunEnd {
+    /// `_start` returned.
+    Returned,
+    /// Instantiation or `_start` failed: trap, exit, link error.
+    Trapped(wasmtime::Error),
+    /// The async timeout fired (guest blocked in a host call).
+    HostTimeout,
+    /// The backstop answered; the run thread may still be running.
+    Backstop,
+}
+
+/// Instantiate and run `_start` on an async store inside a fresh
+/// current-thread runtime on THIS thread (a fresh helper thread, so it is
+/// never nested in the caller's runtime).
+fn run_on_current_thread(
+    engine: &Engine,
+    module: &Module,
+    stdout: MemoryOutputPipe,
+    stderr: MemoryOutputPipe,
+    fuel: u64,
+    max_memory_bytes: u64,
+    timeout: Duration,
+) -> Result<RunEnd> {
+    // ---- WASI ctx -------------------------------------------------------
+    // No env, no args, no preopens, no network. Stdio only: stdin is the
+    // default closed stream, stdout/stderr go to bounded memory pipes.
     let mut wasi_builder = WasiCtxBuilder::new();
-    wasi_builder.stdout(stdout_pipe.clone());
-    wasi_builder.stderr(stderr_pipe.clone());
+    wasi_builder
+        .stdout(stdout)
+        .stderr(stderr)
+        .allow_tcp(false)
+        .allow_udp(false)
+        .allow_ip_name_lookup(false)
+        // Keep blocking host work off this thread: with this on, a
+        // relative sleep becomes `std::thread::sleep` on the runtime
+        // thread and the run timeout could not fire (see module docs).
+        .allow_blocking_current_thread(false);
     let wasi = wasi_builder.build_p1();
 
     let limits = StoreLimitsBuilder::new()
@@ -279,71 +517,34 @@ pub fn run_wasm_with_compile_timeout(
         .memories(MAX_MEMORIES)
         .build();
 
-    let mut store: Store<StoreState> = Store::new(&engine, StoreState { wasi, limits });
+    let mut store: Store<StoreState> = Store::new(engine, StoreState { wasi, limits });
     store.limiter(|s| &mut s.limits);
     store.set_fuel(fuel)?;
-    // One epoch tick is enough to interrupt — the watchdog increments
-    // the engine epoch once after `timeout_ms` and the store's deadline
-    // of 1 epoch past the current value will be exceeded.
+    // One epoch tick is enough to interrupt: the watchdog increments the
+    // engine epoch once after the timeout and this deadline (1 tick past
+    // the current epoch) is then exceeded. Trap, never yield-and-continue.
     store.set_epoch_deadline(1);
+    store.epoch_deadline_trap();
 
-    // ---- Linker ---------------------------------------------------------
-    let mut linker: Linker<StoreState> = Linker::new(&engine);
-    wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |s: &mut StoreState| &mut s.wasi)?;
+    let mut linker: Linker<StoreState> = Linker::new(engine);
+    wasmtime_wasi::p1::add_to_linker_async(&mut linker, |s: &mut StoreState| &mut s.wasi)?;
 
-    // ---- Watchdog -------------------------------------------------------
-    // A thread blocks on `recv_timeout(timeout_ms)`. If the run finishes
-    // first we drop `cancel_tx`, the receive returns `Disconnected`
-    // immediately and the thread exits without ticking — so a 2 ms run
-    // joins in ~2 ms instead of parking a thread for the full timeout
-    // (the old `thread::sleep` watchdog, flagged in the 2026-05-02
-    // rust-lead review). On `Timeout` it bumps the engine epoch once,
-    // which trips the store's 1-epoch deadline. The engine is per-run,
-    // so the tick can never interrupt another submission.
-    let (cancel_tx, cancel_rx) = mpsc::channel::<()>();
-    let watchdog_engine = engine.clone();
-    let watchdog = helper_threads::spawn("wasm-watchdog", move || {
-        if let Err(mpsc::RecvTimeoutError::Timeout) =
-            cancel_rx.recv_timeout(Duration::from_millis(timeout_ms))
-        {
-            watchdog_engine.increment_epoch();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()?;
+    let end = runtime.block_on(async {
+        let call = async {
+            let instance = linker.instantiate_async(&mut store, module).await?;
+            let start = instance.get_typed_func::<(), ()>(&mut store, "_start")?;
+            start.call_async(&mut store, ()).await
+        };
+        match tokio::time::timeout(timeout, call).await {
+            Ok(Ok(())) => RunEnd::Returned,
+            Ok(Err(e)) => RunEnd::Trapped(e),
+            Err(_elapsed) => RunEnd::HostTimeout,
         }
-    })?;
-
-    // ---- Instantiate + invoke ------------------------------------------
-    let outcome = (|| -> Result<()> {
-        let instance = linker.instantiate(&mut store, &module)?;
-        let start = instance.get_typed_func::<(), ()>(&mut store, "_start")?;
-        start.call(&mut store, ())?;
-        Ok(())
-    })();
-
-    // Cancel the watchdog (disconnects its receiver) and join.
-    drop(cancel_tx);
-    if watchdog.join().is_err() {
-        tracing::warn!("wasm_runner: watchdog thread panicked");
-    }
-
-    // ---- Drain pipes ----------------------------------------------------
-    // Per docs: contents() returns the bytes accumulated so far, and
-    // the pipe silently drops further writes past capacity (the pipe
-    // was constructed with PIPE_CAP_BYTES capacity).
-    let stdout_bytes = stdout_pipe.contents();
-    let stderr_bytes = stderr_pipe.contents();
-    let captured_stdout = String::from_utf8_lossy(&stdout_bytes).into_owned();
-    let captured_stderr = String::from_utf8_lossy(&stderr_bytes).into_owned();
-
-    match outcome {
-        Ok(()) => {
-            tracing::debug!("wasm_runner: _start returned Ok");
-            Ok(RunVerdict {
-                ok: true,
-                stdout: captured_stdout,
-                stderr: captured_stderr,
-            })
-        }
-        Err(err) => Ok(classify_trap(err, captured_stdout, captured_stderr)),
-    }
+    });
+    Ok(end)
 }
 
 /// Compile `bytes` on a helper thread, waiting at most `timeout` for the
@@ -363,10 +564,16 @@ fn compile_bounded(engine: &Engine, bytes: &[u8], timeout: Duration) -> Result<O
             if helper.join().is_err() {
                 tracing::warn!("wasm_runner: compile helper panicked after sending");
             }
-            Ok(Some(result?))
+            match result {
+                Ok(m) => Ok(Some(m)),
+                Err(e) => {
+                    tracing::warn!("wasm_runner: module refused at compile/validation: {e:#}");
+                    Err(e.into())
+                }
+            }
         }
         Err(mpsc::RecvTimeoutError::Timeout) => {
-            if EXITS_AFTER_JOB.load(Ordering::SeqCst) {
+            if process_exits_after_job() {
                 tracing::warn!(
                     ?timeout,
                     bytes = bytes.len(),
@@ -391,11 +598,37 @@ fn compile_bounded(engine: &Engine, bytes: &[u8], timeout: Duration) -> Result<O
     }
 }
 
+/// Player-facing timeout text: starts with [`TIMEOUT_PREFIX`].
+pub fn timeout_message(timeout_ms: u64) -> String {
+    let limit = if timeout_ms % 1000 == 0 {
+        format!("{} s", timeout_ms / 1000)
+    } else {
+        format!("{timeout_ms} ms")
+    };
+    format!(
+        "{TIMEOUT_PREFIX} your program was still running after the {limit} time limit and was \
+         stopped. Look for a loop that never ends, or a sleep or wait that is too long."
+    )
+}
+
+fn timeout_verdict(timeout_ms: u64, stdout: String, stderr: String) -> RunVerdict {
+    RunVerdict {
+        ok: false,
+        stdout,
+        stderr: combine_trap_msg(&timeout_message(timeout_ms), stderr),
+    }
+}
+
 /// Map a wasmtime invocation error onto a `RunVerdict`. Distinguishes
 /// fuel exhaustion, epoch / timeout interruption, WASI proc_exit(0),
 /// and generic traps so the calling grader can format useful feedback
 /// to the player.
-fn classify_trap(err: anyhow::Error, stdout: String, stderr: String) -> RunVerdict {
+fn classify_trap(
+    err: &wasmtime::Error,
+    timeout_ms: u64,
+    stdout: String,
+    stderr: String,
+) -> RunVerdict {
     // WASI proc_exit(0) is the canonical "successful" exit for a real
     // WASI program. Treat any non-zero exit code as failure.
     if let Some(exit) = err.downcast_ref::<wasmtime_wasi::I32Exit>() {
@@ -432,11 +665,7 @@ fn classify_trap(err: anyhow::Error, stdout: String, stderr: String) -> RunVerdi
             }
             wasmtime::Trap::Interrupt => {
                 tracing::debug!("wasm_runner: epoch interrupt -> timeout");
-                return RunVerdict {
-                    ok: false,
-                    stdout,
-                    stderr: combine_trap_msg("timeout", stderr),
-                };
+                return timeout_verdict(timeout_ms, stdout, stderr);
             }
             other => {
                 tracing::debug!("wasm_runner: trap {:?}", other);
@@ -450,8 +679,8 @@ fn classify_trap(err: anyhow::Error, stdout: String, stderr: String) -> RunVerdi
         }
     }
 
-    // Fall-through: a non-trap anyhow error, e.g. "_start not found".
-    let msg = format!("execution error: {err}");
+    // Fall-through: a non-trap error, e.g. "_start not found".
+    let msg = format!("execution error: {err:#}");
     tracing::debug!("wasm_runner: non-trap error: {err}");
     RunVerdict {
         ok: false,
@@ -465,5 +694,63 @@ fn combine_trap_msg(prefix: &str, captured: String) -> String {
         prefix.to_string()
     } else {
         format!("{prefix}\n--- captured stderr ---\n{captured}")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn timeout_message_is_plain_and_prefixed() {
+        let m = timeout_message(5_000);
+        assert!(m.starts_with(TIMEOUT_PREFIX), "{m}");
+        assert!(m.contains("5 s time limit"), "{m}");
+        assert!(timeout_message(250).contains("250 ms"));
+    }
+
+    #[test]
+    fn allow_list_is_exactly_the_baseline() {
+        // Pinned on purpose: widening this set is a security decision,
+        // not a refactor. Update the module docs and the behavioural
+        // tests in tests/wasm_runner.rs together with it.
+        let f = allowed_wasm_features();
+        for denied in [
+            WasmFeatures::SIMD,
+            WasmFeatures::RELAXED_SIMD,
+            WasmFeatures::THREADS,
+            WasmFeatures::SHARED_EVERYTHING_THREADS,
+            WasmFeatures::GC,
+            WasmFeatures::GC_TYPES,
+            WasmFeatures::FUNCTION_REFERENCES,
+            WasmFeatures::EXCEPTIONS,
+            WasmFeatures::LEGACY_EXCEPTIONS,
+            WasmFeatures::TAIL_CALL,
+            WasmFeatures::MULTI_MEMORY,
+            WasmFeatures::MEMORY64,
+            WasmFeatures::EXTENDED_CONST,
+            WasmFeatures::WIDE_ARITHMETIC,
+            WasmFeatures::STACK_SWITCHING,
+            WasmFeatures::CUSTOM_PAGE_SIZES,
+            WasmFeatures::COMPONENT_MODEL,
+            WasmFeatures::MEMORY_CONTROL,
+        ] {
+            assert!(!f.intersects(denied), "{denied:?} must not be allowed");
+        }
+        assert_eq!(
+            f,
+            WasmFeatures::MUTABLE_GLOBAL
+                | WasmFeatures::SATURATING_FLOAT_TO_INT
+                | WasmFeatures::SIGN_EXTENSION
+                | WasmFeatures::MULTI_VALUE
+                | WasmFeatures::BULK_MEMORY
+                | WasmFeatures::REFERENCE_TYPES
+                | WasmFeatures::FLOATS
+        );
+    }
+
+    #[test]
+    fn hardened_config_builds_an_engine() {
+        assert!(Engine::new(&hardened_config()).is_ok());
     }
 }

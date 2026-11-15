@@ -61,14 +61,22 @@ fn ok_runner() -> JobRunner {
     })
 }
 
+/// Request/reply deadlines for tests that are NOT about deadlines. Kept
+/// far above anything a loaded host needs to connect and write one small
+/// frame (they were 500 ms, which a box running a 24-job build can miss
+/// between `accept` and the client's first write).
+const RELAXED_DEADLINE: Duration = Duration::from_secs(20);
+/// The request deadline the slow-client test measures.
+const SHORT_DEADLINE: Duration = Duration::from_millis(500);
+
 fn ctx(slots: usize, runner: JobRunner) -> BuilderCtx {
     BuilderCtx {
         settings: BuildSettings::default(),
         slots: JobSlots::new(slots),
         runner,
         on_survivors: Arc::new(|| {}),
-        request_deadline: Duration::from_millis(500),
-        reply_deadline: Duration::from_millis(500),
+        request_deadline: RELAXED_DEADLINE,
+        reply_deadline: RELAXED_DEADLINE,
     }
 }
 
@@ -96,7 +104,7 @@ fn read_reply(s: &mut TcpStream) -> Result<JobReply, IpcError> {
     let payload = ipc::read_frame(
         s,
         MAX_REPLY_FRAME_BYTES,
-        Instant::now() + Duration::from_secs(5),
+        Instant::now() + RELAXED_DEADLINE,
         "test reply",
     )?;
     ipc::decode_reply(&payload)
@@ -106,7 +114,7 @@ fn read_reply(s: &mut TcpStream) -> Result<JobReply, IpcError> {
 fn valid_request_round_trips() {
     let (addr, h) = serve_one(ctx(1, ok_runner()));
     let mut s = TcpStream::connect(addr).unwrap();
-    let reply = ipc::exchange(&mut s, &request(), Duration::from_secs(5)).unwrap();
+    let reply = ipc::exchange(&mut s, &request(), RELAXED_DEADLINE).unwrap();
     assert_eq!(reply, JobReply::Graded(graded()));
     assert_eq!(h.join().unwrap(), ConnOutcome::Replied("graded"));
 }
@@ -115,7 +123,7 @@ fn valid_request_round_trips() {
 fn full_builder_answers_busy() {
     let (addr, h) = serve_one(ctx(0, ok_runner()));
     let mut s = TcpStream::connect(addr).unwrap();
-    let reply = ipc::exchange(&mut s, &request(), Duration::from_secs(5)).unwrap();
+    let reply = ipc::exchange(&mut s, &request(), RELAXED_DEADLINE).unwrap();
     assert_eq!(reply, JobReply::Busy);
     assert_eq!(h.join().unwrap(), ConnOutcome::Replied("busy"));
     // The API maps Busy to the handler's queue-full error.
@@ -187,7 +195,9 @@ fn bad_magic_and_oversized_frames_are_refused_unread() {
 
 #[test]
 fn slow_client_is_dropped_at_the_request_deadline() {
-    let (addr, h) = serve_one(ctx(1, ok_runner()));
+    let mut c = ctx(1, ok_runner());
+    c.request_deadline = SHORT_DEADLINE;
+    let (addr, h) = serve_one(c);
     let mut s = TcpStream::connect(addr).unwrap();
     let started = Instant::now();
     // Half a header, then nothing: the server's TOTAL deadline (500 ms)
@@ -198,7 +208,10 @@ fn slow_client_is_dropped_at_the_request_deadline() {
         matches!(&outcome, ConnOutcome::ClientError(m) if m.contains("deadline")),
         "{outcome:?}"
     );
-    assert!(started.elapsed() < Duration::from_secs(3));
+    // Without the deadline the server would wait for this client forever
+    // (it never writes again), so any bound well under the test's own
+    // runtime proves it; 10 s leaves room for a loaded host.
+    assert!(started.elapsed() < SHORT_DEADLINE + Duration::from_secs(10));
     let mut buf = [0u8; 1];
     s.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
     assert!(
@@ -223,7 +236,7 @@ fn survivors_retire_the_slot_and_escalate() {
     let slots = Arc::clone(&c.slots);
     let (addr, h) = serve_one(c);
     let mut s = TcpStream::connect(addr).unwrap();
-    let err = ipc::exchange(&mut s, &request(), Duration::from_secs(5)).unwrap_err();
+    let err = ipc::exchange(&mut s, &request(), RELAXED_DEADLINE).unwrap_err();
     assert!(
         matches!(err, IpcError::Closed(_) | IpcError::Io { .. }),
         "{err:?}"
@@ -247,7 +260,7 @@ fn fake_builder(respond: impl FnOnce(&mut TcpStream) + Send + 'static) -> Socket
         let _ = ipc::read_frame(
             &mut s,
             MAX_REQUEST_FRAME_BYTES,
-            Instant::now() + Duration::from_secs(5),
+            Instant::now() + RELAXED_DEADLINE,
             "fake read",
         );
         respond(&mut s);
@@ -265,7 +278,7 @@ fn api_side_rejects_hostile_builder_replies() {
         let _ = s.write_all(&h);
     });
     let mut s = TcpStream::connect(addr).unwrap();
-    let err = ipc::exchange(&mut s, &request(), Duration::from_secs(5)).unwrap_err();
+    let err = ipc::exchange(&mut s, &request(), RELAXED_DEADLINE).unwrap_err();
     assert!(matches!(err, IpcError::FrameTooLarge { .. }), "{err:?}");
 
     // Unknown variant / extra fields.
@@ -277,7 +290,7 @@ fn api_side_rejects_hostile_builder_replies() {
             let _ = s.write_all(&frame(&body));
         });
         let mut s = TcpStream::connect(addr).unwrap();
-        let err = ipc::exchange(&mut s, &request(), Duration::from_secs(5)).unwrap_err();
+        let err = ipc::exchange(&mut s, &request(), RELAXED_DEADLINE).unwrap_err();
         assert!(matches!(err, IpcError::Decode(_)), "{err:?}");
     }
 
@@ -289,19 +302,26 @@ fn api_side_rejects_hostile_builder_replies() {
         let _ = s.write_all(&frame(&body));
     });
     let mut s = TcpStream::connect(addr).unwrap();
-    let err = ipc::exchange(&mut s, &request(), Duration::from_secs(5)).unwrap_err();
+    let err = ipc::exchange(&mut s, &request(), RELAXED_DEADLINE).unwrap_err();
     assert!(matches!(err, IpcError::Invalid(_)), "{err:?}");
 
-    // A builder that drips its reply past the total reply deadline.
+    // A builder that drips its reply past the total reply deadline: one
+    // header byte per second, so the 8-byte header alone takes 8 s. With
+    // the 500 ms total deadline enforced the client gives up long before;
+    // without it, it would wait the whole 8 s and then fail differently.
     let addr = fake_builder(|s| {
         for b in FRAME_MAGIC {
             let _ = s.write_all(&[b]);
-            std::thread::sleep(Duration::from_millis(200));
+            std::thread::sleep(Duration::from_secs(1));
         }
     });
     let mut s = TcpStream::connect(addr).unwrap();
     let started = Instant::now();
-    let err = ipc::exchange(&mut s, &request(), Duration::from_millis(500)).unwrap_err();
+    let err = ipc::exchange(&mut s, &request(), SHORT_DEADLINE).unwrap_err();
     assert!(matches!(err, IpcError::Timeout(_)), "{err:?}");
-    assert!(started.elapsed() < Duration::from_secs(2));
+    assert!(
+        started.elapsed() < Duration::from_secs(5),
+        "{:?}",
+        started.elapsed()
+    );
 }

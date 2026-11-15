@@ -1,0 +1,45 @@
+# cargo-deny configuration for the compile-API server.
+#
+#   cargo deny check advisories bans sources
+#
+# Scope: the RUNTIME dependency tree of `pledge_compile_api`, the only
+# code that faces the internet and runs untrusted player programs. The
+# game, the tools and every crate's dev-dependencies are excluded from the
+# graph below; their advisories (Bevy's tree, reqwest/rustls for tests)
+# are tracked with `cargo audit`, which always reads the whole lockfile.
+# See compile-api/deploy/README.md section 11.
+
+[graph]
+exclude = ["pledge_and_crown", "render-refs", "web-serve"]
+exclude-dev = true
+all-features = false
+
+[advisories]
+# Every RustSec advisory (vulnerability, unsound, unmaintained, notice)
+# against a crate in the server tree fails the check; yanked versions too.
+# Nothing is ignored. If an advisory must be accepted, add its id to
+# `ignore` with a comment that says why the vulnerable path is unreachable
+# from this server (see the advisory table in
+# .claude/reviews/linux-verification-2026-11-15.md for the format).
+yanked = "deny"
+unmaintained = "all"
+unsound = "all"
+ignore = []
+
+[bans]
+# Duplicate versions are a size/compile-time issue, not a security one.
+multiple-versions = "warn"
+# Path dependencies inside the workspace carry no version; that is fine.
+wildcards = "deny"
+allow-wildcard-paths = true
+deny = [
+    # OpenSSL: the server must not link it (TLS terminates at Caddy).
+    { crate = "openssl-sys" },
+]
+
+[sources]
+# crates.io only: no other registry, no git dependencies.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

@@ -69,10 +69,14 @@ fn never_terminating_build_tree_is_killed_with_no_survivors() {
     ));
     let _ = std::fs::remove_file(&pidfile);
 
+    // The watchdog must not fire before the grandchild has started (two
+    // test-binary launches). 10 s is far more than that takes even on a
+    // host running a 24-job build; it used to be 6 s.
+    const WATCHDOG: Duration = Duration::from_secs(10);
     let started = Instant::now();
     let out = run_captured(
         helper_command("parent", &pidfile),
-        Duration::from_secs(6),
+        WATCHDOG,
         16 * 1024,
         "test hang",
     )
@@ -81,24 +85,25 @@ fn never_terminating_build_tree_is_killed_with_no_survivors() {
 
     assert!(out.timed_out, "watchdog must fire: {out:?}");
     assert!(!out.status.success());
-    // Returned promptly after the 6 s watchdog (tree death is bounded),
+    // Returned promptly after the watchdog (tree death is bounded),
     // instead of waiting 600 s for the sleepers.
     assert!(
-        elapsed < Duration::from_secs(6) + TREE_DEATH_TIMEOUT + Duration::from_secs(10),
+        elapsed < WATCHDOG + TREE_DEATH_TIMEOUT + Duration::from_secs(10),
         "took {elapsed:?}"
     );
 
     let grandchild: u32 = std::fs::read_to_string(&pidfile)
-        .expect("grandchild must have started and written its pid within 6 s")
+        .expect("grandchild must have started and written its pid before the watchdog")
         .trim()
         .parse()
         .expect("pid");
     let _ = std::fs::remove_file(&pidfile);
 
     // On Unix run_captured already confirmed the group empty; on Windows
-    // taskkill is synchronous. Allow a short grace for the OS to finish
-    // tearing the process down.
-    let deadline = Instant::now() + Duration::from_secs(5);
+    // taskkill is not confirmed and teardown is asynchronous. Allow the OS
+    // to finish tearing the process down (a hang guard, generous for a
+    // loaded host; the assertion below is unchanged).
+    let deadline = Instant::now() + Duration::from_secs(30);
     while pid_alive(grandchild) && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(100));
     }

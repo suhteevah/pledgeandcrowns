@@ -49,12 +49,21 @@ uuid = { version = "1", features = ["v4"] }
 # circuiting it, which is exactly the bug `subtle` exists to prevent.
 subtle = "2.6"
 
-# WASM execution sandbox. Pinned to wasmtime/wasmtime-wasi 44.0 (released
-# in lockstep). The `p1` feature on wasmtime-wasi exposes the WASIp1 /
-# preview1 surface used by `_start`-style WASI modules emitted by
-# wasm32-wasip1 Rust toolchains.
-wasmtime = "44"
-wasmtime-wasi = { version = "44", features = ["p1"] }
+# WASM execution sandbox. wasmtime/wasmtime-wasi 50.0 (released in
+# lockstep; 50.0.1 fixes every RustSec advisory filed against 44.0.1, see
+# deny.toml / deploy README section 11). The `p1` feature on wasmtime-wasi
+# exposes the WASIp1 / preview1 surface used by `_start`-style WASI
+# modules emitted by wasm32-wasip1 Rust toolchains.
+#
+# Default features OFF: only what the runner uses is compiled in. That
+# removes the GC collectors, shared-memory threads, the pooling allocator,
+# the module cache (zstd), parallel compilation (rayon), coredumps,
+# profiling and debug builtins from the binary altogether, so a future
+# config mistake cannot switch them on. `async` is needed for the run
+# timeout (an async store lets a blocked WASI host call be cancelled, see
+# wasm_runner.rs); wasmtime-wasi's `p1` itself pulls in `component-model`.
+wasmtime = { version = "50.0.1", default-features = false, features = ["cranelift", "runtime", "std", "async", "anyhow"] }
+wasmtime-wasi = { version = "50.0.1", default-features = false, features = ["p1"] }
 
 # Frame-by-frame request-body reading in `middleware::limit_body`, so an
 # oversized upload can be drained (bounded) before the 413 is sent.

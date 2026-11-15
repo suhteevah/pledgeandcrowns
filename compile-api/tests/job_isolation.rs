@@ -111,12 +111,53 @@ fn processes_mentioning(needle: &str) -> usize {
     }
 }
 
+/// Hang guard for "eventually" checks. These tests failed twice on an
+/// overloaded Windows box with the old 5 s / immediate checks: a slow host
+/// delays thread exit and process teardown, it does not leave them alive.
+/// The assertions are unchanged (zero helpers, zero processes, dead PIDs);
+/// only how long we wait for the OS to finish what was already ordered.
+const SETTLE: Duration = Duration::from_secs(30);
+
 fn wait_for_helpers_to_exit() -> usize {
     let started = Instant::now();
-    while helper_threads::live() > 0 && started.elapsed() < Duration::from_secs(5) {
+    while helper_threads::live() > 0 && started.elapsed() < SETTLE {
         std::thread::sleep(Duration::from_millis(20));
     }
     helper_threads::live()
+}
+
+/// Build processes (cargo, rustc, linker) still alive for this test.
+///
+/// Linux: `proc_tree` only returns once every process group it killed is
+/// confirmed empty, so this must be zero at once; no waiting.
+/// Windows (dev only): `taskkill /T /F` is not confirmed (documented gap
+/// in `proc_tree`) and process teardown after TerminateProcess is
+/// asynchronous, so a process can still be listed for a moment after the
+/// job returned. Poll until it is gone, bounded by [`SETTLE`].
+fn surviving_build_processes(tag: &str) -> usize {
+    if cfg!(unix) {
+        return processes_mentioning(tag);
+    }
+    let started = Instant::now();
+    loop {
+        let n = processes_mentioning(tag);
+        if n == 0 || started.elapsed() >= SETTLE {
+            return n;
+        }
+        std::thread::sleep(Duration::from_millis(250));
+    }
+}
+
+/// Same rule as [`surviving_build_processes`] for one job process.
+fn job_process_alive(pid: u32) -> bool {
+    if cfg!(unix) {
+        return pid_alive(pid);
+    }
+    let started = Instant::now();
+    while pid_alive(pid) && started.elapsed() < SETTLE {
+        std::thread::sleep(Duration::from_millis(250));
+    }
+    pid_alive(pid)
 }
 
 fn assert_deadline_verdict(run: &JobReply) {
@@ -199,9 +240,13 @@ async fn timed_out_jobs_leave_no_process_thread_or_slot_behind() {
     let pids = pids.lock().unwrap().clone();
     assert_eq!(pids.len(), N);
     for pid in &pids {
-        assert!(!pid_alive(*pid), "job process {pid} survived");
+        assert!(!job_process_alive(*pid), "job process {pid} survived");
     }
-    assert_eq!(processes_mentioning(&tag), 0, "build processes survived");
+    assert_eq!(
+        surviving_build_processes(&tag),
+        0,
+        "build processes survived"
+    );
     assert_eq!(wait_for_helpers_to_exit(), 0, "helper threads survived");
     assert_eq!(probe.available_build_slots(), 2, "semaphore back to full");
     let _ = std::fs::remove_dir_all(&root);
@@ -262,9 +307,13 @@ fn builder_slots_return_to_full_after_timed_out_jobs() {
         assert_eq!(outcome, ConnOutcome::Replied("graded"));
     }
     for pid in pids.lock().unwrap().iter() {
-        assert!(!pid_alive(*pid), "job process {pid} survived");
+        assert!(!job_process_alive(*pid), "job process {pid} survived");
     }
-    assert_eq!(processes_mentioning(&tag), 0, "build processes survived");
+    assert_eq!(
+        surviving_build_processes(&tag),
+        0,
+        "build processes survived"
+    );
     assert_eq!(wait_for_helpers_to_exit(), 0, "helper threads survived");
     assert_eq!(slots.available(), N, "job slots back to full");
     let _ = std::fs::remove_dir_all(&root);
@@ -298,8 +347,8 @@ fn runaway_rustc_is_killed_with_its_job() {
     assert_deadline_verdict(&run.reply);
     let peak = watcher.join().unwrap();
     assert!(peak > 0, "expected build processes while the job ran");
-    assert!(!pid_alive(run.pid));
-    assert_eq!(processes_mentioning(&tag), 0, "rustc survived its job");
+    assert!(!job_process_alive(run.pid));
+    assert_eq!(surviving_build_processes(&tag), 0, "rustc survived its job");
     assert_eq!(wait_for_helpers_to_exit(), 0);
     let _ = std::fs::remove_dir_all(&root);
 }

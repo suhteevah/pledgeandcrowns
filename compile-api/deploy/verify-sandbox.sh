@@ -16,11 +16,24 @@
 #   2. Units: both are active; the builder journal (current run) shows
 #      "isolation checks passed" and "build self-test passed"; the API
 #      journal shows it hands builds to the builder.
-#   3. Sandbox probes, run as the builder user with exactly the builder's
-#      settings, through `pledge_compile_api sandbox-verify` (deny-list OFF
-#      for that one CLI build; it has no listener, refuses to run with a
+#   3. Sandbox probes through `pledge_compile_api sandbox-verify` (deny-list
+#      OFF for that one CLI build; it has no listener, refuses to run with a
 #      token in its environment and refuses PNC_BUILD_SANDBOX=none, so it
-#      cannot be "left on"):
+#      cannot be "left on"), in up to two passes (PNC_VERIFY_PROBES):
+#        - `runuser`: as the builder user with the builder's env file. Tests
+#          bwrap and the rlimits alone, outside any systemd sandboxing.
+#        - `unit`: in a transient systemd service carrying the INSTALLED
+#          builder unit's own [Service] settings (`systemctl cat`, drop-ins
+#          included; only ExecStart/Type/Restart*/RuntimeDirectory* are
+#          replaced). So the unit's seccomp filter, namespaces restrictions,
+#          ProtectProc/ProtectSystem/PrivateTmp/NoExecPaths, capability
+#          bounding set and cgroup limits are what the probes run under.
+#          The running builder itself cannot run them: it applies the
+#          deny-list to every request by design. Before the probes, the
+#          transient service's effective security properties are compared
+#          with the running builder's (`systemctl show`); any difference
+#          fails the check.
+#      Default `both`. In each pass:
 #        - positive control: include_str! of a file that IS inside the
 #          sandbox (/build/Cargo.toml) compiles, runs and prints it - so
 #          the probe mechanism (absolute include, deny-list really off)
@@ -53,6 +66,9 @@ BUILDER_USER="${PNC_BUILDER_USER:-pnc-builder}"
 API_UNIT="${PNC_API_UNIT:-pnc-compile-api}"
 BUILDER_UNIT="${PNC_BUILDER_UNIT:-pnc-builder}"
 SOCKET="${PNC_BUILDER_SOCKET_PATH:-/run/pnc-builder/builder.sock}"
+# Probe passes: runuser, unit or both (see the header).
+VERIFY_PROBES="${PNC_VERIFY_PROBES:-both}"
+case "$VERIFY_PROBES" in runuser|unit|both) ;; *) echo "PNC_VERIFY_PROBES must be runuser, unit or both" >&2; exit 2 ;; esac
 
 PASSED=0
 FAILED=0
@@ -61,7 +77,7 @@ fail() { FAILED=$((FAILED + 1)); echo "FAIL - $*" >&2; }
 die()  { echo "FAIL - $*" >&2; echo "RESULT: FAIL (aborted)" >&2; exit 1; }
 
 [ "$(id -u)" -eq 0 ] || die "run as root (sudo)"
-for tool in curl runuser systemctl journalctl grep sed mktemp stat install head od tr timeout; do
+for tool in curl runuser systemctl systemd-run journalctl grep sed awk mktemp stat install head od tr timeout; do
     command -v "$tool" >/dev/null || die "$tool is required"
 done
 [ -x "$BIN" ] || die "$BIN is not executable"
@@ -130,50 +146,103 @@ CANARY="PNC_PROBE_CANARY"
 CANARY_VALUE="canary-$(rand_hex)"
 API_PID="$(systemctl show -p MainPID --value "$API_UNIT")"
 
-N=0
-# run_probe <source>: run one probe build as the builder user; JSON on stdout.
-run_probe() {
-    N=$((N + 1))
-    local src="$WORK/probe-$N.rs"
-    printf '%s\n' "$1" > "$src"
-    runuser -u "$BUILDER_USER" -- env -i PATH=/usr/bin:/bin "${BENV[@]}" \
-        PNC_BUILD_ROOT="$PROBE_ROOT" RUST_LOG=warn "$CANARY=$CANARY_VALUE" \
-        "$BIN" sandbox-verify < "$src" 2> "$WORK/probe-$N.err"
+PASS_LABEL=""
+PROBE_MODE="runuser"
+UNIT_PROPS=()
+
+# The installed builder unit's [Service] settings, minus what a one-shot
+# probe service must replace. Values are passed to systemd-run unchanged.
+load_unit_props() {
+    local line
+    UNIT_PROPS=()
+    while IFS= read -r line; do
+        UNIT_PROPS+=(-p "$line")
+    done < <(systemctl cat "$BUILDER_UNIT" | awk '
+        /^[[:space:]]*#/ { next }
+        /^\[/ { sec = $0; next }
+        sec == "[Service]" && /^[A-Za-z]+=/ { print }' \
+        | grep -Ev '^(Type|ExecStart|ExecStartPre|ExecStartPost|ExecReload|ExecStop|ExecStopPost|Restart|RestartSec|RestartPreventExitStatus|RuntimeDirectory|RuntimeDirectoryMode|RuntimeDirectoryPreserve|WatchdogSec|NotifyAccess|PIDFile|StandardInput|StandardOutput|StandardError)=')
+    [ "${#UNIT_PROPS[@]}" -gt 20 ] || die "could not read the [Service] settings of $BUILDER_UNIT"
 }
 
+# Security-relevant properties that must be identical in the running
+# builder and in the transient probe service.
+COMPARE_PROPS="User Group SystemCallFilter SystemCallErrorNumber SystemCallArchitectures RestrictNamespaces ProtectProc ProcSubset PrivateTmp PrivateNetwork PrivateDevices ProtectSystem ProtectHome ProtectKernelTunables ProtectKernelLogs ProtectKernelModules ProtectControlGroups ProtectClock ProtectHostname NoNewPrivileges CapabilityBoundingSet AmbientCapabilities RestrictAddressFamilies IPAddressDeny NoExecPaths RestrictSUIDSGID RestrictRealtime LockPersonality MemoryDenyWriteExecute MemoryMax MemorySwapMax TasksMax CPUQuotaPerSecUSec LimitNOFILE LimitCORE UMask EnvironmentFiles OOMPolicy"
+
+compare_unit_props() {
+    local unit="pnc-verify-props-$$" prop a b same=1
+    if ! systemd-run --quiet --unit="$unit" --remain-after-exit "${UNIT_PROPS[@]}" /usr/bin/true \
+        2>"$WORK/props.err"; then
+        fail "unit pass: systemd-run refused the builder unit's settings: $(head -c 600 "$WORK/props.err")"
+        return 1
+    fi
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        [ "$(systemctl show -p ActiveState --value "$unit")" = "active" ] && break
+        sleep 0.5
+    done
+    for prop in $COMPARE_PROPS; do
+        a="$(systemctl show -p "$prop" --value "$BUILDER_UNIT")"
+        b="$(systemctl show -p "$prop" --value "$unit")"
+        if [ "$a" != "$b" ]; then
+            same=0
+            fail "unit pass: $prop differs (running builder '$a', probe service '$b')"
+        fi
+    done
+    systemctl stop "$unit" >/dev/null 2>&1 || true
+    systemctl reset-failed "$unit" >/dev/null 2>&1 || true
+    if [ "$same" -eq 1 ]; then
+        ok "unit pass: probe service has the running builder's settings ($(wc -w <<<"$COMPARE_PROPS") security properties identical)"
+        return 0
+    fi
+    return 1
+}
+
+# run_probe <source>: run one probe build; JSON on stdout, its stderr in
+# $LAST_ERR. It always runs inside $(...) (a subshell), so nothing it sets
+# survives: each call names its files from a fresh mktemp instead of a
+# counter, and copies its stderr to the fixed $LAST_ERR path.
+LAST_ERR="$WORK/last-probe.err"
+run_probe() {
+    local src err id
+    src="$(mktemp "$WORK/probe-XXXXXX")"
+    id="${src##*/probe-}"
+    err="$WORK/probe-$id.err"
+    printf '%s\n' "$1" > "$src"
+    if [ "$PROBE_MODE" = "unit" ]; then
+        # The unit's EnvironmentFile wins over -E for the same key (systemd
+        # rule), so only keys the env file does not set are added here.
+        # stdin/stdout/stderr are pipes, not files: with --pipe, systemd
+        # (init_t) receives these descriptors, and SELinux policy lets it
+        # use the caller's pipes but not write a user_tmp_t file (seen as
+        # permissive-mode AVCs on the first host).
+        printf '%s\n' "$1" | timeout 300 systemd-run --quiet --wait --pipe --collect \
+            --unit="pnc-verify-probe-$$-$id" "${UNIT_PROPS[@]}" -p RuntimeMaxSec=240 \
+            -E PNC_BUILD_ROOT=/tmp/pnc-verify-probe -E "$CANARY=$CANARY_VALUE" \
+            "$BIN" sandbox-verify 2> >(cat > "$err")
+    else
+        runuser -u "$BUILDER_USER" -- env -i PATH=/usr/bin:/bin "${BENV[@]}" \
+            PNC_BUILD_ROOT="$PROBE_ROOT" RUST_LOG=warn "$CANARY=$CANARY_VALUE" \
+            "$BIN" sandbox-verify < "$src" 2> "$err"
+    fi
+    local rc=$?
+    wait 2>/dev/null
+    cp -f "$err" "$LAST_ERR" 2>/dev/null
+    return $rc
+}
+
+sandbox_probes() {
+local out
 # Positive control: a file that IS visible inside the sandbox.
 if out="$(run_probe 'fn main() { print!("{}", include_str!("/build/Cargo.toml")); }')"; then
     if grep -qF '"compiled":true' <<<"$out" && grep -qF '"ran_ok":true' <<<"$out" \
         && grep -qF 'player_submission' <<<"$out"; then
-        ok "positive control: include_str!(\"/build/Cargo.toml\") read the in-sandbox file"
+        ok "$PASS_LABEL positive control: include_str!(\"/build/Cargo.toml\") read the in-sandbox file"
     else
-        fail "positive control did not read /build/Cargo.toml (probe mechanism broken): $out"
+        fail "$PASS_LABEL positive control did not read /build/Cargo.toml (probe mechanism broken): $out"
     fi
 else
-    fail "positive control: sandbox-verify failed to run: $(head -c 800 "$WORK/probe-$N.err")"
+    fail "$PASS_LABEL positive control: sandbox-verify failed to run: $(head -c 800 "$LAST_ERR")"
 fi
-
-# probe_missing <name> <path> <source>: path exists on the host, and rustc
-# inside the sandbox reports exactly that it does not exist.
-probe_missing() {
-    local name="$1" path="$2" src="$3" out
-    if [ ! -e "$path" ]; then
-        fail "host control: $path does not exist on the host, probe '$name' would prove nothing"
-        return
-    fi
-    if ! out="$(run_probe "$src")"; then
-        fail "probe '$name': sandbox-verify failed to run: $(head -c 800 "$WORK/probe-$N.err")"
-        return
-    fi
-    if grep -qF "$CANARY_VALUE" <<<"$out"; then
-        fail "probe '$name' LEAKED the environment canary"
-    elif grep -qF '"compiled":false' <<<"$out" \
-        && grep -qF "couldn't read \`$path\`: No such file or directory" <<<"$out"; then
-        ok "probe '$name': rustc in the sandbox: couldn't read \`$path\`: No such file or directory"
-    else
-        fail "probe '$name': expected rustc \"couldn't read \`$path\`: No such file or directory\", got: $(head -c 800 <<<"$out")"
-    fi
-}
 
 probe_missing "API env file (include_str)" "$API_ENV" \
     "fn main() { print!(\"{}\", include_str!(\"$API_ENV\")); }"
@@ -206,27 +275,64 @@ elif out="$(run_probe "#[path = \"$BUILDER_ENV\"] mod leak; fn main() {}")"; the
     if grep -qF '"compiled":false' <<<"$out" \
         && { grep -qF "couldn't find file \`$BUILDER_ENV\`" <<<"$out" \
              || grep -qF 'file not found for module `leak`' <<<"$out"; }; then
-        ok "probe '#[path] to the (host-readable) builder env file': rustc in the sandbox cannot find it"
+        ok "$PASS_LABEL probe '#[path] to the (host-readable) builder env file': rustc in the sandbox cannot find it"
     else
-        fail "probe '#[path]': expected \"couldn't find file \`$BUILDER_ENV\`\", got: $(head -c 800 <<<"$out")"
+        fail "$PASS_LABEL probe '#[path]': expected \"couldn't find file \`$BUILDER_ENV\`\", got: $(head -c 800 <<<"$out")"
     fi
 else
-    fail "probe '#[path]': sandbox-verify failed to run"
+    fail "$PASS_LABEL probe '#[path]': sandbox-verify failed to run"
 fi
 
 # Build-time environment: the canary IS in sandbox-verify's own
 # environment, so env! would compile if the environment leaked in.
 if out="$(run_probe "fn main() { println!(\"{}\", env!(\"$CANARY\")); }")"; then
     if grep -qF "$CANARY_VALUE" <<<"$out"; then
-        fail "probe 'env!': the build saw the caller's environment"
+        fail "$PASS_LABEL probe 'env!': the build saw the caller's environment"
     elif grep -qF '"compiled":false' <<<"$out" \
         && grep -qF "environment variable \`$CANARY\` not defined at compile time" <<<"$out"; then
-        ok "probe 'env!': environment variable \`$CANARY\` not defined at compile time"
+        ok "$PASS_LABEL probe 'env!': environment variable \`$CANARY\` not defined at compile time"
     else
-        fail "probe 'env!': expected 'not defined at compile time', got: $(head -c 800 <<<"$out")"
+        fail "$PASS_LABEL probe 'env!': expected 'not defined at compile time', got: $(head -c 800 <<<"$out")"
     fi
 else
-    fail "probe 'env!': sandbox-verify failed to run"
+    fail "$PASS_LABEL probe 'env!': sandbox-verify failed to run"
+fi
+}
+
+# probe_missing <name> <path> <source>: path exists on the host, and rustc
+# inside the sandbox reports exactly that it does not exist.
+probe_missing() {
+    local name="$1" path="$2" src="$3" out
+    if [ ! -e "$path" ]; then
+        fail "host control: $path does not exist on the host, probe '$name' would prove nothing"
+        return
+    fi
+    if ! out="$(run_probe "$src")"; then
+        fail "$PASS_LABEL probe '$name': sandbox-verify failed to run: $(head -c 800 "$LAST_ERR")"
+        return
+    fi
+    if grep -qF "$CANARY_VALUE" <<<"$out"; then
+        fail "$PASS_LABEL probe '$name' LEAKED the environment canary"
+    elif grep -qF '"compiled":false' <<<"$out" \
+        && grep -qF "couldn't read \`$path\`: No such file or directory" <<<"$out"; then
+        ok "$PASS_LABEL probe '$name': rustc in the sandbox: couldn't read \`$path\`: No such file or directory"
+    else
+        fail "$PASS_LABEL probe '$name': expected rustc \"couldn't read \`$path\`: No such file or directory\", got: $(head -c 800 <<<"$out")"
+    fi
+}
+
+if [ "$VERIFY_PROBES" = "runuser" ] || [ "$VERIFY_PROBES" = "both" ]; then
+    PROBE_MODE="runuser"; PASS_LABEL="[runuser]"
+    sandbox_probes
+fi
+if [ "$VERIFY_PROBES" = "unit" ] || [ "$VERIFY_PROBES" = "both" ]; then
+    PROBE_MODE="unit"; PASS_LABEL="[unit]"
+    load_unit_props
+    if compare_unit_props; then
+        sandbox_probes
+    else
+        fail "[unit] probes skipped: the probe service would not match the running builder"
+    fi
 fi
 
 # ---- 4. config refusals (no network) -------------------------------------------------
