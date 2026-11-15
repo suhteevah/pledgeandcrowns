@@ -97,12 +97,29 @@
 //! Only the clock wait can block, and every function is behind (2) and
 //! (3) anyway. `tests/wasm_runner.rs` pins sleep, absolute-time poll,
 //! multi-subscription poll, busy loop and stdin reads.
+//!
+//! # The late-nonce host import (harness mode `UnsafeLateNonce` only)
+//!
+//! Every run links exactly the WASIp1 functions above, with ONE opt-in
+//! exception: a run given a [`LateNonce`] (only
+//! `expectations::HarnessMode::UnsafeLateNonce` missions, i.e. Act 9's
+//! `unsafe` lessons; see `HARNESS-NOTES.md`) also links one host function,
+//! `pnc_harness.<per-request random name>(ptr: i32, len: i32) -> i32`. It
+//! writes the request's nonce into guest memory at `ptr` through
+//! wasmtime's bounds-checked [`wasmtime::Memory::write`], at most once per
+//! run (every later call returns [`LATE_NONCE_TAKEN`] and writes nothing),
+//! and cannot block. Runs without a `LateNonce` link nothing extra, and a
+//! module importing it then fails to instantiate. Engine configuration,
+//! limits, fuel, timeouts and WASI context are identical in both cases.
+//! It raises the bar for forged harness results; it is not a guarantee
+//! (player `unsafe` code shares the checker's memory).
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::time::Duration;
 
 use anyhow::{Result, bail};
+use serde::{Deserialize, Serialize};
 
 use crate::helper_threads;
 
@@ -136,7 +153,8 @@ pub fn announce_run_phase() {
 }
 
 use wasmtime::{
-    Config, Engine, Linker, Module, Store, StoreLimits, StoreLimitsBuilder, WasmFeatures,
+    Caller, Config, Engine, Extern, Linker, Module, Store, StoreLimits, StoreLimitsBuilder,
+    WasmFeatures,
 };
 use wasmtime_wasi::WasiCtxBuilder;
 use wasmtime_wasi::p1::WasiP1Ctx;
@@ -200,11 +218,138 @@ pub struct RunVerdict {
     pub stderr: String,
 }
 
+/// Import module of the late-nonce host function (see module docs).
+pub const LATE_NONCE_MODULE: &str = "pnc_harness";
+/// Prefix of the late-nonce import name; 32 random lowercase hex digits
+/// follow, fresh per request.
+pub const LATE_NONCE_IMPORT_PREFIX: &str = "nonce_";
+/// Length of a harness nonce: `PNC` + 32 lowercase hex digits.
+pub const NONCE_LEN: usize = 35;
+/// Late-nonce import result: the nonce was written.
+pub const LATE_NONCE_OK: i32 = 0;
+/// Late-nonce import result: it was already called once in this run.
+pub const LATE_NONCE_TAKEN: i32 = -1;
+/// Late-nonce import result: `len` is not [`NONCE_LEN`].
+pub const LATE_NONCE_BAD_LEN: i32 = -2;
+/// Late-nonce import result: the module exports no memory, or `ptr..ptr+len`
+/// is outside it.
+pub const LATE_NONCE_BAD_PTR: i32 = -3;
+
+/// The secret a late-nonce harness run hands to its checker at the end of
+/// the run, and the per-request import name it is reachable under. Both
+/// are random per request. `Debug` redacts both: neither is ever logged.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LateNonce {
+    import: String,
+    nonce: String,
+}
+
+impl std::fmt::Debug for LateNonce {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("LateNonce { import: <redacted>, nonce: <redacted> }")
+    }
+}
+
+fn is_lower_hex32(s: &str) -> bool {
+    s.len() == 32 && s.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+}
+
+impl LateNonce {
+    /// A fresh random nonce and import name.
+    pub fn generate() -> Self {
+        Self {
+            import: format!(
+                "{LATE_NONCE_IMPORT_PREFIX}{}",
+                uuid::Uuid::new_v4().simple()
+            ),
+            nonce: format!("PNC{}", uuid::Uuid::new_v4().simple()),
+        }
+    }
+
+    /// Build from parts, validated (tests; the child decodes with serde and
+    /// calls [`LateNonce::validate`]).
+    pub fn new(import: String, nonce: String) -> Result<Self, String> {
+        let n = Self { import, nonce };
+        n.validate()?;
+        Ok(n)
+    }
+
+    /// The import name (`nonce_` + 32 hex), compiled into the checker.
+    pub fn import(&self) -> &str {
+        &self.import
+    }
+
+    /// The nonce (`PNC` + 32 hex). Never log it.
+    pub fn nonce(&self) -> &str {
+        &self.nonce
+    }
+
+    /// Shape check, applied on both sides of the run-child boundary.
+    pub fn validate(&self) -> Result<(), String> {
+        let import_ok = self
+            .import
+            .strip_prefix(LATE_NONCE_IMPORT_PREFIX)
+            .is_some_and(is_lower_hex32);
+        let nonce_ok = self.nonce.len() == NONCE_LEN
+            && self.nonce.strip_prefix("PNC").is_some_and(is_lower_hex32);
+        if import_ok && nonce_ok {
+            Ok(())
+        } else {
+            Err("late nonce is malformed".to_string())
+        }
+    }
+}
+
+/// The run's copy of the nonce, handed out at most once.
+struct LateSlot {
+    nonce: Vec<u8>,
+    taken: bool,
+}
+
 /// Per-store data. Holds the WASI preview1 context plus the store
-/// limits applied to memory/instance growth.
+/// limits applied to memory/instance growth, and (late-nonce harness runs
+/// only) the nonce slot.
 struct StoreState {
     wasi: WasiP1Ctx,
     limits: StoreLimits,
+    late: Option<LateSlot>,
+}
+
+/// The late-nonce host function: write the nonce at `ptr` (exactly
+/// [`NONCE_LEN`] bytes), once. The first call consumes the slot whatever
+/// its arguments, so a probing call cannot be retried.
+fn take_late_nonce(mut caller: Caller<'_, StoreState>, ptr: i32, len: i32) -> i32 {
+    let Some(slot) = caller.data_mut().late.as_mut() else {
+        // Not reachable: the function is only linked when a slot exists.
+        return LATE_NONCE_TAKEN;
+    };
+    if slot.taken {
+        tracing::warn!("wasm_runner: late nonce requested a second time; refused");
+        return LATE_NONCE_TAKEN;
+    }
+    slot.taken = true;
+    let bytes = std::mem::take(&mut slot.nonce);
+    if usize::try_from(len).ok() != Some(bytes.len()) {
+        tracing::warn!(len, "wasm_runner: late nonce requested with a wrong length");
+        return LATE_NONCE_BAD_LEN;
+    }
+    let Some(Extern::Memory(memory)) = caller.get_export("memory") else {
+        tracing::warn!("wasm_runner: late nonce requested by a module without memory");
+        return LATE_NONCE_BAD_PTR;
+    };
+    // A wasm32 address is an unsigned 32-bit value carried in an i32.
+    let offset = u32::from_ne_bytes(ptr.to_ne_bytes()) as usize;
+    match memory.write(&mut caller, offset, &bytes) {
+        Ok(()) => {
+            tracing::debug!("wasm_runner: late nonce delivered to the checker");
+            LATE_NONCE_OK
+        }
+        Err(e) => {
+            tracing::warn!("wasm_runner: late nonce target out of bounds: {e}");
+            LATE_NONCE_BAD_PTR
+        }
+    }
 }
 
 /// The only wasm proposals the engine accepts: the WebAssembly 2.0
@@ -280,6 +425,50 @@ pub fn run_wasm_with_compile_timeout(
     max_memory_bytes: u64,
     compile_timeout: Duration,
 ) -> Result<RunVerdict> {
+    run_wasm_inner(
+        bytes,
+        timeout_ms,
+        fuel,
+        max_memory_bytes,
+        compile_timeout,
+        None,
+    )
+}
+
+/// [`run_wasm`] for a late-nonce harness run: with `Some(late)` the linker
+/// also gets the one-shot `pnc_harness` import described in the module
+/// docs. `None` is exactly [`run_wasm`].
+pub fn run_wasm_late_nonce(
+    bytes: &[u8],
+    timeout_ms: u64,
+    fuel: u64,
+    max_memory_bytes: u64,
+    late: Option<&LateNonce>,
+) -> Result<RunVerdict> {
+    run_wasm_inner(
+        bytes,
+        timeout_ms,
+        fuel,
+        max_memory_bytes,
+        MODULE_COMPILE_TIMEOUT,
+        late,
+    )
+}
+
+fn run_wasm_inner(
+    bytes: &[u8],
+    timeout_ms: u64,
+    fuel: u64,
+    max_memory_bytes: u64,
+    compile_timeout: Duration,
+    late: Option<&LateNonce>,
+) -> Result<RunVerdict> {
+    if let Some(l) = late
+        && let Err(e) = l.validate()
+    {
+        tracing::warn!("wasm_runner: rejected late nonce: {e}");
+        bail!("wasm_runner: {e}");
+    }
     if bytes.is_empty() {
         tracing::warn!("wasm_runner: rejected empty module");
         bail!("wasm_runner: bytes is empty");
@@ -315,6 +504,7 @@ pub fn run_wasm_with_compile_timeout(
     }
 
     tracing::debug!(
+        late_nonce = late.is_some(),
         "wasm_runner: starting run bytes={} timeout_ms={} fuel={} max_memory_bytes={}",
         bytes.len(),
         timeout_ms,
@@ -370,6 +560,7 @@ pub fn run_wasm_with_compile_timeout(
     let run_engine = engine.clone();
     let out_pipe = stdout_pipe.clone();
     let err_pipe = stderr_pipe.clone();
+    let run_late = late.cloned();
     let runner = helper_threads::spawn("wasm-run", move || {
         let end = run_on_current_thread(
             &run_engine,
@@ -379,6 +570,7 @@ pub fn run_wasm_with_compile_timeout(
             fuel,
             max_memory_bytes,
             timeout,
+            run_late,
         );
         let _ = done_tx.send(end);
     });
@@ -490,6 +682,7 @@ enum RunEnd {
 /// Instantiate and run `_start` on an async store inside a fresh
 /// current-thread runtime on THIS thread (a fresh helper thread, so it is
 /// never nested in the caller's runtime).
+#[allow(clippy::too_many_arguments)]
 fn run_on_current_thread(
     engine: &Engine,
     module: &Module,
@@ -498,6 +691,7 @@ fn run_on_current_thread(
     fuel: u64,
     max_memory_bytes: u64,
     timeout: Duration,
+    late: Option<LateNonce>,
 ) -> Result<RunEnd> {
     // ---- WASI ctx -------------------------------------------------------
     // No env, no args, no preopens, no network. Stdio only: stdin is the
@@ -523,7 +717,19 @@ fn run_on_current_thread(
         .memories(MAX_MEMORIES)
         .build();
 
-    let mut store: Store<StoreState> = Store::new(engine, StoreState { wasi, limits });
+    let import = late.as_ref().map(|l| l.import.clone());
+    let slot = late.map(|l| LateSlot {
+        nonce: l.nonce.into_bytes(),
+        taken: false,
+    });
+    let mut store: Store<StoreState> = Store::new(
+        engine,
+        StoreState {
+            wasi,
+            limits,
+            late: slot,
+        },
+    );
     store.limiter(|s| &mut s.limits);
     store.set_fuel(fuel)?;
     // One epoch tick is enough to interrupt: the watchdog increments the
@@ -534,6 +740,12 @@ fn run_on_current_thread(
 
     let mut linker: Linker<StoreState> = Linker::new(engine);
     wasmtime_wasi::p1::add_to_linker_async(&mut linker, |s: &mut StoreState| &mut s.wasi)?;
+    // Late-nonce harness runs only: the one extra host function (module
+    // docs). Every other run links WASIp1 and nothing else.
+    if let Some(name) = import.as_deref() {
+        linker.func_wrap(LATE_NONCE_MODULE, name, take_late_nonce)?;
+        tracing::debug!("wasm_runner: late-nonce import linked for this run");
+    }
 
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_time()
@@ -753,6 +965,37 @@ mod tests {
                 | WasmFeatures::REFERENCE_TYPES
                 | WasmFeatures::FLOATS
         );
+    }
+
+    #[test]
+    fn late_nonce_is_random_validated_and_never_printed() {
+        let a = LateNonce::generate();
+        let b = LateNonce::generate();
+        assert!(a.validate().is_ok() && b.validate().is_ok());
+        assert_ne!(a.nonce(), b.nonce());
+        assert_ne!(a.import(), b.import());
+        assert_ne!(
+            &a.nonce()[3..],
+            &a.import()[LATE_NONCE_IMPORT_PREFIX.len()..]
+        );
+        assert_eq!(a.nonce().len(), NONCE_LEN);
+        let shown = format!("{a:?}");
+        assert!(
+            !shown.contains(a.nonce()) && !shown.contains(a.import()),
+            "{shown}"
+        );
+        let hex = "0123456789abcdef0123456789abcdef";
+        assert!(LateNonce::new(format!("nonce_{hex}"), format!("PNC{hex}")).is_ok());
+        for (import, nonce) in [
+            (format!("nonce_{hex}x"), format!("PNC{hex}")),
+            (format!("fd_write{hex}"), format!("PNC{hex}")),
+            (format!("nonce_{}", hex.to_uppercase()), format!("PNC{hex}")),
+            (format!("nonce_{hex}"), format!("PNX{hex}")),
+            (format!("nonce_{hex}"), format!("PNC{}", &hex[1..])),
+            (format!("nonce_{hex}"), format!("PNC{hex} ")),
+        ] {
+            assert!(LateNonce::new(import, nonce).is_err());
+        }
     }
 
     #[test]

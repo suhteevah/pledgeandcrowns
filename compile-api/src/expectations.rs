@@ -75,12 +75,32 @@
 //! Known limit: player code that names `crate::...` resolves against the
 //! server entry crate, not its own file, in harness missions. No mission
 //! needs `crate::` paths.
+//!
+//! # Harness modes ([`HarnessMode`], per mission, chosen by the server)
+//!
+//! - [`HarnessMode::ForbidUnsafe`] (every registered mission): the entry has
+//!   `#![forbid(unsafe_code)]` and the nonce is a `const` in the checker,
+//!   as described above.
+//! - [`HarnessMode::UnsafeLateNonce`] (opt-in, for Act 9's `unsafe`
+//!   lessons; HARNESS-NOTES.md design 1): no `forbid`, and NO nonce in the
+//!   program. The checker formats every result to owned text while it
+//!   calls the player's code, lets every player value drop, resets the
+//!   panic hook, and only then fetches the nonce once from a host import
+//!   (`wasm_runner::LateNonce`) and prints the tagged lines and the done
+//!   mark in one write. The nonce is therefore not in guest memory at any
+//!   moment player code runs before the checker's last call returns.
+//!   Player `unsafe` code can still corrupt checker state in the shared
+//!   memory before that point (stored results, allocator, stdout), so
+//!   this raises the bar from "scan memory" to "exploit the checker's
+//!   heap"; it is NOT a guarantee. [`UNSAFE_HARNESS_FORBIDS`] adds static
+//!   rules against the cheapest ways to run code during the late print.
 
 mod data;
 
 use serde::{Deserialize, Serialize};
 
 use crate::wasm_builder::{self, BuildSettings, Layout, RealOutcome, RunLimits};
+use crate::wasm_runner::LateNonce;
 
 /// Identifier prefix reserved for server checker code.
 pub const RESERVED_PREFIX: &str = "__pnc";
@@ -210,11 +230,40 @@ pub enum Check {
     },
 }
 
+/// How a [`Check::Harness`] mission's checker is built and keyed. Chosen by
+/// the server per mission id; nothing in the player's source can change
+/// it. Ignored for the other check kinds (their builds never contain a
+/// nonce).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HarnessMode {
+    /// `#![forbid(unsafe_code)]` in the server entry; the nonce is compiled
+    /// into the checker. Every mission before Act 9.
+    ForbidUnsafe,
+    /// `unsafe` allowed (the lesson needs it); the nonce is NOT compiled in
+    /// and reaches the checker from the host only after its last call into
+    /// player code (HARNESS-NOTES.md design 1). Raises the bar, does not
+    /// guarantee: see the module docs and HARNESS-NOTES.md.
+    UnsafeLateNonce,
+}
+
+/// Tokens refused in every [`HarnessMode::UnsafeLateNonce`] mission on top
+/// of its own [`MissionCheck::forbids`] (whole words, comments and strings
+/// removed, checked after the behaviour passed). Each names a way for
+/// player code to run *during* the checker's late print, when the nonce
+/// is in memory: a `#[global_allocator]` is called for every allocation
+/// the print makes, and `#[export_name]` can replace a symbol std uses
+/// (e.g. `memcpy`). `no_mangle` does the same but is part of the FFI
+/// lesson, so missions forbid it individually where they can.
+pub const UNSAFE_HARNESS_FORBIDS: &[&str] = &["global_allocator", "export_name"];
+
 /// A mission id and its check.
 #[derive(Debug, Clone, Copy)]
 pub struct MissionCheck {
     pub id: &'static str,
     pub check: Check,
+    /// How a harness check is built (see [`HarnessMode`]).
+    /// [`HarnessMode::ForbidUnsafe`] for every registered mission.
+    pub harness_mode: HarnessMode,
     /// Static token groups (same rule as [`Check::CompileOnly`]'s
     /// `required`) applied AFTER a [`Check::Stdout`] or [`Check::Harness`]
     /// check has passed. Used where the pinned output alone could be
@@ -397,17 +446,47 @@ pub struct Transcript {
     pub results: Vec<String>,
     /// The checker reached its end.
     pub finished: bool,
+    /// A nonce-tagged line appeared after the `<done>` mark (or a second
+    /// `<done>`). The honest checker never does that, so the run is not
+    /// graded as a pass. Such lines are not counted as results.
+    pub after_done: bool,
 }
 
 /// Split raw harness stdout on the request nonce.
 pub fn parse_transcript(raw: &str, nonce: &str) -> Transcript {
+    parse_transcript_tagged(raw, nonce, nonce)
+}
+
+/// Split raw harness stdout: `<main>`/`</main>` marks carry `mark`, results
+/// and `<done>` carry `nonce`. In [`HarnessMode::ForbidUnsafe`] both are
+/// the nonce. In [`HarnessMode::UnsafeLateNonce`] the main marks are
+/// printed while player code runs, before the nonce exists, so they carry
+/// a separate non-secret per-request mark: forging one only moves the
+/// boundary of the player's own `main` output, which the player controls
+/// anyway.
+pub fn parse_transcript_tagged(raw: &str, nonce: &str, mark: &str) -> Transcript {
     let tag = format!("{nonce} ");
+    let mark_tag = format!("{mark} ");
     let mut t = Transcript::default();
     let mut program = Vec::new();
     let mut main_lines: Option<Vec<&str>> = None;
     let mut in_main = false;
     let unified = raw.replace("\r\n", "\n");
     for line in unified.lines() {
+        if let Some(rest) = line.strip_prefix(&mark_tag) {
+            match rest.trim_end() {
+                "<main>" => {
+                    in_main = true;
+                    main_lines = Some(Vec::new());
+                    continue;
+                }
+                "</main>" => {
+                    in_main = false;
+                    continue;
+                }
+                _ => {}
+            }
+        }
         let Some(rest) = line.strip_prefix(&tag) else {
             program.push(line);
             if in_main && let Some(m) = main_lines.as_mut() {
@@ -415,12 +494,11 @@ pub fn parse_transcript(raw: &str, nonce: &str) -> Transcript {
             }
             continue;
         };
+        if t.finished {
+            t.after_done = true;
+            continue;
+        }
         match rest.trim_end() {
-            "<main>" => {
-                in_main = true;
-                main_lines = Some(Vec::new());
-            }
-            "</main>" => in_main = false,
             "<done>" => t.finished = true,
             result => t.results.push(result.to_string()),
         }
@@ -497,6 +575,110 @@ pub fn harness_module_source(h: &Harness, nonce: &str) -> String {
     )
 }
 
+/// Source of the checker module for `h` in [`HarnessMode::UnsafeLateNonce`].
+///
+/// No nonce appears in it. `mark` (non-secret, per request) tags the
+/// `<main>` marks; `import` is the per-request name of the host's one-shot
+/// nonce function (`wasm_runner::LateNonce`). Order of events in `run`:
+///
+/// 1. `calls()`: the player's `main` (if `run_main`) and the mission body.
+///    `emit` formats each result to an owned `String` and drops the player
+///    value right there; every other player value is a local of `calls`
+///    and is dropped when it returns.
+/// 2. `finish()`: reset the panic hook (dropping any the player installed),
+///    take the stored lines, THEN fetch the nonce (the first moment it is
+///    in guest memory), build the whole tagged block and print it in one
+///    write, flushed. Nothing in `finish` calls player code (barring the
+///    corruptions HARNESS-NOTES.md lists as the known limit).
+///
+/// The one `unsafe` block is the FFI call to the host import (hard rule 1's
+/// FFI exception); it lives in server-written guest code, never in the
+/// server process.
+pub fn harness_module_source_late(h: &Harness, mark: &str, import: &str) -> String {
+    let main_call = if h.run_main {
+        "    mark(\"main\");\n    let _ = super::main();\n    mark(\"/main\");\n"
+    } else {
+        ""
+    };
+    format!(
+        "// Server-owned mission checker (pledge_compile_api). Not player code.\n\
+         // Harness mode UnsafeLateNonce: the result key is fetched from the host\n\
+         // after the last call into player code; it is not in this file.\n\
+         #![allow(unused, dead_code, non_snake_case, unused_must_use, clippy::all)]\n\
+         const MARK: &str = \"{mark}\";\n\
+         const KEY_LEN: usize = {key_len};\n\
+         static RESULTS: ::std::sync::Mutex<::std::vec::Vec<::std::string::String>> =\n    \
+             ::std::sync::Mutex::new(::std::vec::Vec::new());\n\
+         #[link(wasm_import_module = \"{module}\")]\n\
+         unsafe extern \"C\" {{\n    \
+             #[link_name = \"{import}\"]\n    \
+             fn take_key(ptr: *mut u8, len: usize) -> i32;\n\
+         }}\n\
+         fn emit<T: ::core::fmt::Debug>(label: &str, value: T) {{\n    \
+             let line = ::std::format!(\"{{}} = {{:?}}\", label, value);\n    \
+             ::core::mem::drop(value);\n    \
+             if let ::core::result::Result::Ok(mut r) = RESULTS.lock() {{\n        \
+                 r.push(line);\n    \
+             }}\n\
+         }}\n\
+         fn mark(tag: &str) {{\n    ::std::println!(\"{{}} <{{}}>\", MARK, tag);\n}}\n\
+         fn calls() {{\n{main_call}{body}\n}}\n\
+         fn finish() {{\n    \
+             ::core::mem::drop(::std::panic::take_hook());\n    \
+             let results = match RESULTS.lock() {{\n        \
+                 ::core::result::Result::Ok(mut r) => ::core::mem::take(&mut *r),\n        \
+                 ::core::result::Result::Err(_) => return,\n    \
+             }};\n    \
+             let mut key = [0u8; KEY_LEN];\n    \
+             // SAFETY: `take_key` is the host's late-nonce import. It writes at\n    \
+             // most `len` bytes at `ptr` through bounds-checked host code, and\n    \
+             // `key` is a live local buffer of exactly `len` bytes.\n    \
+             let rc = unsafe {{ take_key(key.as_mut_ptr(), key.len()) }};\n    \
+             if rc != 0 {{\n        \
+                 ::std::eprintln!(\"mission checker: the server refused its result key ({{}})\", rc);\n        \
+                 return;\n    \
+             }}\n    \
+             let ::core::result::Result::Ok(key) = ::core::str::from_utf8(&key) else {{ return; }};\n    \
+             let mut block = ::std::string::String::new();\n    \
+             for r in &results {{\n        \
+                 block.push_str(key);\n        \
+                 block.push(' ');\n        \
+                 block.push_str(r);\n        \
+                 block.push('\\n');\n    \
+             }}\n    \
+             block.push_str(key);\n    \
+             block.push_str(\" <done>\\n\");\n    \
+             ::std::print!(\"{{}}\", block);\n    \
+             let _ = ::std::io::Write::flush(&mut ::std::io::stdout());\n\
+         }}\n\
+         pub(crate) fn run() {{\n    calls();\n    finish();\n}}\n",
+        key_len = crate::wasm_runner::NONCE_LEN,
+        module = crate::wasm_runner::LATE_NONCE_MODULE,
+        body = h.body
+    )
+}
+
+/// Server entry crate root for `mode`: [`HARNESS_ENTRY_SOURCE`] (with
+/// `#![forbid(unsafe_code)]`) for [`HarnessMode::ForbidUnsafe`],
+/// [`HARNESS_ENTRY_SOURCE_UNSAFE_ALLOWED`] only for
+/// [`HarnessMode::UnsafeLateNonce`].
+pub fn harness_entry_source(mode: HarnessMode) -> &'static str {
+    match mode {
+        HarnessMode::ForbidUnsafe => HARNESS_ENTRY_SOURCE,
+        HarnessMode::UnsafeLateNonce => HARNESS_ENTRY_SOURCE_UNSAFE_ALLOWED,
+    }
+}
+
+/// [`HARNESS_ENTRY_SOURCE`] without the `forbid`, for
+/// [`HarnessMode::UnsafeLateNonce`] missions only. Same line count and
+/// layout otherwise, so diagnostics behave the same.
+pub const HARNESS_ENTRY_SOURCE_UNSAFE_ALLOWED: &str = "// Server-owned entry point (pledge_compile_api). The player's code is\n\
+// the `main` module, src/main.rs.\n\
+// unsafe allowed: harness mode UnsafeLateNonce (see HARNESS-NOTES.md).\n\
+#[allow(special_module_name)]\n\
+mod main;\n\
+fn main() {\n    main::__pnc_harness::run();\n}\n";
+
 /// Source of the server entry crate root for harness builds.
 ///
 /// `#![forbid(unsafe_code)]` (third security review, C-1): the checker's
@@ -567,6 +749,12 @@ pub fn explain_unsafe_refusal(stderr: &str) -> String {
 /// Fresh per-request nonce.
 fn new_nonce() -> String {
     format!("PNC{}", uuid::Uuid::new_v4().simple())
+}
+
+/// Fresh per-request `<main>` mark for [`HarnessMode::UnsafeLateNonce`]
+/// (not a secret; see [`parse_transcript_tagged`]).
+fn new_mark() -> String {
+    format!("PNM{}", uuid::Uuid::new_v4().simple())
 }
 
 /// Remove rustc diagnostics whose primary location is in a server file
@@ -727,54 +915,76 @@ pub fn grade_in(
     limits: &RunLimits,
     settings: &BuildSettings,
 ) -> anyhow::Result<GradedRun> {
-    let spec = lookup(encounter_id);
-    if let Some(m) = spec
-        && matches!(m.check, Check::Harness(_))
-        && source.contains(RESERVED_PREFIX)
-    {
-        tracing::warn!(
+    let Some(m) = lookup(encounter_id) else {
+        let outcome = wasm_builder::compile_and_run_in(source, limits, settings)?;
+        let graded = GradedRun::unchecked(
+            outcome,
+            format!(
+                "no output check exists for mission `{encounter_id}`; \
+                 ok means it compiled and ran cleanly"
+            ),
+        );
+        tracing::info!(
             encounter = encounter_id,
+            state = ?graded.state,
+            checked = false,
+            "expectations: grading decision"
+        );
+        return Ok(graded);
+    };
+    grade_check(m, source, limits, settings)
+}
+
+/// Grade `source` against the check `m` (what [`grade_in`] does for a
+/// registered id). Public so test-only fixtures (e.g. the Act 9
+/// `UnsafeLateNonce` proofs, whose missions are not registered yet) run
+/// the exact production path.
+pub fn grade_check(
+    m: &MissionCheck,
+    source: &str,
+    limits: &RunLimits,
+    settings: &BuildSettings,
+) -> anyhow::Result<GradedRun> {
+    if matches!(m.check, Check::Harness(_)) && source.contains(RESERVED_PREFIX) {
+        tracing::warn!(
+            encounter = m.id,
             "expectations: refused reserved identifier"
         );
         return Ok(refused_reserved());
     }
-    let graded = match spec.map(|m| m.check) {
-        None => {
-            let outcome = wasm_builder::compile_and_run_in(source, limits, settings)?;
-            GradedRun::unchecked(
-                outcome,
-                format!(
-                    "no output check exists for mission `{encounter_id}`; \
-                     ok means it compiled and ran cleanly"
-                ),
-            )
-        }
-        Some(Check::RunOnly { reason }) => {
+    let graded = match m.check {
+        Check::RunOnly { reason } => {
             let outcome = wasm_builder::compile_and_run_in(source, limits, settings)?;
             GradedRun::unchecked(outcome, format!("output not checked: {reason}"))
         }
-        Some(Check::Stdout { matchers }) => grade_stdout(source, matchers, limits, settings)?,
-        Some(Check::Harness(h)) => grade_harness(source, &h, limits, settings)?,
-        Some(Check::CompileOnly { reason, required }) => {
+        Check::Stdout { matchers } => grade_stdout(source, matchers, limits, settings)?,
+        Check::Harness(h) => grade_harness(source, &h, m.harness_mode, limits, settings)?,
+        Check::CompileOnly { reason, required } => {
             grade_compile_only(source, reason, required, limits, settings)?
         }
     };
-    let graded = match spec {
-        Some(m) if graded.state == GradeState::Passed && !m.uses.is_empty() => {
-            apply_uses(source, graded, m.uses)
-        }
-        _ => graded,
+    let graded = if graded.state == GradeState::Passed && !m.uses.is_empty() {
+        apply_uses(source, graded, m.uses)
+    } else {
+        graded
     };
-    let graded = match spec {
-        Some(m) if graded.state == GradeState::Passed && !m.forbids.is_empty() => {
-            apply_forbids(source, graded, m.forbids)
-        }
-        _ => graded,
+    let late =
+        matches!(m.check, Check::Harness(_)) && m.harness_mode == HarnessMode::UnsafeLateNonce;
+    let graded = if graded.state == GradeState::Passed && late {
+        apply_forbids(source, graded, UNSAFE_HARNESS_FORBIDS)
+    } else {
+        graded
+    };
+    let graded = if graded.state == GradeState::Passed && !m.forbids.is_empty() {
+        apply_forbids(source, graded, m.forbids)
+    } else {
+        graded
     };
     tracing::info!(
-        encounter = encounter_id,
+        encounter = m.id,
         state = ?graded.state,
         checked = graded.state.behaviour_checked(),
+        late_nonce = late,
         "expectations: grading decision"
     );
     Ok(graded)
@@ -850,23 +1060,45 @@ fn wrong_output(mut outcome: RealOutcome, f: MatchFailure) -> GradedRun {
 fn grade_harness(
     source: &str,
     h: &Harness,
+    mode: HarnessMode,
     limits: &RunLimits,
     settings: &BuildSettings,
 ) -> anyhow::Result<GradedRun> {
-    let nonce = new_nonce();
-    let checker = harness_module_source(h, &nonce);
+    // ForbidUnsafe: the nonce is compiled into the checker. UnsafeLateNonce:
+    // only the import name and the non-secret main mark are; the nonce
+    // itself goes to the run (never the build) and the checker fetches it
+    // after its last call into player code.
+    let (checker, nonce, mark, late) = match mode {
+        HarnessMode::ForbidUnsafe => {
+            let nonce = new_nonce();
+            (harness_module_source(h, &nonce), nonce.clone(), nonce, None)
+        }
+        HarnessMode::UnsafeLateNonce => {
+            let late = LateNonce::generate();
+            let mark = new_mark();
+            let checker = harness_module_source_late(h, &mark, late.import());
+            (checker, late.nonce().to_string(), mark, Some(late))
+        }
+    };
+    tracing::debug!(?mode, "expectations: building harness");
     let layout = Layout::Harness {
-        entry: HARNESS_ENTRY_SOURCE,
+        entry: harness_entry_source(mode),
         checker: &checker,
     };
-    let mut outcome =
-        wasm_builder::compile_and_run_layout(source, &layout, true, limits, settings)?;
-    let transcript = parse_transcript(&outcome.stdout, &nonce);
+    let mut outcome = wasm_builder::compile_and_run_layout_with(
+        source,
+        &layout,
+        true,
+        limits,
+        settings,
+        late.as_ref(),
+    )?;
+    let transcript = parse_transcript_tagged(&outcome.stdout, &nonce, &mark);
     // Never hand checker lines (or the nonce) to the player.
     outcome.stdout = transcript.program.clone();
 
     if !outcome.compiled {
-        if refused_for_unsafe(&outcome.stderr) {
+        if mode == HarnessMode::ForbidUnsafe && refused_for_unsafe(&outcome.stderr) {
             tracing::info!("expectations: harness build refused: player code uses `unsafe`");
             let (filtered, _) = filter_harness_diagnostics(&outcome.stderr);
             outcome.stderr = explain_unsafe_refusal(&filtered);
@@ -900,6 +1132,17 @@ fn grade_harness(
         };
         return Ok(wrong_output(outcome, f));
     }
+    if transcript.after_done {
+        tracing::warn!(
+            ?mode,
+            "expectations: checker-tagged output after the done mark; not a pass"
+        );
+        let f = MatchFailure {
+            expected: "nothing from the checker after it finished".to_string(),
+            actual: "checker output appeared after the checker had finished".to_string(),
+        };
+        return Ok(wrong_output(outcome, f));
+    }
     if h.run_main {
         let main_out = transcript.main_output.as_deref().unwrap_or_default();
         if let Err(f) = check_stdout(h.main_matchers, main_out) {
@@ -918,7 +1161,16 @@ fn grade_harness(
         state: GradeState::Passed,
         expected: None,
         actual: None,
-        note: format!("checked by calling your code ({} checks)", h.expected.len()),
+        note: match mode {
+            HarnessMode::ForbidUnsafe => {
+                format!("checked by calling your code ({} checks)", h.expected.len())
+            }
+            HarnessMode::UnsafeLateNonce => format!(
+                "checked by calling your code ({} checks; `unsafe` allowed, results keyed \
+                 by the server only after your code finished)",
+                h.expected.len()
+            ),
+        },
     })
 }
 
@@ -1069,6 +1321,140 @@ mod tests {
         assert_eq!(PLAYER_PREAMBLE_LINES, 1);
         assert_eq!(wasm_builder::PLAYER_PREAMBLE.lines().count(), 1);
         assert!(!wasm_builder::PLAYER_PREAMBLE.contains("unsafe"));
+    }
+
+    /// No registered mission opts into `UnsafeLateNonce`, so every harness
+    /// build the server makes today carries the `forbid`. The mode is a
+    /// field of the server's table, picked by mission id: nothing in a
+    /// player's source reaches `harness_entry_source`.
+    #[test]
+    fn every_registered_mission_keeps_forbid_unsafe() {
+        for m in all() {
+            assert_eq!(m.harness_mode, HarnessMode::ForbidUnsafe, "{}", m.id);
+            assert!(
+                harness_entry_source(m.harness_mode).contains("#![forbid(unsafe_code)]"),
+                "{}",
+                m.id
+            );
+        }
+        assert_eq!(
+            harness_entry_source(HarnessMode::ForbidUnsafe),
+            HARNESS_ENTRY_SOURCE
+        );
+    }
+
+    #[test]
+    fn unsafe_allowed_entry_differs_only_by_the_forbid() {
+        let late = harness_entry_source(HarnessMode::UnsafeLateNonce);
+        assert!(!late.contains("forbid"), "{late}");
+        assert!(!late.lines().any(|l| l.starts_with("#![")), "{late}");
+        // Same items, same line count (the forbid line became a comment).
+        let code = |s: &str| -> Vec<String> {
+            s.lines()
+                .filter(|l| !l.starts_with("//") && !l.starts_with("#!["))
+                .map(str::to_string)
+                .collect()
+        };
+        assert_eq!(code(late), code(HARNESS_ENTRY_SOURCE));
+        assert_eq!(late.lines().count(), HARNESS_ENTRY_SOURCE.lines().count());
+    }
+
+    fn looks_like_nonce(s: &str) -> bool {
+        s.match_indices("PNC").any(|(at, _)| {
+            let rest = &s[at + 3..];
+            rest.len() >= 32
+                && rest[..32]
+                    .bytes()
+                    .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+        })
+    }
+
+    #[test]
+    fn late_checker_holds_no_nonce_and_fetches_it_after_the_calls() {
+        let h = Harness {
+            contract: "fn f()",
+            run_main: true,
+            body: "    emit(\"f(1)\", super::f(1));",
+            expected: &["f(1) = 2"],
+            main_matchers: &[],
+        };
+        let late = LateNonce::generate();
+        let src = harness_module_source_late(&h, "PNMmark", late.import());
+        assert!(!looks_like_nonce(&src), "{src}");
+        assert!(!src.contains(late.nonce()));
+        assert!(src.contains(&format!("#[link_name = \"{}\"]", late.import())));
+        assert!(src.contains("#[link(wasm_import_module = \"pnc_harness\")]"));
+        assert!(src.contains("const MARK: &str = \"PNMmark\";"));
+        // Order: player calls, then finish; inside finish the hook reset
+        // and the stored results come before the key, the key before the
+        // print.
+        let at = |needle: &str| {
+            src.find(needle)
+                .unwrap_or_else(|| panic!("missing {needle}"))
+        };
+        assert!(at("fn calls()") < at("super::main()"));
+        assert!(at("super::main()") < at("emit(\"f(1)\""));
+        assert!(at("emit(\"f(1)\"") < at("fn finish()"));
+        assert!(at("fn finish()") < at("take_hook()"));
+        assert!(at("take_hook()") < at("::core::mem::take(&mut *r)"));
+        assert!(at("::core::mem::take(&mut *r)") < at("take_key(key.as_mut_ptr()"));
+        assert!(at("take_key(key.as_mut_ptr()") < at("::std::print!"));
+        assert!(src.contains("pub(crate) fn run() {\n    calls();\n    finish();\n}"));
+        // Exactly one unsafe block: the FFI call.
+        assert_eq!(src.matches("unsafe {").count(), 1, "{src}");
+        // The sealed checker, by contrast, does compile the nonce in.
+        assert!(looks_like_nonce(&harness_module_source(&h, late.nonce())));
+    }
+
+    #[test]
+    fn late_transcript_uses_the_mark_for_main_and_rejects_lines_after_done() {
+        let raw = "M <main>\nhello\nM </main>\nside\nN f(1) = 2\nN <done>\n";
+        let t = parse_transcript_tagged(raw, "N", "M");
+        assert_eq!(t.main_output.as_deref(), Some("hello"));
+        assert_eq!(t.program, "hello\nside");
+        assert_eq!(t.results, vec!["f(1) = 2".to_string()]);
+        assert!(t.finished && !t.after_done);
+        // A main mark carrying the nonce is not a main mark in late mode,
+        // and a result carrying the mark is just program output.
+        let t = parse_transcript_tagged("N <main>\nM f(1) = 2\nN <done>\n", "N", "M");
+        assert_eq!(t.results, vec!["<main>".to_string()]);
+        assert!(t.main_output.is_none());
+        assert_eq!(t.program, "M f(1) = 2");
+        // Tagged lines after the done mark (or a second done) are flagged
+        // and never counted.
+        let t = parse_transcript_tagged("N f = 1\nN <done>\nN f = 2\nN <done>\n", "N", "M");
+        assert!(t.finished && t.after_done);
+        assert_eq!(t.results, vec!["f = 1".to_string()]);
+        // ForbidUnsafe parsing is unchanged (mark == nonce).
+        let t = parse_transcript("N <main>\nx\nN </main>\nN a = 1\nN <done>\n", "N");
+        assert_eq!(t.main_output.as_deref(), Some("x"));
+        assert_eq!(t.results, vec!["a = 1".to_string()]);
+        assert!(!t.after_done);
+    }
+
+    #[test]
+    fn unsafe_harness_forbids_catch_late_print_hooks() {
+        assert_eq!(
+            forbidden_token(
+                "#[global_allocator]\nstatic A: Spy = Spy;",
+                UNSAFE_HARNESS_FORBIDS
+            ),
+            Some("global_allocator")
+        );
+        assert_eq!(
+            forbidden_token(
+                "#[unsafe(export_name = \"memcpy\")]\nextern \"C\" fn m() {}",
+                UNSAFE_HARNESS_FORBIDS
+            ),
+            Some("export_name")
+        );
+        assert_eq!(
+            forbidden_token(
+                "// global_allocator export_name\nfn main() {}",
+                UNSAFE_HARNESS_FORBIDS
+            ),
+            None
+        );
     }
 
     #[test]
