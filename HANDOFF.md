@@ -1,7 +1,7 @@
 # HANDOFF.md
 
 ## Last Updated
-2026-11-14 — **Orchestrated build-out: waves 1-3 merged, wave 4 in flight.**
+2026-11-15 — **Orchestrated build-out: waves 1-6 merged; art for Acts 3-8 awaiting approval.**
 
 Branch **`finish/integration`** (not pushed, `main` untouched). Fable
 orchestrates Opus agents in git worktrees, reviews each branch, merges, and
@@ -22,10 +22,32 @@ runs `scripts/ci.ps1` on the merged result as the sign-off gate.
   grader, per-mission behaviour checks on `/compile-real` (41 of 57), Act 9 and
   10 specs with proven solutions.
 
-### In flight (wave 4)
-UI theme for menus/title/panels; editor layout + honest "verified / not
-verified" grades; dialogue fixes + player occlusion fade; compile-api security
-round 2 (split API and builder units); `fn main` rule + edition 2024 alignment.
+### Waves 4-6 (signed off through wave 5 at `9cea928`; wave 6 merged)
+- **Wave 4** (`7084912`): palette-driven UI theme (title, pause, settings, HUD,
+  panels); editor rebuilt with a fixed layout and honest grade banners
+  (VERIFIED / NOT VERIFIED / PATTERN CHECK ONLY); dialogue inline code, a
+  correct "come back later" line, persisted greeting state; props fade to 62%
+  when they hide a character; compile-api split into a token-holding API unit
+  and a secret-free builder unit; `fn main` required; edition 2024 everywhere.
+  **Tests no longer touch the real save** (`ProgressPlugin::on_disk()` for the
+  game, `::in_memory()` for every test).
+- **Wave 5** (`9cea928`): flagstone plazas (REF-75 via combined atlas REF-76);
+  one colour source and one markdown renderer in `ui_theme`; 54 of 57 missions
+  behaviour-checked by the server (3 static-only: two thread missions and
+  `async_fn`); **the sandbox proven on Linux (cnc)** with five Linux-only fixes.
+- **Wave 6** (merged, CI on the merged tree is the gate): ink code surface as
+  bible v2.2 candidate behind `ui_theme::DEFAULT_CODE_SURFACE`; wasmtime 44 ->
+  50 with 0 advisories left in the server tree and `deny.toml`; run timeout
+  enforced (a sleeping guest now answers in ~5 s); OOM path exercised;
+  `verify-sandbox.sh` has a pass that runs under the real unit (46 checks).
+
+### Art awaiting Matt's approval (design canvas, none wired)
+30 villagers of Acts 3-8 redrawn on their kits (`ref-31..65 *-v2.jsx`), player
+walk frames (`ref-77`), Ferris walk frames (`ref-78`), and the editor code-page
+decision (ink vs parchment). Wiring is one batch task once approved: copy each
+`REFnnv2.png` over `game/assets/sprites/npc/<slug>_idle_0.png`, add the walk
+animation system (facing, 4-frame cycle, flip for right, NPC idle bob).
+
 
 ### Known-open, in priority order
 1. **compile-api is NOT safe to deploy publicly.** Two reviews filed in
