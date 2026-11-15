@@ -1467,7 +1467,7 @@ the whole program stops, the quests after it included.\n\n\
 No nested `match`: each `?` handles its own step's failure.\n\n\
 ## Task\n\
 Replace each `.unwrap()` in `quest` with `?`. Use no `match`, `unwrap`, \
-`expect` or `panic!` anywhere in the program: the Tavernkeeper checks. \
+`expect` or `panic!` anywhere in the program: the Barkeep checks. \
 Your program should print `Ok(22)`, `Err(BadMap)`, `Err(Locked)`, then \
 `Err(Broke)`.\n\n\
 ## Hint\n\

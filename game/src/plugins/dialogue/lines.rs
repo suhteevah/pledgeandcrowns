@@ -172,7 +172,7 @@ pub const TRIAL_STAGES: &[NpcLines] = &[
                 "A possessed host fights back: `blow + will`. Give `Wraith::Possessed { will }` its own arm.",
             ],
             cleared: &[
-                "Four forms, four arms, none left to chance. The Wraith is unmade.",
+                "Four forms, four arms, every one entered in the ledger. The assessment is closed.",
                 "Name every variant, and the compiler keeps the roll for you. The Guild is proud to count you a member.",
             ],
         },
@@ -183,7 +183,7 @@ pub const TRIAL_STAGES: &[NpcLines] = &[
         lines: StatusLines {
             not_yet: &[],
             offer: &[
-                "You have climbed my tower. Now meet what guards its top: the Chimera. Three heads, three stages.",
+                "You have climbed my tower. Now meet what guards its top: the Chimera. You will take its heads one at a time.",
                 "First, the heads themselves. Only Fire has been granted the `Enemy` trait. Frost and Storm have not.",
                 "Call a trait method on them and the compiler answers E0599: no such method. Grant the trait.",
             ],
@@ -214,15 +214,15 @@ pub const TRIAL_STAGES: &[NpcLines] = &[
             not_yet: &[],
             offer: &[
                 "Final stage. The Chimera shows a fourth head, `Plasma`. Your `battle` knows only three.",
-                "It matches on a list of heads fixed in advance, and today the heads arrive as trait objects.",
+                "It matches on yesterday's heads, written down in advance. Today the heads arrive as trait objects.",
                 "Take `&[Box<dyn Enemy>]` and call the trait. Then any head, known or not, can be fought.",
             ],
             in_progress: &[
                 "`battle` still expects `&[Head]`: E0308, mismatched types. Let it take `&[Box<dyn Enemy>]`.",
             ],
             cleared: &[
-                "Four heads, one `battle`, and not one arm per head. The Chimera falls silent.",
-                "Generics when you know the type, trait objects when you do not. The top of the tower is yours.",
+                "Four heads, one `battle`, and not one arm per head. The Chimera has no breath left.",
+                "Generics when you know the type, trait objects when you do not. Carry both spells down with you.",
             ],
         },
     },
@@ -232,7 +232,7 @@ pub const TRIAL_STAGES: &[NpcLines] = &[
         lines: StatusLines {
             not_yet: &[],
             offer: &[
-                "Fancy a wager? The Tavernkeeper's game: three rounds, and the house collects on every slip.",
+                "Fancy a wager? My table, my game: three rounds, and the house collects on every slip.",
                 "First round, the stake. `?` can hand a bad stake back, but only from a function that returns `Result`.",
                 "Yours returns a plain `u32`, so the compiler says E0277. Let the signature admit it might fail.",
             ],
@@ -270,7 +270,7 @@ pub const TRIAL_STAGES: &[NpcLines] = &[
                 "`read_map(map)?`, then `open_vault(key)?`, then `pay_guide(gold, leagues)?`. The first failure pays out.",
             ],
             cleared: &[
-                "Every step chained, every failure handed back, and not one broken glass. The wager is yours.",
+                "Three rounds, and not one broken glass all night. Drinks are on the house.",
                 "A `Result` tells the truth about failure. Keep it, and a bad night ends in an `Err`, not a crash.",
             ],
         },
@@ -281,7 +281,7 @@ pub const TRIAL_STAGES: &[NpcLines] = &[
         lines: StatusLines {
             not_yet: &[],
             offer: &[
-                "The Forge-Golem is awake, and every forge key is in my keeping. Three stages to bring it down.",
+                "The Forge-Golem is awake, and every forge key is in my keeping. Bring it down and they are yours.",
                 "First, its weak points. Your chain turns each part into a label, then asks the label for armour.",
                 "A label has no armour field, so the compiler says E0609. Filter while you still hold the whole part.",
             ],
@@ -319,8 +319,8 @@ pub const TRIAL_STAGES: &[NpcLines] = &[
                 "`.filter(..)` skips a plate and keeps going. Then `.map(..)` to the hit, and `.fold(0, ..)` the total.",
             ],
             cleared: &[
-                "One chain, top to bottom, and the Golem comes apart at every seam.",
-                "Filter skips, map changes, fold gathers. Every key back on its hook.",
+                "Not a loop, not a `mut`, and the Golem lies in pieces on my floor.",
+                "Filter skips, map changes, fold gathers. Hang that on your ring beside the forge keys.",
             ],
         },
     },
@@ -330,7 +330,7 @@ pub const TRIAL_STAGES: &[NpcLines] = &[
         lines: StatusLines {
             not_yet: &[],
             offer: &[
-                "The Tide Hydra is rising in the harbour. Three heads, and we fight it in three stages.",
+                "The Tide Hydra is rising in the harbour. Three heads, and I need every hand on the dock.",
                 "First, the signals. Every head reports on one channel, but your loop hands the only sender to the first head.",
                 "The next head finds it gone: E0382, use of moved value. Give each head its own `tx.clone()`.",
             ],
@@ -359,14 +359,14 @@ pub const TRIAL_STAGES: &[NpcLines] = &[
             not_yet: &[],
             offer: &[
                 "Final stage. The body opens only when every head is down.",
-                "Your watch strikes at the first `Down`, before the other two heads report down.",
+                "Your watch strikes at the first `Down` it hears, without waiting for the other two.",
                 "Count the heads as they report, and strike only when all of them have.",
             ],
             in_progress: &[
                 "Count the `Down` reports and stop when the count reaches `heads`. Every hit before that counts.",
             ],
             cleared: &[
-                "Three workers out, three reports in, one strike at the body. The Hydra sinks.",
+                "Three workers out, three reports in, one strike at the body. Not a head left above the water.",
                 "Send them off with `move`, hear them on one channel, wait for all. That is how a harbour runs.",
             ],
         },
@@ -415,8 +415,8 @@ pub const TRIAL_STAGES: &[NpcLines] = &[
                 "`owes: RefCell<Weak<Debtor>>`, `Rc::downgrade` to link, `.upgrade()` to follow. Stop at the start.",
             ],
             cleared: &[
-                "The ring walked once, and nothing left behind when it closed. The Warden steps aside.",
-                "Box to hold, Rc to share, RefCell to change, Weak to let go. The Vault is yours.",
+                "The ring walked once, and when the handles dropped, the debts went with them. The Warden steps aside.",
+                "Box to hold, Rc to share, RefCell to change, Weak to let go. That is the whole of my craft.",
             ],
         },
     },

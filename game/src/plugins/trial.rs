@@ -122,7 +122,7 @@ pub const TRIALS: &[Trial] = &[
         name: "The Tide Hydra",
         npc: "thread_spawn",
         stages: &["hydra_senders", "hydra_threads", "hydra_body"],
-        complete_line: "\"Every head down, every worker home. The harbour is yours.\"",
+        complete_line: "\"Every report in, every flag read. The harbour is yours.\"",
     },
     // Act 8 boss, the last missions in the registry. The Vaultwright's
     // prologue is `box_basic`.
@@ -131,7 +131,7 @@ pub const TRIALS: &[Trial] = &[
         name: "The Memory Warden",
         npc: "box_basic",
         stages: &["warden_box", "warden_shared", "warden_weak"],
-        complete_line: "\"No debt unpaid, nothing left behind. The Vault is open to you.\"",
+        complete_line: "\"Every phase held with the right grip. The Vault is open to you.\"",
     },
 ];
 
