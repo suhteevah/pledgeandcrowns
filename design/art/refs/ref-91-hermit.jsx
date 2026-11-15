@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // REF-91 - The Hermit on the Throne kit (REF-86), 32x32, idle.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15, with the designer's note applied (narrowed
+// kit). Not wired yet.
 //
 // Outpost keeper. The mantle is worn short and ragged at the edge, so far
 // more of the cobalt underrobe shows; white hair and beard, a dulled
@@ -22,25 +23,25 @@ const REF91_GRID = [
   '....Z....XXXPXPPPXPRXXX.........', //  6 eyes
   '....Z...XSVXPPPRRPPRXSBX........', //  7 raised collar
   '....Z...XSVSXVVVVVVXSSBX........', //  8 beard
-  '....Z..XSSVSSXVVVVXSSSBBX.......', //  9
-  '....Z.XSSVSSSVVVVVVSSSSBBX......', // 10
-  '....Z.XSSVSSBCVVVVVBSSSBBX......', // 11
-  '....Z.XSSVSSBCVVVVVBSSSBBX......', // 12
-  '....Z.XSSVSSBCVVLVVBSSSBBX......', // 13 brass device
-  '....Z.XSSVSSBCVL#LVBSSSBBX......', // 14
-  '....Z.XSSVSSBCVVLVVBSSSBBX......', // 15
-  '....Z.XSSVSSBCVVVVVBSSSBBX......', // 16
-  '....Z.XSSVSSBCVVVVVBSSSBBX......', // 17
-  '....Z.XBSBBSBCVVVVVBSBBSBX......', // 18 ragged mantle edge
-  '....ZPX<<><<<CVVVVV<<N<<<X......', // 19 hand on the staff
-  '....Z.X<<><<<CVVVVV<NLN<<X......', // 20 lantern
-  '....Z.X<<><<<CVVVVV<N#N<<X......', // 21
-  '....Z.X<<><<<CVVVVV<NNN<<X......', // 22
-  '....Z.X<<><<<CVVVVV<<<><<X......', // 23
-  '....Z.X<<><<<CVVVVV<<<><<X......', // 24
-  '....Z.X<<><<<<<<<<<<<<><<X......', // 25
-  '....Z.X<<<<<<<<<<<<<<<<<<X......', // 26
-  '....Z.XXXXXXXXXXXXXXXXXXXX......', // 27
+  '....Z...XSVSSXVVVVXSSBBX........', //  9
+  '....Z..XSVSSSVVVVVVSSSBBX.......', // 10
+  '....Z..XSVSSBCVVVVVBSSBBX.......', // 11
+  '....Z..XSVSSBCVVVVVBSSBBX.......', // 12
+  '....Z..XSVSSBCVVLVVBSSBBX.......', // 13 brass device
+  '....Z..XSVSSBCVL#LVBSSBBX.......', // 14
+  '....Z..XSVSSBCVVLVVBSSBBX.......', // 15
+  '....Z..XSVSSBCVVVVVBSSBBX.......', // 16
+  '....Z..XSVSSBCVVVVVBSSBBX.......', // 17
+  '....Z..XBSBSBCVVVVVBSBSBX.......', // 18 ragged mantle edge
+  '....ZPPX<><<<CVVVVV<<N<<X.......', // 19 hand on the staff
+  '....Z..X<><<<CVVVVV<NLN<X.......', // 20 lantern
+  '....Z..X<><<<CVVVVV<N#N<X.......', // 21
+  '....Z..X<><<<CVVVVV<NNN<X.......', // 22
+  '....Z..X<><<<CVVVVV<<<><X.......', // 23
+  '....Z..X<><<<CVVVVV<<<><X.......', // 24
+  '....Z..X<><<<<<<<<<<<<><X.......', // 25
+  '....Z..X<<<<<<<<<<<<<<<<X.......', // 26
+  '....Z..XXXXXXXXXXXXXXXXXX.......', // 27
   '....Z....XUUX......XUUX.........', // 28
   '....Z....XXXX......XXXX.........', // 29
   '................................', // 30

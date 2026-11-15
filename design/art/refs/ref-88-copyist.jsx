@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // REF-88 - The Copyist on the Throne kit (REF-86), 32x32, idle.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15, with the designer's note applied (narrowed
+// kit). Not wired yet.
 //
 // Scribe. Lesson prop (cow_borrow): an open book with a wine ribbon marking
 // the place, and a quill held ready but not yet used. Read from the page
@@ -21,25 +22,25 @@ const REF88_GRID = [
   '.........XXXPXPPPXPRXXX.........', //  6 eyes
   '........XSVXPPPRRPPRXSBX........', //  7 raised collar
   '........XSVSXPPPPPPXSSBX........', //  8
-  '.......XSSVSSXXXXXXSSSBBX.......', //  9
-  '......XSSVSSSVVVVVVSSSSBBX......', // 10
-  '......XSSVSSBCVVVVVBSSSCBX......', // 11 quill
-  '......XSSVSSBCVVVVVBSSCBBX......', // 12
-  '......XSSVSSBXXXXXXBSSCBBX......', // 13 open book
-  '......XSSVSSBCCXCWCBSCSBBX......', // 14 ribbon marks the place
-  '......XSSVSSBCCXCWCBSXSBBX......', // 15 nib
-  '......XSSVSSBXXXXWXBSSSBBX......', // 16
-  '......XSSVSSBCVVVWVBSSSBBX......', // 17 ribbon tail
-  '......X<<VSSBCVVVVVBSSS<<X......', // 18 cobalt cuffs
-  '......XPPSSSBCVVVVVBSSSPPX......', // 19 hands
-  '......XSSVSSBCVVVVVBSSSBBX......', // 20
-  '......XSSVSSBCVVVVVBSSSBBX......', // 21
-  '......XBBBBBBCVVVVVBBBBBBX......', // 22
-  '......X<<><<<CVVVVV<<<><<X......', // 23
-  '......X<<><<<CVVVVV<<<><<X......', // 24
-  '......X<<><<<<<<<<<<<<><<X......', // 25
-  '......X<<<<<<<<<<<<<<<<<<X......', // 26
-  '......XXXXXXXXXXXXXXXXXXXX......', // 27
+  '........XSVSSXXXXXXSSBBX........', //  9
+  '.......XSVSSSVVVVVVSSSBBX.......', // 10
+  '.......XSVSSBCVVVVVBSSCBX.......', // 11 quill
+  '.......XSVSSBCVVVVVBSCBBX.......', // 12
+  '.......XSVSSBXXXXXXBSCBBX.......', // 13 open book
+  '.......XSVSSBCCXCWCBCSBBX.......', // 14 ribbon marks the place
+  '.......XSVSSBCCXCWCBXSBBX.......', // 15 nib
+  '.......XSVSSBXXXXWXBSSBBX.......', // 16
+  '.......XSVSSBCVVVWVBSSBBX.......', // 17 ribbon tail
+  '.......X<<SSBCVVVVVBSS<<X.......', // 18 cobalt cuffs
+  '.......XPPSSBCVVVVVBSSPPX.......', // 19 hands
+  '.......XSVSSBCVVVVVBSSBBX.......', // 20
+  '.......XSVSSBCVVVVVBSSBBX.......', // 21
+  '.......XBBBBBCVVVVVBBBBBX.......', // 22
+  '.......X<><<<CVVVVV<<<><X.......', // 23
+  '.......X<><<<CVVVVV<<<><X.......', // 24
+  '.......X<><<<<<<<<<<<<><X.......', // 25
+  '.......X<<<<<<<<<<<<<<<<X.......', // 26
+  '.......XXXXXXXXXXXXXXXXXX.......', // 27
   '.........XUUX......XUUX.........', // 28
   '.........XXXX......XXXX.........', // 29
   '................................', // 30

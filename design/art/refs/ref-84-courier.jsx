@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-84 - The Courier on the Library kit (REF-79), 32x32, idle.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15. Not wired yet.
 //
 // Tome-carrier. The only one in the Library whose robe is kilted up: the hem
 // stops short and the boots show, because this one walks between the stacks.

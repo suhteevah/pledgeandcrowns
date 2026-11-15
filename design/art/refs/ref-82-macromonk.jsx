@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-82 - The Macro Monk on the Library kit (REF-79), 32x32, idle.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15. Not wired yet.
 //
 // Silent copyist. Hood pulled lower than anyone else in the Library, head
 // bowed, hands lost in the joined sleeves. Lesson prop (macro_rules): a

@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: MIT
 // REF-94 - The Compiler, Act 10 final boss, 64x64, idle.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15, with the designer's notes applied (the cape
+// tapers to the floor in four steps instead of hanging as one rectangle, and
+// two gauntlets rest on the belt). Not wired yet.
 //
-// Colossal, filling the frame edge to edge. A brass-leaf crown over a
-// stone-grey helm with two cobalt eyes and a row of vents for a mouth - it
-// has no face, only output. Squared stone pauldrons with brass studs, a
-// brass gorget and belt, an aged-paper tabard with a brass device, and a
-// cobalt-deep cape that falls from the shoulders to the floor on both sides.
+// Colossal, filling the frame edge to edge at the shoulders. A brass-leaf
+// crown over a stone-grey helm with two cobalt eyes and a row of vents for a
+// mouth - it has no face, only output. Squared stone pauldrons with brass
+// studs, a brass gorget and belt, an aged-paper tabard with a brass device,
+// and a cobalt-deep cape that falls from the shoulders and narrows to the
+// floor.
 // Specular white is 7 px of 4096 (cap 40): crown, eyes, one pauldron edge,
 // gorget, device.
 //
@@ -46,33 +49,33 @@ const REF94_GRID = [
   '...X<<><<<<<><<<<<<<<<SVSSSSCVVLLVVSSSSSBB<<<<<<<<<><<<<<<><X...', // 28
   '...X<<><<<<<><<<<<<<<<SVSSSSCVVVVVVSSSSSBB<<<<<<<<<><<<<<<><X...', // 29
   '...X<<><<<<<><<<<<<<<<SVSSSSCVVVVVVSSSSSBB<<<<<<<<<><<<<<<><X...', // 30
-  '...X<<><<<<<><<<<<<<<<SVSSSSCVVVVVVSSSSSBB<<<<<<<<<><<<<<<><X...', // 31
-  '...X<<><<<<<><<<<<<<<<SVSSSSCVVVVVVSSSSSBB<<<<<<<<<><<<<<<><X...', // 32
-  '...X<<><<<<<><<<<<<<<<SVSSSSCVVVVVVSSSSSBB<<<<<<<<<><<<<<<><X...', // 33
-  '...X<<><<<<<><<<<<<<<<GGGGGGGGGLLGGGGGGGGN<<<<<<<<<><<<<<<><X...', // 34 belt
-  '...X<<><<<<<><<<<<<<<<NNNNNNNNNGGNNNNNNNNZ<<<<<<<<<><<<<<<><X...', // 35
-  '...X<<><<<<<><<<<<<<<<SVSSSBCVVVVVVSBSSSBB<<<<<<<<<><<<<<<><X...', // 36 tassets
-  '...X<<><<<<<><<<<<<<<<SVSSSBCVVVVVVSBSSSBB<<<<<<<<<><<<<<<><X...', // 37
-  '...X<<><<<<<><<<<<<<<<SVSSSBCVVVVVVSBSSSBB<<<<<<<<<><<<<<<><X...', // 38
-  '...X<<><<<<<><<<<<<<<<SVSSSBCVVVVVVSBSSSBB<<<<<<<<<><<<<<<><X...', // 39
-  '...X<<><<<<<><<<<<<<<<BBBBBBCVVVVVVSBBBBBB<<<<<<<<<><<<<<<><X...', // 40 plate line
-  '...X<<><<<<<><<<<<<<<<SVSSSBCVVVVVVSBSSSBB<<<<<<<<<><<<<<<><X...', // 41
-  '...X<<><<<<<><<<<<<<<<SVSSSBCVVVVVVSBSSSBB<<<<<<<<<><<<<<<><X...', // 42
-  '...X<<><<<<<><<<<<<<<<SVSSSBCVVVVVVSBSSSBB<<<<<<<<<><<<<<<><X...', // 43
-  '...X<<><<<<<><<<<<<<<<SVSSSBCVVVVVVSBSSSBB<<<<<<<<<><<<<<<><X...', // 44
-  '...X<<><<<<<><<<<<<<<<BBBBBBCVVVVVVSBBBBBB<<<<<<<<<><<<<<<><X...', // 45 plate line
-  '...X<<><<<<<><<<<<<<<<SVSSSBCVVVVVVSBSSSBB<<<<<<<<<><<<<<<><X...', // 46
-  '...X<<><<<<<><<<<<<<<<SVSSSBCVVVVVVSBSSSBB<<<<<<<<<><<<<<<><X...', // 47
-  '...X<<><<<<<><<<<<<<<<SVSSSBCVVVVVVSBSSSBB<<<<<<<<<><<<<<<><X...', // 48
-  '...X<<><<<<<><<<<<<<<<SVSSSBCVVVVVVSBSSSBB<<<<<<<<<><<<<<<><X...', // 49
-  '...X<<><<<<<><<<<<<<<<BBBBBBCVVVVVVSBBBBBB<<<<<<<<<><<<<<<><X...', // 50 plate line
-  '...X<<><<<<<><<<<<<<<<SVSSSBCVVVVVVSBSSSBB<<<<<<<<<><<<<<<><X...', // 51
-  '...X<<><<<<<><<<<<<<<<SVSSSBCVVVVVVSBSSSBB<<<<<<<<<><<<<<<><X...', // 52
-  '...X<<><<<<<><<<<<<<<<SVSSSBCVVVVVVSBSSSBB<<<<<<<<<><<<<<<><X...', // 53
-  '...X<<><<<<<><<<<<<<<<SVSSSBCVVVVVVSBSSSBB<<<<<<<<<><<<<<<><X...', // 54
-  '...X<<><<<<<><<<<<<<<<SVSSSBBCVVVVSBBSSSBB<<<<<<<<<><<<<<<><X...', // 55 tabard ends
-  '...X<<><<<<<><<<<<<<<<<<<<><<<<<<<<<<><<<<<<<<<<<<<><<<<<<><X...', // 56 hem
-  '...XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX...', // 57
+  '...XX<><<<<<><<<<<<<<<XXXXXSCVVVVVVSSXXXXX<<<<<<<<<><<<<<<>XX...', // 31 cape steps in, gauntlets
+  '.....X><<<<<><<<<<<<<<VVSSXSCVVVVVVSSXSSBB<<<<<<<<<><<<<<<X.....', // 32
+  '.....X><<<<<><<<<<<<<<VSSSXSCVVVVVVSSXSSBB<<<<<<<<<><<<<<<X.....', // 33
+  '.....X><<<<<><<<<<<<<<VSSSXGGGGLLGGGGXSSBB<<<<<<<<<><<<<<<X.....', // 34 belt
+  '.....X><<<<<><<<<<<<<<XXXXXNNNNGGNNNNXXXXX<<<<<<<<<><<<<<<X.....', // 35
+  '.....X><<<<<><<<<<<<<<SVSSSBCVVVVVVSBSSSBB<<<<<<<<<><<<<<<X.....', // 36 tassets
+  '.....X><<<<<><<<<<<<<<SVSSSBCVVVVVVSBSSSBB<<<<<<<<<><<<<<<X.....', // 37
+  '.....X><<<<<><<<<<<<<<SVSSSBCVVVVVVSBSSSBB<<<<<<<<<><<<<<<X.....', // 38
+  '.....XX<<<<<><<<<<<<<<SVSSSBCVVVVVVSBSSSBB<<<<<<<<<><<<<<XX.....', // 39 cape steps in
+  '.......X<<<<><<<<<<<<<BBBBBBCVVVVVVSBBBBBB<<<<<<<<<><<<<X.......', // 40 plate line
+  '.......X<<<<><<<<<<<<<SVSSSBCVVVVVVSBSSSBB<<<<<<<<<><<<<X.......', // 41
+  '.......X<<<<><<<<<<<<<SVSSSBCVVVVVVSBSSSBB<<<<<<<<<><<<<X.......', // 42
+  '.......X<<<<><<<<<<<<<SVSSSBCVVVVVVSBSSSBB<<<<<<<<<><<<<X.......', // 43
+  '.......X<<<<><<<<<<<<<SVSSSBCVVVVVVSBSSSBB<<<<<<<<<><<<<X.......', // 44
+  '.......X<<<<><<<<<<<<<BBBBBBCVVVVVVSBBBBBB<<<<<<<<<><<<<X.......', // 45 plate line
+  '.......X<<<<><<<<<<<<<SVSSSBCVVVVVVSBSSSBB<<<<<<<<<><<<<X.......', // 46
+  '.......XX<<<><<<<<<<<<SVSSSBCVVVVVVSBSSSBB<<<<<<<<<><<<XX.......', // 47 cape steps in
+  '.........X<<><<<<<<<<<SVSSSBCVVVVVVSBSSSBB<<<<<<<<<><<X.........', // 48
+  '.........X<<><<<<<<<<<SVSSSBCVVVVVVSBSSSBB<<<<<<<<<><<X.........', // 49
+  '.........X<<><<<<<<<<<BBBBBBCVVVVVVSBBBBBB<<<<<<<<<><<X.........', // 50 plate line
+  '.........X<<><<<<<<<<<SVSSSBCVVVVVVSBSSSBB<<<<<<<<<><<X.........', // 51
+  '.........X<<><<<<<<<<<SVSSSBCVVVVVVSBSSSBB<<<<<<<<<><<X.........', // 52
+  '.........X<<><<<<<<<<<SVSSSBCVVVVVVSBSSSBB<<<<<<<<<><<X.........', // 53
+  '.........X<<><<<<<<<<<SVSSSBCVVVVVVSBSSSBB<<<<<<<<<><<X.........', // 54
+  '.........X<<><<<<<<<<<SVSSSBBCVVVVSBBSSSBB<<<<<<<<<><<X.........', // 55 tabard ends
+  '.........X<<><<<<<<<<<<<<<><<<<<<<<><<<<<<<<<<<<<<<><<X.........', // 56 hem
+  '.........XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.........', // 57
   '..............XSSSSSSSSSSX............XSSSSSSSSBBX..............', // 58 boots
   '..............XSSSSSSSSSSX............XSSSSSSSSBBX..............', // 59
   '..............XXXXXXXXXXXX............XXXXXXXXXXXX..............', // 60

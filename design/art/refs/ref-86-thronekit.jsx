@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: MIT
 // REF-86 - Costume kit exemplar, Act 10 The Throne, 32x32.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15, with the designer's note applied (narrowed
+// by two pixels so the figure reads statuesque, not stout). Kit exemplar:
+// not wired to any NPC.
 //
 // Kit rule for the Throne cast: a stiff stone-grey mantle squared at the
 // shoulders like carved stone, a raised collar framing the head, an
 // aged-paper tabard down the front with one brass device, a cobalt-deep
 // underrobe showing at the cuffs and below the mantle, a thin brass-leaf
 // circlet, and a visible face.
-// Silhouette = statuesque: a near-rectangle from shoulder to hem, the widest
-// villagers in the game. Specular white is 2 px (cap 10), on brass only.
+// Silhouette = statuesque: a straight column from collar to hem, 18 px wide.
+// Specular white is 2 px (cap 10), on brass only.
 //
 // Legend: X coalblack  S stone grey  B basalt  V aged paper
 //         C parchment cream  < cobalt deep  > cobalt  L brass leaf  G old gold
@@ -24,25 +26,25 @@ const REF86_GRID = [
   '.........XXXPXPPPXPRXXX.........', //  6 eyes, collar tips
   '........XSVXPPPRRPPRXSBX........', //  7 raised collar
   '........XSVSXPPPPPPXSSBX........', //  8
-  '.......XSSVSSXXXXXXSSSBBX.......', //  9
-  '......XSSVSSSVVVVVVSSSSBBX......', // 10 squared shoulders
-  '......XSSVSSBCVVVVVBSSSBBX......', // 11 tabard
-  '......XSSVSSBCVVVVVBSSSBBX......', // 12
-  '......XSSVSSBCVVLVVBSSSBBX......', // 13 brass device
-  '......XSSVSSBCVL#LVBSSSBBX......', // 14
-  '......XSSVSSBCVVLVVBSSSBBX......', // 15
-  '......XSSVSSBCVVVVVBSSSBBX......', // 16
-  '......XSSVSSBCVVVVVBSSSBBX......', // 17
-  '......X<<VSSBCVVVVVBSSS<<X......', // 18 cobalt cuffs
-  '......XPPSSSBCVVVVVBSSSPPX......', // 19 hands
-  '......XSSVSSBCVVVVVBSSSBBX......', // 20
-  '......XSSVSSBCVVVVVBSSSBBX......', // 21
-  '......XBBBBBBCVVVVVBBBBBBX......', // 22 mantle ends
-  '......X<<><<<CVVVVV<<<><<X......', // 23 underrobe
-  '......X<<><<<CVVVVV<<<><<X......', // 24
-  '......X<<><<<<<<<<<<<<><<X......', // 25
-  '......X<<<<<<<<<<<<<<<<<<X......', // 26
-  '......XXXXXXXXXXXXXXXXXXXX......', // 27
+  '........XSVSSXXXXXXSSBBX........', //  9
+  '.......XSVSSSVVVVVVSSSBBX.......', // 10 squared shoulders
+  '.......XSVSSBCVVVVVBSSBBX.......', // 11 tabard
+  '.......XSVSSBCVVVVVBSSBBX.......', // 12
+  '.......XSVSSBCVVLVVBSSBBX.......', // 13 brass device
+  '.......XSVSSBCVL#LVBSSBBX.......', // 14
+  '.......XSVSSBCVVLVVBSSBBX.......', // 15
+  '.......XSVSSBCVVVVVBSSBBX.......', // 16
+  '.......XSVSSBCVVVVVBSSBBX.......', // 17
+  '.......X<<SSBCVVVVVBSS<<X.......', // 18 cobalt cuffs
+  '.......XPPSSBCVVVVVBSSPPX.......', // 19 hands
+  '.......XSVSSBCVVVVVBSSBBX.......', // 20
+  '.......XSVSSBCVVVVVBSSBBX.......', // 21
+  '.......XBBBBBCVVVVVBBBBBX.......', // 22 mantle ends
+  '.......X<><<<CVVVVV<<<><X.......', // 23 underrobe
+  '.......X<><<<CVVVVV<<<><X.......', // 24
+  '.......X<><<<<<<<<<<<<><X.......', // 25
+  '.......X<<<<<<<<<<<<<<<<X.......', // 26
+  '.......XXXXXXXXXXXXXXXXXX.......', // 27
   '.........XUUX......XUUX.........', // 28 shoes
   '.........XXXX......XXXX.........', // 29
   '................................', // 30

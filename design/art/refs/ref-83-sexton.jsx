@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-83 - The Sexton on the Library kit (REF-79), 32x32, idle.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15. Not wired yet.
 //
 // Candle-keeper. Three pixels shorter and two wider than the kit column.
 // Lesson prop (drop_trait): a long brass candle snuffer in the left hand -
@@ -13,9 +13,9 @@
 
 const REF83_GRID = [
   '................................', //  0
-  '.....N..........................', //  1 snuffer bell
-  '....NGN.........................', //  2
-  '....N.N.........................', //  3
+  '....NNN.........................', //  1 snuffer bell
+  '...NGGGN........................', //  2
+  '...N...N........................', //  3
   '.....N........XXXX..............', //  4 hood peak
   '.....N......XXYOOYXX............', //  5
   '.....N.....XYYOOYYYYX...........', //  6
@@ -32,8 +32,8 @@ const REF83_GRID = [
   '.....NPXYYYYOOYCVSPPOYKKX.......', // 17 hands
   '.....N.XYYYYKKKCVSKKYYKKX.......', // 18
   '.....N.XYSBSBSBSBSBSBSBYX.......', // 19 belt chain
-  '.....N.XYYYSYCVVVVSYLYKKX.......', // 20 flame
-  '.....N.XYYYBYCVVVVSYCYKKX.......', // 21 the candle still lit
+  '.....N.XYYYSYCVVVVSGLGKKX.......', // 20 flame and its glow
+  '.....N.XYYYBYCVVVVSYGYKKX.......', // 21 the candle still lit
   '.....N.XYYYSYCVVVVSYCYKKX.......', // 22
   '.....N.XYYYOYCVVVVSYCYKKX.......', // 23
   '.....N.XYYOYYYCVVSYYYYKKX.......', // 24

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-79 - Costume kit exemplar, Act 9 Forbidden Library, 32x32.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15. Not wired yet.
 //
 // Kit rule for the Library cast: a deep hood and a Crypt robe that falls
 // straight to the floor with no flare and no visible feet, an aged-paper
