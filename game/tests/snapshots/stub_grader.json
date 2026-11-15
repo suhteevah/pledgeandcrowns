@@ -1401,6 +1401,186 @@
   },
   {
     "case": "canonical",
+    "id": "bridge_toll",
+    "input": "fn weigh(cargo: &str) -> usize { cargo.len() }\nfn main() {\n    let cargo = String::from(\"lantern oil\");\n    let toll = weigh(&cargo);\n    println!(\"toll: {toll}\");\n    println!(\"cargo: {cargo}\");\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Borrow Checker steps aside one pace. \"the cargo is still yours. first toll paid.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "bridge_toll",
+    "input": "fn weigh(cargo: String) -> usize {\n    cargo.len()\n}\n\nfn main() {\n    let cargo = String::from(\"lantern oil\");\n    // this won't compile yet: weigh keeps the cargo, then main reaches for it\n    let toll = weigh(cargo);\n    println!(\"toll: {toll}\");\n    println!(\"cargo: {cargo}\");\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Borrow Checker bars the bridge — weigh must borrow its cargo: `fn weigh(cargo: &str)`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "bridge_toll",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Borrow Checker bars the bridge — weigh must borrow its cargo: `fn weigh(cargo: &str)`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_0",
+    "id": "bridge_toll",
+    "input": " weigh(cargo: &str) -> usize { cargo.len() }\nfn main() {\n    let cargo = String::from(\"lantern oil\");\n    let toll = weigh(&cargo);\n    println!(\"toll: {toll}\");\n    println!(\"cargo: {cargo}\");\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Borrow Checker bars the bridge — weigh must borrow its cargo: `fn weigh(cargo: &str)`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_7",
+    "id": "bridge_toll",
+    "input": "fn weigh(cargo: &str) -> usize { cargo.len() \nfn main() {\n    let cargo = String::from(\"lantern oil\");\n    let toll = weigh(&cargo);\n    println!(\"toll: {toll}\");\n    println!(\"cargo: {cargo}\");\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Borrow Checker bars the bridge — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_14",
+    "id": "bridge_toll",
+    "input": "fn weigh(cargo: &str) -> usize { cargo.len() }\nfn main() {\n    let cargo =  oil\");\n    let toll = weigh(&cargo);\n    println!(\"toll: {toll}\");\n    println!(\"cargo: {cargo}\");\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Borrow Checker bars the bridge — lend the cargo: call `weigh(&cargo)`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "bridge_quill",
+    "input": "fn inscribe(scroll: &mut Vec<String>, entry: &str) { scroll.push(entry.to_string()); }\nfn main() {\n    let mut scroll = vec![String::from(\"north road\")];\n    println!(\"reader one: {}\", scroll[0]);\n    println!(\"reader two: {}\", scroll[0]);\n    inscribe(&mut scroll, \"east road\");\n    println!(\"scroll: {}\", scroll.join(\", \"));\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Borrow Checker releases the quill. \"readers first, then the writer. second toll paid.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "bridge_quill",
+    "input": "fn main() {\n    let mut scroll = vec![String::from(\"north road\")];\n    let first = &scroll[0];\n    let second = &scroll[0];\n    // this won't compile yet: the quill writes while both readers still hold the scroll\n    scroll.push(String::from(\"east road\"));\n    println!(\"reader one: {first}\");\n    println!(\"reader two: {second}\");\n    println!(\"scroll: {}\", scroll.join(\", \"));\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Borrow Checker holds the quill back — inscribe takes the scroll as `&mut Vec<String>` and the entry as `&str`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "bridge_quill",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Borrow Checker holds the quill back — inscribe takes the scroll as `&mut Vec<String>` and the entry as `&str`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_0",
+    "id": "bridge_quill",
+    "input": " inscribe(scroll: &mut Vec<String>, entry: &str) { scroll.push(entry.to_string()); }\nfn main() {\n    let mut scroll = vec![String::from(\"north road\")];\n    println!(\"reader one: {}\", scroll[0]);\n    println!(\"reader two: {}\", scroll[0]);\n    inscribe(&mut scroll, \"east road\");\n    println!(\"scroll: {}\", scroll.join(\", \"));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Borrow Checker holds the quill back — inscribe takes the scroll as `&mut Vec<String>` and the entry as `&str`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_7",
+    "id": "bridge_quill",
+    "input": "fn inscribe(scroll: &mut Vec<String>, entry: &str) {  }\nfn main() {\n    let mut scroll = vec![String::from(\"north road\")];\n    println!(\"reader one: {}\", scroll[0]);\n    println!(\"reader two: {}\", scroll[0]);\n    inscribe(&mut scroll, \"east road\");\n    println!(\"scroll: {}\", scroll.join(\", \"));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Borrow Checker holds the quill back — inscribe must `push` the entry onto the scroll",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_8",
+    "id": "bridge_quill",
+    "input": "fn inscribe(scroll: &mut Vec<String>, entry: &str) { scroll.push(entry.to_string()); \nfn main() {\n    let mut scroll = vec![String::from(\"north road\")];\n    println!(\"reader one: {}\", scroll[0]);\n    println!(\"reader two: {}\", scroll[0]);\n    inscribe(&mut scroll, \"east road\");\n    println!(\"scroll: {}\", scroll.join(\", \"));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Borrow Checker holds the quill back — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_16",
+    "id": "bridge_quill",
+    "input": "fn inscribe(scroll: &mut Vec<String>, entry: &str) { scroll.push(entry.to_string()); }\nfn main() {\n    let mut scroll =  road\")];\n    println!(\"reader one: {}\", scroll[0]);\n    println!(\"reader two: {}\", scroll[0]);\n    inscribe(&mut scroll, \"east road\");\n    println!(\"scroll: {}\", scroll.join(\", \"));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Borrow Checker holds the quill back — hand over the quill exclusively: call `inscribe(&mut scroll, ...)`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "bridge_lantern",
+    "input": "fn before<'a>(line: &'a str, sep: &str) -> &'a str {\n    match line.find(sep) { Some(i) => &line[..i], None => line }\n}\nfn main() {\n    let lantern = String::from(\"oil:wick:glass\");\n    let part;\n    { let sep = String::from(\":\"); part = before(&lantern, &sep); }\n    println!(\"first: {part}\");\n    println!(\"whole: {}\", before(\"glass\", \":\"));\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Borrow Checker lifts the lantern. \"the answer borrows from the line alone. you may cross.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "bridge_lantern",
+    "input": "// this won't compile yet: say which input the answer borrows from\nfn before(line: &str, sep: &str) -> &str {\n    match line.find(sep) {\n        Some(i) => &line[..i],\n        None => line,\n    }\n}\n\nfn main() {\n    let lantern = String::from(\"oil:wick:glass\");\n    let part;\n    {\n        let sep = String::from(\":\");\n        part = before(&lantern, &sep);\n    }\n    println!(\"first: {part}\");\n    println!(\"whole: {}\", before(\"glass\", \":\"));\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Borrow Checker shades the lantern — tie the answer to `line` only: `fn before<'a>(line: &'a str, sep: &str) -> &'a str`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "bridge_lantern",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Borrow Checker shades the lantern — tie the answer to `line` only: `fn before<'a>(line: &'a str, sep: &str) -> &'a str`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_0",
+    "id": "bridge_lantern",
+    "input": " before<'a>(line: &'a str, sep: &str) -> &'a str {\n    match line.find(sep) { Some(i) => &line[..i], None => line }\n}\nfn main() {\n    let lantern = String::from(\"oil:wick:glass\");\n    let part;\n    { let sep = String::from(\":\"); part = before(&lantern, &sep); }\n    println!(\"first: {part}\");\n    println!(\"whole: {}\", before(\"glass\", \":\"));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Borrow Checker shades the lantern — tie the answer to `line` only: `fn before<'a>(line: &'a str, sep: &str) -> &'a str`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_19",
+    "id": "bridge_lantern",
+    "input": "fn before<'a>(line: &'a str, sep: &str) -> &'a str {\n    match line.find(sep) { Some(i) => &line[..i], None => line \n}\nfn main() {\n    let lantern = String::from(\"oil:wick:glass\");\n    let part;\n    { let sep = String::from(\":\"); part = before(&lantern, &sep); }\n    println!(\"first: {part}\");\n    println!(\"whole: {}\", before(\"glass\", \":\"));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Borrow Checker shades the lantern — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
     "id": "impl_method",
     "input": "struct Hero { level: i32 }\nimpl Hero {\n    fn power(&self) -> i32 { self.level * 10 }\n}\nfn main() {\n    let h = Hero { level: 3 };\n    println!(\"{}\", h.power());\n}",
     "verdict": {

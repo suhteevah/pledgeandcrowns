@@ -28,6 +28,8 @@ pub mod solutions;
 pub mod widgets;
 
 use crate::plugins::mission::{ActiveMission, Mission};
+use crate::plugins::progress::MissionProgress;
+use crate::plugins::trial::StageStrip;
 use crate::plugins::ui_theme::{self, CodeTheme, highlight, markdown};
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass, egui};
@@ -272,6 +274,7 @@ fn draw_editor(
     mut state: ResMut<EditorState>,
     mut session: ResMut<EditorSession>,
     active: Res<ActiveMission>,
+    progress: Option<Res<MissionProgress>>,
 ) {
     if !state.open {
         return;
@@ -387,7 +390,12 @@ fn draw_editor(
             let mut goal_ui = pane_ui(ui, r(lay.goal), 8.0);
             match revealed {
                 Some(code) => draw_solution(&mut goal_ui, state, session, code, code_theme),
-                None => draw_goal(&mut goal_ui, mission),
+                None => {
+                    let stage = progress
+                        .as_deref()
+                        .and_then(|p| StageStrip::for_mission(mission.id, p));
+                    draw_goal(&mut goal_ui, mission, stage.as_ref());
+                }
             }
 
             widgets::paint_pane(ui.painter(), r(lay.result), palette::SURFACE);
@@ -466,12 +474,16 @@ fn draw_solution_button(ui: &mut egui::Ui, session: &mut EditorSession, gate: So
     }
 }
 
-fn draw_goal(ui: &mut egui::Ui, mission: &Mission) {
+fn draw_goal(ui: &mut egui::Ui, mission: &Mission, stage: Option<&StageStrip>) {
     egui::ScrollArea::vertical()
         .id_salt("goal_scroll")
         .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
         .auto_shrink([false; 2])
         .show(ui, |ui| {
+            if let Some(stage) = stage {
+                stage.show(ui, ui_theme::SMALL_SIZE);
+                ui.add_space(2.0);
+            }
             widgets::caption(ui, "GOAL");
             markdown::show_scaled(ui, mission.prompt, markdown::TextScale::COMPACT);
             ui.add_space(4.0);

@@ -305,6 +305,65 @@ fn main() {
 }
 "#,
     ),
+    // ── Act 2 boss: the Borrow Checker's trial, The Bridge ───────────
+    (
+        "bridge_toll",
+        r#"// `&str` borrows: `weigh` reads the cargo and gives it back untouched.
+fn weigh(cargo: &str) -> usize {
+    cargo.len()
+}
+
+fn main() {
+    let cargo = String::from("lantern oil");
+    // Lend with `&`: `main` still owns `cargo` after the call.
+    let toll = weigh(&cargo);
+    println!("toll: {toll}");
+    println!("cargo: {cargo}");
+}
+"#,
+    ),
+    (
+        "bridge_quill",
+        r#"// `&mut` is the one exclusive borrow: only `inscribe` may write while it runs.
+fn inscribe(scroll: &mut Vec<String>, entry: &str) {
+    scroll.push(entry.to_string());
+}
+
+fn main() {
+    let mut scroll = vec![String::from("north road")];
+    let first = &scroll[0];
+    let second = &scroll[0];
+    // Two shared borrows at once are fine. Their last use is here...
+    println!("reader one: {first}");
+    println!("reader two: {second}");
+    // ...so the exclusive borrow may start now.
+    inscribe(&mut scroll, "east road");
+    println!("scroll: {}", scroll.join(", "));
+}
+"#,
+    ),
+    (
+        "bridge_lantern",
+        r#"// `'a` ties the answer to `line` only; `sep` is just read.
+fn before<'a>(line: &'a str, sep: &str) -> &'a str {
+    match line.find(sep) {
+        Some(i) => &line[..i],
+        None => line,
+    }
+}
+
+fn main() {
+    let lantern = String::from("oil:wick:glass");
+    let part;
+    {
+        let sep = String::from(":");
+        part = before(&lantern, &sep);
+    } // `sep` is dropped here, but `part` borrows from `lantern`, not `sep`.
+    println!("first: {part}");
+    println!("whole: {}", before("glass", ":"));
+}
+"#,
+    ),
     // ── Act 3: The Guildhall Quarter ─────────────────────────────────
     (
         "impl_method",

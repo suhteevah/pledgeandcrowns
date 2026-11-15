@@ -27,8 +27,15 @@ use std::sync::Mutex;
 use pledge_compile_api::expectations::{self, Check, GradeState};
 use pledge_compile_api::wasm_builder::{self, BuildSettings, Layout, RunLimits};
 
-/// Parallel build workers.
-const WORKERS: usize = 6;
+/// Parallel build workers: `CARGO_BUILD_JOBS` when set (so a run on a
+/// shared machine can be kept light), else 6.
+fn workers() -> usize {
+    std::env::var("CARGO_BUILD_JOBS")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .filter(|n| *n > 0)
+        .unwrap_or(6)
+}
 
 fn game_file(rel: &str) -> String {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -217,6 +224,40 @@ fn wrong_variants() -> HashMap<&'static str, Vec<&'static str>> {
             "while_loop",
             vec![
                 "fn main() { let mut n = 5; while n > 1 { println!(\"{n}\"); n -= 1; } println!(\"{n}\"); }",
+            ],
+        ),
+        // The Borrow Checker's trial. Every variant compiles on its own.
+        (
+            "bridge_toll",
+            vec![
+                // Pays the toll with a clone: `weigh` still takes `String`.
+                "fn weigh(cargo: String) -> usize { cargo.len() }\nfn main() { let cargo = String::from(\"lantern oil\"); let toll = weigh(cargo.clone()); println!(\"toll: {toll}\"); println!(\"cargo: {cargo}\"); }",
+                // Borrows, but weighs nothing: always 11.
+                "fn weigh(_cargo: &str) -> usize { 11 }\nfn main() { let cargo = String::from(\"lantern oil\"); let toll = weigh(&cargo); println!(\"toll: {toll}\"); println!(\"cargo: {cargo}\"); }",
+                // Never shows the cargo was kept.
+                "fn weigh(cargo: &str) -> usize { cargo.len() }\nfn main() { let cargo = String::from(\"lantern oil\"); let toll = weigh(&cargo); println!(\"toll: {toll}\"); }",
+            ],
+        ),
+        (
+            "bridge_quill",
+            vec![
+                // Writes at the front of the scroll.
+                "fn inscribe(scroll: &mut Vec<String>, entry: &str) { scroll.insert(0, entry.to_string()); }\nfn main() { let mut scroll = vec![String::from(\"north road\")]; println!(\"reader one: {}\", scroll[0]); println!(\"reader two: {}\", scroll[0]); inscribe(&mut scroll, \"east road\"); println!(\"scroll: {}\", scroll.join(\", \")); }",
+                // Writes the entry twice.
+                "fn inscribe(scroll: &mut Vec<String>, entry: &str) { scroll.push(entry.to_string()); scroll.push(entry.to_string()); }\nfn main() { let mut scroll = vec![String::from(\"north road\")]; println!(\"reader one: {}\", scroll[0]); println!(\"reader two: {}\", scroll[0]); inscribe(&mut scroll, \"east road\"); println!(\"scroll: {}\", scroll.join(\", \")); }",
+                // Writes first, reads after: the lines come out in the wrong order.
+                "fn inscribe(scroll: &mut Vec<String>, entry: &str) { scroll.push(entry.to_string()); }\nfn main() { let mut scroll = vec![String::from(\"north road\")]; inscribe(&mut scroll, \"east road\"); println!(\"scroll: {}\", scroll.join(\", \")); println!(\"reader one: {}\", scroll[0]); println!(\"reader two: {}\", scroll[0]); }",
+            ],
+        ),
+        (
+            "bridge_lantern",
+            vec![
+                // Returns the part AFTER the separator.
+                "fn before<'a>(line: &'a str, sep: &str) -> &'a str { match line.find(sep) { Some(i) => &line[i + sep.len()..], None => line } }\nfn main() { let lantern = String::from(\"oil:wick:glass\"); let part; { let sep = String::from(\":\"); part = before(&lantern, &sep); } println!(\"first: {part}\"); println!(\"whole: {}\", before(\"glass\", \":\")); }",
+                // Ignores the separator.
+                "fn before<'a>(line: &'a str, _sep: &str) -> &'a str { line }\nfn main() { let lantern = String::from(\"oil:wick:glass\"); let part; { let sep = String::from(\":\"); part = before(&lantern, &sep); } println!(\"first: {part}\"); println!(\"whole: {}\", before(\"glass\", \":\")); }",
+                // Dodges the lifetime with an owned String: right output, wrong signature.
+                "fn before(line: &str, sep: &str) -> String { line.split(sep).next().unwrap_or(line).to_string() }\nfn main() { let lantern = String::from(\"oil:wick:glass\"); let part; { let sep = String::from(\":\"); part = before(&lantern, &sep); } println!(\"first: {part}\"); println!(\"whole: {}\", before(\"glass\", \":\")); }",
             ],
         ),
         (
@@ -538,6 +579,32 @@ fn literal_prints() -> HashMap<&'static str, &'static str> {
     ])
 }
 
+/// Realistic correct solutions that differ from the canonical one. Each
+/// must pass (`Passed`). The game's `tests/contract.rs` `CORRECT` corpus
+/// holds the same programs, so they are proven against both graders.
+fn alternatives() -> HashMap<&'static str, Vec<&'static str>> {
+    HashMap::from([
+        (
+            "bridge_toll",
+            vec![
+                "fn weigh(cargo: &str) -> usize {\n    cargo.chars().count()\n}\nfn main() {\n    let cargo = String::from(\"lantern oil\");\n    let toll = weigh(cargo.as_str());\n    println!(\"toll: {toll}\");\n    println!(\"cargo: {cargo}\");\n}\n",
+            ],
+        ),
+        (
+            "bridge_quill",
+            vec![
+                "fn inscribe(list: &mut Vec<String>, line: &str) {\n    list.push(String::from(line));\n}\nfn main() {\n    let mut scroll = vec![String::from(\"north road\")];\n    let first = scroll[0].clone();\n    let second = scroll[0].clone();\n    inscribe(&mut scroll, \"east road\");\n    println!(\"reader one: {first}\");\n    println!(\"reader two: {second}\");\n    println!(\"scroll: {}\", scroll.join(\", \"));\n}\n",
+            ],
+        ),
+        (
+            "bridge_lantern",
+            vec![
+                "fn before<'a, 'b>(line: &'a str, sep: &'b str) -> &'a str {\n    line.split(sep).next().unwrap_or(line)\n}\nfn main() {\n    let lantern = String::from(\"oil:wick:glass\");\n    let part;\n    {\n        let sep = String::from(\":\");\n        part = before(&lantern, &sep);\n    }\n    println!(\"first: {part}\");\n    println!(\"whole: {}\", before(\"glass\", \":\"));\n}\n",
+            ],
+        ),
+    ])
+}
+
 #[derive(Debug)]
 enum Role {
     Canonical,
@@ -545,6 +612,8 @@ enum Role {
     Wrong(usize),
     /// A [`literal_prints`] program: must be `StaticCheckFailed`.
     Literal,
+    /// An [`alternatives`] program: must be `Passed`.
+    Alternative(usize),
 }
 
 impl Role {
@@ -554,6 +623,7 @@ impl Role {
             Self::Starter => "starter".to_string(),
             Self::Wrong(i) => format!("wrong#{i}"),
             Self::Literal => "literal".to_string(),
+            Self::Alternative(i) => format!("alt#{i}"),
         }
     }
 }
@@ -568,7 +638,7 @@ fn run_parallel(cases: Vec<Case>) -> Vec<(Case, expectations::GradedRun)> {
     let queue = Mutex::new(cases);
     let results = Mutex::new(Vec::new());
     std::thread::scope(|s| {
-        for _ in 0..WORKERS {
+        for _ in 0..workers() {
             s.spawn(|| {
                 loop {
                     let Some(case) = queue.lock().expect("queue").pop() else {
@@ -590,8 +660,8 @@ fn run_parallel(cases: Vec<Case>) -> Vec<(Case, expectations::GradedRun)> {
 fn game_sources_parse() {
     let sols = canonical_solutions();
     let starters = starters();
-    assert_eq!(sols.len(), 57, "solutions parsed");
-    assert_eq!(starters.len(), 57, "starters parsed");
+    assert_eq!(sols.len(), 60, "solutions parsed");
+    assert_eq!(starters.len(), 60, "starters parsed");
     for m in expectations::all() {
         assert!(
             sols.contains_key(m.id),
@@ -707,6 +777,13 @@ fn every_expectation_discriminates() {
                 source: (*w).to_string(),
             });
         }
+        for (i, a) in alternatives().get(m.id).into_iter().flatten().enumerate() {
+            cases.push(Case {
+                id: m.id,
+                role: Role::Alternative(i),
+                source: (*a).to_string(),
+            });
+        }
     }
     let total = cases.len();
     let results = run_parallel(cases);
@@ -729,6 +806,7 @@ fn every_expectation_discriminates() {
             (Role::Starter, Check::RunOnly { .. }) => true,
             (Role::Starter | Role::Wrong(_), _) => !g.ok(),
             (Role::Literal, _) => g.state == GradeState::StaticCheckFailed,
+            (Role::Alternative(_), _) => g.state == GradeState::Passed,
         };
         match case.role {
             Role::Canonical => entry.0 = ok,
@@ -740,7 +818,7 @@ fn every_expectation_discriminates() {
                 }
             }
             // Counted through `failures` only.
-            Role::Literal => {}
+            Role::Literal | Role::Alternative(_) => {}
         }
         println!(
             "{:<22} {:<10} -> {:?}{}",

@@ -205,6 +205,100 @@ fn out_of_range_settings_are_clamped_on_load() {
     assert_eq!(data.settings.sfx_volume, 20);
 }
 
+/// A v2 save written before the Borrow Checker's trial existed (its
+/// cleared and opened sets hold only pre-trial mission ids) loads
+/// unchanged, and the trial slots into its progression: trial stages are
+/// ordinary missions keyed by id, so no format change was needed.
+#[test]
+fn pre_trial_v2_save_loads_unchanged_and_offers_the_trial() {
+    use pledge_and_crown::plugins::mission::MissionRegistry;
+    use pledge_and_crown::plugins::trial;
+
+    #[derive(Serialize)]
+    struct S {
+        a: u8,
+        b: u8,
+        c: u8,
+    }
+    #[derive(Serialize)]
+    struct V2 {
+        version: u32,
+        cleared: Vec<String>,
+        settings: S,
+        player_position: Option<[f32; 2]>,
+    }
+    #[derive(Serialize)]
+    struct Ext {
+        magic: [u8; 4],
+        opened: Vec<String>,
+    }
+    let reg = MissionRegistry::default();
+    // Everything the old registry had up to and including `impl_method`
+    // (the old order: the 21 Acts 1-2 missions, then Act 3).
+    let mut cleared: Vec<String> = reg
+        .missions
+        .iter()
+        .map(|m| m.id)
+        .filter(|id| trial::trial_of(id).is_none())
+        .take(22)
+        .map(str::to_string)
+        .collect();
+    assert_eq!(cleared.last().map(String::as_str), Some("impl_method"));
+    cleared.sort();
+    let opened = vec!["assoc_new".to_string(), "borrow_preview".to_string()];
+    let mut bytes = bincode::serde::encode_to_vec(
+        &V2 {
+            version: 2,
+            cleared: cleared.clone(),
+            settings: S {
+                a: 70,
+                b: 60,
+                c: 50,
+            },
+            player_position: Some([12.5, -3.0]),
+        },
+        bincode::config::standard(),
+    )
+    .unwrap();
+    bytes.extend(
+        bincode::serde::encode_to_vec(
+            &Ext {
+                magic: *b"PNCx",
+                opened: opened.clone(),
+            },
+            bincode::config::standard(),
+        )
+        .unwrap(),
+    );
+
+    let data = SaveData::decode(&bytes).expect("pre-trial v2 save must load");
+    let p = &data.progress;
+    assert_eq!(p.cleared_count(), cleared.len());
+    for id in &cleared {
+        assert!(p.is_cleared(id), "lost {id}");
+    }
+    for id in &opened {
+        assert!(p.is_opened(id), "lost opened {id}");
+    }
+    assert_eq!(data.player_position, Some(Vec2::new(12.5, -3.0)));
+    assert_eq!(data.settings.master_volume, 70);
+    // Re-encoding and decoding again changes nothing.
+    assert_eq!(SaveData::decode(&data.encode().unwrap()).unwrap(), data);
+
+    // The trial is the next thing to do; the Act 3 save point stays usable.
+    assert_eq!(reg.next_locked(p).map(|m| m.id), Some("bridge_toll"));
+    assert_eq!(
+        trial::current_mission(&reg, p, "borrow_preview").map(|m| m.id),
+        Some("bridge_toll")
+    );
+    let unlocked = |id: &str| reg.find(id).is_some_and(|m| m.is_unlocked(p));
+    assert!(unlocked("bridge_toll"));
+    assert!(!unlocked("bridge_quill"));
+    // A cleared impl_method still unlocks the next Act 3 mission (which a
+    // demo build does not include at all).
+    assert_eq!(unlocked("assoc_new"), !cfg!(feature = "demo"));
+}
+
 #[test]
 fn has_progress_reflects_clears_or_position() {
     let mut d = SaveData::default();

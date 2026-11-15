@@ -25,7 +25,12 @@ use std::process::Command;
 
 /// Missions whose starter is meant to fail to compile, with the error
 /// code the lesson is about.
-const STARTERS_THAT_MUST_FAIL: &[(&str, &str)] = &[("lifetimes", "E0106")];
+const STARTERS_THAT_MUST_FAIL: &[(&str, &str)] = &[
+    ("bridge_toll", "E0382"),
+    ("bridge_quill", "E0502"),
+    ("bridge_lantern", "E0106"),
+    ("lifetimes", "E0106"),
+];
 
 /// Fresh per-test, per-process scratch dir (the slow tests run in
 /// parallel, so each needs its own).
@@ -104,6 +109,12 @@ const PINNED_OUTPUT: &[(&str, &str)] = &[
     ("vec_iter", "60"),
     ("closure_basic", "42"),
     ("enum_match", "0\n90\n180\n270"),
+    ("bridge_toll", "toll: 11\ncargo: lantern oil"),
+    (
+        "bridge_quill",
+        "reader one: north road\nreader two: north road\nscroll: north road, east road",
+    ),
+    ("bridge_lantern", "first: oil\nwhole: glass"),
     ("and_then", "Some(2)\nNone"),
     ("hashmap_basic", "Some(7)\nNone"),
     ("arc_mutex", "5"),
@@ -286,9 +297,12 @@ fn demo_boundary_is_the_last_act_2_mission() {
         .iter()
         .position(|m| m.id == DEMO_LAST_MISSION_ID)
         .expect("demo boundary must be a registered mission");
-    // Acts 1-2 are the 21 prelude missions; Act 3 opens with `impl_method`.
-    assert_eq!(DEMO_LAST_MISSION_ID, "while_loop");
-    assert_eq!(idx + 1, 21, "demo mission count");
+    // Acts 1-2 are the 21 prelude missions plus the three stages of the
+    // Borrow Checker's trial (the Act 2 boss), which ends the demo; Act 3
+    // opens with `impl_method`.
+    assert_eq!(DEMO_LAST_MISSION_ID, "bridge_lantern");
+    assert_eq!(idx + 1, 24, "demo mission count");
+    assert_eq!(reg.missions[idx - 3].id, "while_loop");
     assert_eq!(reg.missions[idx + 1].id, "impl_method");
     assert_eq!(
         reg.missions.len() - (idx + 1),
@@ -334,4 +348,215 @@ fn demo_completion_flag() {
         }
     }
     assert!(!reg.demo_complete(&progress));
+}
+
+// ── Hard rule 3: what the Borrow Checker says about the compiler ─────
+
+use pledge_and_crown::plugins::dialogue::lines::{AUTHORED, TRIAL_STAGES};
+use pledge_and_crown::plugins::stub_grader::MISSION_RULES;
+use pledge_and_crown::plugins::trial::TRIALS;
+
+/// What a claim says rustc does with its program.
+enum Claimed {
+    /// Fails with only this error code, and stderr contains every piece
+    /// (the first piece is the wording the Borrow Checker quotes).
+    Error(&'static str, &'static [&'static str]),
+    /// Compiles (the claim is "this also compiles").
+    Compiles,
+}
+
+/// Every statement the Borrow Checker makes about compiler behaviour in
+/// his trial (tutorials, hints, dialogue), with the program it is about.
+/// `(label, program, claim)`. Programs are the real starters, edited the
+/// way the text describes.
+fn borrow_checker_claims() -> Vec<(&'static str, String, Claimed)> {
+    let reg = MissionRegistry::default();
+    let starter = |id: &str| {
+        reg.find(id)
+            .unwrap_or_else(|| panic!("`{id}` is not a mission"))
+            .starter_code
+            .to_string()
+    };
+    let edit = |id: &str, from: &str, to: &str| {
+        let s = starter(id);
+        assert!(
+            s.contains(from),
+            "`{id}` starter no longer contains {from:?}"
+        );
+        s.replace(from, to)
+    };
+    vec![
+        (
+            "bridge_toll starter: E0382, borrow of moved value",
+            starter("bridge_toll"),
+            Claimed::Error("E0382", &["borrow of moved value: `cargo`"]),
+        ),
+        (
+            "bridge_toll hint: `weigh(cargo.clone())` also compiles",
+            edit("bridge_toll", "weigh(cargo)", "weigh(cargo.clone())"),
+            Claimed::Compiles,
+        ),
+        (
+            "bridge_quill starter: E0502 with the quoted wording",
+            starter("bridge_quill"),
+            Claimed::Error(
+                "E0502",
+                &["cannot borrow `scroll` as mutable because it is also borrowed as immutable"],
+            ),
+        ),
+        (
+            "bridge_lantern starter: E0106, and rustc's help ties `sep` to 'a too",
+            starter("bridge_lantern"),
+            Claimed::Error(
+                "E0106",
+                &[
+                    "missing lifetime specifier",
+                    "fn before<'a>(line: &'a str, sep: &'a str) -> &'a str",
+                ],
+            ),
+        ),
+        (
+            "bridge_lantern: following that help makes `main` fail with E0597",
+            edit(
+                "bridge_lantern",
+                "fn before(line: &str, sep: &str) -> &str",
+                "fn before<'a>(line: &'a str, sep: &'a str) -> &'a str",
+            ),
+            Claimed::Error("E0597", &["`sep` does not live long enough"]),
+        ),
+    ]
+}
+
+/// Error codes in `text` (`E` followed by exactly four digits).
+fn error_codes(text: &str) -> Vec<String> {
+    let b = text.as_bytes();
+    (0..b.len().saturating_sub(4))
+        .filter(|&i| b[i] == b'E' && b[i + 1..i + 5].iter().all(u8::is_ascii_digit))
+        .filter(|&i| i + 5 >= b.len() || !b[i + 5].is_ascii_digit())
+        .map(|i| text[i..i + 5].to_string())
+        .collect()
+}
+
+/// Everything the Borrow Checker says: his prologue and trial missions'
+/// prompts and tutorials, his dialogue rows, his grader messages, the
+/// trial-complete line.
+fn borrow_checker_texts() -> Vec<String> {
+    let reg = MissionRegistry::default();
+    let trial = TRIALS
+        .iter()
+        .find(|t| t.npc == "borrow_preview")
+        .expect("the Borrow Checker has a trial");
+    let ids: Vec<&str> = std::iter::once(trial.npc)
+        .chain(trial.stages.iter().copied())
+        .collect();
+    let mut out = Vec::new();
+    for id in &ids {
+        let m = reg.find(id).expect("mission");
+        out.push(m.prompt.to_string());
+        out.push(m.tutorial.to_string());
+        for row in AUTHORED
+            .iter()
+            .chain(TRIAL_STAGES)
+            .filter(|r| r.npc_id == *id)
+        {
+            for set in [
+                row.lines.not_yet,
+                row.lines.offer,
+                row.lines.in_progress,
+                row.lines.cleared,
+            ] {
+                out.extend(set.iter().map(|l| l.to_string()));
+            }
+        }
+        for rule in MISSION_RULES.iter().filter(|r| r.id == *id) {
+            out.push(rule.npc.to_string());
+            out.push(rule.pass.to_string());
+            out.extend(rule.checks.iter().map(|c| c.hint.to_string()));
+        }
+    }
+    out.push(trial.complete_line.to_string());
+    out
+}
+
+#[test]
+fn every_error_the_borrow_checker_names_is_a_compiled_claim() {
+    let claims = borrow_checker_claims();
+    let claimed: Vec<&str> = claims
+        .iter()
+        .filter_map(|(_, _, c)| match c {
+            Claimed::Error(code, _) => Some(*code),
+            Claimed::Compiles => None,
+        })
+        .collect();
+    let texts = borrow_checker_texts();
+    let mut named = std::collections::BTreeSet::new();
+    for t in &texts {
+        for code in error_codes(t) {
+            assert!(
+                claimed.contains(&code.as_str()),
+                "the Borrow Checker names {code} with no compiled claim:\n{t}"
+            );
+            named.insert(code);
+        }
+    }
+    // No stale claims: every claimed code and quoted wording is said.
+    for (label, _, c) in &claims {
+        if let Claimed::Error(code, pieces) = c {
+            assert!(named.contains(*code), "{label}: {code} is never said");
+            assert!(
+                texts.iter().any(|t| t.contains(pieces[0])),
+                "{label}: wording {:?} is never said",
+                pieces[0]
+            );
+        }
+    }
+    assert_eq!(
+        named.into_iter().collect::<Vec<_>>(),
+        ["E0106", "E0382", "E0502", "E0597"],
+        "codes the Borrow Checker names"
+    );
+}
+
+#[test]
+#[ignore = "slow: runs rustc once per claim"]
+fn borrow_checker_claims_are_what_rustc_emits() {
+    let dir = scratch_dir("bc-claims");
+    let version = Command::new("rustc")
+        .arg("--version")
+        .output()
+        .expect("rustc --version");
+    println!("{}", String::from_utf8_lossy(&version.stdout).trim());
+    let mut problems = Vec::new();
+    for (n, (label, src, claim)) in borrow_checker_claims().into_iter().enumerate() {
+        let path = dir.join(format!("claim{n}.rs"));
+        std::fs::write(&path, &src).expect("write claim");
+        let out = Command::new("rustc")
+            .args(["--edition", PLAYER_EDITION, "--crate-type", "bin", "-o"])
+            .arg(dir.join(format!("claim{n}.out")))
+            .arg(&path)
+            .output()
+            .expect("spawn rustc");
+        let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+        let codes: Vec<&str> = stderr
+            .match_indices("error[")
+            .map(|(i, _)| &stderr[i + 6..i + 11])
+            .collect();
+        match claim {
+            Claimed::Compiles if out.status.success() => println!("ok  {label}: compiles"),
+            Claimed::Compiles => problems.push(format!("{label}: does not compile\n{stderr}")),
+            Claimed::Error(code, pieces) => {
+                let wording = pieces.iter().all(|p| stderr.contains(p));
+                let only = !codes.is_empty() && codes.iter().all(|c| *c == code);
+                if !out.status.success() && only && wording {
+                    println!("ok  {label}: {codes:?}");
+                } else {
+                    problems.push(format!(
+                        "{label}: expected only {code} with {pieces:?}, got {codes:?}\n{stderr}"
+                    ));
+                }
+            }
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(problems.is_empty(), "{}", problems.join("\n\n"));
 }

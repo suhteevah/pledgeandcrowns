@@ -1203,7 +1203,7 @@ error: could not compile `player_submission` (bin \"player_submission\") due to 
                 }
             }
         }
-        assert_eq!(all().len(), 57, "one entry per registry mission");
+        assert_eq!(all().len(), 60, "one entry per registry mission");
     }
 
     /// The headline numbers in `docs/mission-audit.md`. Change both together.
@@ -1215,7 +1215,7 @@ error: could not compile `player_submission` (bin \"player_submission\") due to 
         let unverified = count(|c| matches!(c, Check::RunOnly { .. }));
         assert_eq!(
             (behaviour, static_only, unverified),
-            (54, 3, 0),
+            (57, 3, 0),
             "behaviour-checked / static-only / run-only"
         );
     }

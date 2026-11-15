@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 //! Dialogue text, keyed by NPC id (the roster `mission_id`, which is unique
-//! per NPC; display names are not guaranteed unique).
+//! per NPC; display names are not guaranteed unique), plus one row per
+//! boss-trial stage in [`TRIAL_STAGES`], keyed by the stage's mission id.
 //!
 //! Every status falls back to [`GENERIC`] when an NPC has no authored lines
 //! for it, so all 57 roster NPCs can talk today. Authored lines exist only
@@ -61,6 +62,70 @@ pub const NOT_YET_ELSEWHERE: &str = "I'm not ready for you yet. See {next} first
 
 /// Locked, and no mission is playable at all (this build ends earlier).
 pub const NOT_YET_NOTHING: &str = "I'm not ready for you yet. Come back another day.";
+
+/// Authored lines for boss-trial stages, keyed by stage mission id (see
+/// `plugins::trial`). The owner speaks them when that stage is their
+/// current mission. Which statuses can occur for a stage:
+///
+/// - `offer` / `in_progress`: every stage.
+/// - `cleared`: only the final stage (a trial NPC is Cleared only once
+///   every stage is); its lines close the trial.
+/// - `not_yet`: only stage 1 of a trial whose owner has no prologue
+///   mission. The Borrow Checker has one (`borrow_preview`) and talks as a
+///   cleared villager until the Bridge opens, so his stages leave
+///   `not_yet` empty.
+///
+/// Every compiler error named here is compiled in
+/// `tests/mission_text.rs` (`BORROW_CHECKER_CLAIMS`), hard rule 3.
+pub const TRIAL_STAGES: &[NpcLines] = &[
+    NpcLines {
+        npc_id: "bridge_toll",
+        lines: StatusLines {
+            not_yet: &[],
+            offer: &[
+                "So. You would cross. The Bridge has three tolls, and I collect every one.",
+                "First toll: `weigh` takes your `String` and keeps it. Then you reach for it again.",
+                "The compiler calls that E0382, borrow of moved value. Lend the cargo. Do not hand it over.",
+            ],
+            in_progress: &[
+                "Here. Here you have moved what you intended to lend. Let `weigh` take `&str`, and pass `&cargo`.",
+            ],
+            cleared: &[],
+        },
+    },
+    NpcLines {
+        npc_id: "bridge_quill",
+        lines: StatusLines {
+            not_yet: &[],
+            offer: &[
+                "Second toll. Two travellers read the scroll at once. Many `&` borrows may share it.",
+                "Then the quill writes while their borrows are still in use. That is E0502.",
+                "The compiler: cannot borrow `scroll` as mutable because it is also borrowed as immutable.",
+            ],
+            in_progress: &[
+                "One `&mut` or many `&`, never both. Let the readers finish, then pass `&mut scroll` to `inscribe`.",
+            ],
+            cleared: &[],
+        },
+    },
+    NpcLines {
+        npc_id: "bridge_lantern",
+        lines: StatusLines {
+            not_yet: &[],
+            offer: &[
+                "Last toll: the lantern. `before` hands back part of `line`, but never says whose part.",
+                "E0106, missing lifetime specifier. Name it `'a`, and tie the answer to `line` alone.",
+            ],
+            in_progress: &[
+                "The compiler's help ties `sep` to `'a` as well. Follow it, and `sep` does not live long enough: E0597.",
+            ],
+            cleared: &[
+                "You may cross. The Old Tongue speaks through you.",
+                "Lend, do not give. One writer or many readers. Say what your answer borrows. Remember the Bridge.",
+            ],
+        },
+    },
+];
 
 /// Authored lines for the Hearthstone Square cast.
 pub const AUTHORED: &[NpcLines] = &[

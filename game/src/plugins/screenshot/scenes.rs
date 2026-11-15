@@ -376,8 +376,127 @@ pub(super) fn all_scenes() -> Vec<Scene> {
     editor_scenes(&mut v);
     editor_result_scenes(&mut v);
     code_surface_scenes(&mut v);
+    trial_scenes(&mut v);
     overlay_scenes(&mut v);
     v
+}
+
+/// Roster key of the Borrow Checker, who owns the Bridge trial.
+const TRIAL_NPC: &str = "borrow_preview";
+
+/// Make `id` the active mission (what the prompt panel and `E` show).
+fn set_active(world: &mut World, id: &str) {
+    let mission = world.resource::<MissionRegistry>().find(id).cloned();
+    if mission.is_none() {
+        tracing::warn!(id, "set_active: unknown mission");
+    }
+    world.resource_mut::<ActiveMission>().current = mission;
+}
+
+/// Undo a trial scene: no panel, no editor, no active mission, fresh
+/// progress, trial bookkeeping reset.
+fn reset_trial_scene(world: &mut World) {
+    close_dialogue(world);
+    close_editor(world);
+    world.resource_mut::<CompletionView>().mission_id = None;
+    world.resource_mut::<ActiveMission>().current = None;
+    *world.resource_mut::<crate::plugins::trial::TrialView>() = Default::default();
+    fresh_progress(world);
+}
+
+/// The Borrow Checker's trial: the offer dialogue, the prompt (mission)
+/// panel with stage pips at stage 1 and stage 2, the editor on a stage,
+/// the "next stage" panel and the trial-complete panel.
+fn trial_scenes(v: &mut Vec<Scene>) {
+    let enter = || Action::EnterState(GameState::InGame, ENTER_GAME_SETTLE);
+    v.push(scene(
+        "trial-offer",
+        vec![
+            enter(),
+            act(|w| {
+                reset_trial_scene(w);
+                clear_before(w, "bridge_toll");
+            }),
+            beside_npc(TRIAL_NPC),
+            Action::Wait(0.4),
+            Action::Tap(KeyCode::KeyF),
+            Action::Wait(0.3),
+            Action::Tap(KeyCode::KeyF),
+            act(|w| {
+                let open = w.resource::<Dialogue>().active.as_ref().map(|a| {
+                    (
+                        a.mission_id,
+                        a.status,
+                        a.stage.as_ref().map(|s| s.label.clone()),
+                    )
+                });
+                let line = format!("trial-offer dialogue: {open:?}");
+                tracing::info!("{line}");
+                w.resource_mut::<ShotLog>().0.push(line);
+            }),
+        ],
+        0.4,
+        boxed(reset_trial_scene),
+    ));
+    for (name, stage) in [
+        ("trial-panel-stage1", "bridge_toll"),
+        ("trial-panel-stage2", "bridge_quill"),
+    ] {
+        v.push(scene(
+            name,
+            vec![
+                enter(),
+                act(move |w| {
+                    reset_trial_scene(w);
+                    clear_before(w, stage);
+                    w.resource_mut::<MissionProgress>().mark_opened(stage);
+                    set_active(w, stage);
+                }),
+                beside_npc(TRIAL_NPC),
+                Action::Wait(0.4),
+            ],
+            0.3,
+            boxed(reset_trial_scene),
+        ));
+    }
+    v.push(scene(
+        "trial-editor",
+        vec![
+            enter(),
+            act(|w| {
+                reset_trial_scene(w);
+                clear_before(w, "bridge_quill");
+                let starter = w
+                    .resource::<MissionRegistry>()
+                    .find("bridge_quill")
+                    .map(|m| m.starter_code)
+                    .unwrap_or_default();
+                open_editor(w, "bridge_quill", starter);
+            }),
+        ],
+        0.8,
+        boxed(reset_trial_scene),
+    ));
+    for (name, cleared_through, view) in [
+        ("trial-next-stage", "bridge_quill", "bridge_toll"),
+        ("trial-complete", "impl_method", "bridge_lantern"),
+    ] {
+        v.push(scene(
+            name,
+            vec![
+                enter(),
+                act(move |w| {
+                    reset_trial_scene(w);
+                    clear_before(w, cleared_through);
+                    set_active(w, view);
+                    w.resource_mut::<CompletionView>().mission_id = Some(view.to_string());
+                }),
+                Action::Wait(0.2),
+            ],
+            0.5,
+            boxed(reset_trial_scene),
+        ));
+    }
 }
 
 fn title_scenes(v: &mut Vec<Scene>) {

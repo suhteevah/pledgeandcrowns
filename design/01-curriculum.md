@@ -92,6 +92,8 @@ When the player finally passes, the Checker bows: "You may cross. The Old Tongue
 
 **Estimated playtime:** 2–3 hours. This is the hardest tutorial act, by design — Acts 1–2 together are the MVP vertical slice.
 
+**Code status (2026-11-14).** The boss ships as a *trial* (finish plan D1: no combat, turns or key items): three staged missions owned by the Borrow Checker, at the end of Act 2, after his prologue mission `borrow_preview`. Mechanism: `game/src/plugins/trial.rs`. Stages: `bridge_toll` (First Move: a `String` passed by value is moved, E0382; borrow with `&str`), `bridge_quill` (Two Travellers + Mutable Quill: many `&` or one `&mut`, E0502), `bridge_lantern` (Lifetime Lantern: `'a` on the input the answer borrows from, E0106; tying both inputs fails with E0597). Every compiler error he names is compiled in `game/tests/mission_text.rs`. The trial is the last content of the free demo (24 missions).
+
 ---
 
 # Act 3 — The Guildhall Quarter

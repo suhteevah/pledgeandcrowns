@@ -823,6 +823,64 @@ pub fn status_mark(ui: &mut egui::Ui, status: Status, size: f32) -> egui::Respon
     resp
 }
 
+/// One stage of a trial in a pip row (see [`stage_pips`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Pip {
+    /// Done: a filled Forest square with a Parchment tick.
+    Cleared,
+    /// The stage in play (or on view): an Oxblood ring around an Oxblood
+    /// core, a size larger than the others.
+    Current,
+    /// Not reachable yet: a hollow Basalt square.
+    Locked,
+}
+
+/// Draw a trial's stages as a row of pips, in shapes and theme colours
+/// (never font glyphs), each in a square the height of `size`-point text.
+/// The three states differ in shape as well as colour.
+pub fn stage_pips(ui: &mut egui::Ui, pips: &[Pip], size: f32) -> egui::Response {
+    let gap = (size * 0.35).round();
+    let n = pips.len() as f32;
+    let width = n * size + (n - 1.0).max(0.0) * gap;
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(width, size), egui::Sense::hover());
+    let p = ui.painter();
+    for (i, pip) in pips.iter().enumerate() {
+        let x = rect.left() + i as f32 * (size + gap);
+        let cell = egui::Rect::from_min_size(egui::pos2(x, rect.top()), egui::Vec2::splat(size));
+        match pip {
+            Pip::Cleared => {
+                let r = cell.shrink(size * 0.16);
+                p.rect_filled(r, egui::CornerRadius::ZERO, FOREST);
+                let stroke = egui::Stroke::new((size / 9.0).max(1.5), SURFACE);
+                let a = egui::pos2(r.left() + r.width() * 0.2, r.center().y);
+                let b = egui::pos2(r.left() + r.width() * 0.42, r.bottom() - r.height() * 0.22);
+                let c = egui::pos2(r.right() - r.width() * 0.18, r.top() + r.height() * 0.22);
+                p.line_segment([a, b], stroke);
+                p.line_segment([b, c], stroke);
+            }
+            Pip::Current => {
+                let c = cell.center();
+                p.circle_stroke(
+                    c,
+                    size * 0.46,
+                    egui::Stroke::new((size / 8.0).max(2.0), SELECT_FILL),
+                );
+                p.circle_filled(c, size * 0.22, SELECT_FILL);
+            }
+            Pip::Locked => {
+                let r = cell.shrink(size * 0.24);
+                p.rect_stroke(
+                    r,
+                    egui::CornerRadius::ZERO,
+                    egui::Stroke::new(2.0_f32, BASALT),
+                    egui::StrokeKind::Inside,
+                );
+            }
+        }
+    }
+    resp
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

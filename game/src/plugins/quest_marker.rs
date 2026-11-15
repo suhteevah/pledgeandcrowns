@@ -13,6 +13,7 @@ use crate::plugins::mission::{ActiveMission, MissionRegistry};
 use crate::plugins::npc::Npc;
 use crate::plugins::progress::MissionProgress;
 use crate::plugins::state::GameState;
+use crate::plugins::trial;
 use bevy::asset::RenderAssetUsages;
 use bevy::image::ImageSampler;
 use bevy::prelude::*;
@@ -223,12 +224,11 @@ fn update_markers(
     let active_id = active.current.as_ref().map(|m| m.id);
 
     for (npc, children) in &npcs {
-        let kind = marker_kind(
-            npc.mission_id,
-            next,
-            progress.is_cleared(npc.mission_id),
-            active_id,
-        );
+        // A trial NPC owns several missions; the marker follows the one
+        // talking to them is about, so it stays up until the last stage.
+        let current = trial::current_mission(&registry, &progress, npc.mission_id)
+            .map_or(npc.mission_id, |m| m.id);
+        let kind = marker_kind(current, next, progress.is_cleared(current), active_id);
         for child in children.iter() {
             let Ok((mut sprite, mut vis)) = marker_q.get_mut(child) else {
                 continue;

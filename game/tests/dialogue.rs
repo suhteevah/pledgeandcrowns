@@ -590,3 +590,219 @@ fn movement_keys_read_released_while_dialogue_is_open() {
     assert!(!keys.pressed(KeyCode::KeyW), "W must not reach movement");
     assert!(!keys.just_pressed(KeyCode::KeyW));
 }
+
+// --- boss trial: the Borrow Checker's Bridge ------------------------------
+
+use pledge_and_crown::plugins::dialogue::lines::TRIAL_STAGES;
+use pledge_and_crown::plugins::mission::CompletionView;
+use pledge_and_crown::plugins::trial::{self, TRIALS};
+use pledge_and_crown::plugins::ui_theme::Pip;
+
+/// Mark every registry mission up to and including `last` cleared.
+fn clear_through(app: &mut App, last: &str) {
+    let ids: Vec<&'static str> = MissionRegistry::default()
+        .missions
+        .iter()
+        .map(|m| m.id)
+        .collect();
+    let mut p = app.world_mut().resource_mut::<MissionProgress>();
+    for id in ids {
+        p.mark_cleared(id);
+        if id == last {
+            break;
+        }
+    }
+}
+
+fn open_dialogue(app: &App) -> Option<(&'static str, MissionStatus, Option<String>)> {
+    app.world().resource::<Dialogue>().active.as_ref().map(|a| {
+        (
+            a.mission_id,
+            a.status,
+            a.stage.as_ref().map(|s| s.label.clone()),
+        )
+    })
+}
+
+fn finish_dialogue(app: &mut App) {
+    while dialogue_open(app) {
+        tap(app, KeyCode::KeyF);
+    }
+}
+
+#[test]
+fn trial_stage_lines_are_authored_and_fit() {
+    for t in TRIALS {
+        for (i, stage) in t.stages.iter().enumerate() {
+            let row = TRIAL_STAGES
+                .iter()
+                .find(|r| r.npc_id == *stage)
+                .unwrap_or_else(|| panic!("{stage}: no trial lines"));
+            assert!(!row.lines.offer.is_empty(), "{stage}: offer");
+            assert!(!row.lines.in_progress.is_empty(), "{stage}: in_progress");
+            if i + 1 == t.stages.len() {
+                assert!(
+                    !row.lines.cleared.is_empty(),
+                    "{stage}: trial-complete lines"
+                );
+            }
+            for status in MissionStatus::ALL {
+                for l in row.lines.for_status(status) {
+                    assert!(l.chars().count() <= MAX_LINE_CHARS, "{stage}: {l}");
+                    assert_eq!(l.matches('`').count() % 2, 0, "{stage}: backticks: {l}");
+                }
+                // Every status still has something to say (fallback).
+                assert!(!select_conversation(stage, status, FERRIS).lines.is_empty());
+            }
+        }
+    }
+    assert_eq!(
+        line_templates("bridge_quill", MissionStatus::Offer),
+        TRIAL_STAGES[1].lines.offer
+    );
+}
+
+#[test]
+fn borrow_checker_is_a_cleared_villager_until_the_bridge_opens() {
+    let mut app = app_with_nearby("The Borrow Checker", "borrow_preview");
+    clear_through(&mut app, "borrow_preview");
+    tap(&mut app, KeyCode::KeyF);
+    assert_eq!(
+        open_dialogue(&app),
+        Some(("borrow_preview", MissionStatus::Cleared, None))
+    );
+}
+
+#[test]
+fn trial_offer_opens_stage_one_then_next_stage_key_skips_the_walk() {
+    let mut app = app_with_nearby("The Borrow Checker", "borrow_preview");
+    clear_through(&mut app, "while_loop");
+
+    // Offer of stage 1, with the trial header.
+    tap(&mut app, KeyCode::KeyF);
+    assert_eq!(
+        open_dialogue(&app),
+        Some((
+            "bridge_toll",
+            MissionStatus::Offer,
+            Some("Trial: The Bridge - stage 1 of 3".to_string())
+        ))
+    );
+    finish_dialogue(&mut app);
+    assert!(editor_open(&app));
+    assert_eq!(
+        app.world().resource::<EditorState>().encounter_id,
+        "bridge_toll"
+    );
+    assert!(
+        app.world()
+            .resource::<MissionProgress>()
+            .is_opened("bridge_toll"),
+        "the stage's offer is saved as heard, keyed by the stage"
+    );
+
+    // The server clears the stage; the player closes the editor.
+    app.update();
+    app.world_mut()
+        .resource_mut::<MissionProgress>()
+        .mark_cleared("bridge_toll");
+    app.update();
+    app.world_mut().resource_mut::<EditorState>().open = false;
+    app.update();
+    assert_eq!(
+        app.world()
+            .resource::<CompletionView>()
+            .mission_id
+            .as_deref(),
+        Some("bridge_toll"),
+        "closing the editor after a stage clear shows the stage panel"
+    );
+
+    // N: stage 2 straight in the editor.
+    tap(&mut app, KeyCode::KeyN);
+    assert!(editor_open(&app));
+    assert_eq!(
+        app.world().resource::<EditorState>().encounter_id,
+        "bridge_quill"
+    );
+    assert!(
+        app.world()
+            .resource::<CompletionView>()
+            .mission_id
+            .is_none()
+    );
+
+    // Walk away instead: close, talk again later -> stage 2 is in progress.
+    app.world_mut().resource_mut::<EditorState>().open = false;
+    app.update();
+    tap(&mut app, KeyCode::KeyF);
+    assert_eq!(
+        open_dialogue(&app),
+        Some((
+            "bridge_quill",
+            MissionStatus::InProgress,
+            Some("Trial: The Bridge - stage 2 of 3".to_string())
+        ))
+    );
+}
+
+#[test]
+fn cleared_trial_shows_the_final_stage_and_digits_pick_any_stage() {
+    let mut app = app_with_nearby("The Borrow Checker", "borrow_preview");
+    clear_through(&mut app, "bridge_lantern");
+    tap(&mut app, KeyCode::KeyF);
+    assert_eq!(
+        open_dialogue(&app),
+        Some((
+            "bridge_lantern",
+            MissionStatus::Cleared,
+            Some("Trial: The Bridge - stage 3 of 3".to_string())
+        ))
+    );
+    finish_dialogue(&mut app);
+    assert!(
+        !editor_open(&app),
+        "a cleared trial opens the panel, not the editor"
+    );
+    let view = |app: &App| app.world().resource::<CompletionView>().mission_id.clone();
+    assert_eq!(view(&app).as_deref(), Some("bridge_lantern"));
+    tap(&mut app, KeyCode::Digit1);
+    assert_eq!(view(&app).as_deref(), Some("bridge_toll"));
+    // F revisits the stage on view, not the NPC's current mission.
+    tap(&mut app, KeyCode::KeyF);
+    assert!(editor_open(&app));
+    assert_eq!(
+        app.world().resource::<EditorState>().encounter_id,
+        "bridge_toll"
+    );
+    let p = app.world().resource::<MissionProgress>();
+    assert_eq!(
+        trial::pips(&TRIALS[0], p, "bridge_toll"),
+        vec![Pip::Current, Pip::Cleared, Pip::Cleared]
+    );
+}
+
+#[test]
+fn trial_stays_locked_until_its_prereq_and_gates_act_3() {
+    let reg = MissionRegistry::default();
+    let mut p = MissionProgress::default();
+    for m in &reg.missions {
+        if m.id == "bridge_toll" {
+            break;
+        }
+        p.mark_cleared(m.id);
+    }
+    let unlocked = |p: &MissionProgress, id: &str| reg.find(id).unwrap().is_unlocked(p);
+    assert!(unlocked(&p, "bridge_toll"));
+    assert!(!unlocked(&p, "bridge_quill"));
+    assert!(!unlocked(&p, "impl_method"));
+    p.mark_cleared("bridge_toll");
+    p.mark_cleared("bridge_quill");
+    assert!(
+        !unlocked(&p, "impl_method"),
+        "Act 3 waits for the final stage"
+    );
+    p.mark_cleared("bridge_lantern");
+    // In the demo build Act 3 is not in the build at all.
+    assert_eq!(unlocked(&p, "impl_method"), !cfg!(feature = "demo"));
+}

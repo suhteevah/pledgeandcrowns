@@ -157,6 +157,7 @@ fn draw_title_menu(
     };
     let nav = read_nav(ctx);
     let cleared = progress.cleared_count();
+    // Missions, not NPCs: a trial NPC owns several missions.
     let total = registry.missions.len();
     let has_progress = cleared > 0 || saved_pos.0.is_some();
     let inset = letterbox_points(windows.single().ok(), ctx.pixels_per_point());
@@ -175,7 +176,7 @@ fn draw_title_menu(
                     let tagline = if cleared == 0 {
                         "a Rust kingdom awaits its pledge".to_string()
                     } else if cleared < total {
-                        format!("your pledge so far: {cleared} / {total} encounters cleared")
+                        format!("your pledge so far: {cleared} / {total} missions cleared")
                     } else {
                         format!("the realm has crowned you - {cleared} / {total} cleared")
                     };
@@ -213,7 +214,7 @@ fn draw_title_menu(
                 ui.vertical_centered(|ui| {
                     ui_theme::heading(ui, "Start a new game?");
                     ui.label(format!(
-                        "This erases your saved progress ({cleared} / {total} encounters cleared)."
+                        "This erases your saved progress ({cleared} / {total} missions cleared)."
                     ));
                     ui_theme::rule(ui);
                     let mut sel = menu.selected;

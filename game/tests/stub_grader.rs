@@ -79,6 +79,37 @@ fn main() {
     println!("{n}");
 }"#
         }
+        "bridge_toll" => {
+            r#"fn weigh(cargo: &str) -> usize { cargo.len() }
+fn main() {
+    let cargo = String::from("lantern oil");
+    let toll = weigh(&cargo);
+    println!("toll: {toll}");
+    println!("cargo: {cargo}");
+}"#
+        }
+        "bridge_quill" => {
+            r#"fn inscribe(scroll: &mut Vec<String>, entry: &str) { scroll.push(entry.to_string()); }
+fn main() {
+    let mut scroll = vec![String::from("north road")];
+    println!("reader one: {}", scroll[0]);
+    println!("reader two: {}", scroll[0]);
+    inscribe(&mut scroll, "east road");
+    println!("scroll: {}", scroll.join(", "));
+}"#
+        }
+        "bridge_lantern" => {
+            r#"fn before<'a>(line: &'a str, sep: &str) -> &'a str {
+    match line.find(sep) { Some(i) => &line[..i], None => line }
+}
+fn main() {
+    let lantern = String::from("oil:wick:glass");
+    let part;
+    { let sep = String::from(":"); part = before(&lantern, &sep); }
+    println!("first: {part}");
+    println!("whole: {}", before("glass", ":"));
+}"#
+        }
         "borrow_mut" => {
             r#"fn bump(x: &mut i32) { *x = 99; }
 fn main() { let mut n = 0; bump(&mut n); println!("{n}"); }"#

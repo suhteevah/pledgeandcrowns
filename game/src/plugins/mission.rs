@@ -12,6 +12,7 @@ use crate::plugins::editor::EditorState;
 use crate::plugins::npc::NearbyNpc;
 use crate::plugins::progress::MissionProgress;
 use crate::plugins::state::{GameState, PauseState};
+use crate::plugins::trial;
 use crate::plugins::ui_theme;
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, EguiPrimaryContextPass, egui};
@@ -45,9 +46,12 @@ pub struct Mission {
 }
 
 /// The last mission of Act 2: the final mission playable in the free demo
-/// (`--features demo`). Acts 1-2 are the first 21 missions in the
-/// registry; Act 3 opens with `impl_method`.
-pub const DEMO_LAST_MISSION_ID: &str = "while_loop";
+/// (`--features demo`). It is the last stage of the Borrow Checker's
+/// trial, the Act 2 boss, so the demo ends on the boss (design/01 and
+/// design/07: "Acts 1-2 together are the MVP vertical slice"). Acts 1-2
+/// are the first 24 missions in the registry (21 lessons plus the three
+/// trial stages); Act 3 opens with `impl_method`.
+pub const DEMO_LAST_MISSION_ID: &str = "bridge_lantern";
 
 /// Where the end-of-demo panel will point players for the full game.
 /// Deliberately empty and unused: the store, price and name are blocked
@@ -645,6 +649,101 @@ decrement step.",
                 prereq: None,
                 available: true,
                 starter_code: "fn main() {\n    let mut _n = 5;\n    // count down with a while loop and a -= 1 step\n    println!(\"{_n}\");\n}\n",
+            },
+            // ── Act 2 boss: the Borrow Checker's trial, The Bridge ─────
+            // Three stages owned by the Borrow Checker (`trial::TRIALS`),
+            // after his prologue `borrow_preview`: move vs borrow, shared
+            // vs exclusive borrows, a lifetime on a returned slice. Every
+            // starter fails with the error the stage is about, and every
+            // compiler error he names is compiled in
+            // `tests/mission_text.rs` (hard rule 3).
+            Mission {
+                id: "bridge_toll",
+                npc_name: "The Borrow Checker",
+                prompt: "Make `weigh` borrow the cargo, so `main` still owns it after the toll.",
+                tutorial: "## Concept\n\
+The first toll of the Bridge. Passing a `String` to a function by value \
+*moves* it: ownership goes to the parameter, and here `weigh` drops the \
+cargo when it returns. The name `cargo` is still in scope in `main`, but it \
+no longer owns anything, so the next use is rejected with E0382, \
+\"borrow of moved value: `cargo`\". A function that only reads should \
+*borrow*: take `&str`, and the caller lends with `&`. The owner keeps it.\n\n\
+## Syntax\n\
+```\nfn len_of(s: &str) -> usize {\n    s.len()\n}\nlet name = String::from(\"gate\");\nlet n = len_of(&name);   // lend: &String coerces to &str\nprintln!(\"{name} {n}\"); // name is still the owner\n```\n\
+A borrow ends when its last use is over; it never takes the value away.\n\n\
+## Task\n\
+The starter does not compile: `weigh` takes the cargo, then `main` prints \
+it. Change `weigh` to `fn weigh(cargo: &str) -> usize` and call it with \
+`&cargo`. Your program should print `toll: 11`, then `cargo: lantern oil`.\n\n\
+## Hint\n\
+The grader needs `fn weigh(cargo: &str)` and a call that lends, \
+`weigh(&cargo)`. Calling `weigh(cargo.clone())` also compiles, but it pays \
+the toll with a copy: the Borrow Checker wants a lend, not a gift.",
+                prereq: None,
+                available: true,
+                starter_code: "fn weigh(cargo: String) -> usize {\n    cargo.len()\n}\n\nfn main() {\n    let cargo = String::from(\"lantern oil\");\n    // this won't compile yet: weigh keeps the cargo, then main reaches for it\n    let toll = weigh(cargo);\n    println!(\"toll: {toll}\");\n    println!(\"cargo: {cargo}\");\n}\n",
+            },
+            Mission {
+                id: "bridge_quill",
+                npc_name: "The Borrow Checker",
+                prompt: "Let both readers finish, then write on the scroll through an `&mut` borrow.",
+                tutorial: "## Concept\n\
+The second toll is the rule itself: at any moment a value may have many \
+shared borrows (`&T`) or one exclusive borrow (`&mut T`), never both. A \
+borrow lasts until its last use, not to the end of the block. Two readers \
+may hold `&scroll[0]` together, but `scroll.push(...)` needs `&mut scroll`, \
+and while a reader is still used later the compiler refuses with E0502, \
+\"cannot borrow `scroll` as mutable because it is also borrowed as \
+immutable\".\n\n\
+## Syntax\n\
+```\nfn add(list: &mut Vec<i32>, n: i32) {\n    list.push(n);\n}\nlet mut v = vec![1];\nlet first = &v[0];\nprintln!(\"{first}\");   // last use of the shared borrow\nadd(&mut v, 2);         // now the exclusive borrow is allowed\n```\n\
+The `&mut` at the call site says, out loud, who may write.\n\n\
+## Task\n\
+Write `fn inscribe(scroll: &mut Vec<String>, entry: &str)` that pushes the \
+entry onto the scroll. In `main`, let both readers print first, then write \
+with `inscribe(&mut scroll, \"east road\")` and print the scroll. Your \
+program should print `reader one: north road`, `reader two: north road`, \
+then `scroll: north road, east road`.\n\n\
+## Hint\n\
+The grader needs `fn inscribe(scroll: &mut Vec<String>, entry: &str)`, a \
+`push` onto the scroll inside it, and a call `inscribe(&mut scroll, ...)`. \
+`entry.to_string()` turns the `&str` into the `String` the scroll holds. \
+Moving the two reader lines above the write is all `main` needs.",
+                prereq: None,
+                available: true,
+                starter_code: "fn main() {\n    let mut scroll = vec![String::from(\"north road\")];\n    let first = &scroll[0];\n    let second = &scroll[0];\n    // this won't compile yet: the quill writes while both readers still hold the scroll\n    scroll.push(String::from(\"east road\"));\n    println!(\"reader one: {first}\");\n    println!(\"reader two: {second}\");\n    println!(\"scroll: {}\", scroll.join(\", \"));\n}\n",
+            },
+            Mission {
+                id: "bridge_lantern",
+                npc_name: "The Borrow Checker",
+                prompt: "Give `before` a lifetime `'a` that ties its answer to `line` alone.",
+                tutorial: "## Concept\n\
+The last toll. A function that returns a reference must say which input \
+it borrows from, so the caller knows how long the answer may live. With \
+one reference parameter the compiler works it out; with two (and no \
+`self`) it will not guess, and stops with E0106, \"missing lifetime \
+specifier\". A lifetime parameter `'a` names the link. Tie the answer to \
+the input it really comes from. The compiler's help ties both inputs to \
+`'a`; do that here, and the answer is held to `sep` as well, so a `sep` \
+dropped early fails with E0597, \"`sep` does not live long enough\".\n\n\
+## Syntax\n\
+```\nfn after<'a>(line: &'a str, sep: &str) -> &'a str {\n    match line.find(sep) {\n        Some(i) => &line[i + sep.len()..],\n        None => \"\",\n    }\n}\n```\n\
+`'a` appears on `line` and on the return type only: `sep` is merely read.\n\n\
+## Task\n\
+`before` returns the part of `line` before the first `sep`, or all of \
+`line` if there is none. The starter fails with E0106. Add `'a` so the \
+answer borrows from `line` only, and leave `sep` a plain `&str`. Keep \
+`main` as it is: `sep` is dropped at the end of the inner block, before \
+`part` is printed. Your program should print `first: oil`, then \
+`whole: glass`.\n\n\
+## Hint\n\
+The grader needs `fn before<'a>(line: &'a str, sep: &str) -> &'a str` \
+(another lifetime name is fine). If you write `sep: &'a str` as well, \
+`main` fails with E0597: the answer would be tied to `sep`, which is \
+dropped at the inner `}`.",
+                prereq: None,
+                available: true,
+                starter_code: "// this won't compile yet: say which input the answer borrows from\nfn before(line: &str, sep: &str) -> &str {\n    match line.find(sep) {\n        Some(i) => &line[..i],\n        None => line,\n    }\n}\n\nfn main() {\n    let lantern = String::from(\"oil:wick:glass\");\n    let part;\n    {\n        let sep = String::from(\":\");\n        part = before(&lantern, &sep);\n    }\n    println!(\"first: {part}\");\n    println!(\"whole: {}\", before(\"glass\", \":\"));\n}\n",
             },
             // ── Act 3: The Guildhall Quarter ──────────────────────────
             // Fills the doc's Act 3 gaps the prelude skipped: methods/impl,
@@ -1636,13 +1735,16 @@ impl Plugin for MissionPlugin {
             .init_resource::<ActiveMission>()
             .init_resource::<CompletionView>()
             .init_resource::<EpilogueView>()
+            .init_resource::<trial::TrialView>()
             .add_message::<MissionLockedAttempt>()
             .add_systems(
                 Update,
                 (
                     handle_interact_key,
+                    trial::trial_panel_keys,
                     dismiss_completion_on_escape,
                     dismiss_epilogue_on_escape,
+                    trial::watch_stage_clears,
                 )
                     .run_if(in_state(GameState::InGame)),
             )
@@ -1732,10 +1834,16 @@ fn handle_interact_key(
     let Some(entry) = nearby.current.as_ref() else {
         return;
     };
-    let Some(mission) = registry
-        .missions
-        .iter()
-        .find(|m| m.id == entry.mission_id)
+    // A recap open on one of this NPC's own missions (a trial stage picked
+    // on the trial panel, say) is what F revisits; otherwise F is about the
+    // NPC's current mission (see `trial::current_mission`).
+    let viewing = completion
+        .mission_id
+        .as_deref()
+        .filter(|id| trial::owned_missions(entry.mission_id).contains(id))
+        .and_then(|id| registry.find(id));
+    let Some(mission) = viewing
+        .or_else(|| trial::current_mission(&registry, &progress, entry.mission_id))
         .cloned()
     else {
         tracing::warn!(
@@ -1805,7 +1913,21 @@ fn handle_interact_key(
         entry.name,
         cleared
     );
+    start_mission(&mut editor, &mut active, mission);
+}
 
+/// Load `mission`'s starter into the editor, open it and make the mission
+/// active (the F-press flow, and a trial's "next stage" key).
+pub fn start_mission(editor: &mut EditorState, active: &mut ActiveMission, mission: Mission) {
+    if let Some((t, i)) = trial::trial_of(mission.id) {
+        tracing::debug!(
+            trial = t.id,
+            stage = mission.id,
+            stage_no = i + 1,
+            of = t.stages.len(),
+            "trial stage opened in the editor"
+        );
+    }
     editor.source = mission.starter_code.to_string();
     editor.last_compile_result = None;
     editor.encounter_id = mission.id.to_string();
@@ -1871,10 +1993,13 @@ fn draw_interaction_prompt(
         return;
     };
 
-    let available = registry.is_available(entry.mission_id);
-    let cleared = available && progress.is_cleared(entry.mission_id);
-    let mission = registry.find(entry.mission_id);
+    let mission = trial::current_mission(&registry, &progress, entry.mission_id);
+    let current_id = mission.map_or(entry.mission_id, |m| m.id);
+    let available = registry.is_available(current_id);
+    let cleared = available && progress.is_cleared(current_id);
     let unlocked = mission.is_some_and(|m| m.is_unlocked(&progress));
+    // A trial NPC shows where the trial stands (stage label + pips).
+    let strip = trial::StageStrip::for_mission(current_id, &progress);
     let prereq_npc_name = mission
         .and_then(|m| m.prereq)
         .and_then(|pid| registry.find(pid))
@@ -1922,7 +2047,10 @@ fn draw_interaction_prompt(
                         .color(ui_theme::TEXT),
                 );
             });
-            if let Some(m) = active.current.as_ref().filter(|m| m.id == entry.mission_id) {
+            if let Some(strip) = strip.as_ref().filter(|_| available) {
+                strip.show(ui, ui_theme::SMALL_SIZE);
+            }
+            if let Some(m) = active.current.as_ref().filter(|m| m.id == current_id) {
                 ui_theme::markdown::show_inline(ui, m.prompt, ui_theme::BODY_SIZE);
             }
             ui_theme::caption(
@@ -2037,6 +2165,7 @@ fn draw_completion_panel(
     mut contexts: EguiContexts,
     completion: Res<CompletionView>,
     registry: Res<MissionRegistry>,
+    progress: Res<MissionProgress>,
 ) {
     let Some(mission_id) = completion.mission_id.as_deref() else {
         return;
@@ -2047,6 +2176,10 @@ fn draw_completion_panel(
     let Ok(ctx) = contexts.ctx_mut() else {
         return;
     };
+    if let Some((t, index)) = trial::trial_of(mission.id) {
+        draw_trial_panel(ctx, t, index, mission, &registry, &progress);
+        return;
+    }
 
     modal_panel(ctx, "mission complete", 520.0, |ui| {
         ui.horizontal(|ui| {
@@ -2071,6 +2204,84 @@ fn draw_completion_panel(
             });
         ui_theme::rule(ui);
         ui_theme::key_hint(ui, &[("F", "revisit"), ("Esc", "close")]);
+    });
+}
+
+/// The completion panel of a trial stage. Two shapes, both with the stage
+/// label and pips:
+///
+/// - a stage cleared, trial not finished: "stage i cleared", the recap and
+///   `[N] next stage` (the next stage opens straight in the editor) or
+///   `[Esc]` to walk away and come back later;
+/// - every stage cleared: the trial-complete panel, distinct from a normal
+///   clear: the owner's closing line, every stage selectable with its
+///   digit key so any stage can be re-read, `[F]` revisits the one on view.
+fn draw_trial_panel(
+    ctx: &egui::Context,
+    t: &'static trial::Trial,
+    index: usize,
+    mission: &Mission,
+    registry: &MissionRegistry,
+    progress: &MissionProgress,
+) {
+    let complete = trial::is_complete(t, progress);
+    let strip = trial::StageStrip {
+        label: trial::stage_label(t, index),
+        pips: trial::pips(t, progress, mission.id),
+    };
+    let next = t
+        .stages
+        .get(index + 1)
+        .and_then(|id| registry.find(id))
+        .filter(|m| m.is_unlocked(progress) && !progress.is_cleared(m.id));
+    let id = if complete {
+        "trial complete"
+    } else {
+        "trial stage cleared"
+    };
+    modal_panel(ctx, id, 560.0, |ui| {
+        ui.horizontal(|ui| {
+            ui_theme::status_mark(ui, ui_theme::Status::Cleared, ui_theme::HEADING_SIZE);
+            if complete {
+                ui_theme::heading(ui, format!("Trial complete: {}", t.name));
+            } else {
+                ui_theme::heading(ui, mission.npc_name);
+            }
+        });
+        if complete {
+            ui.label(
+                egui::RichText::new(format!("{} - {}", mission.npc_name, t.complete_line))
+                    .size(ui_theme::BODY_SIZE)
+                    .color(ui_theme::TEXT)
+                    .italics(),
+            );
+            ui_theme::caption(ui, format!("all {} stages cleared", t.stages.len()));
+        } else {
+            ui_theme::caption(ui, format!("stage {} cleared", index + 1));
+        }
+        ui_theme::rule(ui);
+        strip.show(ui, ui_theme::BODY_SIZE);
+        ui_theme::markdown::show_inline(ui, mission.prompt, ui_theme::BODY_SIZE);
+        ui_theme::rule(ui);
+        let max_h = (ui.ctx().content_rect().height() - RECAP_CHROME_HEIGHT - 40.0).max(120.0);
+        egui::ScrollArea::vertical()
+            .id_salt("trial_recap_scroll")
+            .max_height(max_h)
+            .show(ui, |ui| {
+                ui_theme::markdown::show(ui, &recap_text(mission.tutorial));
+            });
+        ui_theme::rule(ui);
+        let stage_keys = format!("1-{}", t.stages.len());
+        let hints: Vec<(&str, &str)> = match (complete, next) {
+            (true, _) => vec![
+                (stage_keys.as_str(), "re-read a stage"),
+                ("F", "revisit"),
+                ("Esc", "close"),
+            ],
+            (false, Some(_)) => vec![("N", "next stage"), ("F", "revisit"), ("Esc", "walk away")],
+            (false, None) => vec![("F", "revisit"), ("Esc", "close")],
+        };
+        ui_theme::key_hint(ui, &hints);
     });
 }
 
@@ -2112,8 +2323,9 @@ fn draw_epilogue_panel(
         ui.add_space(6.0);
         ui.horizontal(|ui| {
             ui_theme::status_mark(ui, ui_theme::Status::Cleared, ui_theme::BODY_SIZE);
+            // Missions, not NPCs: a trial NPC owns several missions.
             ui.label(format!(
-                "{} of {} encounters cleared.",
+                "{} of {} missions cleared.",
                 progress.cleared_count(),
                 registry.missions.len()
             ));
@@ -2234,12 +2446,13 @@ fn draw_demo_end_panel(
         ui_theme::heading(ui, "The demo ends here.");
         ui_theme::rule(ui);
         ui.label(format!(
-            "You have cleared all {free} encounters of Acts 1 and 2. The road out \
-             of the village continues in the full game."
+            "You have cleared all {free} missions of Acts 1 and 2, the Borrow \
+             Checker's trial among them. The road past the Bridge continues in \
+             the full game."
         ));
         ui.add_space(6.0);
         ui.label(format!(
-            "The full game has {more} more encounters across Acts 3 to 8:"
+            "The full game has {more} more missions across Acts 3 to 8:"
         ));
         ui.add_space(2.0);
         for (act, topics) in FULL_GAME_ACTS {

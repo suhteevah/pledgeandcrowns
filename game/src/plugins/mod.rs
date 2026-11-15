@@ -21,6 +21,7 @@ pub mod screenshot;
 pub mod state;
 pub mod stub_grader;
 pub mod title;
+pub mod trial;
 pub mod ui_theme;
 pub mod world;
 

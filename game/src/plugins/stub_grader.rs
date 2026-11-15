@@ -848,6 +848,34 @@ pub static MISSION_RULES: &[MissionRule] = &[
         ],
         pass: "the Heraldic Sage walks the sash. \"every variant a panel, every arm a blazon read.\"",
     },
+    // ── Act 2 boss: the Borrow Checker's trial, The Bridge (stages 1-3).
+    MissionRule {
+        id: "bridge_toll",
+        npc: "the Borrow Checker bars the bridge",
+        checks: &[
+            check(&["fn weigh($_: &str)"], "weigh must borrow its cargo: `fn weigh(cargo: &str)`"),
+            check(&["weigh(&$_)", "weigh($_.as_str())"], "lend the cargo: call `weigh(&cargo)`"),
+        ],
+        pass: "the Borrow Checker steps aside one pace. \"the cargo is still yours. first toll paid.\"",
+    },
+    MissionRule {
+        id: "bridge_quill",
+        npc: "the Borrow Checker holds the quill back",
+        checks: &[
+            check(&["fn inscribe($S: &mut Vec<String>, $_: &str)"], "inscribe takes the scroll as `&mut Vec<String>` and the entry as `&str`"),
+            check(&["fn inscribe($S: &mut Vec<String>, $_: &str) $.. $S.push("], "inscribe must `push` the entry onto the scroll"),
+            check(&["inscribe(&mut $_"], "hand over the quill exclusively: call `inscribe(&mut scroll, ...)`"),
+        ],
+        pass: "the Borrow Checker releases the quill. \"readers first, then the writer. second toll paid.\"",
+    },
+    MissionRule {
+        id: "bridge_lantern",
+        npc: "the Borrow Checker shades the lantern",
+        checks: &[
+            check(&["fn before<$'a>($_: &$'a str, $_: &str) -> &$'a str", "fn before<$'a, $'b>($_: &$'a str, $_: &$'b str) -> &$'a str"], "tie the answer to `line` only: `fn before<'a>(line: &'a str, sep: &str) -> &'a str`"),
+        ],
+        pass: "the Borrow Checker lifts the lantern. \"the answer borrows from the line alone. you may cross.\"",
+    },
     // ── Act 3 (Guildhall Quarter).
     MissionRule {
         id: "impl_method",

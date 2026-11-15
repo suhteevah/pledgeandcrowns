@@ -39,8 +39,9 @@ use crate::plugins::mission::{CompletionView, MissionLockedAttempt, MissionRegis
 use crate::plugins::npc::{NPC_ROSTER, NearbyNpc};
 use crate::plugins::progress::MissionProgress;
 use crate::plugins::state::{GameState, PauseState};
+use crate::plugins::trial;
 
-use lines::{AUTHORED, GENERIC, NOT_YET_ELSEWHERE, NOT_YET_NOTHING, StatusLines};
+use lines::{AUTHORED, GENERIC, NOT_YET_ELSEWHERE, NOT_YET_NOTHING, StatusLines, TRIAL_STAGES};
 
 // Colours are the shared theme's roles (design/03-art-style-bible.md, UI
 // style); `ui_theme` is the only place a colour is defined. Inline code
@@ -149,9 +150,12 @@ impl StatusLines {
 }
 
 /// Authored lines for `npc_id`/`status`, else the generic fallback.
+/// `npc_id` is a mission id: a villager's roster key, or a trial stage
+/// (looked up in [`TRIAL_STAGES`]).
 pub fn line_templates(npc_id: &str, status: MissionStatus) -> &'static [&'static str] {
     AUTHORED
         .iter()
+        .chain(TRIAL_STAGES.iter())
         .find(|row| row.npc_id == npc_id)
         .map(|row| row.lines.for_status(status))
         .filter(|l| !l.is_empty())
@@ -409,7 +413,14 @@ impl DialogueRun {
 /// A conversation on screen.
 pub struct ActiveDialogue {
     pub speaker: &'static str,
+    /// Roster key of the speaking NPC (portrait lookup).
     pub npc_id: &'static str,
+    /// The mission the conversation is about (the NPC's current mission;
+    /// a trial stage for a trial owner). Its offer is what gets saved as
+    /// heard.
+    pub mission_id: &'static str,
+    /// Trial header (label + pips) when the mission is a trial stage.
+    pub stage: Option<trial::StageStrip>,
     pub status: MissionStatus,
     pub finish: Finish,
     pub run: DialogueRun,
@@ -520,7 +531,9 @@ pub fn dialogue_input(
                     // Saved with the progress; only touch it (and so
                     // trigger a save) the first time.
                     match progress.as_mut() {
-                        Some(p) if !p.is_opened(active.npc_id) => p.mark_opened(active.npc_id),
+                        Some(p) if !p.is_opened(active.mission_id) => {
+                            p.mark_opened(active.mission_id)
+                        }
                         Some(_) => {}
                         None => tracing::warn!("dialogue: no MissionProgress; opened not saved"),
                     }
@@ -549,7 +562,9 @@ pub fn dialogue_input(
         tracing::warn!("dialogue: registry/progress missing; F ignored");
         return;
     };
-    let Some(mission) = registry.find(entry.mission_id) else {
+    // The NPC's current mission: its own for a villager, the stage in play
+    // for a trial owner (see `trial` for the status rule).
+    let Some(mission) = trial::current_mission(&registry, progress, entry.mission_id) else {
         // mission.rs logs the unknown-mission case on its own path.
         return;
     };
@@ -566,7 +581,13 @@ pub fn dialogue_input(
         });
     }
     let hint = next_hint(&registry, progress, mission.id);
-    let convo = select_conversation(entry.mission_id, status, hint);
+    // Lines are keyed by mission: a villager's mission id is their roster
+    // key, and each trial stage has its own row.
+    let convo = select_conversation(mission.id, status, hint);
+    let stage = trial::StageStrip::for_mission(mission.id, progress);
+    if let Some(s) = stage.as_ref() {
+        tracing::debug!(npc = entry.mission_id, stage = mission.id, label = %s.label, ?status, "trial dialogue");
+    }
 
     let spec = NPC_ROSTER.iter().find(|s| s.mission_id == entry.mission_id);
     let portrait = spec
@@ -584,6 +605,8 @@ pub fn dialogue_input(
     dialogue.active = Some(ActiveDialogue {
         speaker: entry.name,
         npc_id: entry.mission_id,
+        mission_id: mission.id,
+        stage,
         status,
         finish: convo.finish,
         run: DialogueRun::new(convo.lines),
@@ -690,6 +713,10 @@ fn draw_dialogue(mut contexts: EguiContexts, dialogue: Res<Dialogue>) {
                                             .strong(),
                                     );
                                 });
+                            if let Some(stage) = active.stage.as_ref() {
+                                ui.add_space(4.0);
+                                stage.show(ui, HINT_TEXT_SIZE);
+                            }
                             ui.add_space(6.0);
                             ui.set_min_height(BODY_TEXT_SIZE * 3.6);
                             let job = spans_job(&active.run.visible_spans(), ui.available_width());

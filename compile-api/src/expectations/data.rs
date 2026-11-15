@@ -288,6 +288,70 @@ pub(super) const CHECKS: &[MissionCheck] = &[
             matchers: &[LastLine("0")],
         },
     ),
+    // ── Act 2 boss: the Borrow Checker's trial, The Bridge ───────────
+    // Each stage's signature is pinned by the `_sig` coercion, so a
+    // solution that compiles only by cloning (stage 1), or that ties the
+    // answer to both inputs (stage 3), fails the checker build.
+    m(
+        "bridge_toll",
+        H(Harness {
+            contract: "`fn weigh(cargo: &str) -> usize` and a `fn main`",
+            run_main: true,
+            body: "    let _sig: fn(&str) -> usize = super::weigh;
+    emit(\"weigh(\\\"lantern oil\\\")\", super::weigh(\"lantern oil\"));
+    let cargo = ::std::string::String::from(\"salt\");
+    let toll = super::weigh(&cargo);
+    emit(\"weigh(&cargo)\", toll);
+    emit(\"cargo after the toll\", cargo);",
+            expected: &[
+                "weigh(\"lantern oil\") = 11",
+                "weigh(&cargo) = 4",
+                "cargo after the toll = \"salt\"",
+            ],
+            main_matchers: &[Exact("toll: 11\ncargo: lantern oil")],
+        }),
+    ),
+    m(
+        "bridge_quill",
+        H(Harness {
+            contract: "`fn inscribe(scroll: &mut Vec<String>, entry: &str)` and a `fn main`",
+            run_main: true,
+            body: "    let _sig: fn(&mut ::std::vec::Vec<::std::string::String>, &str) = super::inscribe;
+    let mut scroll = ::std::vec![::std::string::String::from(\"a\")];
+    super::inscribe(&mut scroll, \"b\");
+    super::inscribe(&mut scroll, \"c\");
+    emit(\"scroll after two entries\", scroll);",
+            expected: &["scroll after two entries = [\"a\", \"b\", \"c\"]"],
+            main_matchers: &[Exact(
+                "reader one: north road\nreader two: north road\nscroll: north road, east road",
+            )],
+        }),
+    ),
+    m(
+        "bridge_lantern",
+        H(Harness {
+            contract: "`fn before<'a>(line: &'a str, sep: &str) -> &'a str` and a `fn main`",
+            run_main: true,
+            body: "    let _sig: for<'a, 'b> fn(&'a str, &'b str) -> &'a str = super::before;
+    emit(\"before(\\\"oil:wick\\\", \\\":\\\")\", super::before(\"oil:wick\", \":\"));
+    emit(\"before(\\\"glass\\\", \\\":\\\")\", super::before(\"glass\", \":\"));
+    emit(\"before(\\\"a--b\\\", \\\"--\\\")\", super::before(\"a--b\", \"--\"));
+    let line = ::std::string::String::from(\"north:south\");
+    let answer;
+    {
+        let sep = ::std::string::String::from(\":\");
+        answer = super::before(&line, &sep);
+    }
+    emit(\"answer outlives sep\", answer);",
+            expected: &[
+                "before(\"oil:wick\", \":\") = \"oil\"",
+                "before(\"glass\", \":\") = \"glass\"",
+                "before(\"a--b\", \"--\") = \"a\"",
+                "answer outlives sep = \"north\"",
+            ],
+            main_matchers: &[Exact("first: oil\nwhole: glass")],
+        }),
+    ),
     // ── Act 3: The Guildhall Quarter ─────────────────────────────────
     m(
         "impl_method",

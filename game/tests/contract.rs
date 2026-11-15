@@ -89,6 +89,37 @@ fn main() {
     println!("{n}");
 }"#
         }
+        "bridge_toll" => {
+            r#"fn weigh(cargo: &str) -> usize { cargo.len() }
+fn main() {
+    let cargo = String::from("lantern oil");
+    let toll = weigh(&cargo);
+    println!("toll: {toll}");
+    println!("cargo: {cargo}");
+}"#
+        }
+        "bridge_quill" => {
+            r#"fn inscribe(scroll: &mut Vec<String>, entry: &str) { scroll.push(entry.to_string()); }
+fn main() {
+    let mut scroll = vec![String::from("north road")];
+    println!("reader one: {}", scroll[0]);
+    println!("reader two: {}", scroll[0]);
+    inscribe(&mut scroll, "east road");
+    println!("scroll: {}", scroll.join(", "));
+}"#
+        }
+        "bridge_lantern" => {
+            r#"fn before<'a>(line: &'a str, sep: &str) -> &'a str {
+    match line.find(sep) { Some(i) => &line[..i], None => line }
+}
+fn main() {
+    let lantern = String::from("oil:wick:glass");
+    let part;
+    { let sep = String::from(":"); part = before(&lantern, &sep); }
+    println!("first: {part}");
+    println!("whole: {}", before("glass", ":"));
+}"#
+        }
         "borrow_mut" => {
             r#"fn bump(x: &mut i32) { *x = 99; }
 fn main() { let mut n = 0; bump(&mut n); println!("{n}"); }"#
@@ -1038,11 +1069,44 @@ const CORRECT: &[(&str, &str, &str)] = &[
         "token match: AtomicU32",
         "use std::sync::atomic::{AtomicU32, Ordering};\nfn main() {\n    let c = AtomicU32::new(0);\n    c.fetch_add(1, Ordering::SeqCst);\n    println!(\"{}\", c.load(Ordering::SeqCst));\n}\n",
     ),
+    // ── the Borrow Checker's trial: realistic alternatives (the same
+    // programs pass the server check in `expectations_proof.rs`) ──
+    (
+        "bridge_toll",
+        "trial alt: chars().count() and as_str()",
+        "fn weigh(cargo: &str) -> usize {\n    cargo.chars().count()\n}\nfn main() {\n    let cargo = String::from(\"lantern oil\");\n    let toll = weigh(cargo.as_str());\n    println!(\"toll: {toll}\");\n    println!(\"cargo: {cargo}\");\n}\n",
+    ),
+    (
+        "bridge_quill",
+        "trial alt: readers clone, other names",
+        "fn inscribe(list: &mut Vec<String>, line: &str) {\n    list.push(String::from(line));\n}\nfn main() {\n    let mut scroll = vec![String::from(\"north road\")];\n    let first = scroll[0].clone();\n    let second = scroll[0].clone();\n    inscribe(&mut scroll, \"east road\");\n    println!(\"reader one: {first}\");\n    println!(\"reader two: {second}\");\n    println!(\"scroll: {}\", scroll.join(\", \"));\n}\n",
+    ),
+    (
+        "bridge_lantern",
+        "trial alt: two named lifetimes, split",
+        "fn before<'a, 'b>(line: &'a str, sep: &'b str) -> &'a str {\n    line.split(sep).next().unwrap_or(line)\n}\nfn main() {\n    let lantern = String::from(\"oil:wick:glass\");\n    let part;\n    {\n        let sep = String::from(\":\");\n        part = before(&lantern, &sep);\n    }\n    println!(\"first: {part}\");\n    println!(\"whole: {}\", before(\"glass\", \":\"));\n}\n",
+    ),
 ];
 
 /// Wrong programs the old substring grader ACCEPTED and a token-level
 /// check now catches. `(mission, audit id, source)`.
 const WRONG: &[(&str, &str, &str)] = &[
+    // ── the Borrow Checker's trial: the shortcuts his tutorial names ──
+    (
+        "bridge_toll",
+        "trial: pays the toll with a clone",
+        "fn weigh(cargo: String) -> usize { cargo.len() }\nfn main() { let cargo = String::from(\"lantern oil\"); let toll = weigh(cargo.clone()); println!(\"toll: {toll}\"); println!(\"cargo: {cargo}\"); }\n",
+    ),
+    (
+        "bridge_quill",
+        "trial: inscribe takes the scroll by value",
+        "fn inscribe(mut scroll: Vec<String>, entry: &str) -> Vec<String> { scroll.push(entry.to_string()); scroll }\nfn main() { let scroll = vec![String::from(\"north road\")]; let scroll = inscribe(scroll, \"east road\"); println!(\"scroll: {}\", scroll.join(\", \")); }\n",
+    ),
+    (
+        "bridge_lantern",
+        "trial: ties the answer to both inputs (rustc's suggestion; E0597 in main)",
+        "fn before<'a>(line: &'a str, sep: &'a str) -> &'a str { match line.find(sep) { Some(i) => &line[..i], None => line } }\nfn main() { println!(\"{}\", before(\"oil:wick\", \":\")); }\n",
+    ),
     (
         "if_else_sign",
         "G2 neg/pos labels swapped",

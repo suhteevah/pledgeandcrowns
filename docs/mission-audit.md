@@ -2,7 +2,9 @@
 
 Covers all 57 missions in `MissionRegistry::default()` (Acts 1-8) as of
 `finish/integration` 83f5daf. Every claim here comes from a command that
-was run, listed under **Evidence**.
+was run, listed under **Evidence**. Since then the Borrow Checker's trial
+added three missions (60 missions, 57 NPCs); see **The Borrow Checker's
+trial** at the end.
 
 Player-facing solutions live in
 `game/src/plugins/editor/solutions/data.rs`. The "Show solution" button
@@ -380,8 +382,10 @@ Task let the player choose the values, and 3 are compile-only. The 13
 Tasks now name the values and show every expected line in a code span,
 so one behaviour is specified.
 
-**Totals now: 54 of 57 behaviour-checked (29 output checks, 25 harness
-checks), 3 static-only, 0 unverified.** The 3 static-only missions cannot
+**Totals now: 57 of 60 behaviour-checked (29 output checks, 28 harness
+checks), 3 static-only, 0 unverified** (the Borrow Checker's trial,
+2026-11-14, added three harness-checked stages; see the section below).
+Before the trial: 54 of 57 (25 harness checks). The 3 static-only missions cannot
 run on `wasm32-wasip1`: `thread_spawn` and `thread_scope` trap (asserted by
 `solutions_build_and_run_in_the_real_server_sandbox`), and `async_fn` has
 no executor. `expectations::tests::classification_totals` pins these
@@ -466,3 +470,32 @@ Gating is real and strict-linear. The `prereq: None` in every literal is
 a placeholder: `MissionRegistry::default` then sets each prereq to the
 previous mission. `game/tests/mission_text.rs::progression_is_strict_linear`
 proves mission N+1 stays locked until N is cleared, for every N.
+
+## The Borrow Checker's trial (2026-11-14)
+
+Three stage missions after `while_loop`, owned by the Borrow Checker
+(`game/src/plugins/trial.rs`): `bridge_toll` (move vs borrow),
+`bridge_quill` (many `&` or one `&mut`), `bridge_lantern` (a lifetime on a
+returned slice). 60 missions, 57 NPCs. The free demo ends on the trial: 24
+free missions, 36 after.
+
+Evidence (rustc 1.99.0, edition 2024):
+
+- `mission_text -- --include-ignored`: every starter fails with its stage's
+  one error (E0382, E0502, E0106); `borrow_checker_claims_are_what_rustc_emits`
+  compiles every error the Borrow Checker names and the wording he quotes
+  (E0382 "borrow of moved value: `cargo`", E0502 "cannot borrow `scroll` as
+  mutable because it is also borrowed as immutable", E0106 "missing lifetime
+  specifier" and its help tying `sep` to `'a`, E0597 "`sep` does not live
+  long enough" after following that help), plus "`weigh(cargo.clone())`
+  also compiles". A fast test fails if he names an uncompiled code.
+- `solutions -- --include-ignored`: 60/60 solutions, native `-D warnings`,
+  `wasm32-wasip1`, sandbox run.
+- `contract -- --include-ignored`: grader corpus 60/60 (a, b, c, f), 45/45
+  correct (3 trial alternatives), 16/16 wrong (3 trial shortcuts); 105/105
+  corpus programs build.
+- `expectations_proof -- --ignored`: each stage is a harness check pinning
+  the signature; canonical and one alternative pass, starter and three
+  wrong-but-compiling variants per stage fail (57 behaviour-checked
+  missions proven).
+- Grader snapshots: 18 new cases per grader, 0 changed rows.

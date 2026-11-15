@@ -129,7 +129,14 @@ impl Plugin for ShotPlugin {
                 tracing::warn!("could not remove stale {}: {e}", done.display());
             }
         }
-        let scenes = scenes::all_scenes();
+        let mut scenes = scenes::all_scenes();
+        // Optional comma-separated filter on output file names, for a short
+        // run that captures only some scenes (e.g. `PNC_SHOTS_ONLY=trial-`).
+        if let Ok(only) = std::env::var("PNC_SHOTS_ONLY") {
+            let wanted: Vec<&str> = only.split(',').filter(|s| !s.is_empty()).collect();
+            scenes.retain(|s| wanted.iter().any(|w| s.file.contains(w)));
+            tracing::info!(?wanted, kept = scenes.len(), "PNC_SHOTS_ONLY filter");
+        }
         tracing::info!(
             "screenshot mode ON; {} scenes; writing to {}",
             scenes.len(),
