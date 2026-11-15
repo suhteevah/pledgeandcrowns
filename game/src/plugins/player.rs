@@ -11,7 +11,7 @@
 use crate::assets::SPRITE_PLAYER;
 use crate::plugins::prop::{Aabb, Solid, slide_move, ysort_z};
 use crate::plugins::state::GameState;
-use crate::plugins::world::{WORLD_HALF_H, WORLD_HALF_W};
+use crate::plugins::world::{PLAYER_SPAWN, WORLD_HALF_H, WORLD_HALF_W};
 use bevy::prelude::*;
 
 /// The player's collision footprint relative to the sprite centre: a small
@@ -78,7 +78,10 @@ fn camera_follow_player(
 }
 
 fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
-    tracing::info!("spawning player at origin (REF-01, scale {PLAYER_SCALE}x)");
+    tracing::info!(
+        ?PLAYER_SPAWN,
+        "spawning player at the hub crossroads (REF-01, scale {PLAYER_SCALE}x)"
+    );
     commands.spawn((
         Sprite {
             image: asset_server.load(SPRITE_PLAYER),
@@ -86,7 +89,11 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
             ..default()
         },
         // z is owned by prop::ysort from here on; seed it consistently.
-        Transform::from_xyz(0.0, 0.0, ysort_z(-PLAYER_DISPLAY * 0.5)),
+        Transform::from_xyz(
+            PLAYER_SPAWN.x,
+            PLAYER_SPAWN.y,
+            ysort_z(PLAYER_SPAWN.y - PLAYER_DISPLAY * 0.5),
+        ),
         Player,
     ));
 }

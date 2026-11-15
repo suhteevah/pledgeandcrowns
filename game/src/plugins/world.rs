@@ -160,6 +160,33 @@ const ROAD_HALF_TILES: u32 = 1;
 // neighbours — they read as individuals scattered across a plaza, not a huddle.
 const NPC_GRID_SPACING: f32 = 240.0;
 
+/// How far an NPC's centre must stay inside its plaza's `plaza_half`: half a
+/// 32 px sprite (16) + one clear flagstone tile (16) + the cobble ring (16) +
+/// up to half a tile (8) because the paved edge lands on the tile grid, not
+/// exactly on `plaza_half`. With 240 px spacing the outer columns of the
+/// 260-half ring plazas stood ON the cobble ring; the grid now compresses to
+/// fit (ring plazas: 204 px), the 300-half hub keeps its 240.
+/// `tests/npc_placement.rs` checks the real tiles under every NPC.
+const NPC_EDGE_CLEARANCE: f32 = 56.0;
+
+/// Where the player spawns on a new game (`player::spawn_player`): the hub
+/// crossroads. The hub's centre grid slot falls exactly here, so its NPC
+/// steps [`NPC_SPAWN_CLEARANCE`] north instead of standing on the player.
+pub const PLAYER_SPAWN: Vec2 = Vec2::ZERO;
+/// A 32 px sprite plus two clear tiles between the NPC and a spawned player.
+const NPC_SPAWN_CLEARANCE: f32 = 64.0;
+
+/// Grid spacing along one axis for `n` slots in a plaza of half-size `half`:
+/// [`NPC_GRID_SPACING`], compressed so the outermost slots keep
+/// [`NPC_EDGE_CLEARANCE`] from the plaza edge.
+fn axis_spacing(n: usize, half: f32) -> f32 {
+    let reach = (n as f32 - 1.0) * 0.5;
+    if reach <= 0.0 {
+        return NPC_GRID_SPACING;
+    }
+    NPC_GRID_SPACING.min((half - NPC_EDGE_CLEARANCE).max(0.0) / reach)
+}
+
 /// World-space position for the NPC at `index` in the roster: a centered grid
 /// slot inside that NPC's district. Replaces the old hand-typed scatter.
 pub fn district_slot(index: usize) -> Vec2 {
@@ -171,9 +198,15 @@ pub fn district_slot(index: usize) -> Vec2 {
             let rows = d.count.div_ceil(cols);
             let col = local % cols;
             let row = local / cols;
-            let x = d.center.x + (col as f32 - (cols as f32 - 1.0) * 0.5) * NPC_GRID_SPACING;
-            let y = d.center.y + (row as f32 - (rows as f32 - 1.0) * 0.5) * NPC_GRID_SPACING;
-            return Vec2::new(x, y);
+            let sx = axis_spacing(cols, d.plaza_half);
+            let sy = axis_spacing(rows, d.plaza_half);
+            let x = d.center.x + (col as f32 - (cols as f32 - 1.0) * 0.5) * sx;
+            let y = d.center.y + (row as f32 - (rows as f32 - 1.0) * 0.5) * sy;
+            let mut slot = Vec2::new(x, y);
+            if slot.distance(PLAYER_SPAWN) < NPC_SPAWN_CLEARANCE {
+                slot.y = PLAYER_SPAWN.y + NPC_SPAWN_CLEARANCE;
+            }
+            return slot;
         }
         acc += d.count;
     }
