@@ -87,7 +87,9 @@ async fn compile_real_rejects_a_silent_intro() {
 async fn compile_real_returns_program_stdout() {
     let addr = spawn_server().await;
     let src = r#"fn main() { let v: Vec<i32> = (1..=4).collect(); println!("sum={}", v.iter().sum::<i32>()); }"#;
-    let (status, body) = post_compile_real(addr, "vec_iter", src).await;
+    // An id with no output check, so the program's own stdout is the
+    // whole verdict (`vec_iter` now checks for the line `60`).
+    let (status, body) = post_compile_real(addr, "no_such_mission", src).await;
     assert_eq!(status.as_u16(), 200);
     assert!(body.ok, "expected ok=true, got {body:?}");
     assert!(body.stdout.contains("sum=10"), "{body:?}");

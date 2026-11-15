@@ -203,6 +203,92 @@ fn verify_script_requires_positive_evidence() {
     assert!(!VERIFY.contains("systemctl restart"));
 }
 
+const MANIFEST: &str = include_str!("../Cargo.toml");
+const LOCKFILE: &str = include_str!("../../Cargo.lock");
+
+/// The `dependencies = [...]` names of one `[[package]]` entry in the lock.
+fn locked_deps(name: &str) -> Vec<String> {
+    let header = format!("name = \"{name}\"\n");
+    let block = LOCKFILE
+        .replace("\r\n", "\n")
+        .split("[[package]]")
+        .find(|b| b.trim_start().starts_with(header.trim_end()))
+        .unwrap_or_else(|| panic!("{name} not in Cargo.lock"))
+        .to_string();
+    block
+        .lines()
+        .skip_while(|l| !l.starts_with("dependencies = ["))
+        .skip(1)
+        .take_while(|l| !l.starts_with(']'))
+        .map(|l| l.trim().trim_matches(|c| c == '"' || c == ',').to_string())
+        .collect()
+}
+
+/// wasmtime is built with only what the runner uses (see wasm_runner.rs).
+/// The features matter because some proposals (GC, threads) can only be
+/// turned on at runtime if they are compiled in, and because the dropped
+/// features carried the zstd/rayon advisories. The lock check catches
+/// another crate in the workspace re-enabling a default feature through
+/// cargo feature unification.
+#[test]
+fn wasmtime_is_built_without_default_features() {
+    let line = MANIFEST
+        .lines()
+        .find(|l| l.starts_with("wasmtime = "))
+        .expect("wasmtime dependency line");
+    assert!(line.contains("default-features = false"), "{line}");
+    for banned in [
+        "\"gc",
+        "\"threads\"",
+        "\"parallel-compilation\"",
+        "\"pooling-allocator\"",
+        "\"cache\"",
+        "\"coredump\"",
+        "\"profiling\"",
+        "\"debug\"",
+        "\"debug-builtins\"",
+        "\"component-model-async\"",
+        "\"wat\"",
+    ] {
+        assert!(
+            !line.contains(banned),
+            "wasmtime must not enable {banned}: {line}"
+        );
+    }
+    let deps = locked_deps("wasmtime");
+    for (dep, why) in [
+        ("rayon", "parallel-compilation"),
+        ("wasmtime-internal-cache", "cache"),
+        ("wasm-encoder", "coredump"),
+        ("ittapi", "profiling"),
+    ] {
+        assert!(
+            !deps.iter().any(|d| d.split(' ').next() == Some(dep)),
+            "wasmtime pulls {dep}: the `{why}` feature is enabled somewhere in the workspace"
+        );
+    }
+    assert!(
+        MANIFEST
+            .lines()
+            .any(|l| l.starts_with("wasmtime-wasi = ") && l.contains("default-features = false")),
+        "wasmtime-wasi must not enable p2/p3 sockets etc. by default"
+    );
+}
+
+#[test]
+fn deny_toml_checks_advisories_and_sources() {
+    let deny = include_str!("../../deny.toml");
+    for needle in [
+        "[advisories]",
+        "[bans]",
+        "[sources]",
+        "unknown-registry = \"deny\"",
+        "unknown-git = \"deny\"",
+    ] {
+        assert!(deny.contains(needle), "deny.toml lacks `{needle}`");
+    }
+}
+
 #[test]
 fn readme_is_an_operator_runbook_for_both_units() {
     for needle in [

@@ -8,12 +8,16 @@
 | `builder.env.example` | Builder settings, nothing secret -> `/etc/pnc-builder/builder.env` (0644) |
 | `verify-sandbox.sh` | Operator proof: positive-evidence sandbox probes, config refusals, exact HTTP checks |
 
-**Status: verified once on a real Linux host** (openSUSE Leap Micro 6.2,
-kernel 6.12, systemd 257, bubblewrap 0.11, 2026-11-14; evidence in
-`.claude/reviews/linux-verification-2026-11-14.md`). Not yet run on
-Debian/Ubuntu. Every install is still a verification pass: both services
-run fail-closed self-tests at startup, and `verify-sandbox.sh` must print
-`PASS`. **Do not expose the service until step 9 passes.**
+**Status: verified on one real Linux host** (openSUSE Leap Micro 6.2,
+kernel 6.12, systemd 257, bubblewrap 0.11, SELinux permissive; 2026-11-14
+and again 2026-11-15 after the wasmtime 50 upgrade and the run-timeout fix;
+evidence in `.claude/reviews/linux-verification-2026-11-14.md` and
+`-2026-11-15.md`). **Not yet run on Debian/Ubuntu** (AppArmor's
+unprivileged-userns restriction is unverified) **nor under SELinux
+enforcing** (see "SELinux and AppArmor" below). Every install is still a
+verification pass: both services run fail-closed self-tests at startup,
+and `verify-sandbox.sh` must print `PASS`. **Do not expose the service
+until step 9 passes.**
 
 ## How it fits together
 
@@ -35,6 +39,13 @@ pnc-builder --per request--> `pledge_compile_api job` --> prlimit -> bwrap -> ca
 - Each job is its own process, killed with its whole process tree at a
   50 s deadline. If a job's processes cannot be killed, the builder exits
   (status 70) and systemd kills its whole cgroup and restarts it.
+- The player's program runs for at most 5 s (plus a 2 s margin) whatever
+  it does: busy loops trap on wasmtime epoch interruption, and a program
+  blocked in a WASI host call (`thread::sleep`, a clock wait) is cancelled
+  by an async timeout around the call; a backstop in the job process
+  answers if both ever failed. Such a run is graded `runtime_error` with a
+  plain "time limit" message (before 2026-11-15 a sleeping program held
+  its slot for the full 50 s and was reported as a compile error).
 - The token-level source deny-list is a second layer, applied by the API
   and again by the builder.
 
@@ -214,6 +225,30 @@ If the builder exits instead, the log names the failing step:
 | `does not match the pinned 1.99.0` | step 4: wrong toolchain or `PNC_TOOLCHAIN_DIR` |
 | allocation error in the self-test | raise `PNC_BUILD_ADDRESS_SPACE_MIB` (max 1408) |
 
+### Linux-only behaviour (fixed on the first Linux host, 2026-11-14)
+
+Three things only show up on Linux; all are in the code, listed here so an
+operator recognises them:
+
+1. **`LD_LIBRARY_PATH=<toolchain>/lib` inside the sandbox.** rustc finds
+   `librustc_driver-*.so` through its `$ORIGIN/../lib` RUNPATH, and glibc
+   expands `$ORIGIN` via `/proc/self/exe`. The sandbox has no `/proc`
+   (`PNC_BWRAP_PROC=none`), so the build env names the (read-only)
+   toolchain lib dir explicitly. Symptom without it: the troubleshooting
+   row above (exit 127). Do not "fix" it with `PNC_BWRAP_PROC=fresh`.
+2. **Descendant process-group kill.** The job process runs cargo in a NEW
+   process group, so killing the job's group at the 50 s deadline missed
+   cargo and rustc (seen: orphans left running with
+   `PNC_BUILD_SANDBOX=none`). On timeout the supervisor now SIGSTOPs the
+   job's group, finds every descendant's group through `/proc/*/stat`,
+   SIGKILLs them all and confirms each empty before the slot is released.
+   Under bwrap the PID namespace and `--die-with-parent` back this up.
+3. **`/usr/local` is hidden.** The sandbox binds `/usr` read-only and
+   mounts an empty tmpfs over `/usr/local` (operator scripts and secrets
+   often live there; on the first host `include_bytes!` of
+   `/usr/local/bin/pledge_compile_api` compiled before the fix). A
+   toolchain under `/usr/local` is bound back on top.
+
 Hardening tried on the first Linux host (2026-11-14): `ProcSubset=pid` on
 the builder breaks bwrap (`Can't read /proc/sys/kernel/overflowuid`), so it
 stays off; `NoExecPaths=/tmp` works and is now in the unit;
@@ -262,8 +297,21 @@ sudo /opt/pnc-compile/verify-sandbox.sh
 It prints one `ok` line per check and ends with `PASS (<n> checks held, 0
 failed)`; anything else exits non-zero. It needs no restart and never
 touches the production deny-list: probes run through
-`pledge_compile_api sandbox-verify` as `pnc-builder` with the builder's own
-env file. What it proves is listed at the top of the script; in short:
+`pledge_compile_api sandbox-verify` in two passes (`PNC_VERIFY_PROBES=both`,
+the default; `runuser` or `unit` for one):
+
+- `[runuser]`: as `pnc-builder` with the builder's env file (bwrap and the
+  rlimits on their own);
+- `[unit]`: in a transient `systemd-run` service carrying the installed
+  builder unit's own `[Service]` settings (drop-ins included), so the
+  unit's seccomp filter, namespace restrictions, `ProtectProc`,
+  `PrivateTmp`, `NoExecPaths`, empty capability set and cgroup limits are
+  in force. The script first checks that this service's effective
+  security properties (`systemctl show`) equal the running builder's and
+  fails if any differs. (The running builder itself cannot run the
+  probes: it applies the deny-list to every request, by design.)
+
+What it proves is listed at the top of the script; in short:
 rustc inside the sandbox reports `couldn't read \`<path>\`: No such file
 or directory` for the env files, `/etc/passwd`, the builder socket and the
 API's `/proc` entry (all of which exist on the host), while an in-sandbox
@@ -288,17 +336,77 @@ bind.)
 
 ## 11. Dependency audit
 
-Not run by the server. On the build box, from the repo root:
+Not run by the server. On the build box, from the repo root (before every
+deploy and after every `cargo update`):
 
 ```bash
 cargo install --locked cargo-audit cargo-deny    # once
-cargo audit                                       # RustSec advisories for Cargo.lock
-cargo deny init                                   # once, then commit deny.toml
-cargo deny check advisories bans sources
+cargo deny check advisories bans sources         # the server's runtime tree: must pass
+cargo audit                                      # the whole lockfile (game included)
 ```
+
+`deny.toml` (repo root) scopes cargo-deny to the runtime dependency tree
+of `pledge_compile_api`: the game, the tools and all dev-dependencies are
+excluded, every advisory kind (vulnerability, unsound, unmaintained) and
+yanked crates fail it, nothing is ignored, and only crates.io sources are
+allowed. `cargo audit` reads the whole `Cargo.lock`, so it also lists the
+game's (Bevy/reqwest) advisories; those do not ship in the server binary.
+Check which tree a crate is in with
+`cargo tree -p pledge_compile_api -e normal -i <crate>`.
+
+wasmtime/wasmtime-wasi are built with `default-features = false` (only
+`cranelift runtime std async anyhow` / `p1`): GC, threads, the pooling
+allocator, the module cache (zstd), parallel compilation (rayon),
+coredumps and profiling are not in the binary at all
+(`tests/deploy_files.rs` pins this against the lockfile). When upgrading
+wasmtime, re-read `src/wasm_runner.rs`'s security contract against the
+new `Config`/`Store`/`WasiCtxBuilder` docs and run
+`cargo test -p pledge_compile_api --test wasm_runner`: it fails if a
+proposal outside the allow-list validates, a WASI capability appears, or
+a blocked host call outlives the run timeout.
 
 Treat any advisory against `wasmtime`, `wasmtime-wasi`, `hyper`, `axum`
 or `tokio` as a deploy blocker.
+
+## 12. SELinux and AppArmor
+
+**SELinux (Fedora/RHEL/openSUSE): checked in permissive mode only.** On
+the verification host (targeted policy, permissive, 2026-11-15) both
+services ran as `system_u:system_r:unconfined_service_t:s0`: systemd
+starts a `bin_t` executable from `/usr/local/bin` in that domain, and the
+targeted policy does not confine it. After the full flow (startup
+self-tests, both `verify-sandbox.sh` passes, HTTP builds, run timeouts,
+the cgroup OOM kill) the audit log held **no AVC, USER_AVC or SELINUX_ERR
+record for `pledge_compile_api`, `bwrap`, `prlimit`, `cargo`, `rustc` or
+`rust-lld`**, so an enforcing host with the same labels would block nothing
+the services do. (The only AVCs seen were four from an early version of
+`verify-sandbox.sh`: PID 1, `init_t`, writing a probe's stderr file
+labelled `user_tmp_t` that `systemd-run --pipe` had handed it. Enforcing
+mode would have denied that; the script now passes pipes, and the rerun
+logged none.) Not verified: enforcing mode itself, and any confined
+domain. Operator rules:
+
+- Keep the binary at `/usr/local/bin` (label `bin_t`) so the units run
+  unconfined as above; check with `ps -eZ | grep pledge_compile`.
+- Relabel the toolchain after copying it: `cp -a` from `/tmp`/`/var/tmp`
+  keeps `user_tmp_t` (seen on the first host). Run
+  `sudo restorecon -RF /opt/rust` (or the `PNC_TOOLCHAIN_DIR` parent) and
+  `sudo restorecon -F /usr/local/bin/pledge_compile_api /etc/pnc-compile/env /etc/pnc-builder/builder.env`.
+- After the first start, look for denials before going public:
+  `sudo ausearch -m AVC,USER_AVC,SELINUX_ERR -ts recent` (if `ausearch`
+  prints `<no matches>` for everything, grep `/var/log/audit/audit.log`
+  for `type=AVC` directly, as on the verification host). In permissive
+  mode each line ends `permissive=1` and names what enforcing would block.
+- Confining the services in their own domain would need rules for user
+  namespace creation, `mount`/`pivot_root` inside it, JIT memory
+  (`execmem`) and the Unix socket; that policy does not exist yet.
+
+**Debian/Ubuntu (AppArmor): unverified.** Ubuntu 24.04+ restricts
+unprivileged user namespaces through AppArmor
+(`kernel.apparmor_restrict_unprivileged_userns=1`); bwrap then needs its
+profile (step 1). Nothing in this repository has run on such a host yet:
+treat the first Ubuntu/Debian install as a verification pass (startup
+self-test, then step 9 must print `PASS`).
 
 ## Updating
 

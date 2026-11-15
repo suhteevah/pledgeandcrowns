@@ -36,7 +36,7 @@ use crate::ipc::{
 };
 use crate::proc_tree::{self, ProcError};
 use crate::wasm_builder::{BuildSettings, CARGO_BUILD_TIMEOUT, RUN_TIMEOUT_MS, RunLimits};
-use crate::wasm_runner::{self, MODULE_COMPILE_TIMEOUT};
+use crate::wasm_runner::{self, JOB_RUN_PHASE_MARKER, MODULE_COMPILE_TIMEOUT, RUN_TIMEOUT_MARGIN};
 
 /// Subcommand that runs one job (stdin -> stdout).
 pub const JOB_SUBCOMMAND: &str = "job";
@@ -47,7 +47,10 @@ pub const JOB_SUBCOMMAND: &str = "job";
 pub const JOB_DEADLINE: Duration = Duration::from_secs(50);
 const _: () = assert!(
     JOB_DEADLINE.as_secs()
-        >= CARGO_BUILD_TIMEOUT.as_secs() + MODULE_COMPILE_TIMEOUT.as_secs() + RUN_TIMEOUT_MS / 1000
+        >= CARGO_BUILD_TIMEOUT.as_secs()
+            + MODULE_COMPILE_TIMEOUT.as_secs()
+            + RUN_TIMEOUT_MS / 1000
+            + RUN_TIMEOUT_MARGIN.as_secs()
 );
 
 /// Cap on captured child stdout/stderr (each).
@@ -108,7 +111,8 @@ pub struct JobRun {
     pub elapsed: Duration,
 }
 
-/// The graded run reported when a job is killed at its deadline.
+/// The graded run reported when a job is killed at its deadline while it
+/// was still building (or before it said otherwise).
 pub fn deadline_graded(deadline: Duration) -> WireGradedRun {
     WireGradedRun {
         compiled: false,
@@ -124,6 +128,29 @@ pub fn deadline_graded(deadline: Duration) -> WireGradedRun {
         expected: None,
         actual: None,
         note: "stopped at the job deadline".to_string(),
+    }
+}
+
+/// The graded run reported when a job is killed at its deadline after its
+/// program had compiled and started running ([`JOB_RUN_PHASE_MARKER`]
+/// seen). The run has its own timeout, so this should not happen; if it
+/// does, the honest grade is a runtime error.
+pub fn deadline_graded_while_running(deadline: Duration) -> WireGradedRun {
+    WireGradedRun {
+        compiled: true,
+        ran_ok: false,
+        stdout: String::new(),
+        stderr: format!(
+            "your program built, but building and running it exceeded the {}s job budget and \
+             it was stopped",
+            deadline.as_secs()
+        ),
+        build_ms: 0,
+        run_ms: Some(u64::try_from(deadline.as_millis()).unwrap_or(u64::MAX)),
+        state: GradeState::RuntimeError,
+        expected: None,
+        actual: None,
+        note: "stopped at the job deadline while running".to_string(),
     }
 }
 
@@ -155,13 +182,20 @@ pub fn run_job_subprocess(
         tracing::debug!(pid = out.pid, "jobs: job process log:\n{shown}");
     }
     if out.timed_out {
+        let running = out.stderr.lines().any(|l| l.trim() == JOB_RUN_PHASE_MARKER);
         tracing::warn!(
             pid = out.pid,
             ?deadline,
+            running,
             "jobs: job hit its deadline; process tree killed"
         );
+        let graded = if running {
+            deadline_graded_while_running(deadline)
+        } else {
+            deadline_graded(deadline)
+        };
         return Ok(JobRun {
-            reply: JobReply::Graded(deadline_graded(deadline)),
+            reply: JobReply::Graded(graded),
             pid: out.pid,
             timed_out: true,
             elapsed: out.elapsed,
@@ -307,5 +341,11 @@ mod tests {
         let g = deadline_graded(JOB_DEADLINE);
         assert!(g.validate().is_ok());
         assert!(!g.into_graded().ok());
+        let r = deadline_graded_while_running(JOB_DEADLINE);
+        assert!(r.validate().is_ok(), "{:?}", r.validate());
+        assert_eq!(r.state, GradeState::RuntimeError);
+        assert!(r.compiled && !r.ran_ok);
+        assert!(r.stderr.contains("job budget"));
+        assert!(!r.into_graded().ok());
     }
 }
