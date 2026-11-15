@@ -54,7 +54,8 @@ Pure Rust, in `tools/render-refs/`. It bakes `palette.js` and every `design/art/
 # Current state
 
 - Tranche 1 (approved 2026-11-13): REF-66 terrain, REF-67 oak, REF-68 cottage are wired. REF-69..74 are approved costume-kit exemplars for Acts 3-8 and are NOT wired to any NPC.
-- Tranche 2: the 40 Act 3-8 villagers get redrawn on those kits. Until then they keep their first-pass sprites.
+- Tranche 2 (approved 2026-11-15, wired): 30 Act 3-8 villagers redrawn on those kits (`ref-NN-<slug>-v2.jsx` -> `REFNNv2.png` -> `npc/<slug>_idle_0.png`); the first-pass refs are kept, marked SUPERSEDED. The six kit holders (Guildmaster, Conjurer, Barkeep, Smelter, Dockmaster, Warden) keep their first-pass sprites. Same approval: REF-77 player walk and REF-78 Ferris walk, wired as atlases (`player/player_walk.png`, `npc/ferris_walk.png`) driven by `game/src/plugins/animation.rs`.
+- Refs 79-94 (Acts 9-10) are drafts: not wired.
 - Owner action before 2026-12-14: Matt exports the approved artboard for REF-29/32/33/35/40/41 from the old claude.ai/design project. See 04b section 9.
 
 # Hard rules

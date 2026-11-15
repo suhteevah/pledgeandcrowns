@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-65 v2 - The Ghostkeeper on the Vault kit, 32x32, idle, transparent bg.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/npc/ghostkeeper_idle_0.png.
 //
 // Kit: the Vault guard (REF-74) as a shade: the same crested helm, pauldrons
 // and plate, drained to aged paper and stone grey with mist-teal where the

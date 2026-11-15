@@ -151,6 +151,8 @@ Each act draws a dominant subset from the 32-color palette by **role name**, nev
 | Throne of the Compiler (Act 10)| Stone grey, Aged paper, Specular white, Brass leaf, Cobalt deep              | Climactic, vast, celestial             |
 | The Temple (Act 11)           | Oxblood + Main teal + Forest (the split-comp triangle) + Old gold + Mage glow | Reverent-meets-glitchy stained glass   |
 
+**Costume kits (Acts 3-8).** Each ring zone dresses its villagers from one approved kit: Guildhall REF-69, Tower REF-70, Tavern REF-71, Forge REF-72, Coast REF-73, Vault REF-74 (`design/art/refs/`). Since 2026-11-15 the kits are applied: the 30 villagers of Acts 3-8 are redrawn on them (`ref-NN-<slug>-v2.jsx`, approved and wired); the six kit holders (Guildmaster, Conjurer, Barkeep, Smelter, Dockmaster, Warden) still use their first-pass sprites. New villagers in these zones start from the zone's kit.
+
 The Temple's stained-glass effect is intentionally the literal split-complementary triad of the palette structure — when the player reaches the climactic religious zone, they're seeing the *harmonic skeleton* of the whole game's color system rendered as light through glass. This is also a curriculum payoff: by Act 11 the player has used every color family the game knows.
 
 ## Animation conventions
@@ -169,7 +171,7 @@ Bosses get more animation states (intro, phase-2 transformation, defeat). Docume
 - **Font:** Pixel-perfect. Use [m6x11plus](https://managore.itch.io/m6x11) or equivalent open-source pixel font. **No web fonts**, **no system fonts**.
 - **Window frames:** Hand-drawn pixel borders, 2-pixel double-line with corner ornaments. Corners are rusty/iron-bound, never plastic-looking.
 - **Text contrast rule:** Text must meet 4.5:1 against the surface it is drawn on; a locked colour that cannot is used for non-text marks only. (Non-text marks such as underlines, gutter bars and status ticks need 3:1.)
-- **Code editor frame:** Inset bevel, **Parchment cream** (`#FCEFC8`) background, **Basalt** (`#3E3833`) frame, syntax highlighting drawn from palette role names only. The keyword/type pairing is deliberately the anchor + split-complementary teal — the two highest-frequency token classes form the same harmonic conversation as the rest of the game:
+- **Code editor frame:** Inset bevel, **Basalt** (`#3E3833`) frame, syntax highlighting drawn from palette role names only. **Since v2.2 code is drawn on the ink page** (Abyssal, see "v2.2: code on an ink page" below); the v2.1 **Parchment cream** (`#FCEFC8`) mapping that follows is kept as the supported alternative surface. The keyword/type pairing is deliberately the anchor + split-complementary teal — the two highest-frequency token classes form the same harmonic conversation as the rest of the game:
   - Keywords (`fn`, `let`, `mut`): **Wineflesh** `#982D52`
   - Types (`String`, `&mut T`): **Deep teal** `#154548` — the Borrow Checker's ramp, on purpose
   - Strings: **Pine** `#27502E`
@@ -183,9 +185,9 @@ Bosses get more animation states (intro, phase-2 transformation, defeat). Docume
 
   *Why these (v2.1):* the v2.0 picks did not have readable contrast on the Parchment cream page (numbers in Old gold about 2:1, Alarm scarlet text 3.6:1, Main teal 3.9:1, Stone grey and Forest 4.2:1). Each role steps to a darker member of its own ramp, so the harmonic structure and the burgundy-vs-teal keyword/type pairing are unchanged. Comments stay visibly quieter than code by hue (warm bronze among cool and red tokens), not by low contrast. Gold cannot reach 4.5:1 on cream at any ramp step that still reads as gold, so literals take the cool counterweight instead. Alarm scarlet keeps its job as the error signal, but only as a mark. Syntax colours are drawn on Parchment cream only: inline code chips (**Aged paper** `#BFB2A0`) carry plain Coalblack code, and fenced code blocks are Parchment cream with a 1px **Basalt** frame, because Wineflesh, Pine and Bronze fall just under 4.5:1 on Aged paper.
 
-  #### v2.2 CANDIDATE: code on an ink page (pending owner approval; v2.1 parchment mapping retained as the alternative)
+  #### v2.2: code on an ink page (the default; approved by the owner 2026-11-15; v2.1 parchment mapping retained as the alternative)
 
-  *Why:* v2.1 is readable but nearly monochrome on cream: types, numbers and plain text all read as near-black and only keywords stand out, because the palette's saturated members are all light. The candidate draws CODE on a dark **Abyssal** page and uses the bright ramp members there. Everything else is unchanged: Parchment panels, Basalt frames, the Oxblood title bar, goal and result prose on Parchment, and inline code chips inside prose stay **Aged paper** with Coalblack text. Ink applies to every code surface: the editor's code pane, fenced code blocks (goal pane, prompt, recap), the revealed solution, and the rustc output block in the result pane (the PASS/FAIL banners and prose stay on Parchment). The game switches between the two with one constant (`ui_theme::DEFAULT_CODE_SURFACE`, currently `Ink`); both are kept fully working and are captured side by side (`scene-*-ink.png` / `scene-*-parchment.png`).
+  *Why:* v2.1 is readable but nearly monochrome on cream: types, numbers and plain text all read as near-black and only keywords stand out, because the palette's saturated members are all light. v2.2 draws CODE on a dark **Abyssal** page and uses the bright ramp members there. Everything else is unchanged: Parchment panels, Basalt frames, the Oxblood title bar, goal and result prose on Parchment, and inline code chips inside prose stay **Aged paper** with Coalblack text. Ink applies to every code surface: the editor's code pane, fenced code blocks (goal pane, prompt, recap), the revealed solution, and the rustc output block in the result pane (the PASS/FAIL banners and prose stay on Parchment). The game switches between the two with one constant (`ui_theme::DEFAULT_CODE_SURFACE`, `Ink` by default); both are kept fully working and are captured side by side (`scene-*-ink.png` / `scene-*-parchment.png`).
 
   Measured WCAG ratios (unit-tested in `ui_theme::tests::ink_surface_meets_contrast`; text ≥ 4.5:1, marks ≥ 3:1):
 
@@ -252,10 +254,10 @@ This document is versioned. Any change to the palette, the resolution table, or 
 
 ---
 
-**Bible version:** 2.1 — editor syntax colours stepped to darker members of their ramps for 4.5:1 text contrast on Parchment cream; text-contrast rule added to UI style.
-**Last updated:** 2026-11-14
+**Bible version:** 2.2 — code is drawn on the ink page (Abyssal with bright ramp members) by default; the v2.1 Parchment mapping stays as the alternative surface.
+**Last updated:** 2026-11-15
 
 **Changelog**
 - 2.0 (2026-04-25) — palette swapped from EDG32-RUST to "Heraldic Code" (split-complementary @ 350° anchor + 140°/178° pair, +42° gold accent, +270° magic flicker). Per-zone roles, editor syntax colors, and reference-image titles updated to match.
 - 2.1 (2026-11-14) — syntax colours: types Main teal → Deep teal, strings Forest → Pine, comments Stone grey → Bronze, numbers Old gold → Cobalt deep, error text Alarm scarlet → Oxblood (scarlet kept for squiggles and the gutter bar), gutter recorded as Bronze; fenced code blocks drawn on Parchment cream with a Basalt frame instead of Aged paper; rule "text must meet 4.5:1 against its surface" added. Palette itself unchanged. Approved by the designer under the owner's delegation.
-- 2.2 CANDIDATE (2026-11-14, not adopted; pending owner approval) — "ink" code surface: code on Abyssal with bright ramp members (see "v2.2 CANDIDATE" under Code editor frame). Built as a one-constant switch with the v2.1 parchment mapping kept as the alternative; the bible version stays 2.1 until the owner picks.
+- 2.2 (candidate 2026-11-14; approved by the owner 2026-11-15) — "ink" code surface: code on Abyssal with bright ramp members (see "v2.2: code on an ink page" under Code editor frame) is the default (`ui_theme::DEFAULT_CODE_SURFACE = Ink`). The v2.1 parchment mapping is kept, fully working, as the alternative behind the same one-constant switch. Palette unchanged. Same day: the Act 3-8 costume kits (REF-69..74) are applied: 30 villagers redrawn on them (`ref-NN-<slug>-v2.jsx`) and wired, and the player walk (REF-77) and Ferris scuttle (REF-78) frames wired per the walk convention above.

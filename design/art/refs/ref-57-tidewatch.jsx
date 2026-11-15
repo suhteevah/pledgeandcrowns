@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-57 - The Tidewatch, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-57-tidewatch-v2.jsx (approved by Matt 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REFnn.png).
 // Stands beside a tall tide-gauge post (frame-right) cut with notched
 // marks up its length. As the tide rises she reads the gauge and the count
 // climbs - a single Old-gold tick mark advancing notch by notch up the

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-63 v2 - The Swapwarden on the Vault kit, 32x32, idle, transparent bg.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/npc/swapwarden_idle_0.png.
 //
 // Kit: stone-grey plate with old-gold trim and gold pauldrons (REF-74), under
 // a mail coif instead of the helm, face showing. The guard stands at

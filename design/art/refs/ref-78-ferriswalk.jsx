@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-78 - Ferris walk frames, 32x32 each, 2-column sheet (64x32).
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/npc/ferris_walk.png (atlas, 2 cols x 1 row).
 //
 // Built on the approved REF-02 Ferris. Rows 0 to 23 - eye stalks, shell, claws
 // and the leg roots - are REF-02 unchanged. Only the two rows of leg tips

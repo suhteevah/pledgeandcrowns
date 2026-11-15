@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-31 v2 - The Recruiter on the Guildhall kit, 32x32, idle, transparent bg.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/npc/recruiter_idle_0.png.
 //
 // Kit: oxblood cap, aged-paper ruff, long oxblood coat (REF-69). A clerk, so a
 // plain round cap with no badge, brass collar studs and a pine hem instead of

@@ -10,6 +10,15 @@
 // future protagonist animation frames have a home.
 pub const SPRITE_PLAYER: &str = "sprites/player/player_idle_0.png";
 pub const SPRITE_FERRIS: &str = "sprites/npc/ferris_idle_0.png";
+
+// Walk sheets (approved by Matt 2026-11-15). Tile sheets, sliced as texture
+// atlases of 32x32 frames by the ref's column count (`plugins::animation`):
+// REF-77 player walk (4 cols x 2 rows: down_0, down_2, up_0, up_1, up_2,
+// left_0, left_1, left_2) and REF-78 Ferris walk (2 cols: walk_0, walk_2).
+// Rendered via `cargo run -p render-refs`; the idle sprites above complete
+// the cycles.
+pub const SPRITE_PLAYER_WALK: &str = "sprites/player/player_walk.png";
+pub const SPRITE_FERRIS_WALK: &str = "sprites/npc/ferris_walk.png";
 pub const SPRITE_BORROW_CHECKER: &str = "sprites/npc/borrow_checker_idle_0.png";
 pub const SPRITE_TILES_VILLAGE: &str = "sprites/tiles_village.png";
 pub const SPRITE_TITLE: &str = "sprites/title.png";
@@ -66,7 +75,11 @@ pub const SPRITE_ALCHEMIST: &str = "sprites/npc/alchemist_idle_0.png";
 
 // NPC batch 5 (2026-06-18) — Act 3 Guildhall Quarter: Guildmaster, Recruiter,
 // Locksmith, Porter, Surveyor, Armorer. Sources: design/art/refs/ref-30..35-*.jsx,
-// rendered via `cargo run -p render-refs`. First-pass, pending Matt's art review.
+// rendered via `cargo run -p render-refs`.
+// Tranche 2 (approved by Matt 2026-11-15): every villager of Acts 3-8 except the
+// six kit holders (Guildmaster, Conjurer, Barkeep, Smelter, Dockmaster, Warden)
+// now ships its `ref-NN-<slug>-v2.jsx` redraw (`REFNNv2.png`) at the same path;
+// the kit holders keep their first-pass sprites. `tests/art_wiring.rs` pins it.
 pub const SPRITE_GUILDMASTER: &str = "sprites/npc/guildmaster_idle_0.png";
 pub const SPRITE_RECRUITER: &str = "sprites/npc/recruiter_idle_0.png";
 pub const SPRITE_LOCKSMITH: &str = "sprites/npc/locksmith_idle_0.png";
@@ -76,8 +89,8 @@ pub const SPRITE_ARMORER: &str = "sprites/npc/armorer_idle_0.png";
 
 // NPC batch 6 (2026-06-18) — Act 4 Trait Mage's Tower: Vexis, Wandwright,
 // Conjurer, Familiar, Lanternkeeper, Loremaster. Sources:
-// design/art/refs/ref-36..41-*.jsx, rendered via `cargo run -p render-refs`.
-// First-pass, pending Matt's art review.
+// design/art/refs/ref-36..41-*.jsx (v2 redraws, see batch 5), rendered via
+// `cargo run -p render-refs`.
 pub const SPRITE_VEXIS: &str = "sprites/npc/vexis_idle_0.png";
 pub const SPRITE_WANDWRIGHT: &str = "sprites/npc/wandwright_idle_0.png";
 pub const SPRITE_CONJURER: &str = "sprites/npc/conjurer_idle_0.png";
@@ -87,8 +100,8 @@ pub const SPRITE_LOREMASTER: &str = "sprites/npc/loremaster_idle_0.png";
 
 // NPC batch 7 (2026-06-18) — Act 5 Tavern of Tribulations: Barkeep, Bouncer,
 // Interpreter, Mixologist, Tabkeeper, Cellarer. Sources:
-// design/art/refs/ref-42..47-*.jsx, rendered via `cargo run -p render-refs`.
-// First-pass, pending Matt's art review.
+// design/art/refs/ref-42..47-*.jsx (v2 redraws, see batch 5), rendered via
+// `cargo run -p render-refs`.
 pub const SPRITE_BARKEEP: &str = "sprites/npc/barkeep_idle_0.png";
 pub const SPRITE_BOUNCER: &str = "sprites/npc/bouncer_idle_0.png";
 pub const SPRITE_INTERPRETER: &str = "sprites/npc/interpreter_idle_0.png";
@@ -97,8 +110,8 @@ pub const SPRITE_TABKEEPER: &str = "sprites/npc/tabkeeper_idle_0.png";
 pub const SPRITE_CELLARER: &str = "sprites/npc/cellarer_idle_0.png";
 
 // NPC batch 8 (2026-06-18) — Act 6 Iterator Forge: Keymaster, Sifter, Smelter,
-// Tallywright, Riveter, Bondsmith. Sources: design/art/refs/ref-48..53-*.jsx,
-// rendered via `cargo run -p render-refs`. First-pass, pending Matt's art review.
+// Tallywright, Riveter, Bondsmith. Sources: design/art/refs/ref-48..53-*.jsx
+// (v2 redraws, see batch 5), rendered via `cargo run -p render-refs`.
 pub const SPRITE_KEYMASTER: &str = "sprites/npc/keymaster_idle_0.png";
 pub const SPRITE_SIFTER: &str = "sprites/npc/sifter_idle_0.png";
 pub const SPRITE_SMELTER: &str = "sprites/npc/smelter_idle_0.png";
@@ -108,8 +121,8 @@ pub const SPRITE_BONDSMITH: &str = "sprites/npc/bondsmith_idle_0.png";
 
 // NPC batch 9 (2026-06-18) — Act 7 Concurrent Coast: Dockmaster, Lighthouse
 // Keeper, Signaler, Tidewatch, Harbormaster, Tideforecaster. Sources:
-// design/art/refs/ref-54..59-*.jsx, rendered via `cargo run -p render-refs`.
-// First-pass, pending Matt's art review.
+// design/art/refs/ref-54..59-*.jsx (v2 redraws, see batch 5), rendered via
+// `cargo run -p render-refs`.
 pub const SPRITE_DOCKMASTER: &str = "sprites/npc/dockmaster_idle_0.png";
 pub const SPRITE_LIGHTHOUSEKEEPER: &str = "sprites/npc/lighthousekeeper_idle_0.png";
 pub const SPRITE_SIGNALER: &str = "sprites/npc/signaler_idle_0.png";
@@ -119,8 +132,8 @@ pub const SPRITE_TIDEFORECASTER: &str = "sprites/npc/tideforecaster_idle_0.png";
 
 // NPC batch 10 (2026-06-19) — Act 8 Vault of Pointers: Vaultwright, Sharekeeper,
 // Warden, Swapwarden, Strongbox, Ghostkeeper. Sources:
-// design/art/refs/ref-60..65-*.jsx, rendered via `cargo run -p render-refs`.
-// First-pass, pending Matt's art review.
+// design/art/refs/ref-60..65-*.jsx (v2 redraws, see batch 5), rendered via
+// `cargo run -p render-refs`.
 pub const SPRITE_VAULTWRIGHT: &str = "sprites/npc/vaultwright_idle_0.png";
 pub const SPRITE_SHAREKEEPER: &str = "sprites/npc/sharekeeper_idle_0.png";
 pub const SPRITE_WARDEN: &str = "sprites/npc/warden_idle_0.png";
@@ -156,6 +169,8 @@ pub const ALL_AUDIO_PATHS: &[&str] = &[
 pub const ALL_SPRITE_PATHS: &[&str] = &[
     SPRITE_PLAYER,
     SPRITE_FERRIS,
+    SPRITE_PLAYER_WALK,
+    SPRITE_FERRIS_WALK,
     SPRITE_BORROW_CHECKER,
     SPRITE_TILES_VILLAGE,
     SPRITE_TITLE,

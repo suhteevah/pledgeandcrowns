@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-49 v2 - The Sifter on the Forge kit, 32x32, idle, transparent bg.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/npc/sifter_idle_0.png.
 //
 // Kit: brass goggles, basalt apron, bare arms (REF-72), with a stone-grey
 // bandana in place of the leather cap. Lesson prop (iter_filter): a wide

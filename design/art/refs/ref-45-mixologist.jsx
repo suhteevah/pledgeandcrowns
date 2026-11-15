@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-45 - The Mixologist, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-45-mixologist-v2.jsx (approved by Matt 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REFnn.png).
 // In the frame-left hand a Bronze cocktail shaker, in the frame-right hand
 // a glass with a Teal drink in it. She is mid-pour, transforming what's in
 // the glass - but only IF there is something to pour. If the glass holds a

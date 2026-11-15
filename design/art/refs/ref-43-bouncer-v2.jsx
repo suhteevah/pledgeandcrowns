@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-43 v2 - The Bouncer on the Tavern kit, 32x32, idle, transparent bg.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/npc/bouncer_idle_0.png.
 //
 // Kit: Tavern shirtsleeves and bronze, no robe (REF-71). The widest figure in
 // the cast: a bronze leather jerkin over a cream shirt, flat grey hair, a

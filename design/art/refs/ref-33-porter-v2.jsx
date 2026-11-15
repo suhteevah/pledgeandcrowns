@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-33 v2 - The Porter on the Guildhall kit, 32x32, idle, transparent bg.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/npc/porter_idle_0.png.
 //
 // Kit: Guildhall oxblood (REF-69), cut for labour: a small cap, a hip-length
 // tunic with a bronze belt and pine hem, pale hose and bronze boots, so the

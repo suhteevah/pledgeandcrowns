@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-61 - The Sharekeeper, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-61-sharekeeper-v2.jsx (approved by Matt 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REFnn.png).
 // Holds one Old-gold coin-hoard chest while several hands reach in from
 // the sides, each laying a tally-token claim on the SAME hoard - and a
 // small count marker beside it ticks the number of claims. No hand owns

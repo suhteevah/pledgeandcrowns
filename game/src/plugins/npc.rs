@@ -20,6 +20,7 @@ use crate::assets::{
     SPRITE_TIDEFORECASTER, SPRITE_TIDEWATCH, SPRITE_TINKER, SPRITE_TRAIT_MAGE, SPRITE_TWIN,
     SPRITE_VAULTWRIGHT, SPRITE_VEXIS, SPRITE_WANDWRIGHT, SPRITE_WARDEN,
 };
+use crate::plugins::animation::{IdleBob, Scuttle, SpriteLift};
 use crate::plugins::player::Player;
 use crate::plugins::state::GameState;
 use bevy::prelude::*;
@@ -510,7 +511,7 @@ fn spawn_npcs(mut commands: Commands, asset_server: Res<AssetServer>) {
             ground = ?crate::plugins::world::ground_at(pos),
             "spawning NPC"
         );
-        spawn_npc(
+        let entity = spawn_npc(
             &mut commands,
             &asset_server,
             spec.name,
@@ -519,6 +520,13 @@ fn spawn_npcs(mut commands: Commands, asset_server: Res<AssetServer>) {
             pos,
             spec.native_px,
         );
+        // Animation: every NPC gets a phase-offset 1 px idle bob; Ferris also
+        // scuttles (REF-78) whenever his transform moves.
+        let mut e = commands.entity(entity);
+        e.insert((IdleBob::for_roster_index(i), SpriteLift::default()));
+        if spec.sprite_path == SPRITE_FERRIS {
+            e.insert(Scuttle::default());
+        }
     }
     tracing::info!(
         "spawned {} NPCs across {} districts",
@@ -535,17 +543,19 @@ fn spawn_npc(
     sprite_path: &'static str,
     pos: Vec2,
     native_px: f32,
-) {
+) -> Entity {
     let display = native_px * NPC_SCALE;
-    commands.spawn((
-        Sprite {
-            image: asset_server.load(sprite_path),
-            custom_size: Some(Vec2::splat(display)),
-            ..default()
-        },
-        Transform::from_xyz(pos.x, pos.y, 5.0),
-        Npc { name, mission_id },
-    ));
+    commands
+        .spawn((
+            Sprite {
+                image: asset_server.load(sprite_path),
+                custom_size: Some(Vec2::splat(display)),
+                ..default()
+            },
+            Transform::from_xyz(pos.x, pos.y, 5.0),
+            Npc { name, mission_id },
+        ))
+        .id()
 }
 
 fn detect_nearby_npc(

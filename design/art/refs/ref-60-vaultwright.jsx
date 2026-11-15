@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-60 - The Vaultwright, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-60-vaultwright-v2.jsx (approved by Matt 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REFnn.png).
 // Cradles a sturdy Old-gold-bound strongbox in both arms, lid latched, a
 // value lifted off the ground and set down onto the heap inside it. He does
 // not hold the value loose in his hands - he BOXES it: takes the thing,

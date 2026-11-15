@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-52 v2 - The Riveter on the Forge kit, 32x32, idle, transparent bg.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/npc/riveter_idle_0.png.
 //
 // Kit: brass goggles, basalt apron, bare arms, glove (REF-72), bare-headed
 // with dark hair and a full basalt beard. Lesson prop (iter_zip): a rivet

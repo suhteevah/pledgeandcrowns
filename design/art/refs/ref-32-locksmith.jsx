@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-32 - The Locksmith, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-32-locksmith-v2.jsx (approved by Matt 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REFnn.png).
 // A Crypt-robed tradesman holds up a ring of gold keys in the right hand,
 // one key raised and singled out - the one key that fits the lock. The lock
 // either opens (Some) or it does not (None).

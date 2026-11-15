@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-31 - The Recruiter, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-31-recruiter-v2.jsx (approved by Matt 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REFnn.png).
 // A Crypt-robed officer holds an open recruit-roll (parchment-cream scroll)
 // in the left hand and a quill in the right, mid-stamp - forging a brand-new
 // member from a name. The scroll IS the constructor output.

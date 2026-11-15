@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-35 v2 - The Armorer on the Guildhall kit, 32x32, idle, transparent bg.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/npc/armorer_idle_0.png.
 //
 // Kit: Guildhall oxblood (REF-69), cut for the workshop: bare head, a full
 // basalt beard, a hip-length tunic with a bronze belt and pine hem, bronze

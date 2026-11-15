@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-63 - The Swapwarden, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-63-swapwarden-v2.jsx (approved by Matt 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REFnn.png).
 // Stands over a single Bronze socket-slot set in a pedestal. One Old-gold
 // coin sits in the slot; with two fingers she lifts it out while the next
 // coin drops in to take its place - one value swapped for another in the

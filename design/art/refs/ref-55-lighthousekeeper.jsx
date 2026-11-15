@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-55 - The Lighthouse Keeper, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-55-lighthousekeeper-v2.jsx (approved by Matt 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REFnn.png).
 // Stands beside a small lighthouse (frame-right) whose lantern room casts
 // a single Teal-and-Old-gold beam out to sea. The light is SHARED - every
 // ship on the coast relies on it - but only ONE keeper may tend the lamp

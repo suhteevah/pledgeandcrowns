@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-64 - The Strongbox keeper, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-64-strongbox-v2.jsx (approved by Matt 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REFnn.png).
 // Stands behind a heavy Bronze strongbox with MULTIPLE keyholes across its
 // face, several Old-gold keys ringed and shared out, and the lid cracked
 // open mid-turn so the contents can be changed. Many owners each hold a key

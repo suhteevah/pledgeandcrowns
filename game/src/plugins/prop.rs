@@ -21,6 +21,7 @@
 //! decision ([`occludes`]) and the ramp ([`step_alpha`]) are pure functions.
 
 use crate::assets::{SPRITE_PROP_COTTAGE, SPRITE_PROP_OAK};
+use crate::plugins::animation::{SpriteLift, unlifted_anchor};
 use crate::plugins::npc::Npc;
 use crate::plugins::player::Player;
 use crate::plugins::state::GameState;
@@ -414,12 +415,25 @@ type YSorted = Or<(With<Prop>, With<Player>, With<Npc>)>;
 
 /// Re-derive z from the ground line for every prop, the player and every NPC.
 /// Characters are centre-anchored sprites, so their ground line is the sprite
-/// bottom; props add their art's ground offset.
-fn ysort(mut q: Query<(&mut Transform, &Sprite, &Anchor, Option<&Prop>), YSorted>) {
+/// bottom; props add their art's ground offset. A character's animation lift
+/// (pass frame, idle bob) is removed first, so it never changes draw order.
+#[allow(clippy::type_complexity)] // standard Bevy query tuple
+fn ysort(
+    mut q: Query<
+        (
+            &mut Transform,
+            &Sprite,
+            &Anchor,
+            Option<&SpriteLift>,
+            Option<&Prop>,
+        ),
+        YSorted,
+    >,
+) {
     let mut changed = 0usize;
-    for (mut tf, sprite, anchor, prop) in q.iter_mut() {
+    for (mut tf, sprite, anchor, lift, prop) in q.iter_mut() {
         let h = sprite.custom_size.map(|s| s.y).unwrap_or(0.0);
-        let bottom = tf.translation.y - (anchor.as_vec().y + 0.5) * h;
+        let bottom = tf.translation.y - (unlifted_anchor(anchor, lift, h).y + 0.5) * h;
         let ground = bottom + prop.map(|p| p.kind.ground_offset()).unwrap_or(0.0);
         let z = ysort_z(ground);
         if (tf.translation.z - z).abs() > f32::EPSILON {
@@ -437,15 +451,15 @@ type Characters = (Or<(With<Player>, With<Npc>)>, Without<Prop>);
 /// Fade props that hide the player or an NPC (see module docs).
 fn fade_occluders(
     time: Res<Time>,
-    chars: Query<(&Transform, &Sprite, &Anchor), Characters>,
+    chars: Query<(&Transform, &Sprite, &Anchor, Option<&SpriteLift>), Characters>,
     mut props: Query<(&Transform, &Prop, &mut Sprite)>,
     mut last_faded: Local<usize>,
 ) {
     let bodies: Vec<(Aabb, f32)> = chars
         .iter()
-        .map(|(tf, sprite, anchor)| {
+        .map(|(tf, sprite, anchor, lift)| {
             let size = sprite.custom_size.unwrap_or(Vec2::ZERO);
-            let center = tf.translation.truncate() - anchor.as_vec() * size;
+            let center = tf.translation.truncate() - unlifted_anchor(anchor, lift, size.y) * size;
             (character_body(center, size), tf.translation.z)
         })
         .collect();

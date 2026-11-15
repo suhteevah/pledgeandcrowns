@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-46 v2 - The Tabkeeper on the Tavern kit, 32x32, idle, transparent bg.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/npc/tabkeeper_idle_0.png.
 //
 // Kit: Tavern shirtsleeves and bronze apron, no robe (REF-71). The tab clerk:
 // a brass eyeshade and grey hair. Lesson prop (and_then): a long cream tab

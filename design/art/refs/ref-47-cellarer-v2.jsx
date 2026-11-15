@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-47 v2 - The Cellarer on the Tavern kit, 32x32, idle, transparent bg.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/npc/cellarer_idle_0.png.
 //
 // Kit: Tavern shirtsleeves and bronze apron, no robe (REF-71), with a bronze
 // knit cap for the cold cellar, clean-shaven. Lesson prop (unwrap_or_else): a

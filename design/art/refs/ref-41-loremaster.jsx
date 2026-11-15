@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-41 - The Loremaster, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-41-loremaster-v2.jsx (approved by Matt 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REFnn.png).
 // A scholar holding an open tome whose Parchment-cream pages show a small
 // inscription: a mapping, one input glyph bound to one output glyph
 // (the Coalblack rule marks). Each trait has ONE associated type bound

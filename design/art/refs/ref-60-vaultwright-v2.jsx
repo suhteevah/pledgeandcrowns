@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-60 v2 - The Vaultwright on the Vault kit, 32x32, idle, transparent bg.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/npc/vaultwright_idle_0.png.
 //
 // Kit: crested helm, stone-grey plate with old-gold trim, gold pauldrons
 // (REF-74). An open-faced helm, so this is the one Vault guard with a visible

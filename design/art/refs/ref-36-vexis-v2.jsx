@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-36 v2 - Vexis the Archmage on the Tower kit, 32x32, idle, transparent bg.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/npc/vexis_idle_0.png.
 //
 // Kit: pointed hat, floor-length cobalt-deep robe, gold hem, aged-paper beard
 // (REF-70). The Archmage outranks the rest: the widest brim in the cast, an

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-48 v2 - The Keymaster on the Forge kit, 32x32, idle, transparent bg.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/npc/keymaster_idle_0.png.
 //
 // Kit: leather cap, brass goggles, basalt apron, bare arms, heavy gloves
 // (REF-72). Goggles pushed up onto the cap, clean face. Lesson prop
