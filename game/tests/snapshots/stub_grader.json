@@ -1412,7 +1412,7 @@
   {
     "case": "starter",
     "id": "bridge_toll",
-    "input": "fn weigh(cargo: String) -> usize {\n    cargo.len()\n}\n\nfn main() {\n    let cargo = String::from(\"lantern oil\");\n    // this won't compile yet: weigh keeps the cargo, then main reaches for it\n    let toll = weigh(cargo);\n    println!(\"toll: {toll}\");\n    println!(\"cargo: {cargo}\");\n}\n",
+    "input": "fn weigh(cargo: String) -> usize {\n    cargo.len()\n}\n\nfn main() {\n    let cargo = String::from(\"lantern oil\");\n    // this won't compile yet: weigh takes the cargo, then main reaches for it\n    let toll = weigh(cargo);\n    println!(\"toll: {toll}\");\n    println!(\"cargo: {cargo}\");\n}\n",
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Borrow Checker bars the bridge — weigh must borrow its cargo: `fn weigh(cargo: &str)`",

@@ -88,7 +88,7 @@ pub const TRIAL_STAGES: &[NpcLines] = &[
                 "The compiler calls that E0382, borrow of moved value. Lend the cargo. Do not hand it over.",
             ],
             in_progress: &[
-                "Here. You have moved what you meant to lend. Let `weigh` take `&str`, and pass `&cargo`.",
+                "Here. Here you have moved what you intended to lend. Let `weigh` take `&str`, and pass `&cargo`.",
             ],
             cleared: &[],
         },

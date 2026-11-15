@@ -681,7 +681,7 @@ The grader needs `fn weigh(cargo: &str)` and a call that lends, \
 the toll with a copy: the Borrow Checker wants a loan, not a gift.",
                 prereq: None,
                 available: true,
-                starter_code: "fn weigh(cargo: String) -> usize {\n    cargo.len()\n}\n\nfn main() {\n    let cargo = String::from(\"lantern oil\");\n    // this won't compile yet: weigh keeps the cargo, then main reaches for it\n    let toll = weigh(cargo);\n    println!(\"toll: {toll}\");\n    println!(\"cargo: {cargo}\");\n}\n",
+                starter_code: "fn weigh(cargo: String) -> usize {\n    cargo.len()\n}\n\nfn main() {\n    let cargo = String::from(\"lantern oil\");\n    // this won't compile yet: weigh takes the cargo, then main reaches for it\n    let toll = weigh(cargo);\n    println!(\"toll: {toll}\");\n    println!(\"cargo: {cargo}\");\n}\n",
             },
             Mission {
                 id: "bridge_quill",
