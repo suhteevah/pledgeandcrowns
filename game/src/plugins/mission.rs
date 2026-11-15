@@ -711,7 +711,7 @@ The grader needs `fn inscribe(scroll: &mut Vec<String>, entry: &str)`, a \
 Moving the two reader lines above the write is all `main` needs.",
                 prereq: None,
                 available: true,
-                starter_code: "fn main() {\n    let mut scroll = vec![String::from(\"north road\")];\n    let first = &scroll[0];\n    let second = &scroll[0];\n    // this won't compile yet: the quill writes while both readers still hold the scroll\n    scroll.push(String::from(\"east road\"));\n    println!(\"reader one: {first}\");\n    println!(\"reader two: {second}\");\n    println!(\"scroll: {}\", scroll.join(\", \"));\n}\n",
+                starter_code: "fn main() {\n    let mut scroll = vec![String::from(\"north road\")];\n    let first = &scroll[0];\n    let second = &scroll[0];\n    // won't compile yet: the quill writes while readers hold the scroll\n    scroll.push(String::from(\"east road\"));\n    println!(\"reader one: {first}\");\n    println!(\"reader two: {second}\");\n    println!(\"scroll: {}\", scroll.join(\", \"));\n}\n",
             },
             Mission {
                 id: "bridge_lantern",

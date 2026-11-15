@@ -868,7 +868,7 @@ pub fn stage_pips(ui: &mut egui::Ui, pips: &[Pip], size: f32) -> egui::Response 
                 p.circle_filled(c, size * 0.22, SELECT_FILL);
             }
             Pip::Locked => {
-                let r = cell.shrink(size * 0.24);
+                let r = cell.shrink(size * 0.16);
                 p.rect_stroke(
                     r,
                     egui::CornerRadius::ZERO,
