@@ -13,9 +13,11 @@
 //! player movement, pause handling); that field's meaning is unchanged.
 //!
 //! Colours come only from [`palette`], aliases of the shared `ui_theme`
-//! (bible §UI Style, v2.1). Tutorial text, fenced code and the revealed
-//! solution are drawn by the shared `ui_theme::markdown` /
-//! `ui_theme::highlight`. Pure logic lives in the submodules so it can be
+//! (bible §UI Style, v2.1), and, for every code surface (code pane,
+//! solution view, rustc output block), the live `ui_theme::code_theme()`
+//! (Abyssal ink by default: the bible v2.2 candidate; Parchment under
+//! v2.1). Tutorial text, fenced code and the revealed solution are drawn
+//! by the shared `ui_theme::markdown` / `ui_theme::highlight`. Pure logic lives in the submodules so it can be
 //! unit-tested without a renderer; egui drawing helpers are in [`widgets`].
 
 pub mod diagnostics;
@@ -26,7 +28,7 @@ pub mod solutions;
 pub mod widgets;
 
 use crate::plugins::mission::{ActiveMission, Mission};
-use crate::plugins::ui_theme::{highlight, markdown};
+use crate::plugins::ui_theme::{self, CodeTheme, highlight, markdown};
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass, egui};
 use diagnostics::{ParsedResult, ResultDetail, ResultKind, ResultTag, SERVER_PREAMBLE_LINES};
@@ -296,9 +298,23 @@ fn draw_editor(
         .as_ref()
         .filter(|m| m.id == state.encounter_id);
 
+    // Solution gate first: whether the solution is showing changes the
+    // right column's split.
+    let gate = mission.map(|m| {
+        session::solution_gate(session.failures(m.id), solutions::canonical_solution(m.id))
+    });
+    let revealed = match gate {
+        Some(SolutionGate::Available(s)) if session.show_solution => Some(s),
+        _ => {
+            session.show_solution = false;
+            None
+        }
+    };
+    let code_theme = ui_theme::code_theme();
+
     let screen = ctx.content_rect();
     let has_result = state.last_compile_result.is_some();
-    let lay = layout::editor_layout(screen.size(), has_result);
+    let lay = layout::editor_layout(screen.size(), has_result, revealed.is_some());
     let offset = screen.min.to_vec2();
     let r = |rect: egui::Rect| rect.translate(offset);
 
@@ -320,7 +336,7 @@ fn draw_editor(
             let mut title_ui = pane_ui(ui, r(lay.title), 0.0);
             widgets::title_bar(&mut title_ui, &title, "Esc closes  ·  Ctrl+Enter compiles");
 
-            let Some(mission) = mission else {
+            let (Some(mission), Some(gate)) = (mission, gate) else {
                 let mut body = pane_ui(ui, r(lay.code).union(r(lay.result)), 12.0);
                 draw_empty_state(&mut body);
                 return;
@@ -334,16 +350,6 @@ fn draw_editor(
             if compile_now {
                 tracing::debug!("Ctrl+Enter pressed");
             }
-
-            let solution = solutions::canonical_solution(mission.id);
-            let gate = session::solution_gate(session.failures(mission.id), solution);
-            let revealed = match gate {
-                SolutionGate::Available(s) if session.show_solution => Some(s),
-                _ => {
-                    session.show_solution = false;
-                    None
-                }
-            };
 
             // Snapshot the result: the panes below may edit `state`.
             let result_raw = state.last_compile_result.clone();
@@ -373,20 +379,20 @@ fn draw_editor(
                 draw_solution_button(ui, session, gate);
             });
 
-            widgets::paint_pane(ui.painter(), r(lay.code), palette::PAGE_BG);
+            widgets::paint_pane(ui.painter(), r(lay.code), code_theme.page);
             let mut code_ui = pane_ui(ui, r(lay.code), 2.0);
-            draw_code(&mut code_ui, &mut state.source, &error_lines);
+            draw_code(&mut code_ui, &mut state.source, &error_lines, code_theme);
 
             widgets::paint_pane(ui.painter(), r(lay.goal), palette::SURFACE);
             let mut goal_ui = pane_ui(ui, r(lay.goal), 8.0);
             match revealed {
-                Some(code) => draw_solution(&mut goal_ui, state, session, code),
+                Some(code) => draw_solution(&mut goal_ui, state, session, code, code_theme),
                 None => draw_goal(&mut goal_ui, mission),
             }
 
             widgets::paint_pane(ui.painter(), r(lay.result), palette::SURFACE);
             let mut result_ui = pane_ui(ui, r(lay.result), 8.0);
-            draw_result(&mut result_ui, parsed.as_ref(), detail.as_ref());
+            draw_result(&mut result_ui, parsed.as_ref(), detail.as_ref(), code_theme);
 
             if compile_now {
                 request_compile(state, session);
@@ -482,6 +488,7 @@ fn draw_solution(
     state: &mut EditorState,
     session: &mut EditorSession,
     code: &str,
+    theme: &CodeTheme,
 ) {
     widgets::caption(ui, "REFERENCE SOLUTION");
     ui.horizontal_wrapped(|ui| {
@@ -537,7 +544,7 @@ fn draw_solution(
                 let glyph = ui.fonts_mut(|f| f.glyph_width(&font, 'M')).max(1.0);
                 let cols = solution_view_columns(ui.available_width(), glyph);
                 let shown = highlight::wrap_comment_lines(code, cols);
-                let job = highlight::layout_job(&shown, font.clone(), &BTreeSet::new());
+                let job = highlight::layout_job(&shown, font.clone(), &BTreeSet::new(), theme);
                 ui.add(egui::Label::new(job).extend());
             });
     });
@@ -559,6 +566,7 @@ fn draw_result(
     ui: &mut egui::Ui,
     parsed: Option<&ParsedResult<'_>>,
     detail: Option<&ResultDetail>,
+    theme: &CodeTheme,
 ) {
     let Some(p) = parsed else {
         widgets::caption(ui, "RESULT");
@@ -590,6 +598,11 @@ fn draw_result(
         widgets::first_error(ui, first);
         ui.add_space(2.0);
     }
+    // The pinned headline is shown once: drop it from the top of the block.
+    let block = match pinned {
+        Some(first) => diagnostics::without_leading_line(&cleaned, first),
+        None => cleaned.as_str(),
+    };
     // A fresh scroll state per result, so a new verdict starts at its top
     // left. Both directions: rustc's ASCII art must not wrap.
     let salt = ("result_scroll", p.body.len(), p.body.lines().count());
@@ -602,25 +615,40 @@ fn draw_result(
                 widgets::draw_expected_actual(ui, expected, actual);
                 if let Some(extra) = diagnostics::wrong_output_extra(&cleaned) {
                     ui.add_space(4.0);
-                    widgets::draw_output(ui, extra);
+                    widgets::draw_output(ui, extra, theme);
                 }
             } else {
                 if p.kind == ResultKind::Pass && !cleaned.is_empty() && !p.offline {
                     widgets::caption(ui, "OUTPUT");
                 }
-                widgets::draw_output(ui, &cleaned);
+                widgets::draw_output(ui, block, theme);
             }
         });
 }
 
-/// Code page: Parchment fill, line-number gutter with error lines marked,
-/// and the highlighted TextEdit filling the pane. Wrapping is off so each
-/// gutter row lines up with exactly one source line; the page scrolls in
-/// both directions inside its fixed rectangle.
-fn draw_code(ui: &mut egui::Ui, source: &mut String, error_lines: &BTreeSet<usize>) {
+/// Code page: the live code surface's page, a line-number gutter (on its
+/// own strip on ink) with error lines marked, and the highlighted TextEdit
+/// filling the pane. Wrapping is off so each gutter row lines up with
+/// exactly one source line; the page scrolls in both directions inside its
+/// fixed rectangle.
+fn draw_code(
+    ui: &mut egui::Ui,
+    source: &mut String,
+    error_lines: &BTreeSet<usize>,
+    theme: &'static CodeTheme,
+) {
     let font_id = widgets::mono_font();
-    let gutter = gutter_job(source, &font_id, error_lines);
+    let gutter = gutter_job(source, &font_id, error_lines, theme);
     let page = ui.available_size();
+    {
+        // Cursor and selection belong to the code surface, not the
+        // parchment chrome around it.
+        let v = ui.visuals_mut();
+        v.selection.bg_fill = theme.selection;
+        v.selection.stroke = egui::Stroke::new(1.0_f32, theme.plain);
+        v.text_cursor.stroke = egui::Stroke::new(2.0_f32, theme.cursor);
+        v.override_text_color = Some(theme.plain);
+    }
 
     egui::ScrollArea::both()
         .id_salt("source_scroll")
@@ -630,13 +658,14 @@ fn draw_code(ui: &mut egui::Ui, source: &mut String, error_lines: &BTreeSet<usiz
                 ui.vertical(|ui| {
                     // Match the TextEdit's top margin.
                     ui.add_space(4.0);
-                    paint_gutter(ui, gutter, error_lines);
+                    paint_gutter(ui, gutter, error_lines, theme);
                 });
                 let layout_font = font_id.clone();
                 let errs = error_lines.clone();
                 let mut layouter =
                     move |ui: &egui::Ui, text: &dyn egui::TextBuffer, _wrap_width: f32| {
-                        let job = highlight::layout_job(text.as_str(), layout_font.clone(), &errs);
+                        let job =
+                            highlight::layout_job(text.as_str(), layout_font.clone(), &errs, theme);
                         ui.ctx().fonts_mut(|f| f.layout_job(job))
                     };
                 let width = ui.available_width().max(200.0);
@@ -656,14 +685,30 @@ fn draw_code(ui: &mut egui::Ui, source: &mut String, error_lines: &BTreeSet<usiz
 
 /// Width of the Alarm scarlet bar beside an error line's number.
 const ERROR_BAR_WIDTH: f32 = 3.0;
+/// Padding right of the gutter numbers on their strip.
+const GUTTER_PAD: f32 = 3.0;
 
-/// Draw the gutter numbers, with an Alarm scarlet bar (a mark, not text)
-/// left of every line rustc flagged. The number itself stays Oxblood on an
-/// Aged paper band: scarlet text would be 3.6:1 (bible v2.1).
-fn paint_gutter(ui: &mut egui::Ui, job: egui::text::LayoutJob, error_lines: &BTreeSet<usize>) {
+/// Draw the gutter: its strip (ink), then for every line rustc flagged a
+/// band behind the number, an Alarm scarlet bar (a mark, not text) at its
+/// left edge and, on ink, a full-width error-row band behind the code
+/// (painted before the TextEdit, so it sits under the text). Error-line
+/// numbers are error TEXT on their band, never scarlet (bible v2.1).
+fn paint_gutter(
+    ui: &mut egui::Ui,
+    job: egui::text::LayoutJob,
+    error_lines: &BTreeSet<usize>,
+    theme: &CodeTheme,
+) {
     let galley = ui.fonts_mut(|f| f.layout_job(job));
-    let size = galley.size() + egui::vec2(ERROR_BAR_WIDTH, 0.0);
+    let size = galley.size() + egui::vec2(ERROR_BAR_WIDTH + GUTTER_PAD, 0.0);
     let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
+    let clip = ui.clip_rect();
+    let painter = ui.painter();
+    if let Some(strip) = theme.gutter_bg {
+        let strip_rect =
+            egui::Rect::from_x_y_ranges((rect.left() - 2.0)..=rect.right(), clip.y_range());
+        painter.rect_filled(strip_rect, 0.0, strip);
+    }
     let rows = galley.rows.len().max(1);
     // One row per source line: the gutter job never wraps.
     let row_h = galley.size().y / rows as f32;
@@ -672,16 +717,30 @@ fn paint_gutter(ui: &mut egui::Ui, job: egui::text::LayoutJob, error_lines: &BTr
             continue;
         }
         let top = rect.top() + row_h * (line - 1) as f32;
+        let band_left = if theme.error_band_under_bar() {
+            rect.left()
+        } else {
+            rect.left() + ERROR_BAR_WIDTH
+        };
+        let band = egui::Rect::from_x_y_ranges(band_left..=rect.right(), top..=(top + row_h));
+        painter.rect_filled(band, 0.0, theme.gutter_error_bg);
+        if let Some(row) = theme.error_row {
+            let code_row = egui::Rect::from_x_y_ranges(
+                band.right()..=clip.right().max(band.right()),
+                band.y_range(),
+            );
+            painter.rect_filled(code_row, 0.0, row);
+        }
         let bar = egui::Rect::from_min_size(
             egui::pos2(rect.left(), top),
             egui::vec2(ERROR_BAR_WIDTH, row_h),
         );
-        ui.painter().rect_filled(bar, 0.0, palette::ERROR_MARK);
+        painter.rect_filled(bar, 0.0, theme.error_mark);
     }
-    ui.painter().galley(
+    painter.galley(
         rect.min + egui::vec2(ERROR_BAR_WIDTH, 0.0),
         galley,
-        palette::TEXT,
+        theme.gutter,
     );
 }
 
@@ -689,35 +748,43 @@ fn gutter_job(
     source: &str,
     font_id: &egui::FontId,
     error_lines: &BTreeSet<usize>,
+    theme: &CodeTheme,
 ) -> egui::text::LayoutJob {
     let line_count = source.matches('\n').count() + 1;
     let width = line_count.to_string().len().max(2);
     let mut job = egui::text::LayoutJob::default();
     for n in 1..=line_count {
-        let is_err = error_lines.contains(&n);
         let text = if n == line_count {
             format!(" {n:>width$}")
         } else {
             format!(" {n:>width$}\n")
         };
-        job.append(
-            &text,
-            0.0,
-            egui::TextFormat {
-                font_id: font_id.clone(),
-                color: if is_err {
-                    palette::GUTTER_ERROR
-                } else {
-                    palette::GUTTER
-                },
-                background: if is_err {
-                    palette::CHIP_BG
-                } else {
-                    egui::Color32::TRANSPARENT
-                },
-                ..Default::default()
-            },
-        );
+        let color = if error_lines.contains(&n) {
+            theme.gutter_error
+        } else {
+            theme.gutter
+        };
+        job.append(&text, 0.0, egui::TextFormat::simple(font_id.clone(), color));
     }
     job
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gutter_job_marks_error_lines_in_error_text_on_both_surfaces() {
+        let errs: BTreeSet<usize> = [2].into_iter().collect();
+        for theme in [&ui_theme::INK_CODE, &ui_theme::PARCHMENT_CODE] {
+            let job = gutter_job("a\nb\nc", &widgets::mono_font(), &errs, theme);
+            assert_eq!(job.text, "  1\n  2\n  3");
+            let colours: Vec<_> = job.sections.iter().map(|s| s.format.color).collect();
+            assert_eq!(
+                colours,
+                vec![theme.gutter, theme.gutter_error, theme.gutter]
+            );
+            assert_ne!(theme.gutter_error, theme.error_mark);
+        }
+    }
 }

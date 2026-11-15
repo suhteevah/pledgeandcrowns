@@ -15,15 +15,16 @@
 //! [`parse`] is pure and unit-tested on the real tutorial strings; the
 //! `show*` functions draw the result with the theme: headings in Oxblood,
 //! strong in Wineflesh, inline code as monospace on an Aged paper chip
-//! ([`super::inline_code_format`]), fenced code syntax-coloured on
-//! Parchment inside a 1 px Basalt frame (bible v2.1: the syntax colours
-//! are not all 4.5:1 on Aged paper).
+//! ([`super::inline_code_format`]) because it sits in parchment prose,
+//! fenced code syntax-coloured on the live code surface
+//! ([`super::code_theme`]: Abyssal ink by default, the bible v2.2
+//! candidate; Parchment under v2.1) inside a 1 px Basalt frame.
 
 use bevy_egui::egui;
 
 use super::{
-    BODY_SIZE, CODE_BLOCK_FRAME, CODE_PAGE, MONO_SIZE, SMALL_SIZE, SUBHEADING_SIZE, TEXT,
-    TEXT_HEADING, WINEFLESH, highlight, inline_code_format,
+    BODY_SIZE, MONO_SIZE, SMALL_SIZE, SUBHEADING_SIZE, TEXT, TEXT_HEADING, WINEFLESH, code_theme,
+    highlight, inline_code_format,
 };
 
 /// Inline run kinds.
@@ -205,12 +206,14 @@ pub fn show_inline(ui: &mut egui::Ui, src: &str, size: f32) -> egui::Response {
     ui.label(job)
 }
 
-/// The frame every block of syntax-coloured code sits in: Parchment with
-/// a 1 px Basalt line (fenced code here, the editor's solution view).
+/// The frame every block of syntax-coloured code sits in: the live code
+/// page with a 1 px frame line (fenced code here, the editor's solution
+/// view, the result pane's rustc output on ink).
 pub fn code_frame() -> egui::Frame {
+    let theme = code_theme();
     egui::Frame::new()
-        .fill(CODE_PAGE)
-        .stroke(egui::Stroke::new(1.0_f32, CODE_BLOCK_FRAME))
+        .fill(theme.page)
+        .stroke(egui::Stroke::new(1.0_f32, theme.block_frame))
         .inner_margin(egui::Margin::symmetric(8, 6))
 }
 
@@ -223,6 +226,7 @@ pub fn code_block(ui: &mut egui::Ui, code: &str, mono_size: f32) {
             code,
             egui::FontId::monospace(mono_size),
             &std::collections::BTreeSet::new(),
+            code_theme(),
         );
         job.wrap.max_width = ui.available_width();
         ui.add(egui::Label::new(job).wrap());

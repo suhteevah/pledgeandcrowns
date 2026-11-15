@@ -2000,10 +2000,16 @@ fn draw_next_pin(
                         .color(ui_theme::TEXT),
                 );
             });
-            ui_theme::caption(ui, format!("encounter: {}", next.id));
+            // The mission's goal line (its one-sentence prompt, with inline
+            // code chips), never its snake_case id.
+            ui.set_max_width(NEXT_PIN_MAX_WIDTH);
+            ui_theme::markdown::show_inline(ui, next.prompt, ui_theme::SMALL_SIZE);
         });
     });
 }
+
+/// Widest the "next mission" pin grows before its goal line wraps.
+const NEXT_PIN_MAX_WIDTH: f32 = 340.0;
 
 /// A centred modal panel: framed, at least `min_width` wide.
 fn modal_panel(ctx: &egui::Context, id: &str, min_width: f32, add: impl FnOnce(&mut egui::Ui)) {
@@ -2022,6 +2028,10 @@ fn modal_panel(ctx: &egui::Context, id: &str, min_width: f32, add: impl FnOnce(&
         });
     });
 }
+
+/// Window height the recap keeps for its frame, heading, goal line and key
+/// hints; the tutorial excerpt scrolls in what is left.
+const RECAP_CHROME_HEIGHT: f32 = 260.0;
 
 fn draw_completion_panel(
     mut contexts: EguiContexts,
@@ -2043,15 +2053,22 @@ fn draw_completion_panel(
             ui_theme::status_mark(ui, ui_theme::Status::Cleared, ui_theme::HEADING_SIZE);
             ui_theme::heading(ui, mission.npc_name);
         });
-        ui_theme::caption(ui, format!("encounter cleared: {}", mission.id));
+        // The goal line below says what was cleared; no raw mission id.
+        ui_theme::caption(ui, "encounter cleared");
         ui_theme::rule(ui);
         ui_theme::markdown::show_inline(ui, mission.prompt, ui_theme::BODY_SIZE);
         ui_theme::rule(ui);
-        // Show the Concept section of the tutorial as a recap. It's
-        // the section players most often want to re-read; the others
-        // (Syntax/Task/Hint) are revealed again when they reopen the
-        // editor.
-        ui_theme::markdown::show(ui, &extract_section(mission.tutorial, "## Concept"));
+        // Recap: the Concept section (what players most often re-read)
+        // and the Syntax section (the code shape to remember). Task and
+        // Hint come back when they reopen the editor. Scrolls if a long
+        // tutorial would not fit the window.
+        let max_h = (ui.ctx().content_rect().height() - RECAP_CHROME_HEIGHT).max(120.0);
+        egui::ScrollArea::vertical()
+            .id_salt("recap_scroll")
+            .max_height(max_h)
+            .show(ui, |ui| {
+                ui_theme::markdown::show(ui, &recap_text(mission.tutorial));
+            });
         ui_theme::rule(ui);
         ui_theme::key_hint(ui, &[("F", "revisit"), ("Esc", "close")]);
     });
@@ -2248,6 +2265,17 @@ fn draw_demo_end_panel(
 /// inclusive of the heading line, exclusive of the next `## ` line. If
 /// the section is missing, the full tutorial is returned (better to
 /// over-show than to silently drop the recap).
+/// The recap's tutorial excerpt: the Concept and Syntax sections, each
+/// only if the tutorial has it (never the whole tutorial).
+fn recap_text(tutorial: &str) -> String {
+    ["## Concept", "## Syntax"]
+        .iter()
+        .filter(|h| tutorial.contains(**h))
+        .map(|h| extract_section(tutorial, h))
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
 fn extract_section(tutorial: &str, heading: &str) -> String {
     let Some(start) = tutorial.find(heading) else {
         return tutorial.to_string();
@@ -2271,6 +2299,18 @@ mod tests {
         assert!(!next_pin_visible(false, true, false, false));
         assert!(!next_pin_visible(false, false, true, false));
         assert!(!next_pin_visible(false, false, false, true));
+    }
+
+    #[test]
+    fn recap_is_concept_plus_syntax_for_every_mission() {
+        let reg = MissionRegistry::default();
+        for m in &reg.missions {
+            let r = recap_text(m.tutorial);
+            assert!(r.starts_with("## Concept"), "{}", m.id);
+            assert!(r.contains("## Syntax"), "{}: no syntax section", m.id);
+            assert!(!r.contains("## Task") && !r.contains("## Hint"), "{}", m.id);
+        }
+        assert_eq!(recap_text("no headings"), "");
     }
 
     #[test]

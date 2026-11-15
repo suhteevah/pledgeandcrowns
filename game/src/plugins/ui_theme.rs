@@ -20,6 +20,10 @@
 //!   markdown renderer (mission prompt, recap, editor goal pane); fenced
 //!   code and the editor's solution view share [`markdown::code_block`]
 //!   and the syntax colouring in [`highlight`].
+//! - Code surfaces: every syntax-coloured surface reads [`code_theme`],
+//!   which is [`INK_CODE`] (bible v2.2 candidate, the default) or
+//!   [`PARCHMENT_CODE`] (bible v2.1). [`DEFAULT_CODE_SURFACE`] is the one
+//!   switch.
 //! - Colours: every colour literal in `game/src/plugins` lives in this
 //!   file (a test enforces it). Use a role (`TEXT`, `SURFACE`,
 //!   `SYNTAX_KEYWORD`, ...) or, failing that, a swatch by bible name.
@@ -67,7 +71,7 @@ pub const BRASS_LEAF: egui::Color32 = egui::Color32::from_rgb(0xF0, 0xD2, 0x7D);
 /// `#FCEFC8` primary UI surface.
 pub const PARCHMENT_CREAM: egui::Color32 = egui::Color32::from_rgb(0xFC, 0xEF, 0xC8);
 // Teal ramp.
-/// `#062123` code-editor cursor.
+/// `#062123` the ink code page (v2.2 candidate); code cursor on parchment.
 pub const ABYSSAL: egui::Color32 = egui::Color32::from_rgb(0x06, 0x21, 0x23);
 /// `#154548` borrow-checker robe shadow; types in code (bible v2.1).
 pub const DEEP_TEAL: egui::Color32 = egui::Color32::from_rgb(0x15, 0x45, 0x48);
@@ -182,6 +186,195 @@ pub const SYNTAX_TEXT: &[(&str, egui::Color32)] = &[
 ];
 /// Every surface syntax text is drawn on.
 pub const SYNTAX_SURFACES: &[(&str, egui::Color32)] = &[("code page / code block", CODE_PAGE)];
+
+// --- Code surface switch (bible v2.2 candidate) ------------------------------
+// Code can be drawn on one of two surfaces. `Parchment` is the approved v2.1
+// look (the `SYNTAX_*` roles above); `Ink` is the v2.2 CANDIDATE: code on an
+// Abyssal page with the bright ramp members, pending owner approval. Every
+// code surface (editor code pane, fenced code blocks, the solution view and
+// the rustc output block) reads its colours from [`code_theme`], so switching
+// is the one const below. The screenshot plugin flips it at runtime with
+// [`set_code_surface`] to capture both looks from one build.
+
+/// Which page syntax-coloured code sits on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CodeSurface {
+    /// Bible v2.2 candidate: Abyssal ink page, bright syntax colours.
+    Ink,
+    /// Bible v2.1: Parchment cream page, darkened syntax colours.
+    Parchment,
+}
+
+/// THE switch: the code surface the game starts with.
+pub const DEFAULT_CODE_SURFACE: CodeSurface = CodeSurface::Ink;
+
+/// Every colour one code surface uses.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CodeTheme {
+    /// The page code is drawn on.
+    pub page: egui::Color32,
+    /// 1 px line around a code block / the solution view / output block.
+    pub block_frame: egui::Color32,
+    /// Line-number strip behind the gutter (`None`: the page itself).
+    pub gutter_bg: Option<egui::Color32>,
+    /// Line numbers.
+    pub gutter: egui::Color32,
+    /// Line number of a line rustc flagged...
+    pub gutter_error: egui::Color32,
+    /// ...drawn on this band.
+    pub gutter_error_bg: egui::Color32,
+    pub keyword: egui::Color32,
+    pub ty: egui::Color32,
+    pub string: egui::Color32,
+    pub number: egui::Color32,
+    pub comment: egui::Color32,
+    pub plain: egui::Color32,
+    /// Error TEXT (never the scarlet mark colour).
+    pub error_text: egui::Color32,
+    /// Squiggle and gutter bar (marks, 3:1).
+    pub error_mark: egui::Color32,
+    /// Text cursor (a mark, 3:1).
+    pub cursor: egui::Color32,
+    /// Text-selection fill in the code pane.
+    pub selection: egui::Color32,
+    /// Full-width band behind a flagged line (`None`: no band).
+    pub error_row: Option<egui::Color32>,
+    /// rustc output: plain lines, error headers, warnings, `-->` locations,
+    /// `help:` / `note:` lines.
+    pub out_plain: egui::Color32,
+    pub out_error: egui::Color32,
+    pub out_warning: egui::Color32,
+    pub out_location: egui::Color32,
+    pub out_hint: egui::Color32,
+    /// Draw the rustc output block framed on `page` (ink) or unframed on
+    /// the result pane's parchment (v2.1).
+    pub framed_output: bool,
+}
+
+/// Bible v2.1: code on Parchment cream (the approved look).
+pub const PARCHMENT_CODE: CodeTheme = CodeTheme {
+    page: CODE_PAGE,
+    block_frame: CODE_BLOCK_FRAME,
+    gutter_bg: None,
+    gutter: GUTTER,
+    gutter_error: GUTTER_ERROR,
+    gutter_error_bg: CODE_CHIP,
+    keyword: SYNTAX_KEYWORD,
+    ty: SYNTAX_TYPE,
+    string: SYNTAX_STRING,
+    number: SYNTAX_NUMBER,
+    comment: SYNTAX_COMMENT,
+    plain: SYNTAX_PLAIN,
+    error_text: SYNTAX_ERROR_TEXT,
+    error_mark: ERROR_MARK,
+    cursor: CODE_CURSOR,
+    selection: BRASS_LEAF,
+    error_row: None,
+    out_plain: TEXT,
+    out_error: SYNTAX_ERROR_TEXT,
+    out_warning: BRONZE,
+    out_location: TEXT_MUTED,
+    out_hint: TEXT,
+    framed_output: false,
+};
+
+/// Bible v2.2 CANDIDATE: code on an Abyssal ink page. Measured ratios are
+/// in the bible; `tests::ink_*` enforce them. Deviations from the design
+/// brief, all forced by measurement: numbers are Old gold (Brass leaf sat
+/// only dE00 11.9 from plain cream); the gutter is Aged paper on a Deep
+/// teal strip (Stone grey is 3.46:1 on Abyssal); the error-line band is
+/// Inkblood (keywords are 4.33:1 on Crypt).
+pub const INK_CODE: CodeTheme = CodeTheme {
+    page: ABYSSAL,
+    block_frame: BASALT,
+    gutter_bg: Some(DEEP_TEAL),
+    gutter: AGED_PAPER,
+    gutter_error: PINK_QUARTZ,
+    gutter_error_bg: INKBLOOD,
+    keyword: DUSTY_ROSE,
+    ty: BRIGHT_TEAL,
+    string: SPRING_MEADOW,
+    number: OLD_GOLD,
+    comment: AGED_PAPER,
+    plain: PARCHMENT_CREAM,
+    error_text: PINK_QUARTZ,
+    error_mark: ALARM_SCARLET,
+    cursor: BRASS_LEAF,
+    selection: DEEP_TEAL,
+    error_row: Some(INKBLOOD),
+    out_plain: PARCHMENT_CREAM,
+    out_error: PINK_QUARTZ,
+    out_warning: BRASS_LEAF,
+    out_location: BRIGHT_TEAL,
+    out_hint: SPRING_MEADOW,
+    framed_output: true,
+};
+
+impl CodeTheme {
+    /// Does an error line's band run under the scarlet gutter bar too? On
+    /// ink, yes (the strip under it is only 2.55:1 for the bar); on
+    /// parchment, no (scarlet is 2.00:1 on Aged paper but 3.64:1 on cream).
+    pub const fn error_band_under_bar(&self) -> bool {
+        self.gutter_bg.is_some()
+    }
+
+    /// What the scarlet gutter bar is drawn on.
+    pub const fn error_bar_bg(&self) -> egui::Color32 {
+        if self.error_band_under_bar() {
+            self.gutter_error_bg
+        } else {
+            self.page
+        }
+    }
+}
+
+impl CodeSurface {
+    /// This surface's colours.
+    pub const fn theme(self) -> &'static CodeTheme {
+        match self {
+            CodeSurface::Ink => &INK_CODE,
+            CodeSurface::Parchment => &PARCHMENT_CODE,
+        }
+    }
+
+    const fn to_u8(self) -> u8 {
+        match self {
+            CodeSurface::Ink => 0,
+            CodeSurface::Parchment => 1,
+        }
+    }
+
+    const fn from_u8(v: u8) -> Self {
+        match v {
+            1 => CodeSurface::Parchment,
+            _ => CodeSurface::Ink,
+        }
+    }
+}
+
+/// The live code surface. A display preference only (no game state), so a
+/// process-wide atomic is enough and every draw helper can read it without
+/// threading a resource through.
+static CODE_SURFACE: std::sync::atomic::AtomicU8 =
+    std::sync::atomic::AtomicU8::new(DEFAULT_CODE_SURFACE.to_u8());
+
+/// The code surface currently drawn.
+pub fn code_surface() -> CodeSurface {
+    CodeSurface::from_u8(CODE_SURFACE.load(std::sync::atomic::Ordering::Relaxed))
+}
+
+/// Switch the code surface (the screenshot plugin uses this to capture
+/// both looks; the game itself only ever uses [`DEFAULT_CODE_SURFACE`]).
+pub fn set_code_surface(surface: CodeSurface) {
+    let old = code_surface();
+    CODE_SURFACE.store(surface.to_u8(), std::sync::atomic::Ordering::Relaxed);
+    tracing::debug!(?old, new = ?surface, "ui_theme: code surface set");
+}
+
+/// Colours of the code surface currently drawn.
+pub fn code_theme() -> &'static CodeTheme {
+    code_surface().theme()
+}
 
 /// The one inline-code look (markdown and dialogue): monospace
 /// [`CODE_CHIP_TEXT`] on a [`CODE_CHIP`] band.
@@ -717,6 +910,249 @@ mod tests {
                 assert_ne!(a, b);
             }
         }
+    }
+
+    // --- Code surfaces (v2.1 parchment, v2.2 ink candidate) ---------------
+
+    /// CIE L*a*b* (D65) of an sRGB colour.
+    fn lab(c: egui::Color32) -> (f64, f64, f64) {
+        let (r, g, b) = (
+            channel_linear(c.r()),
+            channel_linear(c.g()),
+            channel_linear(c.b()),
+        );
+        let x = (0.412_456_4 * r + 0.357_576_1 * g + 0.180_437_5 * b) / 0.950_47;
+        let y = 0.212_672_9 * r + 0.715_152_2 * g + 0.072_175_0 * b;
+        let z = (0.019_333_9 * r + 0.119_192_0 * g + 0.950_304_1 * b) / 1.088_83;
+        let f = |t: f64| {
+            if t > 216.0 / 24389.0 {
+                t.cbrt()
+            } else {
+                (24389.0 / 27.0 * t + 16.0) / 116.0
+            }
+        };
+        let (fx, fy, fz) = (f(x), f(y), f(z));
+        (116.0 * fy - 16.0, 500.0 * (fx - fy), 200.0 * (fy - fz))
+    }
+
+    /// CIEDE2000 colour difference (Sharma, Wu & Dalal 2005).
+    fn delta_e_2000(c1: egui::Color32, c2: egui::Color32) -> f64 {
+        delta_e_2000_lab(lab(c1), lab(c2))
+    }
+
+    fn delta_e_2000_lab((l1, a1, b1): (f64, f64, f64), (l2, a2, b2): (f64, f64, f64)) -> f64 {
+        let pow7 = |v: f64| v.powi(7);
+        let c_bar = (a1.hypot(b1) + a2.hypot(b2)) / 2.0;
+        let g = 0.5 * (1.0 - (pow7(c_bar) / (pow7(c_bar) + pow7(25.0))).sqrt());
+        let (a1p, a2p) = ((1.0 + g) * a1, (1.0 + g) * a2);
+        let (c1p, c2p) = (a1p.hypot(b1), a2p.hypot(b2));
+        let hue = |b: f64, a: f64| b.atan2(a).to_degrees().rem_euclid(360.0);
+        let (h1, h2) = (hue(b1, a1p), hue(b2, a2p));
+        let dl = l2 - l1;
+        let dc = c2p - c1p;
+        let dh_deg = if c1p * c2p == 0.0 {
+            0.0
+        } else if (h2 - h1).abs() <= 180.0 {
+            h2 - h1
+        } else if h2 - h1 > 180.0 {
+            h2 - h1 - 360.0
+        } else {
+            h2 - h1 + 360.0
+        };
+        let dh = 2.0 * (c1p * c2p).sqrt() * (dh_deg.to_radians() / 2.0).sin();
+        let l_bar = (l1 + l2) / 2.0;
+        let cp_bar = (c1p + c2p) / 2.0;
+        let h_bar = if c1p * c2p == 0.0 {
+            h1 + h2
+        } else if (h1 - h2).abs() <= 180.0 {
+            (h1 + h2) / 2.0
+        } else if h1 + h2 < 360.0 {
+            (h1 + h2 + 360.0) / 2.0
+        } else {
+            (h1 + h2 - 360.0) / 2.0
+        };
+        let cos = |deg: f64| deg.to_radians().cos();
+        let t = 1.0 - 0.17 * cos(h_bar - 30.0)
+            + 0.24 * cos(2.0 * h_bar)
+            + 0.32 * cos(3.0 * h_bar + 6.0)
+            - 0.20 * cos(4.0 * h_bar - 63.0);
+        let d_theta = 30.0 * (-((h_bar - 275.0) / 25.0).powi(2)).exp();
+        let rc = 2.0 * (pow7(cp_bar) / (pow7(cp_bar) + pow7(25.0))).sqrt();
+        let sl = 1.0 + 0.015 * (l_bar - 50.0).powi(2) / (20.0 + (l_bar - 50.0).powi(2)).sqrt();
+        let sc = 1.0 + 0.045 * cp_bar;
+        let sh = 1.0 + 0.015 * cp_bar * t;
+        let rt = -(2.0 * d_theta).to_radians().sin() * rc;
+        ((dl / sl).powi(2) + (dc / sc).powi(2) + (dh / sh).powi(2) + rt * (dc / sc) * (dh / sh))
+            .sqrt()
+    }
+
+    #[test]
+    fn delta_e_2000_matches_sharma_reference_pairs() {
+        // Pairs 1, 7 and 17 of Sharma, Wu & Dalal's published test data.
+        for (a, b, want) in [
+            ((50.0, 2.6772, -79.7751), (50.0, 0.0, -82.7485), 2.0425),
+            ((50.0, 0.0, 0.0), (50.0, -1.0, 2.0), 2.3669),
+            (
+                (22.7233, 20.0904, -46.6940),
+                (23.0331, 14.9730, -42.5619),
+                2.0373,
+            ),
+        ] {
+            let got = delta_e_2000_lab(a, b);
+            assert!((got - want).abs() < 1e-3, "{a:?} {b:?}: {got} != {want}");
+        }
+        let black = egui::Color32::from_rgb(0, 0, 0);
+        assert!(delta_e_2000(SPECULAR_WHITE, black) > 99.0);
+        assert!(delta_e_2000(OXBLOOD, OXBLOOD).abs() < 1e-9);
+        // Symmetric.
+        let (a, b) = (DUSTY_ROSE, BRIGHT_TEAL);
+        assert!((delta_e_2000(a, b) - delta_e_2000(b, a)).abs() < 1e-6);
+        // Lab of pure white is (100, 0, 0).
+        let (l, a, b) = lab(SPECULAR_WHITE);
+        assert!((l - 100.0).abs() < 0.01 && a.abs() < 0.01 && b.abs() < 0.01);
+    }
+
+    fn token_colours(t: &CodeTheme) -> [(&'static str, egui::Color32); 6] {
+        [
+            ("keyword", t.keyword),
+            ("type", t.ty),
+            ("string", t.string),
+            ("number", t.number),
+            ("comment", t.comment),
+            ("plain", t.plain),
+        ]
+    }
+
+    /// Every text colour drawn directly on a surface's page.
+    fn page_text(t: &CodeTheme) -> Vec<(&'static str, egui::Color32)> {
+        let mut v = token_colours(t).to_vec();
+        v.extend([
+            ("error text", t.error_text),
+            ("out plain", t.out_plain),
+            ("out error", t.out_error),
+            ("out warning", t.out_warning),
+            ("out location", t.out_location),
+            ("out hint", t.out_hint),
+        ]);
+        v
+    }
+
+    /// Text >= 4.5:1 and marks >= 3:1 on every background a surface uses.
+    fn check_surface(name: &str, t: &CodeTheme) {
+        let mut fails = Vec::new();
+        let mut check = |what: String, fg, bg, min: f64| {
+            let r = contrast_ratio(fg, bg);
+            println!("{name}: {what}: {r:.2}:1");
+            if r < min {
+                fails.push(format!("{what} {r:.2}:1 < {min}"));
+            }
+        };
+        for (n, c) in page_text(t) {
+            check(format!("{n} on page"), c, t.page, 4.5);
+        }
+        if let Some(row) = t.error_row {
+            for (n, c) in token_colours(t) {
+                check(format!("{n} on error row"), c, row, 4.5);
+            }
+            check("error mark on error row".into(), t.error_mark, row, 3.0);
+        }
+        let gutter_bg = t.gutter_bg.unwrap_or(t.page);
+        check("gutter number".into(), t.gutter, gutter_bg, 4.5);
+        check(
+            "error-line gutter number".into(),
+            t.gutter_error,
+            t.gutter_error_bg,
+            4.5,
+        );
+        check("error mark on page".into(), t.error_mark, t.page, 3.0);
+        check(
+            "error mark (gutter bar) on what it is drawn on".into(),
+            t.error_mark,
+            t.error_bar_bg(),
+            3.0,
+        );
+        check("cursor on page".into(), t.cursor, t.page, 3.0);
+        assert!(fails.is_empty(), "{name}: {}", fails.join("; "));
+    }
+
+    #[test]
+    fn ink_surface_meets_contrast() {
+        check_surface("ink", &INK_CODE);
+    }
+
+    #[test]
+    fn parchment_surface_meets_contrast() {
+        check_surface("parchment", &PARCHMENT_CODE);
+    }
+
+    /// The smallest CIEDE2000 distance allowed between two token classes on
+    /// the ink page. The measured minimum is plain/comment at 15.8 (comments
+    /// are quiet by being desaturated, not by being dim).
+    const MIN_INK_TOKEN_DELTA_E: f64 = 15.0;
+
+    fn delta_matrix(t: &CodeTheme) -> Vec<(String, f64)> {
+        let toks = token_colours(t);
+        let mut out = Vec::new();
+        for (i, (na, a)) in toks.iter().enumerate() {
+            for (nb, b) in &toks[i + 1..] {
+                out.push((format!("{na}/{nb}"), delta_e_2000(*a, *b)));
+            }
+        }
+        out
+    }
+
+    /// Distinguishability is the reason the ink page exists: no two token
+    /// classes may drift within [`MIN_INK_TOKEN_DELTA_E`] of each other.
+    #[test]
+    fn ink_token_colours_stay_apart() {
+        for (pair, de) in delta_matrix(&INK_CODE) {
+            println!("ink dE00 {pair}: {de:.1}");
+            assert!(de >= MIN_INK_TOKEN_DELTA_E, "ink {pair} only dE00 {de:.1}");
+        }
+    }
+
+    /// The v2.1 parchment mapping, for comparison (printed, loosely bounded:
+    /// its colours are all dark, which is why the ink candidate exists).
+    #[test]
+    fn parchment_token_colours_are_distinct_but_close() {
+        let m = delta_matrix(&PARCHMENT_CODE);
+        for (pair, de) in &m {
+            println!("parchment dE00 {pair}: {de:.1}");
+            assert!(*de >= 5.0, "parchment {pair} only dE00 {de:.1}");
+        }
+    }
+
+    #[test]
+    fn code_surface_switch_round_trips_and_defaults_to_ink() {
+        assert_eq!(DEFAULT_CODE_SURFACE, CodeSurface::Ink);
+        for s in [CodeSurface::Ink, CodeSurface::Parchment] {
+            assert_eq!(CodeSurface::from_u8(s.to_u8()), s);
+        }
+        assert_eq!(CodeSurface::Parchment.theme(), &PARCHMENT_CODE);
+        assert_eq!(CodeSurface::Ink.theme().page, ABYSSAL);
+        // The parchment theme IS the v2.1 table.
+        assert_eq!(PARCHMENT_CODE.keyword, SYNTAX_KEYWORD);
+        assert_eq!(PARCHMENT_CODE.page, CODE_PAGE);
+    }
+
+    /// The v2.2 candidate table, by role, exactly as the bible lists it.
+    #[test]
+    fn ink_roles_match_bible_v2_2_candidate() {
+        let t = &INK_CODE;
+        assert_eq!(t.page, ABYSSAL);
+        assert_eq!(t.plain, PARCHMENT_CREAM);
+        assert_eq!(t.keyword, DUSTY_ROSE);
+        assert_eq!(t.ty, BRIGHT_TEAL);
+        assert_eq!(t.string, SPRING_MEADOW);
+        assert_eq!(t.number, OLD_GOLD);
+        assert_eq!(t.comment, AGED_PAPER);
+        assert_eq!(t.error_text, PINK_QUARTZ);
+        assert_eq!(t.error_mark, ALARM_SCARLET);
+        assert_eq!(t.gutter, AGED_PAPER);
+        assert_eq!(t.gutter_bg, Some(DEEP_TEAL));
+        assert_eq!(t.cursor, BRASS_LEAF);
+        assert_eq!(t.selection, DEEP_TEAL);
+        assert_eq!(t.error_row, Some(INKBLOOD));
     }
 
     /// Files under `game/src/plugins` that may contain a colour literal,

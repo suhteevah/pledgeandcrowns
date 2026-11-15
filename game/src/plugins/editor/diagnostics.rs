@@ -417,6 +417,21 @@ pub fn first_error_line(cleaned: &str) -> Option<&str> {
         .map(str::trim_end)
 }
 
+/// `cleaned` without its first non-blank line when that line is `pinned`
+/// (the headline the result pane pins above the block), so the headline
+/// is shown once. Anything else is returned unchanged.
+pub fn without_leading_line<'a>(cleaned: &'a str, pinned: &str) -> &'a str {
+    let lead = cleaned.len() - cleaned.trim_start_matches(['\n', '\r']).len();
+    let rest = &cleaned[lead..];
+    let (first, after) = rest.split_once('\n').unwrap_or((rest, ""));
+    if first.trim_end() == pinned.trim_end() {
+        tracing::trace!("result pane: pinned headline dropped from block");
+        after
+    } else {
+        cleaned
+    }
+}
+
 /// 1-based lines in the PLAYER's buffer that carry a rustc error.
 ///
 /// Only the primary location (the first `-->` after an `error` header)
@@ -490,6 +505,21 @@ fn parse_location_line(loc: &str) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pinned_headline_is_shown_once() {
+        let out = "error[E0384]: cannot assign twice  \n --> src/main.rs:4:5\n  |";
+        let pinned = first_error_line(out).unwrap_or_default();
+        assert_eq!(
+            without_leading_line(out, pinned),
+            " --> src/main.rs:4:5\n  |"
+        );
+        // Leading blank lines are skipped; a headline further down stays.
+        assert_eq!(without_leading_line("\nerror: x\nrest", "error: x"), "rest");
+        let warn_first = "warning: w\nerror: x";
+        assert_eq!(without_leading_line(warn_first, "error: x"), warn_first);
+        assert_eq!(without_leading_line("error: x", "error: x"), "");
+    }
 
     #[test]
     fn first_error_line_skips_warnings_and_art() {

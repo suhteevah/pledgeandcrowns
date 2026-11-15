@@ -6,7 +6,10 @@
 //! "what" rather than "which swatch".
 //!
 //! Syntax colours (bible v2.1) are the theme's `SYNTAX_*` roles; they are
-//! re-exported here under the editor's historical names.
+//! re-exported here under the editor's historical names. The code SURFACES
+//! (code pane, solution view, rustc output block) do not read these: they
+//! draw from the live `ui_theme::code_theme()` (ink by default, the bible
+//! v2.2 candidate; these parchment values under v2.1).
 
 use crate::plugins::ui_theme as theme;
 use bevy_egui::egui::Color32;

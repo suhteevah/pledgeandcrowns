@@ -11,7 +11,7 @@ use bevy_egui::egui::{self, Color32, FontFamily, FontId, Rect, RichText, Stroke,
 
 use super::diagnostics::{self, Banner, BannerStyle, LineRole};
 use super::palette;
-use crate::plugins::ui_theme;
+use crate::plugins::ui_theme::{self, CodeTheme};
 
 /// Body text size inside the editor (points): the theme's small size, so
 /// the dense editor still never drops under the theme minimum.
@@ -232,23 +232,26 @@ pub fn first_error(ui: &mut egui::Ui, line: &str) {
 
 /// The rustc output as one non-wrapping monospace block. rustc's ASCII
 /// art (`|`, `^^^`, `-->`) assumes no wrapping, so lines are never broken;
-/// the caller puts this inside a two-way `ScrollArea`. Error headers are
-/// error text (Oxblood), warnings Bronze, locations muted.
-pub fn rustc_job(cleaned: &str) -> LayoutJob {
+/// the caller puts this inside a two-way `ScrollArea`. Each line role takes
+/// its colour from the code surface `theme` (`out_*`): on ink, error
+/// headers Pink quartz, `-->` Bright teal, `help:` Spring meadow, warnings
+/// Brass leaf; on parchment (v2.1) Oxblood / muted / plain / Bronze.
+pub fn rustc_job(cleaned: &str, theme: &CodeTheme) -> LayoutJob {
     let mut job = LayoutJob::default();
     for (i, line) in cleaned.lines().enumerate() {
         if i > 0 {
             job.append(
                 "\n",
                 0.0,
-                egui::TextFormat::simple(mono_font(), palette::TEXT),
+                egui::TextFormat::simple(mono_font(), theme.out_plain),
             );
         }
         let color = match diagnostics::line_role(line) {
-            LineRole::ErrorHeader => palette::ERROR_TEXT,
-            LineRole::WarningHeader => palette::WARNING_TEXT,
-            LineRole::Location => palette::TEXT_MUTED,
-            LineRole::Hint | LineRole::Plain => palette::TEXT,
+            LineRole::ErrorHeader => theme.out_error,
+            LineRole::WarningHeader => theme.out_warning,
+            LineRole::Location => theme.out_location,
+            LineRole::Hint => theme.out_hint,
+            LineRole::Plain => theme.out_plain,
         };
         job.append(line, 0.0, egui::TextFormat::simple(mono_font(), color));
     }
@@ -257,13 +260,22 @@ pub fn rustc_job(cleaned: &str) -> LayoutJob {
 }
 
 /// Compiler / grader output. rustc-shaped text is a non-wrapping block
-/// ([`rustc_job`]); anything else is wrapped monospace prose.
-pub fn draw_output(ui: &mut egui::Ui, cleaned: &str) {
-    if cleaned.is_empty() {
+/// ([`rustc_job`]), framed on the code page when the surface asks for it
+/// (ink); anything else is wrapped monospace prose on the parchment pane.
+pub fn draw_output(ui: &mut egui::Ui, cleaned: &str, theme: &CodeTheme) {
+    if cleaned.trim().is_empty() {
         return;
     }
     if is_rustc_like(cleaned) {
-        ui.add(egui::Label::new(rustc_job(cleaned)).extend());
+        let job = rustc_job(cleaned, theme);
+        if theme.framed_output {
+            ui_theme::markdown::code_frame().show(ui, |ui| {
+                ui.set_min_width(ui.available_width());
+                ui.add(egui::Label::new(job).extend());
+            });
+        } else {
+            ui.add(egui::Label::new(job).extend());
+        }
     } else {
         ui.add(
             egui::Label::new(
@@ -295,10 +307,21 @@ mod tests {
     #[test]
     fn rustc_job_never_wraps_and_keeps_every_line() {
         let out = "error[E0384]: cannot assign twice\n --> src/main.rs:3:5\n  |\n3 |     answer = 43;\n  |     ^^^^^^^^^^^ cannot assign twice to immutable variable";
-        let job = rustc_job(out);
-        assert_eq!(job.text, out);
-        assert!(job.wrap.max_width.is_infinite());
-        assert_eq!(job.sections[0].format.color, palette::ERROR_TEXT);
+        for theme in [&ui_theme::INK_CODE, &ui_theme::PARCHMENT_CODE] {
+            let job = rustc_job(out, theme);
+            assert_eq!(job.text, out);
+            assert!(job.wrap.max_width.is_infinite());
+            assert_eq!(job.sections[0].format.color, theme.out_error);
+        }
+        let ink = rustc_job(out, &ui_theme::INK_CODE);
+        let colour_of = |needle: &str| {
+            ink.sections
+                .iter()
+                .find(|s| ink.text[s.byte_range.clone()].contains(needle))
+                .map(|s| s.format.color)
+        };
+        assert_eq!(colour_of("-->"), Some(ui_theme::BRIGHT_TEAL));
+        assert_eq!(colour_of("answer = 43"), Some(ui_theme::PARCHMENT_CREAM));
         assert!(is_rustc_like(out));
         assert!(!is_rustc_like("Ferris clicks approvingly."));
     }

@@ -2,13 +2,14 @@
 //! Hand-rolled Rust syntax highlighter, shared by the editor's code page,
 //! the revealed solution and fenced code blocks in tutorials. Split into a
 //! pure tokenizer (`tokenize`, unit-tested) and an egui `LayoutJob` builder
-//! that maps each token role to a `SYNTAX_*` role of [`super`] (bible v2.1)
-//! and underlines error lines with [`super::ERROR_MARK`].
+//! that maps each token role to a colour of a [`CodeTheme`] (the live one is
+//! [`super::code_theme`]: the v2.1 parchment table or the v2.2 ink
+//! candidate) and underlines error lines with its error mark.
 //!
 //! Hand-rolled because `egui_code_editor` 0.2 pins egui 0.34 while
 //! `bevy_egui` 0.39 ships egui 0.33 (unfixable diamond as of 2026-05-02).
 
-use super as theme;
+use super::CodeTheme;
 use bevy_egui::egui;
 use std::collections::BTreeSet;
 use std::ops::Range;
@@ -25,14 +26,14 @@ pub enum TokenRole {
 }
 
 impl TokenRole {
-    pub fn color(self) -> egui::Color32 {
+    pub fn color(self, theme: &CodeTheme) -> egui::Color32 {
         match self {
-            TokenRole::Keyword => theme::SYNTAX_KEYWORD,
-            TokenRole::Type => theme::SYNTAX_TYPE,
-            TokenRole::Str => theme::SYNTAX_STRING,
-            TokenRole::Comment => theme::SYNTAX_COMMENT,
-            TokenRole::Number => theme::SYNTAX_NUMBER,
-            TokenRole::Plain => theme::SYNTAX_PLAIN,
+            TokenRole::Keyword => theme.keyword,
+            TokenRole::Type => theme.ty,
+            TokenRole::Str => theme.string,
+            TokenRole::Comment => theme.comment,
+            TokenRole::Number => theme.number,
+            TokenRole::Plain => theme.plain,
         }
     }
 }
@@ -70,6 +71,52 @@ pub fn tokenize(src: &str) -> Vec<Token> {
                 i += 1;
             }
             TokenRole::Comment
+        } else if b == b'/' && i + 1 < n && bytes[i + 1] == b'*' {
+            // Block comment, nesting like rustc's; an unterminated one runs
+            // to end of input. Stops are ASCII, so always boundaries.
+            let mut depth = 0usize;
+            while i < n {
+                if bytes[i] == b'/' && i + 1 < n && bytes[i + 1] == b'*' {
+                    depth += 1;
+                    i += 2;
+                } else if bytes[i] == b'*' && i + 1 < n && bytes[i + 1] == b'/' {
+                    depth -= 1;
+                    i += 2;
+                    if depth == 0 {
+                        break;
+                    }
+                } else {
+                    i += 1;
+                }
+            }
+            TokenRole::Comment
+        } else if b == b'\'' {
+            // Char literal (`'a'`, `'\n'`, `'é'`) or lifetime (`'a`).
+            let rest = &src[i + 1..];
+            let mut chars = rest.char_indices();
+            match (chars.next(), chars.next()) {
+                (Some((_, '\\')), _) => {
+                    // Escaped char literal: up to the closing quote.
+                    let close = rest[1..].find('\'').map_or(rest.len(), |p| p + 2);
+                    i += 1 + close;
+                    TokenRole::Str
+                }
+                (Some((_, c)), Some((j, '\''))) if c != '\'' => {
+                    i += 1 + j + 1;
+                    TokenRole::Str
+                }
+                (Some((_, c)), _) if c == '_' || c.is_ascii_alphabetic() => {
+                    i += 1;
+                    while i < n && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
+                        i += 1;
+                    }
+                    TokenRole::Type
+                }
+                _ => {
+                    i += 1;
+                    TokenRole::Plain
+                }
+            }
         } else if b == b'"' {
             // String literal with simple escape skipping. The scan only
             // stops on an ASCII '"' or at end of input, both boundaries.
@@ -84,8 +131,12 @@ pub fn tokenize(src: &str) -> Vec<Token> {
             i = (i + 1).min(n);
             TokenRole::Str
         } else if b.is_ascii_digit() {
+            // A '.' belongs to the number only when a digit follows, so
+            // `0..10` is two numbers around a range, not one.
             while i < n
-                && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_' || bytes[i] == b'.')
+                && (bytes[i].is_ascii_alphanumeric()
+                    || bytes[i] == b'_'
+                    || (bytes[i] == b'.' && i + 1 < n && bytes[i + 1].is_ascii_digit()))
             {
                 i += 1;
             }
@@ -128,6 +179,7 @@ pub fn layout_job(
     src: &str,
     font_id: egui::FontId,
     error_lines: &BTreeSet<usize>,
+    theme: &CodeTheme,
 ) -> egui::text::LayoutJob {
     let mut job = egui::text::LayoutJob::default();
     let mut line = 1usize;
@@ -138,7 +190,7 @@ pub fn layout_job(
         let mut first = true;
         for piece in text.split('\n') {
             if !first {
-                append(&mut job, "\n", &font_id, token.role, false);
+                append(&mut job, "\n", &font_id, token.role, false, theme);
                 line += 1;
             }
             first = false;
@@ -149,6 +201,7 @@ pub fn layout_job(
                     &font_id,
                     token.role,
                     error_lines.contains(&line),
+                    theme,
                 );
             }
         }
@@ -163,9 +216,10 @@ fn append(
     font_id: &egui::FontId,
     role: TokenRole,
     error_line: bool,
+    theme: &CodeTheme,
 ) {
     let underline = if error_line {
-        egui::Stroke::new(1.5_f32, theme::ERROR_MARK)
+        egui::Stroke::new(1.5_f32, theme.error_mark)
     } else {
         egui::Stroke::NONE
     };
@@ -174,7 +228,7 @@ fn append(
         0.0,
         egui::TextFormat {
             font_id: font_id.clone(),
-            color: role.color(),
+            color: role.color(theme),
             underline,
             ..Default::default()
         },
@@ -294,6 +348,46 @@ mod tests {
     }
 
     #[test]
+    fn block_comments_lifetimes_chars_and_ranges() {
+        let src = "/* a /* nested */ still */ fn f<'a>(s: &'a str, c: char) { let r = 0..10; let x = 1.5; let q = '\\n'; let e = 'é'; }";
+        let r = roles(src);
+        assert!(r.contains(&("/* a /* nested */ still */", TokenRole::Comment)));
+        assert!(r.contains(&("'a", TokenRole::Type)));
+        assert!(r.contains(&("0", TokenRole::Number)));
+        assert!(r.contains(&("10", TokenRole::Number)));
+        assert!(r.contains(&("1.5", TokenRole::Number)));
+        assert!(r.contains(&("'\\n'", TokenRole::Str)));
+        assert!(r.contains(&("'é'", TokenRole::Str)));
+        // Unterminated block comment runs to the end; coverage is exact.
+        for s in [src, "let a = 1; /* open", "'", "x'"] {
+            let rebuilt: String = tokenize(s).iter().map(|t| &s[t.range.clone()]).collect();
+            assert_eq!(rebuilt, s);
+        }
+        assert_eq!(
+            tokenize("/* open").last().map(|t| t.role),
+            Some(TokenRole::Comment)
+        );
+    }
+
+    #[test]
+    fn multi_line_block_comment_keeps_per_line_sections() {
+        let src = "/* one\ntwo */\nlet x = 1;";
+        let errs: BTreeSet<usize> = [2].into_iter().collect();
+        let job = layout_job(
+            src,
+            egui::FontId::monospace(12.0),
+            &errs,
+            &crate::plugins::ui_theme::PARCHMENT_CODE,
+        );
+        assert_eq!(job.text, src);
+        let two = job
+            .sections
+            .iter()
+            .find(|s| &job.text[s.byte_range.clone()] == "two */");
+        assert!(two.is_some_and(|s| s.format.underline != egui::Stroke::NONE));
+    }
+
+    #[test]
     fn tokens_cover_every_byte_exactly_once() {
         let src = "let s = \"a\\\"b\"; // c\nlet n = 1_000;";
         let toks = tokenize(src);
@@ -326,7 +420,12 @@ mod tests {
     fn layout_job_underlines_only_error_lines() {
         let src = "let a = 1;\nlet b = \"x\ny\";\nlet c = 3;";
         let errs: BTreeSet<usize> = [3].into_iter().collect();
-        let job = layout_job(src, egui::FontId::monospace(12.0), &errs);
+        let job = layout_job(
+            src,
+            egui::FontId::monospace(12.0),
+            &errs,
+            &crate::plugins::ui_theme::INK_CODE,
+        );
         assert_eq!(job.text, src);
         for section in &job.sections {
             let text = &job.text[section.byte_range.clone()];

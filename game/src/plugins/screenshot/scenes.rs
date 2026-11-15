@@ -26,10 +26,14 @@ use crate::plugins::player::Player;
 use crate::plugins::progress::{MissionProgress, SavedPlayerPosition, Settings};
 use crate::plugins::prop::{MEADOW_OAKS, Prop, PropKind, Solid};
 use crate::plugins::state::{GameState, PauseState};
+use crate::plugins::ui_theme::{CodeSurface, DEFAULT_CODE_SURFACE, set_code_surface};
 use crate::plugins::world::district_slot;
 
 /// First mission (Ferris). The editor/recap/dialogue scenes use it.
 const FIRST_MISSION: &str = "intro_let_binding";
+/// Second mission: no failures recorded in a run, so its solution stays
+/// locked (the toolbar shows the "Unlocks after ..." note).
+const SECOND_MISSION: &str = "double_function";
 /// Missions marked cleared for the "Continue available" title scene.
 const CONTINUE_CLEARED: &[&str] = &["intro_let_binding", "double_function", "borrow_preview"];
 /// Texture-bind settle after the first Title -> InGame transition.
@@ -75,6 +79,55 @@ const LONG_FAIL_JSON: &str = r#"{"ok":false,"stdout":"[real]","stderr":"   Compi
 /// moving any line, so [`LONG_FAIL_JSON`]'s locations still match: every
 /// token class (keyword, type, string, comment, number, plain) on screen.
 const SYNTAX_SOURCE: &str = "fn take(v: String) {} // takes ownership of `v`\nconst LIMIT: u32 = 3_000; const RATIO: f64 = 0.75;\nfn main() {\n    let answer = 42;\n    answer = 43;\n    let n: i32 = \"five\";\n    let s = String::from(\"hi\");\n    take(s);\n    println!(\"{} {}\", s, y);\n}\n";
+
+/// The code-surface comparison sample (bible v2.2 candidate vs v2.1):
+/// every token class several times over. Keywords, types with generics
+/// and lifetimes, strings with format placeholders, integer / hex / float
+/// literals, line, doc and block comments, a macro call and an attribute.
+/// Player line 23 reassigns an immutable binding (see [`SURFACE_FAIL`]).
+const SURFACE_SOURCE: &str = "//! Ferris's ledger: every token class on one page.
+use std::collections::HashMap;
+
+/* Block comment: a quest is a name and a reward. */
+#[derive(Debug, Clone)]
+struct Quest<'a> {
+    name: &'a str,
+    reward: u32, // gold crowns
+}
+
+fn ratio<T: Into<f64>>(won: T, total: f64) -> f64 {
+    won.into() / total
+}
+
+fn main() {
+    let quests: Vec<Quest<'static>> = vec![Quest { name: \"Ferris\", reward: 42 }];
+    let mut ledger: HashMap<&str, u32> = HashMap::new();
+    let rate = ratio(3, 4.0) * 100.0;
+    for q in &quests {
+        ledger.insert(q.name, q.reward + 0x10);
+    }
+    let total = 1_000;
+    total = total + 1;
+    println!(\"{} quests, total {total:>5}\", quests.len());
+}
+";
+
+/// rustc's reply for [`SURFACE_SOURCE`] in the shape `compile_client`
+/// writes for a graded failure (server lines are one below the player's).
+/// One error with a `help:`, one warning with a `note:`.
+const SURFACE_FAIL: &str = "[fail:compile] [real]\n--stderr--\n\
+error[E0384]: cannot assign twice to immutable variable `total`\n  \
+--> src/main.rs:24:5\n   |\n\
+23 |     let total = 1_000;\n   |         ----- first assignment to `total`\n\
+24 |     total = total + 1;\n   |     ^^^^^^^^^^^^^^^^^ cannot assign twice to immutable variable\n   |\n\
+help: consider making this binding mutable\n   |\n\
+23 |     let mut total = 1_000;\n   |         +++\n\n\
+warning: unused variable: `rate`\n  \
+--> src/main.rs:19:9\n   |\n\
+19 |     let rate = ratio(3, 4.0) * 100.0;\n   |         ^^^^ help: if this is intentional, prefix it with an underscore: `_rate`\n   |\n   \
+= note: `#[warn(unused_variables)]` on by default\n\n\
+error: aborting due to 1 previous error; 1 warning emitted\n\n\
+For more information about this error, try `rustc --explain E0384`.";
 
 const WRONG_SOURCE: &str = "fn main() {\n    let answer = 41;\n    println!(\"{answer}\");\n}\n";
 /// `/compile-real` wrong-output reply, verbatim server shape.
@@ -322,6 +375,7 @@ pub(super) fn all_scenes() -> Vec<Scene> {
     dialogue_fix_scenes(&mut v);
     editor_scenes(&mut v);
     editor_result_scenes(&mut v);
+    code_surface_scenes(&mut v);
     overlay_scenes(&mut v);
     v
 }
@@ -862,6 +916,135 @@ fn editor_result_scenes(v: &mut Vec<Scene>) {
             Action::Wait(0.3),
         ],
         0.5,
+        boxed(|w| {
+            close_editor(w);
+            set_window_size(w, 1280.0, 720.0);
+        }),
+    ));
+}
+
+/// Switch the code surface for one scene (display only).
+fn set_surface(surface: CodeSurface) -> Action {
+    act(move |_w| {
+        tracing::info!(?surface, "scene: code surface");
+        set_code_surface(surface);
+    })
+}
+
+/// Teardown that runs `then` and puts the default code surface back.
+fn restore_surface(then: impl Fn(&mut World) + Send + Sync + 'static) -> Option<WorldFn> {
+    boxed(move |w| {
+        then(w);
+        set_code_surface(DEFAULT_CODE_SURFACE);
+    })
+}
+
+/// Show `raw` (a formatted verdict, as `compile_client` writes it) without
+/// counting a failure.
+fn show_verdict(world: &mut World, source: &str, raw: &str) {
+    let mut ed = world.resource_mut::<EditorState>();
+    ed.source = source.to_string();
+    ed.last_compile_result = Some(raw.to_string());
+}
+
+/// Ink (bible v2.2 candidate) and parchment (v2.1) captures of the same
+/// screens from one build, for the owner's choice. Each scene sets its
+/// surface, captures and restores [`DEFAULT_CODE_SURFACE`]. Runs after the
+/// editor scenes, so the first mission's solution gate is already open.
+fn code_surface_scenes(v: &mut Vec<Scene>) {
+    let enter = || Action::EnterState(GameState::InGame, ENTER_GAME_SETTLE);
+    for (suffix, surface) in [
+        ("ink", CodeSurface::Ink),
+        ("parchment", CodeSurface::Parchment),
+    ] {
+        v.push(scene(
+            &format!("editor-syntax-{suffix}"),
+            vec![
+                enter(),
+                set_surface(surface),
+                act(|w| {
+                    w.resource_mut::<EditorSession>().reset_view();
+                    open_editor(w, FIRST_MISSION, SURFACE_SOURCE);
+                    show_verdict(w, SURFACE_SOURCE, SURFACE_FAIL);
+                }),
+                Action::Wait(0.2),
+            ],
+            0.5,
+            restore_surface(close_editor),
+        ));
+        v.push(scene(
+            &format!("editor-fail-{suffix}"),
+            vec![
+                enter(),
+                set_surface(surface),
+                act(|w| {
+                    w.resource_mut::<EditorSession>().reset_view();
+                    open_editor(w, FIRST_MISSION, BUGGY_SOURCE);
+                    show_verdict(w, BUGGY_SOURCE, CANNED_FAIL);
+                }),
+                Action::Wait(0.2),
+            ],
+            0.5,
+            restore_surface(close_editor),
+        ));
+        v.push(scene(
+            &format!("editor-solution-{suffix}"),
+            vec![
+                enter(),
+                set_surface(surface),
+                act(move |w| {
+                    open_editor(w, FIRST_MISSION, BUGGY_SOURCE);
+                    show_verdict(w, BUGGY_SOURCE, CANNED_FAIL);
+                    let n = w.resource::<EditorSession>().failures(FIRST_MISSION);
+                    if n < crate::plugins::editor::session::SOLUTION_UNLOCK_FAILURES {
+                        tracing::warn!(n, "editor-solution-{suffix}: gate still locked");
+                    }
+                    w.resource_mut::<EditorSession>()
+                        .reveal_solution(FIRST_MISSION);
+                }),
+                Action::Wait(0.2),
+            ],
+            0.5,
+            restore_surface(|w| {
+                w.resource_mut::<EditorSession>().reset_view();
+                close_editor(w);
+            }),
+        ));
+        v.push(scene(
+            &format!("recap-{suffix}"),
+            vec![
+                enter(),
+                set_surface(surface),
+                act(|w| {
+                    close_editor(w);
+                    clear_missions(w, &[FIRST_MISSION]);
+                    let mission = w.resource::<MissionRegistry>().find(FIRST_MISSION).cloned();
+                    w.resource_mut::<ActiveMission>().current = mission;
+                    w.resource_mut::<CompletionView>().mission_id = Some(FIRST_MISSION.to_string());
+                }),
+            ],
+            0.6,
+            restore_surface(|w| {
+                w.resource_mut::<CompletionView>().mission_id = None;
+                fresh_progress(w);
+            }),
+        ));
+    }
+    // 960x540 with a mission whose solution is still locked: the toolbar's
+    // "Unlocks after N more failed compiles." note must not clip.
+    v.push(scene(
+        "editor-960x540-locked",
+        vec![
+            enter(),
+            act(|w| set_window_size(w, 960.0, 540.0)),
+            act(|w| {
+                w.resource_mut::<EditorSession>().reset_view();
+                open_editor(w, SECOND_MISSION, BUGGY_SOURCE);
+                show_verdict(w, BUGGY_SOURCE, CANNED_FAIL);
+            }),
+            Action::Wait(1.0),
+        ],
+        0.6,
         boxed(|w| {
             close_editor(w);
             set_window_size(w, 1280.0, 720.0);

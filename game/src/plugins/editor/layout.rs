@@ -33,6 +33,15 @@ pub const GAP: f32 = 8.0;
 pub const CODE_FRACTION: f32 = 0.58;
 /// Result pane share of the right column while a result is showing.
 pub const RESULT_FRACTION: f32 = 0.5;
+/// Below this right-column height (points) the window counts as small
+/// (960x540 is ~406; 1280x720 is ~572): a showing result then takes
+/// [`RESULT_FRACTION_COMPACT`] of the column, because rustc output needs
+/// lines more than the goal pane (which scrolls) does.
+pub const COMPACT_COLUMN: f32 = 520.0;
+/// Result pane share of a small right column while a result is showing.
+pub const RESULT_FRACTION_COMPACT: f32 = 0.68;
+/// The goal pane's floor in a small column.
+pub const GOAL_MIN_COMPACT: f32 = 96.0;
 /// Result pane height bounds (points) while a result is showing.
 pub const RESULT_MIN: f32 = 120.0;
 /// The goal pane never shrinks below this while a result shows.
@@ -59,10 +68,22 @@ impl EditorLayout {
     }
 }
 
+/// `(result share, goal floor)` of a right column `column` points tall
+/// with a result showing. Small columns favour the result, unless the
+/// revealed solution is in the goal slot (then it gets the even split).
+pub fn result_split(column: f32, solution_shown: bool) -> (f32, f32) {
+    if column < COMPACT_COLUMN && !solution_shown {
+        (RESULT_FRACTION_COMPACT, GOAL_MIN_COMPACT)
+    } else {
+        (RESULT_FRACTION, GOAL_MIN)
+    }
+}
+
 /// Layout for a screen of `screen` points. `has_result` gives the result
 /// pane its full share; otherwise it is a one-line strip and the goal
-/// pane gets the room.
-pub fn editor_layout(screen: Vec2, has_result: bool) -> EditorLayout {
+/// pane gets the room. `solution_shown` (the solution is in the goal
+/// slot) keeps the even split on small screens.
+pub fn editor_layout(screen: Vec2, has_result: bool, solution_shown: bool) -> EditorLayout {
     let size = Vec2::new(
         (screen.x * WIDTH_FRACTION).floor(),
         (screen.y * HEIGHT_FRACTION).floor(),
@@ -87,9 +108,10 @@ pub fn editor_layout(screen: Vec2, has_result: bool) -> EditorLayout {
 
     let column = side.height() - GAP;
     let result_h = if has_result {
-        (column * RESULT_FRACTION)
+        let (share, goal_min) = result_split(column, solution_shown);
+        (column * share)
             .max(RESULT_MIN)
-            .min(column - GOAL_MIN)
+            .min(column - goal_min)
             .max(0.0)
     } else {
         RESULT_IDLE.min(column / 2.0)
@@ -132,8 +154,8 @@ mod tests {
     fn editor_fits_the_screen_at_every_size() {
         for &(w, h) in SIZES {
             let screen = Rect::from_min_size(Pos2::ZERO, Vec2::new(w, h));
-            for has_result in [false, true] {
-                let l = editor_layout(Vec2::new(w, h), has_result);
+            for (has_result, solution) in [(false, false), (true, false), (true, true)] {
+                let l = editor_layout(Vec2::new(w, h), has_result, solution);
                 assert!(inside(screen, l.window), "{w}x{h}: window off screen");
                 for p in l.panes() {
                     assert!(inside(l.window, p), "{w}x{h}: pane {p:?} outside window");
@@ -150,8 +172,8 @@ mod tests {
     #[test]
     fn panes_never_overlap() {
         for &(w, h) in SIZES {
-            for has_result in [false, true] {
-                let l = editor_layout(Vec2::new(w, h), has_result);
+            for (has_result, solution) in [(false, false), (true, false), (true, true)] {
+                let l = editor_layout(Vec2::new(w, h), has_result, solution);
                 let panes = l.panes();
                 for (i, a) in panes.iter().enumerate() {
                     for b in &panes[i + 1..] {
@@ -169,22 +191,20 @@ mod tests {
     #[test]
     fn result_pane_is_bounded_and_goal_keeps_room() {
         for &(w, h) in SIZES {
-            let l = editor_layout(Vec2::new(w, h), true);
+            let l = editor_layout(Vec2::new(w, h), true, false);
             let column = l.goal.height() + GAP + l.result.height();
+            let (share, goal_min) = result_split(column, false);
             assert!(
-                l.result.height() >= RESULT_MIN.min(column - GOAL_MIN),
+                l.result.height() >= RESULT_MIN.min(column - goal_min),
                 "{w}x{h}"
             );
-            assert!(
-                l.result.height() <= column * RESULT_FRACTION + 1.0,
-                "{w}x{h}"
-            );
-            assert!(l.goal.height() >= GOAL_MIN - 1.0, "{w}x{h}");
+            assert!(l.result.height() <= column * share + 1.0, "{w}x{h}");
+            assert!(l.goal.height() >= goal_min - 1.0, "{w}x{h}");
             // Goal sits directly above the result, same column.
             assert_eq!(l.goal.min.x, l.result.min.x);
             assert!(l.goal.max.y <= l.result.min.y);
 
-            let idle = editor_layout(Vec2::new(w, h), false);
+            let idle = editor_layout(Vec2::new(w, h), false, false);
             assert!(idle.result.height() <= RESULT_IDLE);
             assert!(idle.goal.height() > l.goal.height());
         }
@@ -192,10 +212,37 @@ mod tests {
 
     #[test]
     fn smallest_supported_window_still_has_usable_panes() {
-        let l = editor_layout(Vec2::new(960.0, 540.0), true);
+        let l = editor_layout(Vec2::new(960.0, 540.0), true, false);
         assert!(l.code.width() >= 480.0, "{:?}", l.code);
         assert!(l.code.height() >= 400.0, "{:?}", l.code);
         assert!(l.goal.width() >= 340.0, "{:?}", l.goal);
         assert!(l.result.height() >= RESULT_MIN, "{:?}", l.result);
+    }
+
+    /// The rebalance, at the three reference sizes: at 960x540 a result
+    /// takes about two thirds of the right column (it used to get half,
+    /// ~200 pt, a handful of rustc lines); larger windows keep the even
+    /// split; a revealed solution keeps the even split everywhere.
+    #[test]
+    fn small_windows_give_the_result_pane_more_room() {
+        let at = |w: f32, h: f32, sol: bool| editor_layout(Vec2::new(w, h), true, sol);
+        let small = at(960.0, 540.0, false);
+        let column = small.goal.height() + small.result.height();
+        assert!(column < COMPACT_COLUMN, "{column}");
+        assert!(small.result.height() >= 270.0, "{:?}", small.result);
+        assert!(small.goal.height() >= GOAL_MIN_COMPACT, "{:?}", small.goal);
+        let sol = at(960.0, 540.0, true);
+        assert!((sol.result.height() - (column * RESULT_FRACTION).floor()).abs() <= 1.0);
+        for (w, h) in [(1280.0, 720.0), (1920.0, 1080.0)] {
+            let l = at(w, h, false);
+            let col = l.goal.height() + l.result.height();
+            assert!(col >= COMPACT_COLUMN, "{w}x{h}: {col}");
+            assert!(
+                (l.result.height() - (col * RESULT_FRACTION).floor()).abs() <= 1.0,
+                "{w}x{h}: {:?}",
+                l.result
+            );
+            assert_eq!(l, at(w, h, true), "{w}x{h}: solution changes nothing");
+        }
     }
 }

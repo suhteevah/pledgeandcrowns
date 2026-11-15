@@ -182,6 +182,41 @@ Bosses get more animation states (intro, phase-2 transformation, defeat). Docume
   - Cursor: **Abyssal** `#062123`
 
   *Why these (v2.1):* the v2.0 picks did not have readable contrast on the Parchment cream page (numbers in Old gold about 2:1, Alarm scarlet text 3.6:1, Main teal 3.9:1, Stone grey and Forest 4.2:1). Each role steps to a darker member of its own ramp, so the harmonic structure and the burgundy-vs-teal keyword/type pairing are unchanged. Comments stay visibly quieter than code by hue (warm bronze among cool and red tokens), not by low contrast. Gold cannot reach 4.5:1 on cream at any ramp step that still reads as gold, so literals take the cool counterweight instead. Alarm scarlet keeps its job as the error signal, but only as a mark. Syntax colours are drawn on Parchment cream only: inline code chips (**Aged paper** `#BFB2A0`) carry plain Coalblack code, and fenced code blocks are Parchment cream with a 1px **Basalt** frame, because Wineflesh, Pine and Bronze fall just under 4.5:1 on Aged paper.
+
+  #### v2.2 CANDIDATE: code on an ink page (pending owner approval; v2.1 parchment mapping retained as the alternative)
+
+  *Why:* v2.1 is readable but nearly monochrome on cream: types, numbers and plain text all read as near-black and only keywords stand out, because the palette's saturated members are all light. The candidate draws CODE on a dark **Abyssal** page and uses the bright ramp members there. Everything else is unchanged: Parchment panels, Basalt frames, the Oxblood title bar, goal and result prose on Parchment, and inline code chips inside prose stay **Aged paper** with Coalblack text. Ink applies to every code surface: the editor's code pane, fenced code blocks (goal pane, prompt, recap), the revealed solution, and the rustc output block in the result pane (the PASS/FAIL banners and prose stay on Parchment). The game switches between the two with one constant (`ui_theme::DEFAULT_CODE_SURFACE`, currently `Ink`); both are kept fully working and are captured side by side (`scene-*-ink.png` / `scene-*-parchment.png`).
+
+  Measured WCAG ratios (unit-tested in `ui_theme::tests::ink_surface_meets_contrast`; text ≥ 4.5:1, marks ≥ 3:1):
+
+  | Role | Colour | On Abyssal `#062123` | On error-line band (Inkblood) |
+  |---|---|---|---|
+  | Plain code | **Parchment cream** `#FCEFC8` | 14.66 | 16.83 |
+  | Keywords | **Dusty rose** `#C56883` | 4.55 | 5.22 |
+  | Types (incl. lifetimes) | **Bright teal** `#5BB8AF` | 7.14 | 8.19 |
+  | Strings and chars | **Spring meadow** `#82B450` | 6.88 | 7.89 |
+  | Numbers / literals | **Old gold** `#D2A53F` | 7.36 | 8.44 |
+  | Comments (no italic: the font has no real italic) | **Aged paper** `#BFB2A0` | 8.08 | 9.27 |
+  | Error text | **Pink quartz** `#EBC2CC` | 10.50 | 12.05 |
+  | Error marks (squiggle, gutter bar) | **Alarm scarlet** `#E63946` | 4.03 | 4.63 |
+  | Cursor (mark) | **Brass leaf** `#F0D27D` | 11.38 | |
+  | Line numbers, on a **Deep teal** `#154548` strip | **Aged paper** `#BFB2A0` | 5.10 (on the strip) | |
+  | Error line's number, on an Inkblood band | **Pink quartz** `#EBC2CC` | | 12.05 |
+  | Selection fill | **Deep teal** `#154548` | | |
+  | Error-line row band | **Inkblood** `#1B0810` | | |
+  | rustc output: plain / error header / `-->` / `help:` `note:` / warning | Parchment cream / Pink quartz / Bright teal / Spring meadow / Brass leaf | 14.66 / 10.50 / 7.14 / 6.88 / 11.38 | |
+
+  Deviations from the designer's first picks, all forced by measurement: numbers are **Old gold**, not Brass leaf (Brass leaf sat only ΔE00 11.9 from plain cream, so numbers and identifiers blurred together); line numbers are **Aged paper** on the Deep teal strip, not Stone grey (Stone grey is 3.46:1 on Abyssal and 2.19:1 on Deep teal); the error-line band is **Inkblood**, not Crypt (keywords are 4.33:1 on Crypt). Known exception: text under an active selection is not held to 4.5:1 (keywords are 2.87:1 on the Deep teal selection), as selection is transient.
+
+  Distinguishability (CIEDE2000 between the six token colours; `ui_theme::tests::ink_token_colours_stay_apart` keeps every pair ≥ 15):
+
+  | ΔE00 | keyword | type | string | number | comment |
+  |---|---|---|---|---|---|
+  | type | 52.3 | | | | |
+  | string | 59.6 | 24.3 | | | |
+  | number | 43.6 | 36.0 | 24.7 | | |
+  | comment | 30.3 | 25.9 | 23.2 | 18.4 | |
+  | plain | 44.1 | 30.3 | 25.6 | 21.8 | 15.8 |
 - **Buttons:** Two states — idle (slight bevel up) and pressed (bevel down + 1px offset).
 - **Icons:** 16×16 or 24×24 with the same outline rule as characters.
 
@@ -223,3 +258,4 @@ This document is versioned. Any change to the palette, the resolution table, or 
 **Changelog**
 - 2.0 (2026-04-25) — palette swapped from EDG32-RUST to "Heraldic Code" (split-complementary @ 350° anchor + 140°/178° pair, +42° gold accent, +270° magic flicker). Per-zone roles, editor syntax colors, and reference-image titles updated to match.
 - 2.1 (2026-11-14) — syntax colours: types Main teal → Deep teal, strings Forest → Pine, comments Stone grey → Bronze, numbers Old gold → Cobalt deep, error text Alarm scarlet → Oxblood (scarlet kept for squiggles and the gutter bar), gutter recorded as Bronze; fenced code blocks drawn on Parchment cream with a Basalt frame instead of Aged paper; rule "text must meet 4.5:1 against its surface" added. Palette itself unchanged. Approved by the designer under the owner's delegation.
+- 2.2 CANDIDATE (2026-11-14, not adopted; pending owner approval) — "ink" code surface: code on Abyssal with bright ramp members (see "v2.2 CANDIDATE" under Code editor frame). Built as a one-constant switch with the v2.1 parchment mapping kept as the alternative; the bible version stays 2.1 until the owner picks.
