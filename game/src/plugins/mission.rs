@@ -678,7 +678,7 @@ it. Change `weigh` to `fn weigh(cargo: &str) -> usize` and call it with \
 ## Hint\n\
 The grader needs `fn weigh(cargo: &str)` and a call that lends, \
 `weigh(&cargo)`. Calling `weigh(cargo.clone())` also compiles, but it pays \
-the toll with a copy: the Borrow Checker wants a lend, not a gift.",
+the toll with a copy: the Borrow Checker wants a loan, not a gift.",
                 prereq: None,
                 available: true,
                 starter_code: "fn weigh(cargo: String) -> usize {\n    cargo.len()\n}\n\nfn main() {\n    let cargo = String::from(\"lantern oil\");\n    // this won't compile yet: weigh keeps the cargo, then main reaches for it\n    let toll = weigh(cargo);\n    println!(\"toll: {toll}\");\n    println!(\"cargo: {cargo}\");\n}\n",
@@ -724,7 +724,7 @@ one reference parameter the compiler works it out; with two (and no \
 `self`) it will not guess, and stops with E0106, \"missing lifetime \
 specifier\". A lifetime parameter `'a` names the link. Tie the answer to \
 the input it really comes from. The compiler's help ties both inputs to \
-`'a`; do that here, and the answer is held to `sep` as well, so a `sep` \
+`'a`. Do that here and the answer is held to `sep` as well, so a `sep` \
 dropped early fails with E0597, \"`sep` does not live long enough\".\n\n\
 ## Syntax\n\
 ```\nfn after<'a>(line: &'a str, sep: &str) -> &'a str {\n    match line.find(sep) {\n        Some(i) => &line[i + sep.len()..],\n        None => \"\",\n    }\n}\n```\n\

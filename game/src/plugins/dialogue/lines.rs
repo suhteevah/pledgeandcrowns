@@ -84,11 +84,11 @@ pub const TRIAL_STAGES: &[NpcLines] = &[
             not_yet: &[],
             offer: &[
                 "So. You would cross. The Bridge has three tolls, and I collect every one.",
-                "First toll: `weigh` takes your `String` and keeps it. Then you reach for it again.",
+                "First toll: `weigh` takes your `String`, and it does not come back. Then you reach for it again.",
                 "The compiler calls that E0382, borrow of moved value. Lend the cargo. Do not hand it over.",
             ],
             in_progress: &[
-                "Here. Here you have moved what you intended to lend. Let `weigh` take `&str`, and pass `&cargo`.",
+                "Here. You have moved what you meant to lend. Let `weigh` take `&str`, and pass `&cargo`.",
             ],
             cleared: &[],
         },
@@ -100,7 +100,7 @@ pub const TRIAL_STAGES: &[NpcLines] = &[
             offer: &[
                 "Second toll. Two travellers read the scroll at once. Many `&` borrows may share it.",
                 "Then the quill writes while their borrows are still in use. That is E0502.",
-                "The compiler: cannot borrow `scroll` as mutable because it is also borrowed as immutable.",
+                "The ruling reads: cannot borrow `scroll` as mutable because it is also borrowed as immutable.",
             ],
             in_progress: &[
                 "One `&mut` or many `&`, never both. Let the readers finish, then pass `&mut scroll` to `inscribe`.",
@@ -113,14 +113,14 @@ pub const TRIAL_STAGES: &[NpcLines] = &[
         lines: StatusLines {
             not_yet: &[],
             offer: &[
-                "Last toll: the lantern. `before` hands back part of `line`, but never says whose part.",
-                "E0106, missing lifetime specifier. Name it `'a`, and tie the answer to `line` alone.",
+                "Last toll: the lantern. `before` hands back a borrow, but its signature never says whose.",
+                "E0106, missing lifetime specifier: the compiler will not guess. Name it `'a`; tie the answer to `line` alone.",
             ],
             in_progress: &[
-                "The compiler's help ties `sep` to `'a` as well. Follow it, and `sep` does not live long enough: E0597.",
+                "Mind the compiler's help. It ties `sep` to `'a` as well, and then `sep` does not live long enough: E0597.",
             ],
             cleared: &[
-                "You may cross. The Old Tongue speaks through you.",
+                "Three tolls, paid in full. \"...acceptable.\"",
                 "Lend, do not give. One writer or many readers. Say what your answer borrows. Remember the Bridge.",
             ],
         },
