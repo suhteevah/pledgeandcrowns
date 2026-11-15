@@ -3471,6 +3471,166 @@
   },
   {
     "case": "canonical",
+    "id": "golem_parts",
+    "input": "struct Part { name: &'static str, armoured: bool, weakness: u32 }\nfn weak_points(parts: &[Part]) -> Vec<String> {\n    parts.iter().filter(|p| !p.armoured).map(|p| format!(\"{} ({})\", p.name, p.weakness)).collect()\n}\nfn main() {\n    let parts = vec![Part { name: \"arm\", armoured: false, weakness: 3 }];\n    println!(\"{:?}\", weak_points(&parts));\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Keymaster hangs up the key. \"every weak point found. first stage passed.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "golem_parts",
+    "input": "struct Part {\n    name: &'static str,\n    armoured: bool,\n    weakness: u32,\n}\n\nfn golem() -> Vec<Part> {\n    vec![\n        Part { name: \"arm\", armoured: false, weakness: 3 },\n        Part { name: \"chest\", armoured: true, weakness: 8 },\n        Part { name: \"knee\", armoured: false, weakness: 4 },\n        Part { name: \"head\", armoured: true, weakness: 5 },\n        Part { name: \"eye\", armoured: false, weakness: 6 },\n    ]\n}\n\n// The parts a blow can reach, with how weak each one is.\nfn weak_points(parts: &[Part]) -> Vec<String> {\n    // this won't compile yet: after `map`, only the labels are left\n    parts\n        .iter()\n        .map(|p| format!(\"{} ({})\", p.name, p.weakness))\n        .filter(|p| !p.armoured)\n        .collect()\n}\n\nfn main() {\n    let parts = golem();\n    println!(\"weak points: {:?}\", weak_points(&parts));\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Keymaster turns a forge key — filter while you still hold each whole part: `.filter(..)` before `.map(..)`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "golem_parts",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Keymaster turns a forge key — filter while you still hold each whole part: `.filter(..)` before `.map(..)`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_10",
+    "id": "golem_parts",
+    "input": "struct Part { name: &'static str, armoured: bool, weakness: u32 \nfn weak_points(parts: &[Part]) -> Vec<String> {\n    parts.iter().filter(|p| !p.armoured).map(|p| format!(\"{} ({})\", p.name, p.weakness)).collect()\n}\nfn main() {\n    let parts = vec![Part { name: \"arm\", armoured: false, weakness: 3 }];\n    println!(\"{:?}\", weak_points(&parts));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Keymaster turns a forge key — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_17",
+    "id": "golem_parts",
+    "input": "struct Part { name: &'static str, armoured: bool, weakness: u32 }\nfn weak_points(parts: &[Part]) -> Vec<String> {\n     !p.armoured).map(|p| format!(\"{} ({})\", p.name, p.weakness)).collect()\n}\nfn main() {\n    let parts = vec![Part { name: \"arm\", armoured: false, weakness: 3 }];\n    println!(\"{:?}\", weak_points(&parts));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Keymaster turns a forge key — filter while you still hold each whole part: `.filter(..)` before `.map(..)`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "golem_sum",
+    "input": "struct Part { armoured: bool, weakness: u32 }\nfn core_damage(parts: &[Part]) -> u32 {\n    let total: u32 = parts.iter().filter(|p| !p.armoured).map(|p| p.weakness).sum();\n    total * 2\n}\nfn main() {\n    let parts = vec![Part { armoured: false, weakness: 3 }];\n    println!(\"{}\", core_damage(&parts));\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Keymaster files the total. \"labelled and doubled. second stage passed.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "golem_sum",
+    "input": "struct Part {\n    name: &'static str,\n    armoured: bool,\n    weakness: u32,\n}\n\nfn golem() -> Vec<Part> {\n    vec![\n        Part { name: \"arm\", armoured: false, weakness: 3 },\n        Part { name: \"chest\", armoured: true, weakness: 8 },\n        Part { name: \"knee\", armoured: false, weakness: 4 },\n        Part { name: \"head\", armoured: true, weakness: 5 },\n        Part { name: \"eye\", armoured: false, weakness: 6 },\n    ]\n}\n\n// The core takes every weak point's weakness, added up and doubled.\nfn core_damage(parts: &[Part]) -> u32 {\n    // this won't compile yet: `sum` can make many kinds of number\n    let total = parts\n        .iter()\n        .filter(|p| !p.armoured)\n        .map(|p| p.weakness)\n        .sum();\n    total * 2\n}\n\nfn main() {\n    let parts = golem();\n    let names: Vec<&str> = parts.iter().map(|p| p.name).collect();\n    println!(\"golem: {}\", names.join(\" \"));\n    println!(\"core damage: {}\", core_damage(&parts));\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Keymaster checks the label — tell `sum` what to make: `let total: u32 = ...sum();`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "golem_sum",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Keymaster checks the label — tell `sum` what to make: `let total: u32 = ...sum();`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_7",
+    "id": "golem_sum",
+    "input": "struct Part { armoured: bool, weakness: u32 \nfn core_damage(parts: &[Part]) -> u32 {\n    let total: u32 = parts.iter().filter(|p| !p.armoured).map(|p| p.weakness).sum();\n    total * 2\n}\nfn main() {\n    let parts = vec![Part { armoured: false, weakness: 3 }];\n    println!(\"{}\", core_damage(&parts));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Keymaster checks the label — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_15",
+    "id": "golem_sum",
+    "input": "struct Part { armoured: bool, weakness: u32 }\nfn core_damage(parts: &[Part]) -> u32 {\n    let  u32 = parts.iter().filter(|p| !p.armoured).map(|p| p.weakness).sum();\n    total * 2\n}\nfn main() {\n    let parts = vec![Part { armoured: false, weakness: 3 }];\n    println!(\"{}\", core_damage(&parts));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Keymaster checks the label — tell `sum` what to make: `let total: u32 = ...sum();`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "golem_core",
+    "input": "struct Part { armoured: bool, weakness: u32 }\nfn total_damage(parts: &[Part], blow: u32) -> u32 {\n    parts.iter().filter(|p| !p.armoured).map(|p| blow * p.weakness).fold(0, |total, hit| total + hit)\n}\nfn main() {\n    let parts = vec![Part { armoured: false, weakness: 3 }];\n    println!(\"{}\", total_damage(&parts, 2));\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Keymaster lowers the bar. \"one chain, every seam struck. the Golem falls.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "golem_core",
+    "input": "struct Part {\n    name: &'static str,\n    armoured: bool,\n    weakness: u32,\n}\n\nfn golem() -> Vec<Part> {\n    vec![\n        Part { name: \"arm\", armoured: false, weakness: 3 },\n        Part { name: \"chest\", armoured: true, weakness: 8 },\n        Part { name: \"knee\", armoured: false, weakness: 4 },\n        Part { name: \"head\", armoured: true, weakness: 5 },\n        Part { name: \"eye\", armoured: false, weakness: 6 },\n    ]\n}\n\n// Every weak point takes the blow, multiplied by its weakness.\nfn total_damage(parts: &[Part], blow: u32) -> u32 {\n    // this runs, but the first armoured part ends the count\n    let mut total = 0;\n    for p in parts {\n        if p.armoured {\n            break;\n        }\n        total += blow * p.weakness;\n    }\n    total\n}\n\nfn main() {\n    let parts = golem();\n    let names: Vec<&str> = parts.iter().map(|p| p.name).collect();\n    println!(\"golem: {}\", names.join(\" \"));\n    println!(\"blow 1: {}\", total_damage(&parts, 1));\n    println!(\"blow 3: {}\", total_damage(&parts, 3));\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Keymaster bars the forge — skip the armour with `.filter(..)`: it passes a plate by and keeps going",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "golem_core",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Keymaster bars the forge — skip the armour with `.filter(..)`: it passes a plate by and keeps going",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_7",
+    "id": "golem_core",
+    "input": "struct Part { armoured: bool, weakness: u32 \nfn total_damage(parts: &[Part], blow: u32) -> u32 {\n    parts.iter().filter(|p| !p.armoured).map(|p| blow * p.weakness).fold(0, |total, hit| total + hit)\n}\nfn main() {\n    let parts = vec![Part { armoured: false, weakness: 3 }];\n    println!(\"{}\", total_damage(&parts, 2));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Keymaster bars the forge — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_16",
+    "id": "golem_core",
+    "input": "struct Part { armoured: bool, weakness: u32 }\nfn total_damage(parts: &[Part], blow: u32) -> u32 {\n     !p.armoured).map(|p| blow * p.weakness).fold(0, |total, hit| total + hit)\n}\nfn main() {\n    let parts = vec![Part { armoured: false, weakness: 3 }];\n    println!(\"{}\", total_damage(&parts, 2));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Keymaster bars the forge — skip the armour with `.filter(..)`: it passes a plate by and keeps going",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_20",
+    "id": "golem_core",
+    "input": "struct Part { armoured: bool, weakness: u32 }\nfn total_damage(parts: &[Part], blow: u32) -> u32 {\n    parts.iter().filter(|p| !p.armoured).map(|p| blow *  |total, hit| total + hit)\n}\nfn main() {\n    let parts = vec![Part { armoured: false, weakness: 3 }];\n    println!(\"{}\", total_damage(&parts, 2));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Keymaster bars the forge — gather the hits into one total with `.fold(0, ..)` or `.sum()`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
     "id": "thread_spawn",
     "input": "use std::thread;\nfn main() {\n    let handle = thread::spawn(|| 21 * 2);\n    let _ = handle.join();\n}",
     "verdict": {
@@ -3806,6 +3966,166 @@
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Tideforecaster waits — drive the future with `.await`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "hydra_senders",
+    "input": "use std::sync::mpsc::{self, Sender};\nfn fight(head: &'static str, tx: Sender<String>) {\n    tx.send(format!(\"{head} down\")).unwrap();\n}\nfn main() {\n    let (tx, rx) = mpsc::channel();\n    for head in [\"fang\", \"venom\"] {\n        fight(head, tx.clone());\n    }\n    drop(tx);\n    let _: Vec<String> = rx.iter().collect();\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Dockmaster reads the flags. \"every head reporting. first stage passed.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "hydra_senders",
+    "input": "use std::sync::mpsc::{self, Sender};\n\n// A head fights until it falls, then reports on the sender it holds.\nfn fight(head: &'static str, hp: u32, tx: Sender<String>) {\n    let blows = hp.div_ceil(4);\n    let report = format!(\"{head} down after {blows} blows\");\n    tx.send(report).expect(\"receiver dropped\");\n}\n\nfn hunt(heads: &[(&'static str, u32)]) -> Vec<String> {\n    let (tx, rx) = mpsc::channel();\n    for &(head, hp) in heads {\n        // this won't compile yet: the first head takes the only sender\n        fight(head, hp, tx);\n    }\n    // No sender left: the receiver knows no more reports are coming.\n    drop(tx);\n    rx.iter().collect()\n}\n\nfn main() {\n    let reports = hunt(&[(\"fang\", 9), (\"venom\", 6), (\"brine\", 13)]);\n    for report in &reports {\n        println!(\"{report}\");\n    }\n    println!(\"{} heads down\", reports.len());\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Dockmaster raises a signal flag — give each head its own sender: `fight(head, hp, tx.clone())`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "hydra_senders",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Dockmaster raises a signal flag — give each head its own sender: `fight(head, hp, tx.clone())`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_2",
+    "id": "hydra_senders",
+    "input": "use std::sync::mpsc::{self, \nfn fight(head: &'static str, tx: Sender<String>) {\n    tx.send(format!(\"{head} down\")).unwrap();\n}\nfn main() {\n    let (tx, rx) = mpsc::channel();\n    for head in [\"fang\", \"venom\"] {\n        fight(head, tx.clone());\n    }\n    drop(tx);\n    let _: Vec<String> = rx.iter().collect();\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Dockmaster raises a signal flag — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_10",
+    "id": "hydra_senders",
+    "input": "use std::sync::mpsc::{self, Sender};\nfn fight(head: &'static str, tx: Sender<String>) {\n     down\")).unwrap();\n}\nfn main() {\n    let (tx, rx) = mpsc::channel();\n    for head in [\"fang\", \"venom\"] {\n        fight(head, tx.clone());\n    }\n    drop(tx);\n    let _: Vec<String> = rx.iter().collect();\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Dockmaster raises a signal flag — give each head its own sender: `fight(head, hp, tx.clone())`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "hydra_threads",
+    "input": "use std::sync::mpsc;\nuse std::thread;\nfn main() {\n    let (tx, rx) = mpsc::channel();\n    for head in [\"fang\", \"venom\"] {\n        let tx = tx.clone();\n        thread::spawn(move || tx.send(head).unwrap());\n    }\n    drop(tx);\n    let mut reports: Vec<&str> = rx.iter().collect();\n    reports.sort();\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Dockmaster opens the gate. \"every worker away with its own sender. second stage passed.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "hydra_threads",
+    "input": "use std::sync::mpsc::{self, Sender};\nuse std::thread;\n\n// A head fights until it falls, then reports on the sender it holds.\nfn fight(head: &'static str, hp: u32, tx: Sender<String>) {\n    let blows = hp.div_ceil(4);\n    let report = format!(\"{head} down after {blows} blows\");\n    tx.send(report).expect(\"receiver dropped\");\n}\n\nfn hunt(heads: &[(&'static str, u32)]) -> Vec<String> {\n    let (tx, rx) = mpsc::channel();\n    for &(head, hp) in heads {\n        let tx = tx.clone();\n        // this won't compile yet: the thread borrows what the loop owns\n        thread::spawn(|| fight(head, hp, tx));\n    }\n    drop(tx);\n    // Threads finish in no promised order: sort what comes back.\n    let mut reports: Vec<String> = rx.iter().collect();\n    reports.sort();\n    reports\n}\n\nfn main() {\n    let reports = hunt(&[(\"fang\", 9), (\"venom\", 6), (\"brine\", 13)]);\n    for report in &reports {\n        println!(\"{report}\");\n    }\n    println!(\"{} heads down\", reports.len());\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Dockmaster holds the gate — send each worker off owning its load: `thread::spawn(move || ...)`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "hydra_threads",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Dockmaster holds the gate — send each worker off owning its load: `thread::spawn(move || ...)`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_4",
+    "id": "hydra_threads",
+    "input": "use std::sync::mpsc;\nuse std::thread;\n main() {\n    let (tx, rx) = mpsc::channel();\n    for head in [\"fang\", \"venom\"] {\n        let tx = tx.clone();\n        thread::spawn(move || tx.send(head).unwrap());\n    }\n    drop(tx);\n    let mut reports: Vec<&str> = rx.iter().collect();\n    reports.sort();\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Dockmaster holds the gate — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_22",
+    "id": "hydra_threads",
+    "input": "use std::sync::mpsc;\nuse std::thread;\nfn main() {\n    let (tx, rx) = mpsc::channel();\n    for head in [\"fang\", \"venom\"] {\n        let tx = tx.clone();\n         || tx.send(head).unwrap());\n    }\n    drop(tx);\n    let mut reports: Vec<&str> = rx.iter().collect();\n    reports.sort();\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Dockmaster holds the gate — send each worker off owning its load: `thread::spawn(move || ...)`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_33",
+    "id": "hydra_threads",
+    "input": "use std::sync::mpsc;\nuse std::thread;\nfn main() {\n    let (tx, rx) = mpsc::channel();\n    for head in [\"fang\", \"venom\"] {\n        let tx = tx.clone();\n        thread::spawn(move || tx.send(head).unwrap());\n    }\n    drop(tx);\n    let mut reports: Vec<&str> = rx.iter().collect();\n    \n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Dockmaster holds the gate — nothing fixes the order the reports arrive in: sort them before you return",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "hydra_body",
+    "input": "use std::sync::mpsc::{self, Receiver};\nenum Report { Hit, Down }\nfn await_heads(rx: &Receiver<Report>, heads: usize) -> u32 {\n    let mut hits = 0;\n    let mut down = 0;\n    while down < heads {\n        match rx.recv() {\n            Ok(Report::Hit) => hits += 1,\n            Ok(Report::Down) => down += 1,\n            Err(_) => break,\n        }\n    }\n    hits\n}\nfn main() {\n    let (tx, rx) = mpsc::channel();\n    tx.send(Report::Hit).unwrap();\n    tx.send(Report::Down).unwrap();\n    println!(\"{}\", await_heads(&rx, 1));\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Dockmaster signals the strike. \"every head down, then the body. the Hydra sinks.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "hydra_body",
+    "input": "use std::sync::mpsc::{self, Receiver};\nuse std::thread;\n\nenum Report {\n    Hit,\n    Down,\n}\n\n// Count the hits, and return only once every head has reported down.\nfn await_heads(rx: &Receiver<Report>, heads: usize) -> u32 {\n    // this runs, but it strikes as soon as the first head falls\n    let _ = heads;\n    let mut hits = 0;\n    for report in rx.iter() {\n        match report {\n            Report::Hit => hits += 1,\n            Report::Down => break,\n        }\n    }\n    hits\n}\n\nfn main() {\n    // The blows each head takes: fang, venom, brine.\n    let blows = [3, 2, 4];\n    let (tx, rx) = mpsc::channel();\n    for n in blows {\n        let tx = tx.clone();\n        thread::spawn(move || {\n            for _ in 0..n {\n                tx.send(Report::Hit).expect(\"receiver dropped\");\n            }\n            tx.send(Report::Down).expect(\"receiver dropped\");\n        });\n    }\n    drop(tx);\n    let hits = await_heads(&rx, blows.len());\n    println!(\"{} heads down after {hits} hits\", blows.len());\n    println!(\"strike the body\");\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Dockmaster watches the water — count the heads that report `Down`, and wait until the count reaches `heads`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "hydra_body",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Dockmaster watches the water — count the heads that report `Down`, and wait until the count reaches `heads`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_2",
+    "id": "hydra_body",
+    "input": "use std::sync::mpsc::{self, \nenum Report { Hit, Down }\nfn await_heads(rx: &Receiver<Report>, heads: usize) -> u32 {\n    let mut hits = 0;\n    let mut down = 0;\n    while down < heads {\n        match rx.recv() {\n            Ok(Report::Hit) => hits += 1,\n            Ok(Report::Down) => down += 1,\n            Err(_) => break,\n        }\n    }\n    hits\n}\nfn main() {\n    let (tx, rx) = mpsc::channel();\n    tx.send(Report::Hit).unwrap();\n    tx.send(Report::Down).unwrap();\n    println!(\"{}\", await_heads(&rx, 1));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Dockmaster watches the water — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_29",
+    "id": "hydra_body",
+    "input": "use std::sync::mpsc::{self, Receiver};\nenum Report { Hit, Down }\nfn await_heads(rx: &Receiver<Report>, heads: usize) -> u32 {\n    let mut hits = 0;\n    let mut down = 0;\n    while down  heads {\n        match rx.recv() {\n            Ok(Report::Hit) => hits += 1,\n            Ok(Report::Down) => down += 1,\n            Err(_) => break,\n        }\n    }\n    hits\n}\nfn main() {\n    let (tx, rx) = mpsc::channel();\n    tx.send(Report::Hit).unwrap();\n    tx.send(Report::Down).unwrap();\n    println!(\"{}\", await_heads(&rx, 1));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Dockmaster watches the water — count the heads that report `Down`, and wait until the count reaches `heads`",
       "stdout": ""
     }
   },
@@ -4156,6 +4476,196 @@
     "verdict": {
       "ok": false,
       "stderr": "[stub] the Ghostkeeper waits — reclaim it (or not) with `.upgrade(`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "warden_box",
+    "input": "enum Ledger { Entry(u32, Box<Ledger>), Closed }\nfn total(ledger: &Ledger) -> u32 {\n    match ledger {\n        Ledger::Entry(amount, rest) => amount + total(rest),\n        Ledger::Closed => 0,\n    }\n}\nfn main() {\n    let ledger = Ledger::Entry(5, Box::new(Ledger::Closed));\n    println!(\"{}\", total(&ledger));\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Vaultwright seals the box. \"a ledger of any length, in a size the compiler knows. first phase passed.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "warden_box",
+    "input": "// A ledger is either closed, or one entry and the rest of the ledger.\n#[derive(Debug)]\nenum Ledger {\n    // this won't compile yet: a Ledger can't hold a whole Ledger inline\n    Entry(u32, Ledger),\n    Closed,\n}\n\nfn entry(amount: u32, rest: Ledger) -> Ledger {\n    Ledger::Entry(amount, rest)\n}\n\nfn total(ledger: &Ledger) -> u32 {\n    match ledger {\n        Ledger::Entry(amount, rest) => amount + total(rest),\n        Ledger::Closed => 0,\n    }\n}\n\nfn main() {\n    let ledger = entry(5, entry(7, entry(3, Ledger::Closed)));\n    println!(\"{ledger:?}\");\n    println!(\"owed: {}\", total(&ledger));\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Vaultwright opens the ledger — give the rest of the ledger a fixed size: `Entry(u32, Box<Ledger>)`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "warden_box",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Vaultwright opens the ledger — give the rest of the ledger a fixed size: `Entry(u32, Box<Ledger>)`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_4",
+    "id": "warden_box",
+    "input": "enum Ledger { Entry(u32,  Closed }\nfn total(ledger: &Ledger) -> u32 {\n    match ledger {\n        Ledger::Entry(amount, rest) => amount + total(rest),\n        Ledger::Closed => 0,\n    }\n}\nfn main() {\n    let ledger = Ledger::Entry(5, Box::new(Ledger::Closed));\n    println!(\"{}\", total(&ledger));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Vaultwright opens the ledger — give the rest of the ledger a fixed size: `Entry(u32, Box<Ledger>)`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_6",
+    "id": "warden_box",
+    "input": "enum Ledger { Entry(u32, Box<Ledger>), Closed \nfn total(ledger: &Ledger) -> u32 {\n    match ledger {\n        Ledger::Entry(amount, rest) => amount + total(rest),\n        Ledger::Closed => 0,\n    }\n}\nfn main() {\n    let ledger = Ledger::Entry(5, Box::new(Ledger::Closed));\n    println!(\"{}\", total(&ledger));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Vaultwright opens the ledger — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_34",
+    "id": "warden_box",
+    "input": "enum Ledger { Entry(u32, Box<Ledger>), Closed }\nfn total(ledger: &Ledger) -> u32 {\n    match ledger {\n        Ledger::Entry(amount, rest) => amount + total(rest),\n        Ledger::Closed => 0,\n    }\n}\nfn main() {\n    let ledger = Ledger::Entry(5, \n    println!(\"{}\", total(&ledger));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Vaultwright opens the ledger — put the rest on the heap where you build an entry: `Box::new(rest)`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "warden_shared",
+    "input": "use std::cell::RefCell;\nuse std::rc::Rc;\nstruct Debtor { vault: Rc<RefCell<u32>> }\nfn pay(debtor: &Debtor, coins: u32) {\n    *debtor.vault.borrow_mut() += coins;\n}\nfn main() {\n    let vault = Rc::new(RefCell::new(0));\n    let miller = Debtor { vault: Rc::clone(&vault) };\n    pay(&miller, 5);\n    println!(\"{}\", vault.borrow());\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Vaultwright counts the coins. \"one vault, many hands. second phase passed.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "warden_shared",
+    "input": "use std::rc::Rc;\n\n// Every debtor holds a handle to the one vault.\nstruct Debtor {\n    name: &'static str,\n    vault: Rc<u32>,\n}\n\nfn pay(debtor: &Debtor, coins: u32) {\n    // this won't compile yet: an Rc shares its value, but only to read\n    *debtor.vault += coins;\n}\n\nfn main() {\n    let vault = Rc::new(0);\n    let miller = Debtor { name: \"miller\", vault: Rc::clone(&vault) };\n    let smith = Debtor { name: \"smith\", vault: Rc::clone(&vault) };\n    pay(&miller, 5);\n    pay(&smith, 7);\n    println!(\"{} and {} paid\", miller.name, smith.name);\n    println!(\"vault holds {vault}\");\n    println!(\"handles: {}\", Rc::strong_count(&vault));\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Vaultwright weighs the vault — share a vault you can write to: `vault: Rc<RefCell<u32>>`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "warden_shared",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Vaultwright weighs the vault — share a vault you can write to: `vault: Rc<RefCell<u32>>`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_8",
+    "id": "warden_shared",
+    "input": "use std::cell::RefCell;\nuse std::rc::Rc;\nstruct Debtor { vault:  }\nfn pay(debtor: &Debtor, coins: u32) {\n    *debtor.vault.borrow_mut() += coins;\n}\nfn main() {\n    let vault = Rc::new(RefCell::new(0));\n    let miller = Debtor { vault: Rc::clone(&vault) };\n    pay(&miller, 5);\n    println!(\"{}\", vault.borrow());\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Vaultwright weighs the vault — share a vault you can write to: `vault: Rc<RefCell<u32>>`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_9",
+    "id": "warden_shared",
+    "input": "use std::cell::RefCell;\nuse std::rc::Rc;\nstruct Debtor { vault: Rc<RefCell<u32>> \nfn pay(debtor: &Debtor, coins: u32) {\n    *debtor.vault.borrow_mut() += coins;\n}\nfn main() {\n    let vault = Rc::new(RefCell::new(0));\n    let miller = Debtor { vault: Rc::clone(&vault) };\n    pay(&miller, 5);\n    println!(\"{}\", vault.borrow());\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Vaultwright weighs the vault — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_16",
+    "id": "warden_shared",
+    "input": "use std::cell::RefCell;\nuse std::rc::Rc;\nstruct Debtor { vault: Rc<RefCell<u32>> }\nfn pay(debtor: &Debtor, coins: u32) {\n     += coins;\n}\nfn main() {\n    let vault = Rc::new(RefCell::new(0));\n    let miller = Debtor { vault: Rc::clone(&vault) };\n    pay(&miller, 5);\n    println!(\"{}\", vault.borrow());\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Vaultwright weighs the vault — borrow the vault to add the coins: `*debtor.vault.borrow_mut() += coins`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "warden_weak",
+    "input": "use std::cell::RefCell;\nuse std::rc::{Rc, Weak};\nstruct Debtor { name: &'static str, owes: RefCell<Weak<Debtor>> }\nfn main() {\n    let a = Rc::new(Debtor { name: \"a\", owes: RefCell::new(Weak::new()) });\n    let b = Rc::new(Debtor { name: \"b\", owes: RefCell::new(Weak::new()) });\n    *a.owes.borrow_mut() = Rc::downgrade(&b);\n    let next = a.owes.borrow().upgrade().map(|d| d.name);\n    println!(\"{} owes {:?}\", a.name, next);\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Vaultwright closes the vault. \"walked once, nothing left behind. the Warden is unmade.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "warden_weak",
+    "input": "use std::cell::RefCell;\nuse std::rc::Rc;\n\nstruct Debtor {\n    name: &'static str,\n    // this runs, but a strong link keeps its creditor alive\n    owes: RefCell<Option<Rc<Debtor>>>,\n}\n\nfn debtor(name: &'static str) -> Rc<Debtor> {\n    let owes = RefCell::new(None);\n    Rc::new(Debtor { name, owes })\n}\n\n// Follow the debts from `start` until they come back round, or end.\nfn circle(start: &Rc<Debtor>) -> Vec<&'static str> {\n    let mut names = vec![start.name];\n    let mut at = Rc::clone(start);\n    loop {\n        let next = at.owes.borrow().clone();\n        match next {\n            Some(d) if !Rc::ptr_eq(&d, start) => {\n                names.push(d.name);\n                at = d;\n            }\n            _ => return names,\n        }\n    }\n}\n\nfn main() {\n    let warden = debtor(\"warden\");\n    let you = debtor(\"you\");\n    let teller = debtor(\"teller\");\n    // The Warden owes you, you owe the teller, the teller owes him.\n    *warden.owes.borrow_mut() = Some(Rc::clone(&you));\n    *you.owes.borrow_mut() = Some(Rc::clone(&teller));\n    *teller.owes.borrow_mut() = Some(Rc::clone(&warden));\n    println!(\"circle: {:?}\", circle(&warden));\n    let strong = Rc::strong_count(&warden);\n    let weak = Rc::weak_count(&warden);\n    println!(\"warden: strong {strong}, weak {weak}\");\n    let probe = Rc::downgrade(&warden);\n    drop((warden, you, teller));\n    let left = probe.upgrade().map(|d| d.name);\n    println!(\"after the ledger closes: {left:?}\");\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Vaultwright traces the ring — make each debt a link that owns nothing: `owes: RefCell<Weak<Debtor>>`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "warden_weak",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Vaultwright traces the ring — make each debt a link that owns nothing: `owes: RefCell<Weak<Debtor>>`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_4",
+    "id": "warden_weak",
+    "input": "use std::cell::RefCell;\nuse std::rc::{Rc, \nstruct Debtor { name: &'static str, owes: RefCell<Weak<Debtor>> }\nfn main() {\n    let a = Rc::new(Debtor { name: \"a\", owes: RefCell::new(Weak::new()) });\n    let b = Rc::new(Debtor { name: \"b\", owes: RefCell::new(Weak::new()) });\n    *a.owes.borrow_mut() = Rc::downgrade(&b);\n    let next = a.owes.borrow().upgrade().map(|d| d.name);\n    println!(\"{} owes {:?}\", a.name, next);\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Vaultwright traces the ring — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_12",
+    "id": "warden_weak",
+    "input": "use std::cell::RefCell;\nuse std::rc::{Rc, Weak};\nstruct Debtor { name: &'static str, owes:  }\nfn main() {\n    let a = Rc::new(Debtor { name: \"a\", owes: RefCell::new(Weak::new()) });\n    let b = Rc::new(Debtor { name: \"b\", owes: RefCell::new(Weak::new()) });\n    *a.owes.borrow_mut() = Rc::downgrade(&b);\n    let next = a.owes.borrow().upgrade().map(|d| d.name);\n    println!(\"{} owes {:?}\", a.name, next);\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Vaultwright traces the ring — make each debt a link that owns nothing: `owes: RefCell<Weak<Debtor>>`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_39",
+    "id": "warden_weak",
+    "input": "use std::cell::RefCell;\nuse std::rc::{Rc, Weak};\nstruct Debtor { name: &'static str, owes: RefCell<Weak<Debtor>> }\nfn main() {\n    let a = Rc::new(Debtor { name: \"a\", owes: RefCell::new(Weak::new()) });\n    let b = Rc::new(Debtor { name: \"b\", owes: RefCell::new(Weak::new()) });\n    *a.owes.borrow_mut() = \n    let next = a.owes.borrow().upgrade().map(|d| d.name);\n    println!(\"{} owes {:?}\", a.name, next);\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Vaultwright traces the ring — link the debtors with `Rc::downgrade(&creditor)`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_43",
+    "id": "warden_weak",
+    "input": "use std::cell::RefCell;\nuse std::rc::{Rc, Weak};\nstruct Debtor { name: &'static str, owes: RefCell<Weak<Debtor>> }\nfn main() {\n    let a = Rc::new(Debtor { name: \"a\", owes: RefCell::new(Weak::new()) });\n    let b = Rc::new(Debtor { name: \"b\", owes: RefCell::new(Weak::new()) });\n    *a.owes.borrow_mut() = Rc::downgrade(&b);\n    let next =  d.name);\n    println!(\"{} owes {:?}\", a.name, next);\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Vaultwright traces the ring — follow a link with `.upgrade()`: `Some` while the debtor lives",
       "stdout": ""
     }
   },

@@ -863,6 +863,76 @@ pub(super) const CHECKS: &[MissionCheck] = &[
             matchers: &[LineContains("Garin")],
         },
     ),
+    // ── Act 6 boss: the Keymaster's trial, The Forge-Golem ───────────
+    // Each stage pins the `Part` struct and its function, and calls it on
+    // parts the player never saw. Stage 3 sends an armoured part first (a
+    // loop that `break`s, or `take_while`, counts nothing after it) and,
+    // once the behaviour matched, needs a `.fold(`/`.sum` and rules out
+    // `for`, `while`, `loop` and `mut`, as its Task says.
+    m(
+        "golem_parts",
+        H(Harness {
+            contract: "`struct Part { name: &'static str, armoured: bool, weakness: u32 }`, `fn weak_points(parts: &[Part]) -> Vec<String>` and a `fn main`",
+            run_main: true,
+            body: "    let _sig: fn(&[super::Part]) -> ::std::vec::Vec<::std::string::String> = super::weak_points;
+    let p = |name: &'static str, armoured: bool, weakness: u32| super::Part { name, armoured, weakness };
+    emit(\"weak_points(plate+, helm+)\", super::weak_points(&[p(\"plate\", true, 9), p(\"helm\", true, 2)]));
+    emit(\"weak_points(cog, rod)\", super::weak_points(&[p(\"cog\", false, 1), p(\"rod\", false, 12)]));
+    emit(\"weak_points(gear+, vent, pipe+, seam)\", super::weak_points(&[p(\"gear\", true, 7), p(\"vent\", false, 5), p(\"pipe\", true, 3), p(\"seam\", false, 9)]));
+    emit(\"weak_points(no parts)\", super::weak_points(&[]));",
+            expected: &[
+                "weak_points(plate+, helm+) = []",
+                "weak_points(cog, rod) = [\"cog (1)\", \"rod (12)\"]",
+                "weak_points(gear+, vent, pipe+, seam) = [\"vent (5)\", \"seam (9)\"]",
+                "weak_points(no parts) = []",
+            ],
+            main_matchers: &[Exact("weak points: [\"arm (3)\", \"knee (4)\", \"eye (6)\"]")],
+        }),
+    ),
+    m(
+        "golem_sum",
+        H(Harness {
+            contract: "`struct Part { name: &'static str, armoured: bool, weakness: u32 }`, `fn core_damage(parts: &[Part]) -> u32` and a `fn main`",
+            run_main: true,
+            body: "    let _sig: fn(&[super::Part]) -> u32 = super::core_damage;
+    let p = |name: &'static str, armoured: bool, weakness: u32| super::Part { name, armoured, weakness };
+    emit(\"core_damage(plate+, helm+)\", super::core_damage(&[p(\"plate\", true, 9), p(\"helm\", true, 2)]));
+    emit(\"core_damage(cog, rod)\", super::core_damage(&[p(\"cog\", false, 1), p(\"rod\", false, 12)]));
+    emit(\"core_damage(gear+, vent, pipe+, seam)\", super::core_damage(&[p(\"gear\", true, 7), p(\"vent\", false, 5), p(\"pipe\", true, 3), p(\"seam\", false, 9)]));
+    emit(\"core_damage(no parts)\", super::core_damage(&[]));",
+            expected: &[
+                "core_damage(plate+, helm+) = 0",
+                "core_damage(cog, rod) = 26",
+                "core_damage(gear+, vent, pipe+, seam) = 28",
+                "core_damage(no parts) = 0",
+            ],
+            main_matchers: &[Exact("golem: arm chest knee head eye\ncore damage: 26")],
+        }),
+    ),
+    muf(
+        "golem_core",
+        H(Harness {
+            contract: "`struct Part { name: &'static str, armoured: bool, weakness: u32 }`, `fn total_damage(parts: &[Part], blow: u32) -> u32` and a `fn main`",
+            run_main: true,
+            body: "    let _sig: fn(&[super::Part], u32) -> u32 = super::total_damage;
+    let p = |name: &'static str, armoured: bool, weakness: u32| super::Part { name, armoured, weakness };
+    emit(\"total_damage(gear+, vent, pipe+, seam; 2)\", super::total_damage(&[p(\"gear\", true, 7), p(\"vent\", false, 5), p(\"pipe\", true, 3), p(\"seam\", false, 9)], 2));
+    emit(\"total_damage(cog, plate+, rod; 5)\", super::total_damage(&[p(\"cog\", false, 1), p(\"plate\", true, 9), p(\"rod\", false, 12)], 5));
+    emit(\"total_damage(plate+, helm+; 4)\", super::total_damage(&[p(\"plate\", true, 9), p(\"helm\", true, 2)], 4));
+    emit(\"total_damage(no parts; 1)\", super::total_damage(&[], 1));",
+            expected: &[
+                "total_damage(gear+, vent, pipe+, seam; 2) = 28",
+                "total_damage(cog, plate+, rod; 5) = 65",
+                "total_damage(plate+, helm+; 4) = 0",
+                "total_damage(no parts; 1) = 0",
+            ],
+            main_matchers: &[Exact(
+                "golem: arm chest knee head eye\nblow 1: 13\nblow 3: 39",
+            )],
+        }),
+        &[&[".fold(", ".sum"]],
+        &["for", "while", "loop", "mut"],
+    ),
     // ── Act 7: The Concurrent Coast ──────────────────────────────────
     m(
         "thread_spawn",
@@ -906,6 +976,68 @@ pub(super) const CHECKS: &[MissionCheck] = &[
                      polls them, so there is no behaviour to observe",
             required: &[&["async fn"], &[".await"]],
         },
+    ),
+    // ── Act 7 boss: the Dockmaster's trial, The Tide Hydra ───────────
+    // Stage 1 runs on one thread (a sender clone per head), so the checker
+    // calls `hunt` on heads of its own. Stage 2 spawns real threads: on
+    // wasm32-wasip1 `thread::spawn` panics, so it is compiled and checked
+    // for `spawn(`, a `move` closure and a sort, never run (its output is
+    // proven natively in the game's `tests/mission_text.rs`). Stage 3's
+    // `main` spawns threads too, so the checker does not run it: it feeds
+    // `await_heads` reports from one thread, with every sender dropped
+    // first, and checks the count.
+    m(
+        "hydra_senders",
+        H(Harness {
+            contract: "`fn hunt(heads: &[(&'static str, u32)]) -> Vec<String>` and a `fn main`",
+            run_main: true,
+            body: "    let _sig: fn(&[(&'static str, u32)]) -> ::std::vec::Vec<::std::string::String> = super::hunt;
+    emit(\"hunt(gill 5)\", super::hunt(&[(\"gill\", 5)]));
+    emit(\"hunt(fin 8, tail 12, eye 17)\", super::hunt(&[(\"fin\", 8), (\"tail\", 12), (\"eye\", 17)]));
+    emit(\"hunt(no heads)\", super::hunt(&[]));",
+            expected: &[
+                "hunt(gill 5) = [\"gill down after 2 blows\"]",
+                "hunt(fin 8, tail 12, eye 17) = [\"fin down after 2 blows\", \"tail down after 3 blows\", \"eye down after 5 blows\"]",
+                "hunt(no heads) = []",
+            ],
+            main_matchers: &[Exact(
+                "fang down after 3 blows\nvenom down after 2 blows\nbrine down after 4 blows\n3 heads down",
+            )],
+        }),
+    ),
+    m(
+        "hydra_threads",
+        CompileOnly {
+            reason: NO_THREADS,
+            required: &[&["spawn("], &["move |", "move||"], &[".sort"]],
+        },
+    ),
+    m(
+        "hydra_body",
+        H(Harness {
+            contract: "`enum Report { Hit, Down }` and `fn await_heads(rx: &Receiver<Report>, heads: usize) -> u32` (your `main` is not run: this server has no threads)",
+            run_main: false,
+            body: "    use super::Report::{Down as D, Hit as H};
+    let _sig: fn(&::std::sync::mpsc::Receiver<super::Report>, usize) -> u32 = super::await_heads;
+    let feed = |reports: ::std::vec::Vec<super::Report>| {
+        let (tx, rx) = ::std::sync::mpsc::channel();
+        for r in reports {
+            let _ = tx.send(r);
+        }
+        rx
+    };
+    emit(\"await_heads(H H D H H D H D, 3)\", super::await_heads(&feed(::std::vec![H, H, D, H, H, D, H, D]), 3));
+    emit(\"await_heads(H H H D, 1)\", super::await_heads(&feed(::std::vec![H, H, H, D]), 1));
+    emit(\"await_heads(D D, 2)\", super::await_heads(&feed(::std::vec![D, D]), 2));
+    emit(\"await_heads(D H H H D, 2)\", super::await_heads(&feed(::std::vec![D, H, H, H, D]), 2));",
+            expected: &[
+                "await_heads(H H D H H D H D, 3) = 5",
+                "await_heads(H H H D, 1) = 3",
+                "await_heads(D D, 2) = 0",
+                "await_heads(D H H H D, 2) = 3",
+            ],
+            main_matchers: &[],
+        }),
     ),
     // ── Act 8: The Vault of Pointers ─────────────────────────────────
     m(
@@ -958,5 +1090,101 @@ pub(super) const CHECKS: &[MissionCheck] = &[
             matchers: &[InOrder(&["Some(5)", "None"])],
         },
         &[&["downgrade"], &[".upgrade("]],
+    ),
+    // ── Act 8 boss: the Vaultwright's trial, The Memory Warden ───────
+    // Every stage pins the type the lesson is about, so a starter shape
+    // does not build against the checker. Stage 1 builds ledgers of its
+    // own; stage 2 pays from two debtors into one vault and counts the
+    // handles; stage 3 walks rings, a self-debt, a dead link and a chain,
+    // then checks that the walks left no extra owner behind.
+    m(
+        "warden_box",
+        H(Harness {
+            contract: "`enum Ledger { Entry(u32, Box<Ledger>), Closed }`, `fn total(ledger: &Ledger) -> u32` and a `fn main`",
+            run_main: true,
+            body: "    use super::Ledger::{Closed, Entry};
+    let _sig: fn(&super::Ledger) -> u32 = super::total;
+    let b = ::std::boxed::Box::new;
+    emit(\"total(Closed)\", super::total(&Closed));
+    emit(\"total(Entry(9, Closed))\", super::total(&Entry(9, b(Closed))));
+    emit(\"total(Entry(1, Entry(2, Entry(4, Entry(8, Closed)))))\", super::total(&Entry(1, b(Entry(2, b(Entry(4, b(Entry(8, b(Closed))))))))));",
+            expected: &[
+                "total(Closed) = 0",
+                "total(Entry(9, Closed)) = 9",
+                "total(Entry(1, Entry(2, Entry(4, Entry(8, Closed))))) = 15",
+            ],
+            main_matchers: &[Exact("Entry(5, Entry(7, Entry(3, Closed)))\nowed: 15")],
+        }),
+    ),
+    m(
+        "warden_shared",
+        H(Harness {
+            contract: "`struct Debtor { name: &'static str, vault: Rc<RefCell<u32>> }`, `fn pay(debtor: &Debtor, coins: u32)` and a `fn main`",
+            run_main: true,
+            body: "    use ::std::cell::RefCell;
+    use ::std::rc::Rc;
+    let _sig: fn(&super::Debtor, u32) = super::pay;
+    let vault = Rc::new(RefCell::new(10));
+    let a = super::Debtor { name: \"a\", vault: Rc::clone(&vault) };
+    let b = super::Debtor { name: \"b\", vault: Rc::clone(&vault) };
+    super::pay(&a, 4);
+    emit(\"vault 10, after a pays 4\", *vault.borrow());
+    super::pay(&b, 6);
+    super::pay(&a, 1);
+    emit(\"then b pays 6 and a pays 1\", *vault.borrow());
+    emit(\"Rc::strong_count(&vault)\", Rc::strong_count(&vault));
+    let _ = (a.name, b.name);",
+            expected: &[
+                "vault 10, after a pays 4 = 14",
+                "then b pays 6 and a pays 1 = 21",
+                "Rc::strong_count(&vault) = 3",
+            ],
+            main_matchers: &[Exact("miller and smith paid\nvault holds 12\nhandles: 3")],
+        }),
+    ),
+    m(
+        "warden_weak",
+        H(Harness {
+            contract: "`struct Debtor { name: &'static str, owes: RefCell<Weak<Debtor>> }`, `fn circle(start: &Rc<Debtor>) -> Vec<&'static str>` and a `fn main`",
+            run_main: true,
+            body: "    use ::std::cell::RefCell;
+    use ::std::rc::{Rc, Weak};
+    let _sig: fn(&Rc<super::Debtor>) -> ::std::vec::Vec<&'static str> = super::circle;
+    let mk = |name: &'static str| Rc::new(super::Debtor { name, owes: RefCell::new(Weak::new()) });
+    let link = |from: &Rc<super::Debtor>, to: &Rc<super::Debtor>| *from.owes.borrow_mut() = Rc::downgrade(to);
+    let (a, b, c, d) = (mk(\"a\"), mk(\"b\"), mk(\"c\"), mk(\"d\"));
+    link(&a, &b);
+    link(&b, &c);
+    link(&c, &d);
+    link(&d, &a);
+    emit(\"circle(a), ring a-b-c-d\", super::circle(&a));
+    emit(\"circle(c), same ring\", super::circle(&c));
+    let lone = mk(\"lone\");
+    emit(\"circle(lone), owes no one\", super::circle(&lone));
+    let me = mk(\"me\");
+    link(&me, &me);
+    emit(\"circle(me), owes itself\", super::circle(&me));
+    let (p, q) = (mk(\"p\"), mk(\"q\"));
+    link(&p, &q);
+    drop(q);
+    emit(\"circle(p), creditor gone\", super::circle(&p));
+    let (x, y) = (mk(\"x\"), mk(\"y\"));
+    link(&x, &y);
+    emit(\"circle(x), chain x-y\", super::circle(&x));
+    emit(\"(strong, weak) of a after the walks\", (Rc::strong_count(&a), Rc::weak_count(&a)));
+    let _ = y;",
+            expected: &[
+                "circle(a), ring a-b-c-d = [\"a\", \"b\", \"c\", \"d\"]",
+                "circle(c), same ring = [\"c\", \"d\", \"a\", \"b\"]",
+                "circle(lone), owes no one = [\"lone\"]",
+                "circle(me), owes itself = [\"me\"]",
+                "circle(p), creditor gone = [\"p\"]",
+                "circle(x), chain x-y = [\"x\", \"y\"]",
+                "(strong, weak) of a after the walks = (1, 1)",
+            ],
+            main_matchers: &[Exact(
+                "circle: [\"warden\", \"you\", \"teller\"]\nwarden: strong 1, weak 1\nafter the ledger closes: None",
+            )],
+        }),
     ),
 ];

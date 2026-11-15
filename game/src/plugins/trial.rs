@@ -18,9 +18,11 @@
 //!   is how a trial with no prologue, such as the Act 9 Librarian, is
 //!   written). The Borrow Checker keeps `borrow_preview` early in Act 2 as
 //!   his prologue and holds the Bridge trial at the end of Act 2. The Act
-//!   3 to 5 bosses have the same shape: the act's lead NPC (the
-//!   Guildmaster, Vexis, the Barkeep) keeps the act's first mission as a
-//!   prologue and holds a trial after the act's sixth mission.
+//!   3 to 8 bosses have the same shape: the act's lead NPC (the
+//!   Guildmaster, Vexis, the Barkeep, the Keymaster, the Dockmaster, the
+//!   Vaultwright) keeps the act's first mission as a prologue and holds a
+//!   trial after the act's sixth mission. The Act 8 trial is the last
+//!   thing in the registry.
 //!
 //! # The NPC's current mission
 //!
@@ -104,6 +106,32 @@ pub const TRIALS: &[Trial] = &[
         npc: "result_match",
         stages: &["wager_stake", "wager_from", "wager_quest"],
         complete_line: "\"The house pays out. You played every round by the rules.\"",
+    },
+    // Act 6 boss. The Keymaster keeps the forge keys; his prologue is
+    // `hashmap_basic`.
+    Trial {
+        id: "forge_golem",
+        name: "The Forge-Golem",
+        npc: "hashmap_basic",
+        stages: &["golem_parts", "golem_sum", "golem_core"],
+        complete_line: "\"Every weak point found, every blow counted. The forge keys are yours.\"",
+    },
+    // Act 7 boss. The Dockmaster's prologue is `thread_spawn`.
+    Trial {
+        id: "tide_hydra",
+        name: "The Tide Hydra",
+        npc: "thread_spawn",
+        stages: &["hydra_senders", "hydra_threads", "hydra_body"],
+        complete_line: "\"Every head down, every worker home. The harbour is yours.\"",
+    },
+    // Act 8 boss, the last missions in the registry. The Vaultwright's
+    // prologue is `box_basic`.
+    Trial {
+        id: "memory_warden",
+        name: "The Memory Warden",
+        npc: "box_basic",
+        stages: &["warden_box", "warden_shared", "warden_weak"],
+        complete_line: "\"No debt unpaid, nothing left behind. The Vault is open to you.\"",
     },
 ];
 
@@ -425,6 +453,10 @@ mod tests {
                 "wraith_possessed"
             ]
         );
+        assert_eq!(
+            owned_missions("box_basic"),
+            vec!["box_basic", "warden_box", "warden_shared", "warden_weak"]
+        );
     }
 
     /// Each Act 3-5 trial sits after its act's sixth mission and before
@@ -468,6 +500,49 @@ mod tests {
         }
     }
 
+    /// Each Act 6-8 trial sits after its act's sixth mission; the Act 6 and
+    /// 7 trials end before the next act's first mission, and the Act 8
+    /// trial ends the registry. Each owner's prologue is its act's first
+    /// mission.
+    #[test]
+    fn act_6_to_8_trials_close_their_acts() {
+        let reg = MissionRegistry::default();
+        let idx = |id: &str| {
+            reg.missions
+                .iter()
+                .position(|m| m.id == id)
+                .unwrap_or_else(|| panic!("{id} not in registry"))
+        };
+        for (trial, prologue, sixth, next_act) in [
+            (
+                "forge_golem",
+                "hashmap_basic",
+                "closure_move",
+                Some("thread_spawn"),
+            ),
+            ("tide_hydra", "thread_spawn", "async_fn", Some("box_basic")),
+            ("memory_warden", "box_basic", "weak_ref", None),
+        ] {
+            let t = TRIALS
+                .iter()
+                .find(|t| t.id == trial)
+                .unwrap_or_else(|| panic!("{trial} missing"));
+            assert_eq!(t.npc, prologue, "{trial}: owner");
+            assert_eq!(t.stages.len(), 3, "{trial}: three stages");
+            assert_eq!(
+                idx(prologue) + 6,
+                idx(t.stages[0]),
+                "{trial}: after the sixth"
+            );
+            assert_eq!(idx(sixth) + 1, idx(t.stages[0]), "{trial}: after {sixth}");
+            let last = idx(t.stages[t.stages.len() - 1]);
+            match next_act {
+                Some(next) => assert_eq!(last + 1, idx(next), "{trial}: before {next}"),
+                None => assert_eq!(last + 1, reg.missions.len(), "{trial}: ends the registry"),
+            }
+        }
+    }
+
     #[test]
     fn prologue_owner_waits_as_a_cleared_villager_then_offers_stage_one() {
         let reg = MissionRegistry::default();
@@ -475,6 +550,9 @@ mod tests {
             ("impl_method", "enum_data_match", "wraith_forms"),
             ("trait_def", "assoc_type", "chimera_heads"),
             ("result_match", "unwrap_or_else", "wager_stake"),
+            ("hashmap_basic", "closure_move", "golem_parts"),
+            ("thread_spawn", "async_fn", "hydra_senders"),
+            ("box_basic", "weak_ref", "warden_box"),
         ] {
             let cur = |p: &MissionProgress| current_mission(&reg, p, npc).map(|m| m.id);
             assert_eq!(cur(&cleared_through(&reg, npc)), Some(npc));

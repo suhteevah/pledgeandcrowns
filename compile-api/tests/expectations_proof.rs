@@ -188,6 +188,72 @@ macro_rules! wager_main {
         "fn main() { println!(\"{:?}\", place_bet(\"15\", 50)); println!(\"{:?}\", place_bet(\"lots\", 50)); println!(\"{:?}\", place_bet(\"80\", 50)); }\n"
     };
 }
+/// The Forge-Golem's `Part` and its five parts (every stage).
+macro_rules! golem_items {
+    () => {
+        "struct Part { name: &'static str, armoured: bool, weakness: u32 }\nfn golem() -> Vec<Part> { vec![Part { name: \"arm\", armoured: false, weakness: 3 }, Part { name: \"chest\", armoured: true, weakness: 8 }, Part { name: \"knee\", armoured: false, weakness: 4 }, Part { name: \"head\", armoured: true, weakness: 5 }, Part { name: \"eye\", armoured: false, weakness: 6 }] }\n"
+    };
+}
+/// Stage 1's `main`.
+macro_rules! golem_main1 {
+    () => {
+        "fn main() { let parts = golem(); println!(\"weak points: {:?}\", weak_points(&parts)); }\n"
+    };
+}
+/// Stage 2's `main`.
+macro_rules! golem_main2 {
+    () => {
+        "fn main() { let parts = golem(); let names: Vec<&str> = parts.iter().map(|p| p.name).collect(); println!(\"golem: {}\", names.join(\" \")); println!(\"core damage: {}\", core_damage(&parts)); }\n"
+    };
+}
+/// Stage 3's `main` (no loop, no `mut`).
+macro_rules! golem_main3 {
+    () => {
+        "fn main() { let parts = golem(); let names: Vec<&str> = parts.iter().map(|p| p.name).collect(); println!(\"golem: {}\", names.join(\" \")); println!(\"blow 1: {}\", total_damage(&parts, 1)); println!(\"blow 3: {}\", total_damage(&parts, 3)); }\n"
+    };
+}
+/// The Tide Hydra's `fight` (stages 1 and 2).
+macro_rules! hydra_fight {
+    () => {
+        "use std::sync::mpsc::{self, Sender};\nfn fight(head: &'static str, hp: u32, tx: Sender<String>) { let blows = hp.div_ceil(4); tx.send(format!(\"{head} down after {blows} blows\")).expect(\"receiver dropped\"); }\n"
+    };
+}
+/// The `main` of stages 1 and 2.
+macro_rules! hydra_main {
+    () => {
+        "fn main() { let reports = hunt(&[(\"fang\", 9), (\"venom\", 6), (\"brine\", 13)]); for report in &reports { println!(\"{report}\"); } println!(\"{} heads down\", reports.len()); }\n"
+    };
+}
+/// Stage 3: everything except `await_heads`. Its `main` spawns threads;
+/// the checker does not run it.
+macro_rules! hydra_body_items {
+    () => {
+        "use std::sync::mpsc::{self, Receiver};\nuse std::thread;\nenum Report { Hit, Down }\nfn main() { let blows = [3, 2, 4]; let (tx, rx) = mpsc::channel(); for n in blows { let tx = tx.clone(); thread::spawn(move || { for _ in 0..n { tx.send(Report::Hit).expect(\"receiver dropped\"); } tx.send(Report::Down).expect(\"receiver dropped\"); }); } drop(tx); let hits = await_heads(&rx, blows.len()); println!(\"{} heads down after {hits} hits\", blows.len()); println!(\"strike the body\"); }\n"
+    };
+}
+/// The Memory Warden's ledger: everything except `total`.
+macro_rules! ledger_items {
+    () => {
+        "#[derive(Debug)]\nenum Ledger { Entry(u32, Box<Ledger>), Closed }\nfn entry(amount: u32, rest: Ledger) -> Ledger { Ledger::Entry(amount, Box::new(rest)) }\nfn main() { let ledger = entry(5, entry(7, entry(3, Ledger::Closed))); println!(\"{ledger:?}\"); println!(\"owed: {}\", total(&ledger)); }\n"
+    };
+}
+/// Stage 2's `Debtor` (its `main` is separate).
+macro_rules! vault_debtor {
+    () => {
+        "use std::cell::RefCell;\nuse std::rc::Rc;\nstruct Debtor { name: &'static str, vault: Rc<RefCell<u32>> }\n"
+    };
+}
+macro_rules! vault_main {
+    () => {
+        "fn main() { let vault = Rc::new(RefCell::new(0)); let miller = Debtor { name: \"miller\", vault: Rc::clone(&vault) }; let smith = Debtor { name: \"smith\", vault: Rc::clone(&vault) }; pay(&miller, 5); pay(&smith, 7); println!(\"{} and {} paid\", miller.name, smith.name); println!(\"vault holds {}\", vault.borrow()); println!(\"handles: {}\", Rc::strong_count(&vault)); }\n"
+    };
+}
+/// Stage 3: everything except `circle`.
+macro_rules! ring_items {
+    () => {
+        "use std::cell::RefCell;\nuse std::rc::{Rc, Weak};\nstruct Debtor { name: &'static str, owes: RefCell<Weak<Debtor>> }\nfn debtor(name: &'static str) -> Rc<Debtor> { Rc::new(Debtor { name, owes: RefCell::new(Weak::new()) }) }\nfn main() { let warden = debtor(\"warden\"); let you = debtor(\"you\"); let teller = debtor(\"teller\"); *warden.owes.borrow_mut() = Rc::downgrade(&you); *you.owes.borrow_mut() = Rc::downgrade(&teller); *teller.owes.borrow_mut() = Rc::downgrade(&warden); println!(\"circle: {:?}\", circle(&warden)); let strong = Rc::strong_count(&warden); let weak = Rc::weak_count(&warden); println!(\"warden: strong {strong}, weak {weak}\"); let probe = Rc::downgrade(&warden); drop((warden, you, teller)); let left = probe.upgrade().map(|d| d.name); println!(\"after the ledger closes: {left:?}\"); }\n"
+    };
+}
 
 /// Wrong-but-compiling variants per mission. Each builds as a standalone
 /// program, and each must be rejected.
@@ -512,6 +578,215 @@ fn wrong_variants() -> HashMap<&'static str, Vec<&'static str>> {
                 concat!(
                     quest_items!(),
                     "fn quest(map: &str, key: &str) -> Result<Reward, QuestError> { let leagues = read_map(map)?; let gold = open_vault(key).map_err(|_| QuestError::BadMap)?; let left = pay_guide(gold, leagues).map_err(|_| QuestError::BadMap)?; Ok(Reward { gold: left }) }\n"
+                ),
+            ],
+        ),
+        // The Keymaster's trial, The Forge-Golem.
+        (
+            "golem_parts",
+            vec![
+                // Keeps the armoured parts instead.
+                concat!(
+                    golem_items!(),
+                    "fn weak_points(parts: &[Part]) -> Vec<String> { parts.iter().filter(|p| p.armoured).map(|p| format!(\"{} ({})\", p.name, p.weakness)).collect() }\n",
+                    golem_main1!()
+                ),
+                // No filter at all.
+                concat!(
+                    golem_items!(),
+                    "fn weak_points(parts: &[Part]) -> Vec<String> { parts.iter().map(|p| format!(\"{} ({})\", p.name, p.weakness)).collect() }\n",
+                    golem_main1!()
+                ),
+                // Labels without the weakness.
+                concat!(
+                    golem_items!(),
+                    "fn weak_points(parts: &[Part]) -> Vec<String> { parts.iter().filter(|p| !p.armoured).map(|p| p.name.to_string()).collect() }\n",
+                    golem_main1!()
+                ),
+                // Drops the chest and the head by name: right `main` output only.
+                concat!(
+                    golem_items!(),
+                    "fn weak_points(parts: &[Part]) -> Vec<String> { parts.iter().map(|p| format!(\"{} ({})\", p.name, p.weakness)).filter(|l| !l.starts_with(\"chest\") && !l.starts_with(\"head\")).collect() }\n",
+                    golem_main1!()
+                ),
+            ],
+        ),
+        (
+            "golem_sum",
+            vec![
+                // Sums every part, armour and all.
+                concat!(
+                    golem_items!(),
+                    "fn core_damage(parts: &[Part]) -> u32 { let total: u32 = parts.iter().map(|p| p.weakness).sum(); total * 2 }\n",
+                    golem_main2!()
+                ),
+                // Forgets to double.
+                concat!(
+                    golem_items!(),
+                    "fn core_damage(parts: &[Part]) -> u32 { let total: u32 = parts.iter().filter(|p| !p.armoured).map(|p| p.weakness).sum(); total }\n",
+                    golem_main2!()
+                ),
+                // Counts the weak points instead of adding their weakness.
+                concat!(
+                    golem_items!(),
+                    "fn core_damage(parts: &[Part]) -> u32 { let total = parts.iter().filter(|p| !p.armoured).count() as u32; total * 2 }\n",
+                    golem_main2!()
+                ),
+            ],
+        ),
+        (
+            "golem_core",
+            vec![
+                // No filter: armour takes the blow too.
+                concat!(
+                    golem_items!(),
+                    "fn total_damage(parts: &[Part], blow: u32) -> u32 { parts.iter().map(|p| blow * p.weakness).sum() }\n",
+                    golem_main3!()
+                ),
+                // Adds the blow instead of multiplying.
+                concat!(
+                    golem_items!(),
+                    "fn total_damage(parts: &[Part], blow: u32) -> u32 { parts.iter().filter(|p| !p.armoured).map(|p| blow + p.weakness).sum() }\n",
+                    golem_main3!()
+                ),
+                // `take_while` stops at the first armoured part, like the
+                // starter's `break`.
+                concat!(
+                    golem_items!(),
+                    "fn total_damage(parts: &[Part], blow: u32) -> u32 { parts.iter().take_while(|p| !p.armoured).map(|p| blow * p.weakness).sum() }\n",
+                    golem_main3!()
+                ),
+            ],
+        ),
+        // The Dockmaster's trial, The Tide Hydra.
+        (
+            "hydra_senders",
+            vec![
+                // A new channel per head, keeping only the last receiver.
+                concat!(
+                    hydra_fight!(),
+                    "fn hunt(heads: &[(&'static str, u32)]) -> Vec<String> { let mut last = Vec::new(); for &(head, hp) in heads { let (tx, rx) = mpsc::channel(); fight(head, hp, tx); last = rx.iter().collect(); } last }\n",
+                    hydra_main!()
+                ),
+                // Collects only the first report.
+                concat!(
+                    hydra_fight!(),
+                    "fn hunt(heads: &[(&'static str, u32)]) -> Vec<String> { let (tx, rx) = mpsc::channel(); for &(head, hp) in heads { fight(head, hp, tx.clone()); } drop(tx); rx.iter().take(1).collect() }\n",
+                    hydra_main!()
+                ),
+                // Skips the first report.
+                concat!(
+                    hydra_fight!(),
+                    "fn hunt(heads: &[(&'static str, u32)]) -> Vec<String> { let (tx, rx) = mpsc::channel(); for &(head, hp) in heads { fight(head, hp, tx.clone()); } drop(tx); rx.iter().skip(1).collect() }\n",
+                    hydra_main!()
+                ),
+            ],
+        ),
+        (
+            // Compile-only on this server: each fails the static check.
+            "hydra_threads",
+            vec![
+                // A `move` closure, but called in place: no thread.
+                concat!(
+                    hydra_fight!(),
+                    "use std::thread;\nfn hunt(heads: &[(&'static str, u32)]) -> Vec<String> { let (tx, rx) = mpsc::channel(); for &(head, hp) in heads { let tx = tx.clone(); let job = move || fight(head, hp, tx); job(); } drop(tx); let _ = thread::current(); let mut reports: Vec<String> = rx.iter().collect(); reports.sort(); reports }\n",
+                    hydra_main!()
+                ),
+                // Threads, but the reports are not sorted.
+                concat!(
+                    hydra_fight!(),
+                    "use std::thread;\nfn hunt(heads: &[(&'static str, u32)]) -> Vec<String> { let (tx, rx) = mpsc::channel(); for &(head, hp) in heads { let tx = tx.clone(); thread::spawn(move || fight(head, hp, tx)); } drop(tx); rx.iter().collect() }\n",
+                    hydra_main!()
+                ),
+                // Stage 1's answer again: no thread, no `move`.
+                concat!(
+                    hydra_fight!(),
+                    "fn hunt(heads: &[(&'static str, u32)]) -> Vec<String> { let (tx, rx) = mpsc::channel(); for &(head, hp) in heads { fight(head, hp, tx.clone()); } drop(tx); let mut reports: Vec<String> = rx.iter().collect(); reports.sort(); reports }\n",
+                    hydra_main!()
+                ),
+            ],
+        ),
+        (
+            "hydra_body",
+            vec![
+                // Counts each `Down` as a hit too.
+                concat!(
+                    hydra_body_items!(),
+                    "fn await_heads(rx: &Receiver<Report>, heads: usize) -> u32 { let mut hits = 0; let mut down = 0; while down < heads { match rx.recv() { Ok(Report::Hit) => hits += 1, Ok(Report::Down) => { hits += 1; down += 1 } Err(_) => break } } hits }\n"
+                ),
+                // Stops one head early.
+                concat!(
+                    hydra_body_items!(),
+                    "fn await_heads(rx: &Receiver<Report>, heads: usize) -> u32 { let mut hits = 0; let mut down = 0; while down + 1 < heads { match rx.recv() { Ok(Report::Hit) => hits += 1, Ok(Report::Down) => down += 1, Err(_) => break } } hits }\n"
+                ),
+                // Returns the heads that fell, not the hits.
+                concat!(
+                    hydra_body_items!(),
+                    "fn await_heads(rx: &Receiver<Report>, heads: usize) -> u32 { let mut down = 0; while down < heads { match rx.recv() { Ok(Report::Hit) => {} Ok(Report::Down) => down += 1, Err(_) => break } } down as u32 }\n"
+                ),
+            ],
+        ),
+        // The Vaultwright's trial, The Memory Warden.
+        (
+            "warden_box",
+            vec![
+                // Only the first entry counts.
+                concat!(
+                    ledger_items!(),
+                    "fn total(ledger: &Ledger) -> u32 { match ledger { Ledger::Entry(amount, _) => *amount, Ledger::Closed => 0 } }\n"
+                ),
+                // Counts the entries instead of adding them.
+                concat!(
+                    ledger_items!(),
+                    "fn total(ledger: &Ledger) -> u32 { match ledger { Ledger::Entry(_, rest) => 1 + total(rest), Ledger::Closed => 0 } }\n"
+                ),
+                // A closed ledger owes one.
+                concat!(
+                    ledger_items!(),
+                    "fn total(ledger: &Ledger) -> u32 { match ledger { Ledger::Entry(amount, rest) => amount + total(rest), Ledger::Closed => 1 } }\n"
+                ),
+            ],
+        ),
+        (
+            "warden_shared",
+            vec![
+                // Replaces the vault's coins instead of adding.
+                concat!(
+                    vault_debtor!(),
+                    "fn pay(debtor: &Debtor, coins: u32) { *debtor.vault.borrow_mut() = coins; }\n",
+                    vault_main!()
+                ),
+                // Adds to a copy: the vault never changes.
+                concat!(
+                    vault_debtor!(),
+                    "fn pay(debtor: &Debtor, coins: u32) { let mut copy = *debtor.vault.borrow(); copy += coins; let _ = copy; }\n",
+                    vault_main!()
+                ),
+                // Right `pay`, but each debtor gets a vault of their own.
+                concat!(
+                    vault_debtor!(),
+                    "fn pay(debtor: &Debtor, coins: u32) { *debtor.vault.borrow_mut() += coins; }\n",
+                    "fn main() { let vault = Rc::new(RefCell::new(0)); let miller = Debtor { name: \"miller\", vault: Rc::new(RefCell::new(0)) }; let smith = Debtor { name: \"smith\", vault: Rc::clone(&vault) }; pay(&miller, 5); pay(&smith, 7); println!(\"{} and {} paid\", miller.name, smith.name); println!(\"vault holds {}\", vault.borrow()); println!(\"handles: {}\", Rc::strong_count(&vault)); }\n"
+                ),
+            ],
+        ),
+        (
+            "warden_weak",
+            vec![
+                // Follows one link and stops.
+                concat!(
+                    ring_items!(),
+                    "fn circle(start: &Rc<Debtor>) -> Vec<&'static str> { let mut names = vec![start.name]; if let Some(d) = start.owes.borrow().upgrade() { if !Rc::ptr_eq(&d, start) { names.push(d.name); } } names }\n"
+                ),
+                // Names the start again when the ring closes.
+                concat!(
+                    ring_items!(),
+                    "fn circle(start: &Rc<Debtor>) -> Vec<&'static str> { let mut names = vec![start.name]; let mut at = Rc::clone(start); loop { let next = at.owes.borrow().upgrade(); match next { Some(d) => { names.push(d.name); if Rc::ptr_eq(&d, start) { return names; } at = d; } None => return names } } }\n"
+                ),
+                // Leaves the start out.
+                concat!(
+                    ring_items!(),
+                    "fn circle(start: &Rc<Debtor>) -> Vec<&'static str> { let mut names = Vec::new(); let mut at = Rc::clone(start); loop { let next = at.owes.borrow().upgrade(); match next { Some(d) if !Rc::ptr_eq(&d, start) => { names.push(d.name); at = d; } _ => return names } } }\n"
                 ),
             ],
         ),
@@ -841,6 +1116,17 @@ fn literal_prints() -> HashMap<&'static str, &'static str> {
                 "fn quest(map: &str, key: &str) -> Result<Reward, QuestError> { read_map(map).map_err(QuestError::from).and_then(|leagues| open_vault(key).map_err(QuestError::from).and_then(|gold| pay_guide(gold, leagues).map_err(QuestError::from))).map(|left| Reward { gold: left }) }\n"
             ),
         ),
+        // Not a literal print either: the Golem's last stage needs a
+        // `.fold(`/`.sum`, and this correct recursion (no loop, no `mut`)
+        // has neither, so only the `uses` token rejects it.
+        (
+            "golem_core",
+            concat!(
+                golem_items!(),
+                "fn total_damage(parts: &[Part], blow: u32) -> u32 { match parts.split_first() { Some((p, rest)) => (if p.armoured { 0 } else { blow * p.weakness }) + total_damage(rest, blow), None => 0 } }\n",
+                golem_main3!()
+            ),
+        ),
     ])
 }
 
@@ -848,35 +1134,67 @@ fn literal_prints() -> HashMap<&'static str, &'static str> {
 /// ([`expectations::MissionCheck::forbids`]). Each must be
 /// `StaticCheckFailed`. Exactly the missions with `forbids` have entries.
 fn forbidden_variants() -> HashMap<&'static str, Vec<&'static str>> {
-    HashMap::from([(
-        "wager_quest",
-        vec![
-            // The nested `match` pyramid the Tavernkeeper grades against.
-            concat!(
-                quest_items!(),
-                "fn quest(map: &str, key: &str) -> Result<Reward, QuestError> { match read_map(map) { Ok(leagues) => match open_vault(key) { Ok(gold) => match pay_guide(gold, leagues) { Ok(left) => Ok(Reward { gold: left }), Err(e) => Err(e.into()) }, Err(e) => Err(e.into()) }, Err(e) => Err(e.into()) } }\n"
-            ),
-            // A guarded `.unwrap()`: never panics here, still ruled out.
-            concat!(
-                quest_items!(),
-                "fn quest(map: &str, key: &str) -> Result<Reward, QuestError> { if let Err(e) = read_map(map) { return Err(e.into()); } let leagues = read_map(map).unwrap(); let gold = open_vault(key)?; let left = pay_guide(gold, leagues)?; Ok(Reward { gold: left }) }\n"
-            ),
-            // `.expect(..)` on a step already known to be Ok.
-            concat!(
-                quest_items!(),
-                "fn quest(map: &str, key: &str) -> Result<Reward, QuestError> { let leagues = read_map(map)?; let gold = open_vault(key)?; let left = pay_guide(gold, leagues)?; let _ = read_map(map).expect(\"read twice\"); Ok(Reward { gold: left }) }\n"
-            ),
-            // A `panic!` on a branch that never runs.
-            concat!(
-                quest_items!(),
-                "fn quest(map: &str, key: &str) -> Result<Reward, QuestError> { let leagues = read_map(map)?; let gold = open_vault(key)?; let left = pay_guide(gold, leagues)?; if left > 1000 { panic!(\"too rich\"); } Ok(Reward { gold: left }) }\n"
-            ),
-        ],
-    )])
+    HashMap::from([
+        (
+            "wager_quest",
+            vec![
+                // The nested `match` pyramid the Tavernkeeper grades against.
+                concat!(
+                    quest_items!(),
+                    "fn quest(map: &str, key: &str) -> Result<Reward, QuestError> { match read_map(map) { Ok(leagues) => match open_vault(key) { Ok(gold) => match pay_guide(gold, leagues) { Ok(left) => Ok(Reward { gold: left }), Err(e) => Err(e.into()) }, Err(e) => Err(e.into()) }, Err(e) => Err(e.into()) } }\n"
+                ),
+                // A guarded `.unwrap()`: never panics here, still ruled out.
+                concat!(
+                    quest_items!(),
+                    "fn quest(map: &str, key: &str) -> Result<Reward, QuestError> { if let Err(e) = read_map(map) { return Err(e.into()); } let leagues = read_map(map).unwrap(); let gold = open_vault(key)?; let left = pay_guide(gold, leagues)?; Ok(Reward { gold: left }) }\n"
+                ),
+                // `.expect(..)` on a step already known to be Ok.
+                concat!(
+                    quest_items!(),
+                    "fn quest(map: &str, key: &str) -> Result<Reward, QuestError> { let leagues = read_map(map)?; let gold = open_vault(key)?; let left = pay_guide(gold, leagues)?; let _ = read_map(map).expect(\"read twice\"); Ok(Reward { gold: left }) }\n"
+                ),
+                // A `panic!` on a branch that never runs.
+                concat!(
+                    quest_items!(),
+                    "fn quest(map: &str, key: &str) -> Result<Reward, QuestError> { let leagues = read_map(map)?; let gold = open_vault(key)?; let left = pay_guide(gold, leagues)?; if left > 1000 { panic!(\"too rich\"); } Ok(Reward { gold: left }) }\n"
+                ),
+            ],
+        ),
+        (
+            "golem_core",
+            vec![
+                // A `for` loop gathers the hits; `.sum()` adds them.
+                concat!(
+                    golem_items!(),
+                    "fn total_damage(parts: &[Part], blow: u32) -> u32 { let mut hits = Vec::new(); for p in parts { if !p.armoured { hits.push(blow * p.weakness); } } hits.iter().sum() }\n",
+                    golem_main3!()
+                ),
+                // The same with `while` and an index.
+                concat!(
+                    golem_items!(),
+                    "fn total_damage(parts: &[Part], blow: u32) -> u32 { let mut i = 0; let mut hits = Vec::new(); while i < parts.len() { if !parts[i].armoured { hits.push(blow * parts[i].weakness); } i += 1; } hits.iter().sum() }\n",
+                    golem_main3!()
+                ),
+                // The same with `loop` and `break`.
+                concat!(
+                    golem_items!(),
+                    "fn total_damage(parts: &[Part], blow: u32) -> u32 { let mut it = parts.iter(); let mut hits = Vec::new(); loop { match it.next() { Some(p) if !p.armoured => hits.push(blow * p.weakness), Some(_) => {} None => break } } hits.iter().sum() }\n",
+                    golem_main3!()
+                ),
+                // A chain whose fold mutates its accumulator: `mut`, nothing else.
+                concat!(
+                    golem_items!(),
+                    "fn total_damage(parts: &[Part], blow: u32) -> u32 { parts.iter().filter(|p| !p.armoured).map(|p| blow * p.weakness).fold(0, |mut t, h| { t += h; t }) }\n",
+                    golem_main3!()
+                ),
+            ],
+        ),
+    ])
 }
 
 /// Realistic correct solutions that differ from the canonical one. Each
-/// must pass (`Passed`). The game's `tests/contract.rs` `CORRECT` corpus
+/// must pass (`Passed`; `CompiledNotChecked` for a compile-only mission,
+/// which is never run). The game's `tests/contract.rs` `CORRECT` corpus
 /// holds the same programs, so they are proven against both graders.
 fn alternatives() -> HashMap<&'static str, Vec<&'static str>> {
     HashMap::from([
@@ -912,8 +1230,72 @@ fn alternatives() -> HashMap<&'static str, Vec<&'static str>> {
         ("wager_stake", vec![WAGER_STAKE_ALT]),
         ("wager_from", vec![WAGER_FROM_ALT]),
         ("wager_quest", vec![WAGER_QUEST_ALT]),
+        // The Act 6-8 trials, the same way. `hydra_threads` is compile-only
+        // here, so its alternatives must be `CompiledNotChecked`.
+        ("golem_parts", vec![GOLEM_PARTS_ALT]),
+        (
+            "golem_sum",
+            vec![GOLEM_SUM_TURBOFISH_ALT, GOLEM_SUM_FOLD_ALT],
+        ),
+        ("golem_core", vec![GOLEM_CORE_SUM_ALT, GOLEM_CORE_FOLD_ALT]),
+        (
+            "hydra_senders",
+            vec![HYDRA_SENDERS_CLONE_ALT, HYDRA_SENDERS_BORROW_ALT],
+        ),
+        (
+            "hydra_threads",
+            vec![HYDRA_THREADS_JOIN_ALT, HYDRA_THREADS_BLOCK_ALT],
+        ),
+        (
+            "hydra_body",
+            vec![HYDRA_BODY_FOR_ALT, HYDRA_BODY_LET_ELSE_ALT],
+        ),
+        (
+            "warden_box",
+            vec![WARDEN_BOX_WHILE_ALT, WARDEN_BOX_IF_LET_ALT],
+        ),
+        ("warden_shared", vec![WARDEN_SHARED_ALT]),
+        (
+            "warden_weak",
+            vec![WARDEN_WEAK_NAMES_ALT, WARDEN_WEAK_WHILE_ALT],
+        ),
     ])
 }
+
+// Alternatives for the Act 6-8 trials, written the way a player might.
+// `tests/contract.rs` holds the same programs.
+
+const GOLEM_PARTS_ALT: &str = "struct Part {\n    name: &'static str,\n    armoured: bool,\n    weakness: u32,\n}\nfn golem() -> Vec<Part> {\n    vec![\n        Part { name: \"arm\", armoured: false, weakness: 3 },\n        Part { name: \"chest\", armoured: true, weakness: 8 },\n        Part { name: \"knee\", armoured: false, weakness: 4 },\n        Part { name: \"head\", armoured: true, weakness: 5 },\n        Part { name: \"eye\", armoured: false, weakness: 6 },\n    ]\n}\nfn weak_points(parts: &[Part]) -> Vec<String> {\n    parts\n        .iter()\n        .filter(|part| part.armoured == false)\n        .map(|part| format!(\"{} ({})\", part.name, part.weakness))\n        .collect::<Vec<_>>()\n}\nfn main() {\n    let parts = golem();\n    let weak = weak_points(&parts);\n    println!(\"weak points: {weak:?}\");\n}\n";
+
+const GOLEM_SUM_TURBOFISH_ALT: &str = "struct Part {\n    name: &'static str,\n    armoured: bool,\n    weakness: u32,\n}\nfn golem() -> Vec<Part> {\n    vec![\n        Part { name: \"arm\", armoured: false, weakness: 3 },\n        Part { name: \"chest\", armoured: true, weakness: 8 },\n        Part { name: \"knee\", armoured: false, weakness: 4 },\n        Part { name: \"head\", armoured: true, weakness: 5 },\n        Part { name: \"eye\", armoured: false, weakness: 6 },\n    ]\n}\nfn core_damage(parts: &[Part]) -> u32 {\n    parts.iter().filter(|p| !p.armoured).map(|p| p.weakness).sum::<u32>() * 2\n}\nfn main() {\n    let parts = golem();\n    let names: Vec<&str> = parts.iter().map(|p| p.name).collect();\n    println!(\"golem: {}\", names.join(\" \"));\n    println!(\"core damage: {}\", core_damage(&parts));\n}\n";
+
+const GOLEM_SUM_FOLD_ALT: &str = "struct Part {\n    name: &'static str,\n    armoured: bool,\n    weakness: u32,\n}\nfn golem() -> Vec<Part> {\n    vec![\n        Part { name: \"arm\", armoured: false, weakness: 3 },\n        Part { name: \"chest\", armoured: true, weakness: 8 },\n        Part { name: \"knee\", armoured: false, weakness: 4 },\n        Part { name: \"head\", armoured: true, weakness: 5 },\n        Part { name: \"eye\", armoured: false, weakness: 6 },\n    ]\n}\nfn core_damage(parts: &[Part]) -> u32 {\n    let total = parts\n        .iter()\n        .filter(|p| !p.armoured)\n        .fold(0, |acc, p| acc + p.weakness);\n    total * 2\n}\nfn main() {\n    let parts = golem();\n    let names: Vec<&str> = parts.iter().map(|p| p.name).collect();\n    println!(\"golem: {}\", names.join(\" \"));\n    println!(\"core damage: {}\", core_damage(&parts));\n}\n";
+
+const GOLEM_CORE_SUM_ALT: &str = "struct Part {\n    name: &'static str,\n    armoured: bool,\n    weakness: u32,\n}\nfn golem() -> Vec<Part> {\n    vec![\n        Part { name: \"arm\", armoured: false, weakness: 3 },\n        Part { name: \"chest\", armoured: true, weakness: 8 },\n        Part { name: \"knee\", armoured: false, weakness: 4 },\n        Part { name: \"head\", armoured: true, weakness: 5 },\n        Part { name: \"eye\", armoured: false, weakness: 6 },\n    ]\n}\nfn total_damage(parts: &[Part], blow: u32) -> u32 {\n    parts.iter().filter(|p| !p.armoured).map(|p| p.weakness).sum::<u32>() * blow\n}\nfn main() {\n    let parts = golem();\n    let names: Vec<&str> = parts.iter().map(|p| p.name).collect();\n    println!(\"golem: {}\", names.join(\" \"));\n    println!(\"blow 1: {}\", total_damage(&parts, 1));\n    println!(\"blow 3: {}\", total_damage(&parts, 3));\n}\n";
+
+const GOLEM_CORE_FOLD_ALT: &str = "struct Part {\n    name: &'static str,\n    armoured: bool,\n    weakness: u32,\n}\nfn golem() -> Vec<Part> {\n    vec![\n        Part { name: \"arm\", armoured: false, weakness: 3 },\n        Part { name: \"chest\", armoured: true, weakness: 8 },\n        Part { name: \"knee\", armoured: false, weakness: 4 },\n        Part { name: \"head\", armoured: true, weakness: 5 },\n        Part { name: \"eye\", armoured: false, weakness: 6 },\n    ]\n}\nfn total_damage(parts: &[Part], blow: u32) -> u32 {\n    parts\n        .iter()\n        .filter(|p| !p.armoured)\n        .fold(0, |acc, p| acc + blow * p.weakness)\n}\nfn main() {\n    let parts = golem();\n    let names = parts.iter().map(|p| p.name).collect::<Vec<_>>();\n    println!(\"golem: {}\", names.join(\" \"));\n    println!(\"blow 1: {}\", total_damage(&parts, 1));\n    println!(\"blow 3: {}\", total_damage(&parts, 3));\n}\n";
+
+const HYDRA_SENDERS_CLONE_ALT: &str = "use std::sync::mpsc::{self, Sender};\nfn fight(head: &'static str, hp: u32, tx: Sender<String>) {\n    let blows = hp.div_ceil(4);\n    tx.send(format!(\"{head} down after {blows} blows\")).unwrap();\n}\nfn hunt(heads: &[(&'static str, u32)]) -> Vec<String> {\n    let (tx, rx) = mpsc::channel();\n    for (head, hp) in heads.iter().copied() {\n        let own = Sender::clone(&tx);\n        fight(head, hp, own);\n    }\n    drop(tx);\n    let mut reports = Vec::new();\n    while let Ok(r) = rx.recv() {\n        reports.push(r);\n    }\n    reports\n}\nfn main() {\n    let reports = hunt(&[(\"fang\", 9), (\"venom\", 6), (\"brine\", 13)]);\n    for report in &reports {\n        println!(\"{report}\");\n    }\n    println!(\"{} heads down\", reports.len());\n}\n";
+
+const HYDRA_SENDERS_BORROW_ALT: &str = "use std::sync::mpsc::{self, Sender};\nfn fight(head: &'static str, hp: u32, tx: &Sender<String>) {\n    let blows = hp.div_ceil(4);\n    tx.send(format!(\"{head} down after {blows} blows\")).unwrap();\n}\nfn hunt(heads: &[(&'static str, u32)]) -> Vec<String> {\n    let (tx, rx) = mpsc::channel();\n    for &(head, hp) in heads {\n        fight(head, hp, &tx);\n    }\n    drop(tx);\n    rx.iter().collect()\n}\nfn main() {\n    let reports = hunt(&[(\"fang\", 9), (\"venom\", 6), (\"brine\", 13)]);\n    for report in &reports {\n        println!(\"{report}\");\n    }\n    println!(\"{} heads down\", reports.len());\n}\n";
+
+const HYDRA_THREADS_JOIN_ALT: &str = "use std::sync::mpsc::{self, Sender};\nuse std::thread;\nfn fight(head: &'static str, hp: u32, tx: Sender<String>) {\n    let blows = hp.div_ceil(4);\n    tx.send(format!(\"{head} down after {blows} blows\")).unwrap();\n}\nfn hunt(heads: &[(&'static str, u32)]) -> Vec<String> {\n    let (tx, rx) = mpsc::channel();\n    let mut workers = Vec::new();\n    for &(head, hp) in heads {\n        let tx = tx.clone();\n        workers.push(thread::spawn(move || fight(head, hp, tx)));\n    }\n    for w in workers {\n        w.join().expect(\"a head's thread panicked\");\n    }\n    drop(tx);\n    let mut reports: Vec<String> = rx.iter().collect();\n    reports.sort_unstable();\n    reports\n}\nfn main() {\n    let reports = hunt(&[(\"fang\", 9), (\"venom\", 6), (\"brine\", 13)]);\n    for report in &reports {\n        println!(\"{report}\");\n    }\n    println!(\"{} heads down\", reports.len());\n}\n";
+
+const HYDRA_THREADS_BLOCK_ALT: &str = "use std::sync::mpsc::{self, Sender};\nuse std::thread;\nfn fight(head: &'static str, hp: u32, tx: Sender<String>) {\n    let blows = hp.div_ceil(4);\n    tx.send(format!(\"{head} down after {blows} blows\")).unwrap();\n}\nfn hunt(heads: &[(&'static str, u32)]) -> Vec<String> {\n    let (tx, rx) = mpsc::channel();\n    for &(head, hp) in heads {\n        let tx = tx.clone();\n        thread::spawn(move || {\n            fight(head, hp, tx);\n        });\n    }\n    drop(tx);\n    let mut reports = rx.into_iter().collect::<Vec<_>>();\n    reports.sort();\n    reports\n}\nfn main() {\n    let reports = hunt(&[(\"fang\", 9), (\"venom\", 6), (\"brine\", 13)]);\n    for report in &reports {\n        println!(\"{report}\");\n    }\n    println!(\"{} heads down\", reports.len());\n}\n";
+
+const HYDRA_BODY_FOR_ALT: &str = "use std::sync::mpsc::{self, Receiver};\nuse std::thread;\nenum Report {\n    Hit,\n    Down,\n}\nfn await_heads(rx: &Receiver<Report>, heads: usize) -> u32 {\n    let (mut hits, mut down) = (0u32, 0usize);\n    for report in rx.iter() {\n        match report {\n            Report::Hit => hits += 1,\n            Report::Down => {\n                down += 1;\n                if down == heads {\n                    break;\n                }\n            }\n        }\n    }\n    hits\n}\nfn main() {\n    let blows = [3, 2, 4];\n    let (tx, rx) = mpsc::channel();\n    for n in blows {\n        let tx = tx.clone();\n        thread::spawn(move || {\n            for _ in 0..n {\n                tx.send(Report::Hit).unwrap();\n            }\n            tx.send(Report::Down).unwrap();\n        });\n    }\n    drop(tx);\n    let hits = await_heads(&rx, blows.len());\n    println!(\"{} heads down after {hits} hits\", blows.len());\n    println!(\"strike the body\");\n}\n";
+
+const HYDRA_BODY_LET_ELSE_ALT: &str = "use std::sync::mpsc::{self, Receiver};\nuse std::thread;\nenum Report {\n    Hit,\n    Down,\n}\nfn await_heads(rx: &Receiver<Report>, heads: usize) -> u32 {\n    let mut hits = 0;\n    let mut down = 0;\n    while down < heads {\n        let Ok(report) = rx.recv() else { break };\n        if let Report::Hit = report {\n            hits += 1;\n        } else {\n            down += 1;\n        }\n    }\n    hits\n}\nfn main() {\n    let blows = [3, 2, 4];\n    let (tx, rx) = mpsc::channel();\n    for n in blows {\n        let tx = tx.clone();\n        thread::spawn(move || {\n            for _ in 0..n {\n                tx.send(Report::Hit).unwrap();\n            }\n            tx.send(Report::Down).unwrap();\n        });\n    }\n    drop(tx);\n    let hits = await_heads(&rx, blows.len());\n    println!(\"{} heads down after {hits} hits\", blows.len());\n    println!(\"strike the body\");\n}\n";
+
+const WARDEN_BOX_WHILE_ALT: &str = "#[derive(Debug)]\nenum Ledger {\n    Entry(u32, Box<Ledger>),\n    Closed,\n}\nfn entry(amount: u32, rest: Ledger) -> Ledger {\n    Ledger::Entry(amount, Box::new(rest))\n}\nfn total(ledger: &Ledger) -> u32 {\n    let mut sum = 0;\n    let mut at = ledger;\n    while let Ledger::Entry(amount, rest) = at {\n        sum += amount;\n        at = rest.as_ref();\n    }\n    sum\n}\nfn main() {\n    let ledger = entry(5, entry(7, entry(3, Ledger::Closed)));\n    println!(\"{:?}\", ledger);\n    println!(\"owed: {}\", total(&ledger));\n}\n";
+
+const WARDEN_BOX_IF_LET_ALT: &str = "#[derive(Debug)]\nenum Ledger {\n    Entry(u32, Box<Ledger>),\n    Closed,\n}\nfn entry(amount: u32, rest: Ledger) -> Ledger {\n    Ledger::Entry(amount, Box::new(rest))\n}\nfn total(ledger: &Ledger) -> u32 {\n    if let Ledger::Entry(owed, rest) = ledger {\n        owed + total(rest)\n    } else {\n        0\n    }\n}\nfn main() {\n    let ledger = entry(5, entry(7, entry(3, Ledger::Closed)));\n    println!(\"{ledger:?}\");\n    println!(\"owed: {}\", total(&ledger));\n}\n";
+
+const WARDEN_SHARED_ALT: &str = "use std::cell::RefCell;\nuse std::rc::Rc;\nstruct Debtor {\n    name: &'static str,\n    vault: Rc<RefCell<u32>>,\n}\nfn pay(debtor: &Debtor, coins: u32) {\n    let mut held = debtor.vault.borrow_mut();\n    *held += coins;\n}\nfn main() {\n    let vault: Rc<RefCell<u32>> = Rc::new(RefCell::new(0));\n    let miller = Debtor { name: \"miller\", vault: vault.clone() };\n    let smith = Debtor { name: \"smith\", vault: vault.clone() };\n    pay(&miller, 5);\n    pay(&smith, 7);\n    println!(\"{} and {} paid\", miller.name, smith.name);\n    println!(\"vault holds {}\", *vault.borrow());\n    println!(\"handles: {}\", Rc::strong_count(&vault));\n}\n";
+
+const WARDEN_WEAK_NAMES_ALT: &str = "use std::cell::RefCell;\nuse std::rc::{Rc, Weak};\nstruct Debtor {\n    name: &'static str,\n    owes: RefCell<Weak<Debtor>>,\n}\nfn debtor(name: &'static str) -> Rc<Debtor> {\n    Rc::new(Debtor { name, owes: RefCell::new(Weak::new()) })\n}\nfn circle(start: &Rc<Debtor>) -> Vec<&'static str> {\n    let mut names = vec![start.name];\n    let mut next = start.owes.borrow().upgrade();\n    while let Some(d) = next {\n        if d.name == start.name {\n            break;\n        }\n        names.push(d.name);\n        next = d.owes.borrow().upgrade();\n    }\n    names\n}\nfn main() {\n    let warden = debtor(\"warden\");\n    let you = debtor(\"you\");\n    let teller = debtor(\"teller\");\n    *warden.owes.borrow_mut() = Rc::downgrade(&you);\n    *you.owes.borrow_mut() = Rc::downgrade(&teller);\n    *teller.owes.borrow_mut() = Rc::downgrade(&warden);\n    println!(\"circle: {:?}\", circle(&warden));\n    println!(\n        \"warden: strong {}, weak {}\",\n        Rc::strong_count(&warden),\n        Rc::weak_count(&warden)\n    );\n    let probe = Rc::downgrade(&warden);\n    drop(warden);\n    drop(you);\n    drop(teller);\n    println!(\"after the ledger closes: {:?}\", probe.upgrade().map(|d| d.name));\n}\n";
+
+const WARDEN_WEAK_WHILE_ALT: &str = "use std::cell::RefCell;\nuse std::rc::{Rc, Weak};\nstruct Debtor {\n    name: &'static str,\n    owes: RefCell<Weak<Debtor>>,\n}\nfn debtor(name: &'static str) -> Rc<Debtor> {\n    let owes = RefCell::new(Weak::new());\n    Rc::new(Debtor { name, owes })\n}\nfn circle(start: &Rc<Debtor>) -> Vec<&'static str> {\n    let mut names = Vec::new();\n    let mut at = Some(Rc::clone(start));\n    while let Some(d) = at {\n        names.push(d.name);\n        at = d.owes.borrow().upgrade().filter(|n| !Rc::ptr_eq(n, start));\n    }\n    names\n}\nfn main() {\n    let warden = debtor(\"warden\");\n    let you = debtor(\"you\");\n    let teller = debtor(\"teller\");\n    *warden.owes.borrow_mut() = Rc::downgrade(&you);\n    *you.owes.borrow_mut() = Rc::downgrade(&teller);\n    *teller.owes.borrow_mut() = Rc::downgrade(&warden);\n    println!(\"circle: {:?}\", circle(&warden));\n    let strong = Rc::strong_count(&warden);\n    let weak = Rc::weak_count(&warden);\n    println!(\"warden: strong {strong}, weak {weak}\");\n    let probe = Rc::downgrade(&warden);\n    drop((warden, you, teller));\n    let left = probe.upgrade().map(|d| d.name);\n    println!(\"after the ledger closes: {left:?}\");\n}\n";
 
 // Alternatives for the Act 3-5 trials, written the way a player might.
 
@@ -999,8 +1381,8 @@ fn run_parallel(cases: Vec<Case>) -> Vec<(Case, expectations::GradedRun)> {
 fn game_sources_parse() {
     let sols = canonical_solutions();
     let starters = starters();
-    assert_eq!(sols.len(), 69, "solutions parsed");
-    assert_eq!(starters.len(), 69, "starters parsed");
+    assert_eq!(sols.len(), 78, "solutions parsed");
+    assert_eq!(starters.len(), 78, "starters parsed");
     for m in expectations::all() {
         assert!(
             sols.contains_key(m.id),
@@ -1038,7 +1420,9 @@ fn game_sources_parse() {
         );
     }
     // The boss-trial stages: at least three wrong variants (forbidden-token
-    // variants count) and at least one alternative each.
+    // variants count) and at least one alternative each. `hydra_threads`
+    // is the one compile-only stage (its wrong variants fail the static
+    // check, its alternatives are `CompiledNotChecked`).
     let alts = alternatives();
     for t in [
         "bridge_toll",
@@ -1053,6 +1437,15 @@ fn game_sources_parse() {
         "wager_stake",
         "wager_from",
         "wager_quest",
+        "golem_parts",
+        "golem_sum",
+        "golem_core",
+        "hydra_senders",
+        "hydra_threads",
+        "hydra_body",
+        "warden_box",
+        "warden_shared",
+        "warden_weak",
     ] {
         let n = wrong.get(t).map_or(0, Vec::len) + forbidden.get(t).map_or(0, Vec::len);
         assert!(n >= 3, "{t}: {n} wrong variants");
@@ -1190,6 +1583,11 @@ fn every_expectation_discriminates() {
             (Role::Starter, Check::RunOnly { .. }) => true,
             (Role::Starter | Role::Wrong(_), _) => !g.ok(),
             (Role::Literal | Role::Forbidden(_), _) => g.state == GradeState::StaticCheckFailed,
+            // A compile-only mission's correct program builds and meets the
+            // static checks; it is never run.
+            (Role::Alternative(_), Check::CompileOnly { .. }) => {
+                g.state == GradeState::CompiledNotChecked
+            }
             (Role::Alternative(_), _) => g.state == GradeState::Passed,
         };
         match case.role {

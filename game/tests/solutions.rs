@@ -55,6 +55,18 @@ const EXPECTED_SANDBOX_RUN_FAILURES: &[(&str, &str)] = &[
         "wasm32-wasip1 std has no thread support: Scope::spawn panics \
          (observed as a wasm `unreachable` trap in the sandbox)",
     ),
+    (
+        "hydra_threads",
+        "the Tide Hydra's stage 2 spawns one thread per head: thread::spawn \
+         panics on wasm32-wasip1 (the server only compiles it; its output is \
+         proven natively in tests/mission_text.rs)",
+    ),
+    (
+        "hydra_body",
+        "the Tide Hydra's stage 3 `main` spawns one thread per head: \
+         thread::spawn panics on wasm32-wasip1 (the server checks \
+         `await_heads` without running `main`)",
+    ),
 ];
 
 fn is_known_gap(id: &str) -> bool {

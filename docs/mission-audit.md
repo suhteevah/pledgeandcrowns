@@ -3,9 +3,10 @@
 Covers all 57 missions in `MissionRegistry::default()` (Acts 1-8) as of
 `finish/integration` 83f5daf. Every claim here comes from a command that
 was run, listed under **Evidence**. Since then the Borrow Checker's trial
-added three missions (60 missions, 57 NPCs), and the Act 3-5 boss trials
-nine more (69 missions, 57 NPCs); see **The Borrow Checker's trial** and
-**The Act 3-5 trials** at the end.
+added three missions (60 missions, 57 NPCs), the Act 3-5 boss trials
+nine more (69 missions, 57 NPCs), and the Act 6-8 boss trials nine more
+(78 missions, 57 NPCs); see **The Borrow Checker's trial**, **The Act 3-5
+trials** and **The Act 6-8 trials** at the end.
 
 Player-facing solutions live in
 `game/src/plugins/editor/solutions/data.rs`. The "Show solution" button
@@ -383,15 +384,19 @@ Task let the player choose the values, and 3 are compile-only. The 13
 Tasks now name the values and show every expected line in a code span,
 so one behaviour is specified.
 
-**Totals now: 66 of 69 behaviour-checked (29 output checks, 37 harness
-checks), 3 static-only, 0 unverified** (the Borrow Checker's trial,
-2026-11-14, added three harness-checked stages and the Act 3-5 trials,
-2026-11-15, nine more; see the sections below). Before the trials: 54 of
-57 (25 harness checks). The 3 static-only missions cannot
-run on `wasm32-wasip1`: `thread_spawn` and `thread_scope` trap (asserted by
+**Totals now: 74 of 78 behaviour-checked (29 output checks, 45 harness
+checks), 4 static-only, 0 unverified** (the Borrow Checker's trial,
+2026-11-14, added three harness-checked stages, the Act 3-5 trials,
+2026-11-15, nine more, and the Act 6-8 trials, 2026-11-15, eight harness
+checks and one static-only stage; see the sections below). Before the
+trials: 54 of 57 (25 harness checks). The 4 static-only missions cannot
+run on `wasm32-wasip1`: `thread_spawn`, `thread_scope` and
+`hydra_threads` trap (asserted by
 `solutions_build_and_run_in_the_real_server_sandbox`), and `async_fn` has
-no executor. `expectations::tests::classification_totals` pins these
-numbers.
+no executor. `hydra_body` is counted as behaviour-checked: its harness
+checks `await_heads` and does not run its threaded `main` (which also
+traps in the sandbox). `expectations::tests::classification_totals` pins
+these numbers.
 
 **The three Act 7 "concurrency" missions do not need threads.** Classified
 by running them, not by name: the canonical solutions of `arc_mutex`,
@@ -554,4 +559,65 @@ Evidence (rustc 1.99.0, edition 2024):
   wrong variants fail; `wager_quest` also has four forbidden-token variants
   and one `?`-less combinator chain (all `StaticCheckFailed`). 66
   behaviour-checked missions proven.
+- Grader snapshots: 51 new cases per grader, 0 changed rows.
+
+## The Act 6-8 trials (2026-11-15)
+
+Nine more stage missions on the same mechanism, owned by each act's lead
+NPC, who keeps the act's first mission as a prologue:
+
+- **The Forge-Golem** (the Keymaster, after `closure_move`): `golem_parts`
+  (filter before map; mapping first leaves only labels, E0609),
+  `golem_sum` (`sum` needs a type, E0283), `golem_core` (total damage as
+  one filter, map, fold chain; no `for`, `while`, `loop` or `mut`).
+- **The Tide Hydra** (the Dockmaster, after `async_fn`): `hydra_senders`
+  (a sender clone per head, E0382; one thread), `hydra_threads` (one
+  `move` thread per head, E0373; sorted reports), `hydra_body` (count
+  every `Down` before striking).
+- **The Memory Warden** (the Vaultwright, after `weak_ref`, ending the
+  registry): `warden_box` (a recursive ledger needs a `Box`, E0072),
+  `warden_shared` (a shared vault as `Rc<RefCell<u32>>`, E0594),
+  `warden_weak` (a ring of debts linked with `Weak` and walked once).
+
+78 missions, 57 NPCs. The demo is unchanged: 24 free missions, ending on
+`bridge_lantern`; 54 after.
+
+Server checks: eight harness checks pin each signature and call the
+player's code on inputs it never saw (parts, heads, ledgers, debtors and
+rings of the checker's own). `golem_core` sends an armoured part first,
+needs a `.fold(`/`.sum` and forbids `for`, `while`, `loop` and `mut`
+(`MissionCheck::forbids`). `wasm32-wasip1` has no threads, so:
+
+- `hydra_threads` is `CompileOnly` (static checks for `spawn(`, a `move`
+  closure and `.sort`), the fourth static-only mission;
+- `hydra_body` is a harness check with `run_main: false`: the checker
+  fills a channel from one thread, drops the sender and calls
+  `await_heads`; the player's threaded `main` is never run;
+- both programs' outputs are pinned in `mission_text.rs` and proven
+  natively, rerun 20 times after the first run (sorted reports; a head's
+  hits reach the channel before its `Down`).
+
+Evidence (rustc 1.99.0, edition 2024):
+
+- `mission_text -- --include-ignored`: 11/11. 16 stage starters (and
+  `lifetimes`) fail with exactly their one error (six new: E0609, E0283, E0382, E0373, E0072,
+  E0594); `golem_core`, `hydra_body` and `warden_weak` starters compile
+  and misbehave. `trial_claims_are_what_rustc_emits`: 28 claims across
+  the seven trials (9 new, including rustc's `tx.clone()` and `move`
+  help, the E0072 help text, two "also compiles" claims and the
+  RefCell already borrowed panic). Hint claims also run the `golem_core`
+  and `warden_weak` starters, a `take_while` variant, a
+  `recv_timeout` Timeout/Disconnected program and two edited starters.
+- `solutions -- --include-ignored`: 78/78 native `-D warnings`, 78/78
+  `wasm32-wasip1`, 74/78 run cleanly in the sandbox (`thread_spawn`,
+  `thread_scope`, `hydra_threads` and `hydra_body` trap, as listed).
+- `contract -- --include-ignored`: grader corpus 78/78 (a, b, c, f),
+  71/71 correct (16 new trial alternatives), 24/24 wrong (3 new trial
+  shortcuts), 149/149 corpus programs compile.
+- `expectations_proof -- --include-ignored`: 341 cases, 0 unexpected;
+  for each new stage the canonical and every alternative pass (the two
+  `hydra_threads` alternatives as `CompiledNotChecked`), the starter and
+  at least three wrong variants fail; `golem_core` also has four
+  forbidden-token variants and one fold-less recursion (all
+  `StaticCheckFailed`). 74 behaviour-checked missions proven.
 - Grader snapshots: 51 new cases per grader, 0 changed rows.

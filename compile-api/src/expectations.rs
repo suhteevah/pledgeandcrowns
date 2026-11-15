@@ -226,9 +226,10 @@ pub struct MissionCheck {
     /// literals removed), checked after a passing behaviour check, like
     /// [`MissionCheck::uses`]. For a mission whose text rules a construct
     /// out (the Barkeep's last trial stage: no `match`, `unwrap`, `expect`
-    /// or `panic!`). A token that starts or ends with an identifier
-    /// character only matches as a whole word (`match` does not match
-    /// `matches!`). Empty for almost every mission.
+    /// or `panic!`; the Keymaster's: no `for`, `while`, `loop` or `mut`).
+    /// A token that starts or ends with an identifier character only
+    /// matches as a whole word (`match` does not match `matches!`). Empty
+    /// for almost every mission.
     pub forbids: &'static [&'static str],
 }
 
@@ -1275,7 +1276,7 @@ error: could not compile `player_submission` (bin \"player_submission\") due to 
                 }
             }
         }
-        assert_eq!(all().len(), 69, "one entry per registry mission");
+        assert_eq!(all().len(), 78, "one entry per registry mission");
     }
 
     #[test]
@@ -1309,6 +1310,24 @@ error: could not compile `player_submission` (bin \"player_submission\") due to 
         assert_eq!(quest.uses, &[&["?"][..]]);
     }
 
+    /// The Keymaster's last stage rules out loops and `mut` as whole
+    /// words only: `format!`, `mutate` and `for_each` are other words.
+    #[test]
+    fn golem_core_forbids_loops_and_mut_as_whole_words() {
+        let core = lookup("golem_core").expect("golem_core check");
+        assert_eq!(core.forbids, &["for", "while", "loop", "mut"]);
+        assert_eq!(core.uses, &[&[".fold(", ".sum"][..]]);
+        let found = |src: &str| forbidden_token(src, core.forbids);
+        assert_eq!(found("fn f() { for p in ps {} }"), Some("for"));
+        assert_eq!(found("fn f() { while go() {} }"), Some("while"));
+        assert_eq!(found("fn f() { loop { break; } }"), Some("loop"));
+        assert_eq!(found("fn f() { let mut t = 0; }"), Some("mut"));
+        assert_eq!(
+            found("fn f() { let s = format!(\"for\"); mutate(); v.iter().for_each(g); }"),
+            None
+        );
+    }
+
     /// The headline numbers in `docs/mission-audit.md`. Change both together.
     #[test]
     fn classification_totals() {
@@ -1318,7 +1337,7 @@ error: could not compile `player_submission` (bin \"player_submission\") due to 
         let unverified = count(|c| matches!(c, Check::RunOnly { .. }));
         assert_eq!(
             (behaviour, static_only, unverified),
-            (66, 3, 0),
+            (74, 4, 0),
             "behaviour-checked / static-only / run-only"
         );
     }

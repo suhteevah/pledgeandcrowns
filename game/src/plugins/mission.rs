@@ -1626,6 +1626,97 @@ seals the charge into himself; it travels where he goes.",
                 available: true,
                 starter_code: "fn main() {\n    let name = String::from(\"Garin\");\n    // capture `name` BY VALUE into a closure (so the closure owns it), then call it\n    let _ = &name;\n}\n",
             },
+            // ── Act 6 boss: the Keymaster's trial, The Forge-Golem ─────
+            // Three stages owned by the Keymaster (`trial::TRIALS`), after
+            // his prologue `hashmap_basic`: filter before map, tell `sum`
+            // its type, then one chain (filter, map, fold) with no loop
+            // and no `mut`. Every compiler error he names is compiled in
+            // `tests/mission_text.rs` (hard rule 3).
+            Mission {
+                id: "golem_parts",
+                npc_name: "The Keymaster",
+                prompt: "Filter out the armoured parts before you map them to labels.",
+                tutorial: "## Concept\n\
+The Forge-Golem is built of parts, and only the unarmoured ones can be \
+hurt. An iterator chain sends each item through its steps in order: \
+`.filter(..)` keeps or drops an item, `.map(..)` turns it into something \
+else. So order matters. Once `.map` has turned a `Part` into a `String` \
+label, the steps after it see only the label, and \
+`.filter(|p| !p.armoured)` stops with E0609, \"no field `armoured` on \
+type `&String`\".\n\n\
+## Syntax\n\
+```\nlet ores = vec![(\"iron\", true), (\"slag\", false)];\nlet good: Vec<String> = ores\n    .iter()\n    .filter(|o| o.1)\n    .map(|o| o.0.to_uppercase())\n    .collect();\n```\n\
+`.filter` sees the whole item; `.map` decides what comes out.\n\n\
+## Task\n\
+Swap the two steps in `weak_points` so the chain filters first and maps \
+after. Your program should print \
+`weak points: [\"arm (3)\", \"knee (4)\", \"eye (6)\"]`.\n\n\
+## Hint\n\
+The grader needs `.filter(..)` followed by `.map(..)`. Dropping the \
+chest and the head by name would print the same line here, but the \
+checker sends `weak_points` parts it has never seen.",
+                prereq: None,
+                available: true,
+                starter_code: "struct Part {\n    name: &'static str,\n    armoured: bool,\n    weakness: u32,\n}\n\nfn golem() -> Vec<Part> {\n    vec![\n        Part { name: \"arm\", armoured: false, weakness: 3 },\n        Part { name: \"chest\", armoured: true, weakness: 8 },\n        Part { name: \"knee\", armoured: false, weakness: 4 },\n        Part { name: \"head\", armoured: true, weakness: 5 },\n        Part { name: \"eye\", armoured: false, weakness: 6 },\n    ]\n}\n\n// The parts a blow can reach, with how weak each one is.\nfn weak_points(parts: &[Part]) -> Vec<String> {\n    // this won't compile yet: after `map`, only the labels are left\n    parts\n        .iter()\n        .map(|p| format!(\"{} ({})\", p.name, p.weakness))\n        .filter(|p| !p.armoured)\n        .collect()\n}\n\nfn main() {\n    let parts = golem();\n    println!(\"weak points: {:?}\", weak_points(&parts));\n}\n",
+            },
+            Mission {
+                id: "golem_sum",
+                npc_name: "The Keymaster",
+                prompt: "Tell `sum` what kind of number to make, then double the total.",
+                tutorial: "## Concept\n\
+The Golem's core takes the weakness of every weak point, added up and \
+doubled. `.sum()` adds up what an iterator yields, and it can make many \
+kinds of number: `u32`, `u64`, `f64` and more. It learns which one from \
+where the result goes. In `let total = ...sum();` nothing names a type, \
+and `total * 2` does not settle it either, so the compiler stops with \
+E0283, \"type annotations needed\". Name the type and the chain \
+compiles. A `.fold(0, |acc, w| acc + w)` in place of `.sum()` also \
+compiles.\n\n\
+## Syntax\n\
+```\nlet weights = vec![2u32, 5, 9];\nlet heavy: u32 = weights.iter().filter(|w| **w > 3).sum();\nlet light = weights.iter().filter(|w| **w <= 3).sum::<u32>();\n```\n\
+A type on the variable, or a turbofish `::<u32>` on `sum`.\n\n\
+## Task\n\
+The starter fails with E0283. Give `total` a type so `core_damage` \
+returns the weak points' total, doubled. Your program should print \
+`golem: arm chest knee head eye`, then `core damage: 26`.\n\n\
+## Hint\n\
+The grader needs `let total: u32 = ...` (or `.sum::<u32>()`, or a \
+`.fold(`). rustc's help writes `let total: u32 = parts`. Leave the \
+filter in: summing every part, armour and all, prints \
+`core damage: 52`.",
+                prereq: None,
+                available: true,
+                starter_code: "struct Part {\n    name: &'static str,\n    armoured: bool,\n    weakness: u32,\n}\n\nfn golem() -> Vec<Part> {\n    vec![\n        Part { name: \"arm\", armoured: false, weakness: 3 },\n        Part { name: \"chest\", armoured: true, weakness: 8 },\n        Part { name: \"knee\", armoured: false, weakness: 4 },\n        Part { name: \"head\", armoured: true, weakness: 5 },\n        Part { name: \"eye\", armoured: false, weakness: 6 },\n    ]\n}\n\n// The core takes every weak point's weakness, added up and doubled.\nfn core_damage(parts: &[Part]) -> u32 {\n    // this won't compile yet: `sum` can make many kinds of number\n    let total = parts\n        .iter()\n        .filter(|p| !p.armoured)\n        .map(|p| p.weakness)\n        .sum();\n    total * 2\n}\n\nfn main() {\n    let parts = golem();\n    let names: Vec<&str> = parts.iter().map(|p| p.name).collect();\n    println!(\"golem: {}\", names.join(\" \"));\n    println!(\"core damage: {}\", core_damage(&parts));\n}\n",
+            },
+            Mission {
+                id: "golem_core",
+                npc_name: "The Keymaster",
+                prompt: "One chain: filter, map, fold. No loop and no `mut`.",
+                tutorial: "## Concept\n\
+The final blow. Every unarmoured part takes the blow times its weakness, \
+and the Golem falls to the total. The starter's loop `break`s at the \
+first armoured part, so the chest stops the count before the knee and \
+the eye are reached. In a chain, `.filter` skips an item and goes on to \
+the next; `.map` turns each weak part into its hit; \
+`.fold(0, |total, hit| total + hit)` gathers the hits into one number. \
+No loop and no mutable total: each step hands its result to the next.\n\n\
+## Syntax\n\
+```\nlet ores = vec![4u32, 0, 7, 0, 2];\nlet worth = ores\n    .iter()\n    .filter(|o| **o > 0)\n    .map(|o| o * 10)\n    .fold(0, |sum, v| sum + v);\n```\n\
+`.sum()` is a ready-made fold for adding.\n\n\
+## Task\n\
+Rewrite `total_damage` as one chain over `parts`. Use no `for`, \
+`while`, `loop` or `mut` anywhere in the program: the Keymaster checks. \
+Your program should print `golem: arm chest knee head eye`, \
+`blow 1: 13`, then `blow 3: 39`.\n\n\
+## Hint\n\
+The grader needs `.filter(` and a `.fold(` (or `.sum`). As written, the \
+starter prints `blow 1: 3` and `blow 3: 9`: only the arm is counted. \
+`.take_while(..)` in place of `.filter(..)` makes the same mistake, \
+because it stops at the first armoured part.",
+                prereq: None,
+                available: true,
+                starter_code: "struct Part {\n    name: &'static str,\n    armoured: bool,\n    weakness: u32,\n}\n\nfn golem() -> Vec<Part> {\n    vec![\n        Part { name: \"arm\", armoured: false, weakness: 3 },\n        Part { name: \"chest\", armoured: true, weakness: 8 },\n        Part { name: \"knee\", armoured: false, weakness: 4 },\n        Part { name: \"head\", armoured: true, weakness: 5 },\n        Part { name: \"eye\", armoured: false, weakness: 6 },\n    ]\n}\n\n// Every weak point takes the blow, multiplied by its weakness.\nfn total_damage(parts: &[Part], blow: u32) -> u32 {\n    // this runs, but the first armoured part ends the count\n    let mut total = 0;\n    for p in parts {\n        if p.armoured {\n            break;\n        }\n        total += blow * p.weakness;\n    }\n    total\n}\n\nfn main() {\n    let parts = golem();\n    let names: Vec<&str> = parts.iter().map(|p| p.name).collect();\n    println!(\"golem: {}\", names.join(\" \"));\n    println!(\"blow 1: {}\", total_damage(&parts, 1));\n    println!(\"blow 3: {}\", total_damage(&parts, 3));\n}\n",
+            },
             // ── Act 7: The Concurrent Coast ───────────────────────────
             // Threads, Arc<Mutex>, channels, atomics, scoped threads, async.
             // See design/01-curriculum.md §Act 7 and
@@ -1786,6 +1877,105 @@ almanac and waits for a tide that hasn't come in yet.",
                 prereq: None,
                 available: true,
                 starter_code: "fn main() {\n    // define an async function that doubles a number, and another that calls it and waits on the result\n    // (it won't actually run here without a runtime like tokio - that's expected)\n    let _ = ();\n}\n",
+            },
+            // ── Act 7 boss: the Dockmaster's trial, The Tide Hydra ─────
+            // Three stages owned by the Dockmaster (`trial::TRIALS`), after
+            // his prologue `thread_spawn`: one sender clone per head (one
+            // thread), one `move` thread per head (sorted reports), then
+            // wait for every head's `Down` before striking. The server has
+            // no threads: stage 2 is compile-only there, stage 3 checks
+            // `await_heads` with checker-sent reports and does not run
+            // `main`. Every compiler error he names is compiled in
+            // `tests/mission_text.rs` (hard rule 3).
+            Mission {
+                id: "hydra_senders",
+                npc_name: "The Dockmaster",
+                prompt: "Give each head its own clone of the sender.",
+                tutorial: "## Concept\n\
+The Tide Hydra's heads report on one channel. `fight` takes its \
+`Sender` by value, so the loop's first call moves the only sender away \
+and the next call has none: E0382, \"use of moved value: `tx`\", with \
+\"value moved here, in previous iteration of loop\". `tx.clone()` makes \
+another sender into the same channel, so every head can hold its own. \
+While any sender is alive, the receiver waits for more: \
+`rx.recv_timeout(..)` on an empty channel gives `Err(Timeout)`. Once \
+the last sender is dropped it gives `Err(Disconnected)`, and \
+`rx.iter()` ends. That is why `hunt` drops `tx` before it collects.\n\n\
+## Syntax\n\
+```\nlet (tx, rx) = mpsc::channel();\nlet tx2 = tx.clone();\ntx.send(1).unwrap();\ntx2.send(2).unwrap();\ndrop(tx);\ndrop(tx2);\nlet all: Vec<i32> = rx.iter().collect();\n```\n\
+Both senders feed the one receiver.\n\n\
+## Task\n\
+Pass each head a clone of the sender, `tx.clone()`. Your program should \
+print `fang down after 3 blows`, `venom down after 2 blows`, \
+`brine down after 4 blows`, then `3 heads down`.\n\n\
+## Hint\n\
+The grader needs a `.clone()` of the sender; rustc's help suggests \
+`fight(head, hp, tx.clone());`. Lending `&tx` to a `fight` that takes \
+`&Sender<String>` also compiles here, but in the next stage each head \
+fights on its own thread and needs a sender of its own.",
+                prereq: None,
+                available: true,
+                starter_code: "use std::sync::mpsc::{self, Sender};\n\n// A head fights until it falls, then reports on the sender it holds.\nfn fight(head: &'static str, hp: u32, tx: Sender<String>) {\n    let blows = hp.div_ceil(4);\n    let report = format!(\"{head} down after {blows} blows\");\n    tx.send(report).expect(\"receiver dropped\");\n}\n\nfn hunt(heads: &[(&'static str, u32)]) -> Vec<String> {\n    let (tx, rx) = mpsc::channel();\n    for &(head, hp) in heads {\n        // this won't compile yet: the first head takes the only sender\n        fight(head, hp, tx);\n    }\n    // No sender left: the receiver knows no more reports are coming.\n    drop(tx);\n    rx.iter().collect()\n}\n\nfn main() {\n    let reports = hunt(&[(\"fang\", 9), (\"venom\", 6), (\"brine\", 13)]);\n    for report in &reports {\n        println!(\"{report}\");\n    }\n    println!(\"{} heads down\", reports.len());\n}\n",
+            },
+            Mission {
+                id: "hydra_threads",
+                npc_name: "The Dockmaster",
+                prompt: "Spawn one thread per head, and `move` what it needs into it.",
+                tutorial: "## Concept\n\
+Now each head is fought on its own thread. A thread started with \
+`thread::spawn` can outlive the function that started it, so its \
+closure must own everything it uses. Without `move`, the closure only \
+borrows `hp`, and the compiler stops with E0373, \"closure may outlive \
+the current function, but it borrows `hp`, which is owned by the current \
+function\". With `move`, the closure takes `head`, `hp` and its own \
+sender along. Nothing in Rust promises which thread reports first, so \
+`hunt` sorts the reports before it returns them.\n\n\
+## Syntax\n\
+```\nuse std::thread;\nlet crew = vec![\"rope\", \"sail\"];\nlet handle = thread::spawn(move || crew.len());\nprintln!(\"{}\", handle.join().unwrap());\n```\n\
+`move` hands `crew` to the thread for good.\n\n\
+## Task\n\
+Add `move` to the closure passed to `thread::spawn`. Your program should \
+print `brine down after 4 blows`, `fang down after 3 blows`, \
+`venom down after 2 blows`, then `3 heads down`. (This server has no \
+threads: it builds your code and looks for `spawn(`, `move` and a \
+`.sort`, but it cannot run it.)\n\n\
+## Hint\n\
+The grader needs `spawn(move ||` and the `.sort`. rustc's help says the \
+same: use the `move` keyword. Without the sort, nothing fixes the order \
+of the lines.",
+                prereq: None,
+                available: true,
+                starter_code: "use std::sync::mpsc::{self, Sender};\nuse std::thread;\n\n// A head fights until it falls, then reports on the sender it holds.\nfn fight(head: &'static str, hp: u32, tx: Sender<String>) {\n    let blows = hp.div_ceil(4);\n    let report = format!(\"{head} down after {blows} blows\");\n    tx.send(report).expect(\"receiver dropped\");\n}\n\nfn hunt(heads: &[(&'static str, u32)]) -> Vec<String> {\n    let (tx, rx) = mpsc::channel();\n    for &(head, hp) in heads {\n        let tx = tx.clone();\n        // this won't compile yet: the thread borrows what the loop owns\n        thread::spawn(|| fight(head, hp, tx));\n    }\n    drop(tx);\n    // Threads finish in no promised order: sort what comes back.\n    let mut reports: Vec<String> = rx.iter().collect();\n    reports.sort();\n    reports\n}\n\nfn main() {\n    let reports = hunt(&[(\"fang\", 9), (\"venom\", 6), (\"brine\", 13)]);\n    for report in &reports {\n        println!(\"{report}\");\n    }\n    println!(\"{} heads down\", reports.len());\n}\n",
+            },
+            Mission {
+                id: "hydra_body",
+                npc_name: "The Dockmaster",
+                prompt: "Wait until every head reports `Down`, then strike the body.",
+                tutorial: "## Concept\n\
+Each head's thread sends a `Report::Hit` for every blow it takes, then a \
+`Report::Down` when it falls. The body may be struck only once every \
+head is down. The starter's `await_heads` leaves its loop at the first \
+`Down`, so it can strike while other heads still fight. Count the \
+`Down` reports and return once the count reaches `heads`. A channel \
+keeps each sender's messages in the order they were sent, so a head's \
+hits arrive before its `Down`: once every head is down, every hit has \
+been counted.\n\n\
+## Syntax\n\
+```\nlet mut done = 0;\nwhile done < 2 {\n    match rx.recv() {\n        Ok(Signal::Done) => done += 1,\n        Ok(Signal::Work) => {}\n        Err(_) => break,\n    }\n}\n```\n\
+`rx.recv()` hands over the next message, or an `Err`.\n\n\
+## Task\n\
+Fix `await_heads`: count the `Down` reports and return the hits once \
+`heads` heads are down. Your program should print \
+`3 heads down after 9 hits`, then `strike the body`. (This server has \
+no threads, so it checks `await_heads` alone: the checker sends the \
+reports itself, on one thread, and does not run your `main`.)\n\n\
+## Hint\n\
+The grader needs `await_heads` to compare its count with `heads`, for \
+example `while down < heads`. The checker rejects a `Down` counted as a \
+hit, and a count that stops one head early.",
+                prereq: None,
+                available: true,
+                starter_code: "use std::sync::mpsc::{self, Receiver};\nuse std::thread;\n\nenum Report {\n    Hit,\n    Down,\n}\n\n// Count the hits, and return only once every head has reported down.\nfn await_heads(rx: &Receiver<Report>, heads: usize) -> u32 {\n    // this runs, but it strikes as soon as the first head falls\n    let _ = heads;\n    let mut hits = 0;\n    for report in rx.iter() {\n        match report {\n            Report::Hit => hits += 1,\n            Report::Down => break,\n        }\n    }\n    hits\n}\n\nfn main() {\n    // The blows each head takes: fang, venom, brine.\n    let blows = [3, 2, 4];\n    let (tx, rx) = mpsc::channel();\n    for n in blows {\n        let tx = tx.clone();\n        thread::spawn(move || {\n            for _ in 0..n {\n                tx.send(Report::Hit).expect(\"receiver dropped\");\n            }\n            tx.send(Report::Down).expect(\"receiver dropped\");\n        });\n    }\n    drop(tx);\n    let hits = await_heads(&rx, blows.len());\n    println!(\"{} heads down after {hits} hits\", blows.len());\n    println!(\"strike the body\");\n}\n",
             },
             // ── Act 8: The Vault of Pointers ──────────────────────────
             // Box, Rc, RefCell, Cell, Rc<RefCell>, Weak. See
@@ -1956,6 +2146,101 @@ and would keep the value alive.",
                 prereq: None,
                 available: true,
                 starter_code: "fn main() {\n    // make a non-owning handle to an Rc holding 5 (one that won't keep it alive, and might find it gone);\n    // print what accessing it gives, drop the Rc, then print it again\n    let _ = ();\n}\n",
+            },
+            // ── Act 8 boss: the Vaultwright's trial, The Memory Warden ─
+            // Three stages owned by the Vaultwright (`trial::TRIALS`),
+            // after his prologue `box_basic`, ending the registry: `Box`
+            // for a recursive enum, `Rc<RefCell<_>>` for a shared vault,
+            // then a ring of debts linked with `Weak` and walked without
+            // leaking. Every compiler error he names is compiled in
+            // `tests/mission_text.rs` (hard rule 3).
+            Mission {
+                id: "warden_box",
+                npc_name: "The Vaultwright",
+                prompt: "Put the rest of the ledger in a `Box`, so `Ledger` has a size.",
+                tutorial: "## Concept\n\
+The Memory Warden keeps his ledger as a chain: each entry holds an \
+amount and the rest of the ledger. Written as `Entry(u32, Ledger)`, a \
+`Ledger` holds a whole `Ledger`, which holds another, without end, so \
+the compiler cannot give it a size: E0072, \"recursive type `Ledger` has \
+infinite size\". A `Box<Ledger>` is a pointer of fixed size to a \
+`Ledger` on the heap, so `Entry(u32, Box<Ledger>)` has a size. rustc's \
+help says so too: \"insert some indirection (e.g., a `Box`, `Rc`, or \
+`&`) to break the cycle\".\n\n\
+## Syntax\n\
+```\nenum Chain {\n    Link(u32, Box<Chain>),\n    End,\n}\nlet c = Chain::Link(1, Box::new(Chain::End));\n```\n\
+`{:?}` prints through a `Box` to the value inside.\n\n\
+## Task\n\
+Change `Entry` to hold a `Box<Ledger>`, and wrap `rest` in `Box::new` \
+in `entry`. `total` works unchanged. Your program should print \
+`Entry(5, Entry(7, Entry(3, Closed)))`, then `owed: 15`.\n\n\
+## Hint\n\
+The grader needs `Box<Ledger>` and `Box::new(`. `total(rest)` still \
+compiles with the `Box`: a `&Box<Ledger>` is accepted where a \
+`&Ledger` is expected.",
+                prereq: None,
+                available: true,
+                starter_code: "// A ledger is either closed, or one entry and the rest of the ledger.\n#[derive(Debug)]\nenum Ledger {\n    // this won't compile yet: a Ledger can't hold a whole Ledger inline\n    Entry(u32, Ledger),\n    Closed,\n}\n\nfn entry(amount: u32, rest: Ledger) -> Ledger {\n    Ledger::Entry(amount, rest)\n}\n\nfn total(ledger: &Ledger) -> u32 {\n    match ledger {\n        Ledger::Entry(amount, rest) => amount + total(rest),\n        Ledger::Closed => 0,\n    }\n}\n\nfn main() {\n    let ledger = entry(5, entry(7, entry(3, Ledger::Closed)));\n    println!(\"{ledger:?}\");\n    println!(\"owed: {}\", total(&ledger));\n}\n",
+            },
+            Mission {
+                id: "warden_shared",
+                npc_name: "The Vaultwright",
+                prompt: "Share the vault as an `Rc<RefCell<u32>>`, so any debtor can pay into it.",
+                tutorial: "## Concept\n\
+Two debtors pay into one vault, and each holds a handle to it. `Rc` \
+gives that shared ownership, but only to read: \
+`*debtor.vault += coins` stops with E0594, \"cannot assign to data in an \
+`Rc`\". A `RefCell` inside the `Rc` lends its value out while the \
+program runs: `.borrow_mut()` gives one writer at a time, through any \
+handle. `Rc::strong_count` counts the handles: the vault's own and one \
+per debtor.\n\n\
+## Syntax\n\
+```\nuse std::cell::RefCell;\nuse std::rc::Rc;\nlet till = Rc::new(RefCell::new(0));\nlet clerk = Rc::clone(&till);\n*clerk.borrow_mut() += 4;\nprintln!(\"{}\", till.borrow());\n```\n\
+`till` and `clerk` open the same `RefCell`.\n\n\
+## Task\n\
+Make `vault` an `Rc<RefCell<u32>>` in `Debtor` and in `main`, and add \
+the coins with `.borrow_mut()` in `pay`. Your program should print \
+`miller and smith paid`, `vault holds 12`, then `handles: 3`.\n\n\
+## Hint\n\
+The grader needs `Rc<RefCell<u32>>` and `.borrow_mut()`. The borrow \
+rules still hold, only at run time: keep a `vault.borrow()` alive \
+across a `pay` and the program panics with RefCell already borrowed.",
+                prereq: None,
+                available: true,
+                starter_code: "use std::rc::Rc;\n\n// Every debtor holds a handle to the one vault.\nstruct Debtor {\n    name: &'static str,\n    vault: Rc<u32>,\n}\n\nfn pay(debtor: &Debtor, coins: u32) {\n    // this won't compile yet: an Rc shares its value, but only to read\n    *debtor.vault += coins;\n}\n\nfn main() {\n    let vault = Rc::new(0);\n    let miller = Debtor { name: \"miller\", vault: Rc::clone(&vault) };\n    let smith = Debtor { name: \"smith\", vault: Rc::clone(&vault) };\n    pay(&miller, 5);\n    pay(&smith, 7);\n    println!(\"{} and {} paid\", miller.name, smith.name);\n    println!(\"vault holds {vault}\");\n    println!(\"handles: {}\", Rc::strong_count(&vault));\n}\n",
+            },
+            Mission {
+                id: "warden_weak",
+                npc_name: "The Vaultwright",
+                prompt: "Link the ring of debts with `Weak`, and walk it once without a leak.",
+                tutorial: "## Concept\n\
+The Warden owes you, you owe the teller, and the teller owes the \
+Warden. With `Rc` links each debtor keeps the next alive, so the ring \
+keeps itself alive: in the starter `Rc::strong_count(&warden)` is 2, \
+and after `main` drops all three handles the probe still finds the \
+Warden. That is a leak. A `Weak` link, made with `Rc::downgrade`, does \
+not count as an owner. `.upgrade()` gives `Some` while the debtor is \
+alive and `None` once it is gone. `circle` follows the links with \
+`.upgrade()` and stops when it is back at `start` (`Rc::ptr_eq`) or \
+finds no one.\n\n\
+## Syntax\n\
+```\nuse std::cell::RefCell;\nuse std::rc::{Rc, Weak};\nstruct Node {\n    next: RefCell<Weak<Node>>,\n}\nlet a = Rc::new(Node { next: RefCell::new(Weak::new()) });\nlet b = Rc::new(Node { next: RefCell::new(Rc::downgrade(&a)) });\nlet back = b.next.borrow().upgrade();\n```\n\
+`back` is an `Option<Rc<Node>>`.\n\n\
+## Task\n\
+Change `owes` to `RefCell<Weak<Debtor>>`: start it as `Weak::new()`, \
+link with `Rc::downgrade`, and follow a link in `circle` with \
+`.upgrade()`. Your program should print \
+`circle: [\"warden\", \"you\", \"teller\"]`, \
+`warden: strong 1, weak 1`, then `after the ledger closes: None`.\n\n\
+## Hint\n\
+The grader needs `Weak<Debtor>`, `downgrade(` and `.upgrade()`. As \
+written, the starter prints `warden: strong 2, weak 0` and \
+`after the ledger closes: Some(\"warden\")`: the ring outlives every \
+handle in `main`. Keep the stop at `start`: a ring has no end of its \
+own.",
+                prereq: None,
+                available: true,
+                starter_code: "use std::cell::RefCell;\nuse std::rc::Rc;\n\nstruct Debtor {\n    name: &'static str,\n    // this runs, but a strong link keeps its creditor alive\n    owes: RefCell<Option<Rc<Debtor>>>,\n}\n\nfn debtor(name: &'static str) -> Rc<Debtor> {\n    let owes = RefCell::new(None);\n    Rc::new(Debtor { name, owes })\n}\n\n// Follow the debts from `start` until they come back round, or end.\nfn circle(start: &Rc<Debtor>) -> Vec<&'static str> {\n    let mut names = vec![start.name];\n    let mut at = Rc::clone(start);\n    loop {\n        let next = at.owes.borrow().clone();\n        match next {\n            Some(d) if !Rc::ptr_eq(&d, start) => {\n                names.push(d.name);\n                at = d;\n            }\n            _ => return names,\n        }\n    }\n}\n\nfn main() {\n    let warden = debtor(\"warden\");\n    let you = debtor(\"you\");\n    let teller = debtor(\"teller\");\n    // The Warden owes you, you owe the teller, the teller owes him.\n    *warden.owes.borrow_mut() = Some(Rc::clone(&you));\n    *you.owes.borrow_mut() = Some(Rc::clone(&teller));\n    *teller.owes.borrow_mut() = Some(Rc::clone(&warden));\n    println!(\"circle: {:?}\", circle(&warden));\n    let strong = Rc::strong_count(&warden);\n    let weak = Rc::weak_count(&warden);\n    println!(\"warden: strong {strong}, weak {weak}\");\n    let probe = Rc::downgrade(&warden);\n    drop((warden, you, teller));\n    let left = probe.upgrade().map(|d| d.name);\n    println!(\"after the ledger closes: {left:?}\");\n}\n",
             },
         ];
         // Strict-linear progression: each mission's prereq is the one

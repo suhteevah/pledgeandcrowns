@@ -807,10 +807,10 @@ fn trial_stays_locked_until_its_prereq_and_gates_act_3() {
     assert_eq!(unlocked(&p, "impl_method"), !cfg!(feature = "demo"));
 }
 
-// --- boss trials of Acts 3-5: same mechanism, prologue owners -------------
+// --- boss trials of Acts 3-8: same mechanism, prologue owners -------------
 
 /// `(speaker, roster key, mission before stage 1, stage 1, label)`.
-const ACT_3_TO_5_TRIALS: &[(&str, &str, &str, &str, &str)] = &[
+const ACT_3_TO_8_TRIALS: &[(&str, &str, &str, &str, &str)] = &[
     (
         "The Guildmaster",
         "impl_method",
@@ -832,12 +832,51 @@ const ACT_3_TO_5_TRIALS: &[(&str, &str, &str, &str, &str)] = &[
         "wager_stake",
         "Trial: The Tavernkeeper's Wager - stage 1 of 3",
     ),
+    (
+        "The Keymaster",
+        "hashmap_basic",
+        "closure_move",
+        "golem_parts",
+        "Trial: The Forge-Golem - stage 1 of 3",
+    ),
+    (
+        "The Dockmaster",
+        "thread_spawn",
+        "async_fn",
+        "hydra_senders",
+        "Trial: The Tide Hydra - stage 1 of 3",
+    ),
+    (
+        "The Vaultwright",
+        "box_basic",
+        "weak_ref",
+        "warden_box",
+        "Trial: The Memory Warden - stage 1 of 3",
+    ),
 ];
 
+/// The Memory Warden ends the registry: with everything cleared, the
+/// Vaultwright's current mission is its final stage and he is Cleared.
 #[test]
-#[cfg_attr(feature = "demo", ignore = "Acts 3-5 are not in the demo build")]
-fn act_3_to_5_owners_talk_as_cleared_villagers_until_their_trial_opens() {
-    for (speaker, npc, _, _, _) in ACT_3_TO_5_TRIALS {
+#[cfg_attr(feature = "demo", ignore = "Act 8 is not in the demo build")]
+fn vaultwright_is_cleared_on_the_last_stage_once_everything_is() {
+    let mut app = app_with_nearby("The Vaultwright", "box_basic");
+    clear_through(&mut app, "warden_weak");
+    tap(&mut app, KeyCode::KeyF);
+    assert_eq!(
+        open_dialogue(&app),
+        Some((
+            "warden_weak",
+            MissionStatus::Cleared,
+            Some("Trial: The Memory Warden - stage 3 of 3".to_string())
+        )),
+    );
+}
+
+#[test]
+#[cfg_attr(feature = "demo", ignore = "Acts 3-8 are not in the demo build")]
+fn act_3_to_8_owners_talk_as_cleared_villagers_until_their_trial_opens() {
+    for (speaker, npc, _, _, _) in ACT_3_TO_8_TRIALS {
         let mut app = app_with_nearby(speaker, npc);
         clear_through(&mut app, npc);
         tap(&mut app, KeyCode::KeyF);
@@ -850,9 +889,9 @@ fn act_3_to_5_owners_talk_as_cleared_villagers_until_their_trial_opens() {
 }
 
 #[test]
-#[cfg_attr(feature = "demo", ignore = "Acts 3-5 are not in the demo build")]
-fn act_3_to_5_trials_offer_stage_one_with_their_header() {
-    for (speaker, npc, before, stage1, label) in ACT_3_TO_5_TRIALS {
+#[cfg_attr(feature = "demo", ignore = "Acts 3-8 are not in the demo build")]
+fn act_3_to_8_trials_offer_stage_one_with_their_header() {
+    for (speaker, npc, before, stage1, label) in ACT_3_TO_8_TRIALS {
         let mut app = app_with_nearby(speaker, npc);
         clear_through(&mut app, before);
         tap(&mut app, KeyCode::KeyF);

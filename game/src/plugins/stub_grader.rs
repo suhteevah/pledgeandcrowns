@@ -1184,6 +1184,32 @@ pub static MISSION_RULES: &[MissionRule] = &[
         ],
         pass: "the Bondsmith seals the charge. \"owned, and carried where I go.\"",
     },
+    // ── Act 6 boss: the Keymaster's trial, The Forge-Golem (stages 1-3).
+    MissionRule {
+        id: "golem_parts",
+        npc: "the Keymaster turns a forge key",
+        checks: &[
+            check(&[".filter($..).map("], "filter while you still hold each whole part: `.filter(..)` before `.map(..)`"),
+        ],
+        pass: "the Keymaster hangs up the key. \"every weak point found. first stage passed.\"",
+    },
+    MissionRule {
+        id: "golem_sum",
+        npc: "the Keymaster checks the label",
+        checks: &[
+            check(&[": u32 = $.. .sum(", ".sum::<u32>(", ".fold("], "tell `sum` what to make: `let total: u32 = ...sum();`"),
+        ],
+        pass: "the Keymaster files the total. \"labelled and doubled. second stage passed.\"",
+    },
+    MissionRule {
+        id: "golem_core",
+        npc: "the Keymaster bars the forge",
+        checks: &[
+            check(&[".filter("], "skip the armour with `.filter(..)`: it passes a plate by and keeps going"),
+            check(&[".fold(", ".sum"], "gather the hits into one total with `.fold(0, ..)` or `.sum()`"),
+        ],
+        pass: "the Keymaster lowers the bar. \"one chain, every seam struck. the Golem falls.\"",
+    },
     // ── Act 7 (Concurrent Coast).
     MissionRule {
         id: "thread_spawn",
@@ -1241,6 +1267,32 @@ pub static MISSION_RULES: &[MissionRule] = &[
         ],
         pass: "the Tideforecaster lowers the glass. \"the tide will come — awaited, not forced.\"",
     },
+    // ── Act 7 boss: the Dockmaster's trial, The Tide Hydra (stages 1-3).
+    MissionRule {
+        id: "hydra_senders",
+        npc: "the Dockmaster raises a signal flag",
+        checks: &[
+            check(&[".clone()", "Sender::clone(", "&tx)"], "give each head its own sender: `fight(head, hp, tx.clone())`"),
+        ],
+        pass: "the Dockmaster reads the flags. \"every head reporting. first stage passed.\"",
+    },
+    MissionRule {
+        id: "hydra_threads",
+        npc: "the Dockmaster holds the gate",
+        checks: &[
+            check(&["spawn(move"], "send each worker off owning its load: `thread::spawn(move || ...)`"),
+            check(&[".sort", ".sort_unstable", ".sort_by", ".sort_by_key", ".sort_unstable_by", ".sort_unstable_by_key"], "nothing fixes the order the reports arrive in: sort them before you return"),
+        ],
+        pass: "the Dockmaster opens the gate. \"every worker away with its own sender. second stage passed.\"",
+    },
+    MissionRule {
+        id: "hydra_body",
+        npc: "the Dockmaster watches the water",
+        checks: &[
+            check(&["< heads", "<= heads", "== heads", ">= heads", "!= heads", "heads >", "heads ==", "heads !="], "count the heads that report `Down`, and wait until the count reaches `heads`"),
+        ],
+        pass: "the Dockmaster signals the strike. \"every head down, then the body. the Hydra sinks.\"",
+    },
     // ── Act 8 (Vault of Pointers).
     MissionRule {
         id: "box_basic",
@@ -1297,6 +1349,35 @@ pub static MISSION_RULES: &[MissionRule] = &[
             check(&[".upgrade("], "reclaim it (or not) with `.upgrade(`"),
         ],
         pass: "the Ghostkeeper tugs the tether. \"a hold that holds nothing alive.\"",
+    },
+    // ── Act 8 boss: the Vaultwright's trial, The Memory Warden (stages 1-3).
+    MissionRule {
+        id: "warden_box",
+        npc: "the Vaultwright opens the ledger",
+        checks: &[
+            check(&["Box<Ledger>"], "give the rest of the ledger a fixed size: `Entry(u32, Box<Ledger>)`"),
+            check(&["Box::new("], "put the rest on the heap where you build an entry: `Box::new(rest)`"),
+        ],
+        pass: "the Vaultwright seals the box. \"a ledger of any length, in a size the compiler knows. first phase passed.\"",
+    },
+    MissionRule {
+        id: "warden_shared",
+        npc: "the Vaultwright weighs the vault",
+        checks: &[
+            check(&["Rc<RefCell<u32>>"], "share a vault you can write to: `vault: Rc<RefCell<u32>>`"),
+            check(&[".borrow_mut()"], "borrow the vault to add the coins: `*debtor.vault.borrow_mut() += coins`"),
+        ],
+        pass: "the Vaultwright counts the coins. \"one vault, many hands. second phase passed.\"",
+    },
+    MissionRule {
+        id: "warden_weak",
+        npc: "the Vaultwright traces the ring",
+        checks: &[
+            check(&["Weak<Debtor>"], "make each debt a link that owns nothing: `owes: RefCell<Weak<Debtor>>`"),
+            check(&["downgrade("], "link the debtors with `Rc::downgrade(&creditor)`"),
+            check(&[".upgrade()"], "follow a link with `.upgrade()`: `Some` while the debtor lives"),
+        ],
+        pass: "the Vaultwright closes the vault. \"walked once, nothing left behind. the Warden is unmade.\"",
     },
 ];
 // END MISSION TABLE

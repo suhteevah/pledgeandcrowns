@@ -69,6 +69,22 @@ runs `scripts/ci.ps1` on the merged result as the sign-off gate.
   stand on the plaza edge wall in the offer scenes (NPC placement, older
   issue); `pitch/deck.template.html` still says 57 missions.
 
+- **Wave 10** (this branch): trials for Acts 6-8, the last before the
+  endgame: the Forge-Golem (the Keymaster: filter before map, E0609; `sum`
+  needs a type, E0283; one chain with no `for`/`while`/`loop`/`mut`,
+  enforced by `forbids`), the Tide Hydra (the Dockmaster: a sender clone
+  per head, E0382; `move` into one thread per head, E0373; wait for every
+  `Down`), the Memory Warden (the Vaultwright: `Box` for a recursive
+  ledger, E0072; `Rc<RefCell<u32>>`, E0594; a ring of debts linked with
+  `Weak`). **78 missions, 57 NPCs; demo unchanged (24 free), 54 after.**
+  The server has no threads: `hydra_threads` is static-only (4 static-only
+  now) and `hydra_body` is checked by feeding `await_heads` from one thread
+  without running `main`; both thread programs are proven natively, 21 runs
+  each. No mechanism change, no art.
+  Open: no voice-editor pass on the three owners' new lines; still no
+  combat layer (Hydra regrowth, Cliphy, the Warden's fourth phase are
+  design-doc only); `pitch/` counts untouched (owner's).
+
 ### Art awaiting Matt's approval (design canvas, none wired)
 30 villagers of Acts 3-8 redrawn on their kits (`ref-31..65 *-v2.jsx`), player
 walk frames (`ref-77`), Ferris walk frames (`ref-78`), and the editor code-page
@@ -83,17 +99,19 @@ animation system (facing, 4-frame cycle, flip for right, NPC idle bob).
    self-test and `deploy/verify-sandbox.sh` on that exact host.
 2. **Nobody has played the build.** UI is checked only through capture scenes.
    No human has confirmed audio is audible (wav never decoded; now ogg).
-3. **3 missions are static-only on the server** (two thread missions,
-   `async_fn`); the other 66 are behaviour-checked.
+3. **4 missions are static-only on the server** (`thread_spawn`,
+   `thread_scope`, `hydra_threads`, `async_fn`); the other 74 are
+   behaviour-checked (`hydra_body` without running its threaded `main`).
 4. **Art still owed by the designer:** pixel font, district landmarks, Act 9/10
    casts (Librarian, Compiler), Borrow Checker intro/defeat frames, title
    redraw. Held until Matt reacts to the 30 redraws.
 5. **Acts 9-10 are specified, not implemented.** The trial mechanism now
    exists; still blocked on art and on the Act 9 harness design for `unsafe`
    (`compile-api/HARNESS-NOTES.md`).
-6. **Bosses of Acts 6-8** (Forge-Golem, Tide Hydra, Memory Warden) have no
-   trials yet; each is a `TRIALS` entry
-   plus stage missions following the Bridge as the pattern.
+6. **Bosses of Acts 2-8 all have trials** (wave 10 closed Acts 6-8). Left
+   for the endgame: the Act 9-10 trials (item 5); the design doc's combat
+   flavour (Hydra regrowth, Cliphy the imp, a fourth Warden phase) is not
+   built, by decision D1.
 7. Owner actions: TESS + RF check; domain; Android keystore;
    export the old claude.ai/design artboard before 2026-12-14; install
    `wasm-opt`, `butler`, Miri; decide the `repository` URL.

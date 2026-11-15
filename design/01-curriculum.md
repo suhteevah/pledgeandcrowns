@@ -195,6 +195,8 @@ When the player finally passes, the Checker bows: "You may cross. The Old Tongue
 
 **Code status (2026-06-18).** The Act 6 *concepts* the prelude skipped ship as 6 missions (the prelude already had `vec_iter`/`iter_map_collect`/`closure_basic`): `hashmap_basic` (The Keymaster), `iter_filter` (The Sifter), `iter_fold` (The Smelter), `iter_enumerate` (The Tallywright), `iter_zip` (The Riveter), `closure_move` (The Bondsmith). Design: `docs/superpowers/specs/2026-06-18-act6-iterator-forge-missions-design.md`.
 
+**Code status (2026-11-15).** The Forge-Golem ships as a trial owned by the Keymaster, after `closure_move`; `hashmap_basic` stays his prologue. Stages over a `Vec<Part>` (`name`, `armoured`, `weakness`): `golem_parts` (`.map` before `.filter` leaves only labels, so `.filter(|p| !p.armoured)` is E0609; filter first), `golem_sum` (`let total = ...sum();` is E0283, "type annotations needed"; name the type or use `fold`), `golem_core` (`total_damage(parts, blow)` as one chain, filter, map, fold; the starter's loop `break`s at the first armoured part). The server rejects `for`, `while`, `loop` and `mut` in the last stage (`MissionCheck::forbids`) and needs a `.fold(`/`.sum`. Cliphy the imp and the "no intermediate variables" rule are not implemented. Every compiler error he names is compiled in `game/tests/mission_text.rs`.
+
 ---
 
 # Act 7 — The Concurrent Coast
@@ -219,6 +221,8 @@ When the player finally passes, the Checker bows: "You may cross. The Old Tongue
 
 **Code status (2026-06-18).** The Act 7 *concepts* ship as 6 missions: `thread_spawn` (The Dockmaster), `arc_mutex` (The Lighthouse Keeper), `mpsc_channel` (The Signaler), `atomic` (The Tidewatch), `thread_scope` (The Harbormaster), `async_fn` (The Tideforecaster). The std-concurrency five compile + grade fully on the host sandbox; **`async_fn` is compile-only** — `async fn`/`.await` type-check and are token-graded, but actually running them needs a runtime (`tokio`) the dependency-free sandbox can't load (the tutorial says so). Design: `docs/superpowers/specs/2026-06-18-act7-concurrent-coast-missions-design.md`.
 
+**Code status (2026-11-15).** The Tide Hydra ships as a trial owned by the Dockmaster, after `async_fn`; `thread_spawn` stays his prologue. Stages: `hydra_senders` (each head reports on its own `tx.clone()`; passing the one `Sender` into a loop is E0382; one thread, so the server calls `hunt` on heads of its own), `hydra_threads` (one `thread::spawn` per head; without `move` the closure borrows `hp`, E0373; the reports are sorted because nothing fixes the order threads finish in), `hydra_body` (count `Report::Down` until every head is down before striking; the starter strikes at the first `Down`). The server has no threads (wasm32-wasip1): `hydra_threads` is compile-only there (static checks for `spawn(`, a `move` closure and a sort), and `hydra_body` is checked by feeding `await_heads` reports from one thread without running the player's `main`. Both thread programs' outputs are proven natively (`game/tests/mission_text.rs`, run 21 times each). Regrowing heads are not implemented (no real-time layer). Every compiler error he names is compiled in `game/tests/mission_text.rs`.
+
 ---
 
 # Act 8 — The Vault of Pointers
@@ -242,6 +246,8 @@ When the player finally passes, the Checker bows: "You may cross. The Old Tongue
 **Estimated playtime:** 4 hours.
 
 **Code status (2026-06-19).** The Act 8 *concepts* ship as 6 missions (`Arc` was already covered by Act 7's `arc_mutex`): `box_basic` (The Vaultwright), `rc_basic` (The Sharekeeper), `refcell` (The Warden), `cell` (The Swapwarden), `rc_refcell` (The Strongbox), `weak_ref` (The Ghostkeeper). Design: `docs/superpowers/specs/2026-06-19-act8-vault-pointers-missions-design.md`.
+
+**Code status (2026-11-15).** The Memory Warden ships as a trial owned by the Vaultwright, after `weak_ref`, and ends the registry; `box_basic` stays his prologue. Three phases, not four: `warden_box` (a ledger `enum` holding itself inline is E0072; `Entry(u32, Box<Ledger>)`), `warden_shared` (two debtors share a vault; assigning through an `Rc` is E0594; `Rc<RefCell<u32>>`, and the hint's held `borrow()` panics with "RefCell already borrowed"), `warden_weak` (the circular debt of this section, the Warden owes you, you owe the teller, the teller owes the Warden: with `Rc` links `strong_count` is 2 and the ring outlives `main`'s handles; with `Weak` links it is 1 and the probe finds nothing; `circle` walks the ring with `upgrade()` and stops at the start). All three are behaviour-checked by the server. Every compiler error he names is compiled in `game/tests/mission_text.rs`.
 
 ---
 

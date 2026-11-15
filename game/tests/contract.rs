@@ -588,6 +588,38 @@ fn main() {
     greet();
 }"#
         }
+        // ── Act 6 boss: the Forge-Golem.
+        "golem_parts" => {
+            r#"struct Part { name: &'static str, armoured: bool, weakness: u32 }
+fn weak_points(parts: &[Part]) -> Vec<String> {
+    parts.iter().filter(|p| !p.armoured).map(|p| format!("{} ({})", p.name, p.weakness)).collect()
+}
+fn main() {
+    let parts = vec![Part { name: "arm", armoured: false, weakness: 3 }];
+    println!("{:?}", weak_points(&parts));
+}"#
+        }
+        "golem_sum" => {
+            r#"struct Part { armoured: bool, weakness: u32 }
+fn core_damage(parts: &[Part]) -> u32 {
+    let total: u32 = parts.iter().filter(|p| !p.armoured).map(|p| p.weakness).sum();
+    total * 2
+}
+fn main() {
+    let parts = vec![Part { armoured: false, weakness: 3 }];
+    println!("{}", core_damage(&parts));
+}"#
+        }
+        "golem_core" => {
+            r#"struct Part { armoured: bool, weakness: u32 }
+fn total_damage(parts: &[Part], blow: u32) -> u32 {
+    parts.iter().filter(|p| !p.armoured).map(|p| blow * p.weakness).fold(0, |total, hit| total + hit)
+}
+fn main() {
+    let parts = vec![Part { armoured: false, weakness: 3 }];
+    println!("{}", total_damage(&parts, 2));
+}"#
+        }
         // ── Act 7: Concurrent Coast.
         "thread_spawn" => {
             r#"use std::thread;
@@ -645,6 +677,57 @@ fn main() {
     let _future = run();
 }"#
         }
+        // ── Act 7 boss: the Tide Hydra.
+        "hydra_senders" => {
+            r#"use std::sync::mpsc::{self, Sender};
+fn fight(head: &'static str, tx: Sender<String>) {
+    tx.send(format!("{head} down")).unwrap();
+}
+fn main() {
+    let (tx, rx) = mpsc::channel();
+    for head in ["fang", "venom"] {
+        fight(head, tx.clone());
+    }
+    drop(tx);
+    let _: Vec<String> = rx.iter().collect();
+}"#
+        }
+        "hydra_threads" => {
+            r#"use std::sync::mpsc;
+use std::thread;
+fn main() {
+    let (tx, rx) = mpsc::channel();
+    for head in ["fang", "venom"] {
+        let tx = tx.clone();
+        thread::spawn(move || tx.send(head).unwrap());
+    }
+    drop(tx);
+    let mut reports: Vec<&str> = rx.iter().collect();
+    reports.sort();
+}"#
+        }
+        "hydra_body" => {
+            r#"use std::sync::mpsc::{self, Receiver};
+enum Report { Hit, Down }
+fn await_heads(rx: &Receiver<Report>, heads: usize) -> u32 {
+    let mut hits = 0;
+    let mut down = 0;
+    while down < heads {
+        match rx.recv() {
+            Ok(Report::Hit) => hits += 1,
+            Ok(Report::Down) => down += 1,
+            Err(_) => break,
+        }
+    }
+    hits
+}
+fn main() {
+    let (tx, rx) = mpsc::channel();
+    tx.send(Report::Hit).unwrap();
+    tx.send(Report::Down).unwrap();
+    println!("{}", await_heads(&rx, 1));
+}"#
+        }
         // ── Act 8: Vault of Pointers.
         "box_basic" => {
             r#"struct Node {
@@ -699,6 +782,46 @@ fn main() {
     let strong = Rc::new(5);
     let weak: Weak<i32> = Rc::downgrade(&strong);
     let _ = weak.upgrade();
+}"#
+        }
+        // ── Act 8 boss: the Memory Warden.
+        "warden_box" => {
+            r#"enum Ledger { Entry(u32, Box<Ledger>), Closed }
+fn total(ledger: &Ledger) -> u32 {
+    match ledger {
+        Ledger::Entry(amount, rest) => amount + total(rest),
+        Ledger::Closed => 0,
+    }
+}
+fn main() {
+    let ledger = Ledger::Entry(5, Box::new(Ledger::Closed));
+    println!("{}", total(&ledger));
+}"#
+        }
+        "warden_shared" => {
+            r#"use std::cell::RefCell;
+use std::rc::Rc;
+struct Debtor { vault: Rc<RefCell<u32>> }
+fn pay(debtor: &Debtor, coins: u32) {
+    *debtor.vault.borrow_mut() += coins;
+}
+fn main() {
+    let vault = Rc::new(RefCell::new(0));
+    let miller = Debtor { vault: Rc::clone(&vault) };
+    pay(&miller, 5);
+    println!("{}", vault.borrow());
+}"#
+        }
+        "warden_weak" => {
+            r#"use std::cell::RefCell;
+use std::rc::{Rc, Weak};
+struct Debtor { name: &'static str, owes: RefCell<Weak<Debtor>> }
+fn main() {
+    let a = Rc::new(Debtor { name: "a", owes: RefCell::new(Weak::new()) });
+    let b = Rc::new(Debtor { name: "b", owes: RefCell::new(Weak::new()) });
+    *a.owes.borrow_mut() = Rc::downgrade(&b);
+    let next = a.owes.borrow().upgrade().map(|d| d.name);
+    println!("{} owes {:?}", a.name, next);
 }"#
         }
         _ => return None,
@@ -1305,7 +1428,124 @@ const CORRECT: &[(&str, &str, &str)] = &[
             "fn quest(map: &str, key: &str) -> Result<Reward, QuestError> {\n    let leagues = read_map(map)?;\n    Ok(Reward { gold: pay_guide(open_vault(key)?, leagues)? })\n}\n"
         ),
     ),
+    // ── the Act 6-8 trials: realistic alternatives (the same programs
+    // pass the server check in `expectations_proof.rs`) ──
+    (
+        "golem_parts",
+        "trial alt: `== false`, renamed closure argument, turbofish collect",
+        GOLEM_PARTS_ALT,
+    ),
+    (
+        "golem_sum",
+        "trial alt: `.sum::<u32>()` in one expression",
+        GOLEM_SUM_TURBOFISH_ALT,
+    ),
+    (
+        "golem_sum",
+        "trial alt: `.fold(0, ..)` instead of `sum`",
+        GOLEM_SUM_FOLD_ALT,
+    ),
+    (
+        "golem_core",
+        "trial alt: map to weakness, sum, then times the blow",
+        GOLEM_CORE_SUM_ALT,
+    ),
+    (
+        "golem_core",
+        "trial alt: filter then one fold",
+        GOLEM_CORE_FOLD_ALT,
+    ),
+    (
+        "hydra_senders",
+        "trial alt: `Sender::clone(&tx)`, `while let` over `recv`",
+        HYDRA_SENDERS_CLONE_ALT,
+    ),
+    (
+        "hydra_senders",
+        "trial alt: `fight` borrows the one sender (rustc's other suggestion)",
+        HYDRA_SENDERS_BORROW_ALT,
+    ),
+    (
+        "hydra_threads",
+        "trial alt: handles joined in order, `sort_unstable`",
+        HYDRA_THREADS_JOIN_ALT,
+    ),
+    (
+        "hydra_threads",
+        "trial alt: block-bodied `move` closure, `into_iter`",
+        HYDRA_THREADS_BLOCK_ALT,
+    ),
+    (
+        "hydra_body",
+        "trial alt: `for` over `rx.iter()`, break when the last head is down",
+        HYDRA_BODY_FOR_ALT,
+    ),
+    (
+        "hydra_body",
+        "trial alt: `let ... else` on `recv`",
+        HYDRA_BODY_LET_ELSE_ALT,
+    ),
+    (
+        "warden_box",
+        "trial alt: a `while let` walk instead of recursion",
+        WARDEN_BOX_WHILE_ALT,
+    ),
+    (
+        "warden_box",
+        "trial alt: `if let` recursion",
+        WARDEN_BOX_IF_LET_ALT,
+    ),
+    (
+        "warden_shared",
+        "trial alt: a named `borrow_mut` guard, `vault.clone()`",
+        WARDEN_SHARED_ALT,
+    ),
+    (
+        "warden_weak",
+        "trial alt: stop on the start's name",
+        WARDEN_WEAK_NAMES_ALT,
+    ),
+    (
+        "warden_weak",
+        "trial alt: `while let` with `Option::filter`",
+        WARDEN_WEAK_WHILE_ALT,
+    ),
 ];
+
+// Alternatives for the Act 6-8 trials, the same text as in
+// `compile-api/tests/expectations_proof.rs`.
+
+const GOLEM_PARTS_ALT: &str = "struct Part {\n    name: &'static str,\n    armoured: bool,\n    weakness: u32,\n}\nfn golem() -> Vec<Part> {\n    vec![\n        Part { name: \"arm\", armoured: false, weakness: 3 },\n        Part { name: \"chest\", armoured: true, weakness: 8 },\n        Part { name: \"knee\", armoured: false, weakness: 4 },\n        Part { name: \"head\", armoured: true, weakness: 5 },\n        Part { name: \"eye\", armoured: false, weakness: 6 },\n    ]\n}\nfn weak_points(parts: &[Part]) -> Vec<String> {\n    parts\n        .iter()\n        .filter(|part| part.armoured == false)\n        .map(|part| format!(\"{} ({})\", part.name, part.weakness))\n        .collect::<Vec<_>>()\n}\nfn main() {\n    let parts = golem();\n    let weak = weak_points(&parts);\n    println!(\"weak points: {weak:?}\");\n}\n";
+
+const GOLEM_SUM_TURBOFISH_ALT: &str = "struct Part {\n    name: &'static str,\n    armoured: bool,\n    weakness: u32,\n}\nfn golem() -> Vec<Part> {\n    vec![\n        Part { name: \"arm\", armoured: false, weakness: 3 },\n        Part { name: \"chest\", armoured: true, weakness: 8 },\n        Part { name: \"knee\", armoured: false, weakness: 4 },\n        Part { name: \"head\", armoured: true, weakness: 5 },\n        Part { name: \"eye\", armoured: false, weakness: 6 },\n    ]\n}\nfn core_damage(parts: &[Part]) -> u32 {\n    parts.iter().filter(|p| !p.armoured).map(|p| p.weakness).sum::<u32>() * 2\n}\nfn main() {\n    let parts = golem();\n    let names: Vec<&str> = parts.iter().map(|p| p.name).collect();\n    println!(\"golem: {}\", names.join(\" \"));\n    println!(\"core damage: {}\", core_damage(&parts));\n}\n";
+
+const GOLEM_SUM_FOLD_ALT: &str = "struct Part {\n    name: &'static str,\n    armoured: bool,\n    weakness: u32,\n}\nfn golem() -> Vec<Part> {\n    vec![\n        Part { name: \"arm\", armoured: false, weakness: 3 },\n        Part { name: \"chest\", armoured: true, weakness: 8 },\n        Part { name: \"knee\", armoured: false, weakness: 4 },\n        Part { name: \"head\", armoured: true, weakness: 5 },\n        Part { name: \"eye\", armoured: false, weakness: 6 },\n    ]\n}\nfn core_damage(parts: &[Part]) -> u32 {\n    let total = parts\n        .iter()\n        .filter(|p| !p.armoured)\n        .fold(0, |acc, p| acc + p.weakness);\n    total * 2\n}\nfn main() {\n    let parts = golem();\n    let names: Vec<&str> = parts.iter().map(|p| p.name).collect();\n    println!(\"golem: {}\", names.join(\" \"));\n    println!(\"core damage: {}\", core_damage(&parts));\n}\n";
+
+const GOLEM_CORE_SUM_ALT: &str = "struct Part {\n    name: &'static str,\n    armoured: bool,\n    weakness: u32,\n}\nfn golem() -> Vec<Part> {\n    vec![\n        Part { name: \"arm\", armoured: false, weakness: 3 },\n        Part { name: \"chest\", armoured: true, weakness: 8 },\n        Part { name: \"knee\", armoured: false, weakness: 4 },\n        Part { name: \"head\", armoured: true, weakness: 5 },\n        Part { name: \"eye\", armoured: false, weakness: 6 },\n    ]\n}\nfn total_damage(parts: &[Part], blow: u32) -> u32 {\n    parts.iter().filter(|p| !p.armoured).map(|p| p.weakness).sum::<u32>() * blow\n}\nfn main() {\n    let parts = golem();\n    let names: Vec<&str> = parts.iter().map(|p| p.name).collect();\n    println!(\"golem: {}\", names.join(\" \"));\n    println!(\"blow 1: {}\", total_damage(&parts, 1));\n    println!(\"blow 3: {}\", total_damage(&parts, 3));\n}\n";
+
+const GOLEM_CORE_FOLD_ALT: &str = "struct Part {\n    name: &'static str,\n    armoured: bool,\n    weakness: u32,\n}\nfn golem() -> Vec<Part> {\n    vec![\n        Part { name: \"arm\", armoured: false, weakness: 3 },\n        Part { name: \"chest\", armoured: true, weakness: 8 },\n        Part { name: \"knee\", armoured: false, weakness: 4 },\n        Part { name: \"head\", armoured: true, weakness: 5 },\n        Part { name: \"eye\", armoured: false, weakness: 6 },\n    ]\n}\nfn total_damage(parts: &[Part], blow: u32) -> u32 {\n    parts\n        .iter()\n        .filter(|p| !p.armoured)\n        .fold(0, |acc, p| acc + blow * p.weakness)\n}\nfn main() {\n    let parts = golem();\n    let names = parts.iter().map(|p| p.name).collect::<Vec<_>>();\n    println!(\"golem: {}\", names.join(\" \"));\n    println!(\"blow 1: {}\", total_damage(&parts, 1));\n    println!(\"blow 3: {}\", total_damage(&parts, 3));\n}\n";
+
+const HYDRA_SENDERS_CLONE_ALT: &str = "use std::sync::mpsc::{self, Sender};\nfn fight(head: &'static str, hp: u32, tx: Sender<String>) {\n    let blows = hp.div_ceil(4);\n    tx.send(format!(\"{head} down after {blows} blows\")).unwrap();\n}\nfn hunt(heads: &[(&'static str, u32)]) -> Vec<String> {\n    let (tx, rx) = mpsc::channel();\n    for (head, hp) in heads.iter().copied() {\n        let own = Sender::clone(&tx);\n        fight(head, hp, own);\n    }\n    drop(tx);\n    let mut reports = Vec::new();\n    while let Ok(r) = rx.recv() {\n        reports.push(r);\n    }\n    reports\n}\nfn main() {\n    let reports = hunt(&[(\"fang\", 9), (\"venom\", 6), (\"brine\", 13)]);\n    for report in &reports {\n        println!(\"{report}\");\n    }\n    println!(\"{} heads down\", reports.len());\n}\n";
+
+const HYDRA_SENDERS_BORROW_ALT: &str = "use std::sync::mpsc::{self, Sender};\nfn fight(head: &'static str, hp: u32, tx: &Sender<String>) {\n    let blows = hp.div_ceil(4);\n    tx.send(format!(\"{head} down after {blows} blows\")).unwrap();\n}\nfn hunt(heads: &[(&'static str, u32)]) -> Vec<String> {\n    let (tx, rx) = mpsc::channel();\n    for &(head, hp) in heads {\n        fight(head, hp, &tx);\n    }\n    drop(tx);\n    rx.iter().collect()\n}\nfn main() {\n    let reports = hunt(&[(\"fang\", 9), (\"venom\", 6), (\"brine\", 13)]);\n    for report in &reports {\n        println!(\"{report}\");\n    }\n    println!(\"{} heads down\", reports.len());\n}\n";
+
+const HYDRA_THREADS_JOIN_ALT: &str = "use std::sync::mpsc::{self, Sender};\nuse std::thread;\nfn fight(head: &'static str, hp: u32, tx: Sender<String>) {\n    let blows = hp.div_ceil(4);\n    tx.send(format!(\"{head} down after {blows} blows\")).unwrap();\n}\nfn hunt(heads: &[(&'static str, u32)]) -> Vec<String> {\n    let (tx, rx) = mpsc::channel();\n    let mut workers = Vec::new();\n    for &(head, hp) in heads {\n        let tx = tx.clone();\n        workers.push(thread::spawn(move || fight(head, hp, tx)));\n    }\n    for w in workers {\n        w.join().expect(\"a head's thread panicked\");\n    }\n    drop(tx);\n    let mut reports: Vec<String> = rx.iter().collect();\n    reports.sort_unstable();\n    reports\n}\nfn main() {\n    let reports = hunt(&[(\"fang\", 9), (\"venom\", 6), (\"brine\", 13)]);\n    for report in &reports {\n        println!(\"{report}\");\n    }\n    println!(\"{} heads down\", reports.len());\n}\n";
+
+const HYDRA_THREADS_BLOCK_ALT: &str = "use std::sync::mpsc::{self, Sender};\nuse std::thread;\nfn fight(head: &'static str, hp: u32, tx: Sender<String>) {\n    let blows = hp.div_ceil(4);\n    tx.send(format!(\"{head} down after {blows} blows\")).unwrap();\n}\nfn hunt(heads: &[(&'static str, u32)]) -> Vec<String> {\n    let (tx, rx) = mpsc::channel();\n    for &(head, hp) in heads {\n        let tx = tx.clone();\n        thread::spawn(move || {\n            fight(head, hp, tx);\n        });\n    }\n    drop(tx);\n    let mut reports = rx.into_iter().collect::<Vec<_>>();\n    reports.sort();\n    reports\n}\nfn main() {\n    let reports = hunt(&[(\"fang\", 9), (\"venom\", 6), (\"brine\", 13)]);\n    for report in &reports {\n        println!(\"{report}\");\n    }\n    println!(\"{} heads down\", reports.len());\n}\n";
+
+const HYDRA_BODY_FOR_ALT: &str = "use std::sync::mpsc::{self, Receiver};\nuse std::thread;\nenum Report {\n    Hit,\n    Down,\n}\nfn await_heads(rx: &Receiver<Report>, heads: usize) -> u32 {\n    let (mut hits, mut down) = (0u32, 0usize);\n    for report in rx.iter() {\n        match report {\n            Report::Hit => hits += 1,\n            Report::Down => {\n                down += 1;\n                if down == heads {\n                    break;\n                }\n            }\n        }\n    }\n    hits\n}\nfn main() {\n    let blows = [3, 2, 4];\n    let (tx, rx) = mpsc::channel();\n    for n in blows {\n        let tx = tx.clone();\n        thread::spawn(move || {\n            for _ in 0..n {\n                tx.send(Report::Hit).unwrap();\n            }\n            tx.send(Report::Down).unwrap();\n        });\n    }\n    drop(tx);\n    let hits = await_heads(&rx, blows.len());\n    println!(\"{} heads down after {hits} hits\", blows.len());\n    println!(\"strike the body\");\n}\n";
+
+const HYDRA_BODY_LET_ELSE_ALT: &str = "use std::sync::mpsc::{self, Receiver};\nuse std::thread;\nenum Report {\n    Hit,\n    Down,\n}\nfn await_heads(rx: &Receiver<Report>, heads: usize) -> u32 {\n    let mut hits = 0;\n    let mut down = 0;\n    while down < heads {\n        let Ok(report) = rx.recv() else { break };\n        if let Report::Hit = report {\n            hits += 1;\n        } else {\n            down += 1;\n        }\n    }\n    hits\n}\nfn main() {\n    let blows = [3, 2, 4];\n    let (tx, rx) = mpsc::channel();\n    for n in blows {\n        let tx = tx.clone();\n        thread::spawn(move || {\n            for _ in 0..n {\n                tx.send(Report::Hit).unwrap();\n            }\n            tx.send(Report::Down).unwrap();\n        });\n    }\n    drop(tx);\n    let hits = await_heads(&rx, blows.len());\n    println!(\"{} heads down after {hits} hits\", blows.len());\n    println!(\"strike the body\");\n}\n";
+
+const WARDEN_BOX_WHILE_ALT: &str = "#[derive(Debug)]\nenum Ledger {\n    Entry(u32, Box<Ledger>),\n    Closed,\n}\nfn entry(amount: u32, rest: Ledger) -> Ledger {\n    Ledger::Entry(amount, Box::new(rest))\n}\nfn total(ledger: &Ledger) -> u32 {\n    let mut sum = 0;\n    let mut at = ledger;\n    while let Ledger::Entry(amount, rest) = at {\n        sum += amount;\n        at = rest.as_ref();\n    }\n    sum\n}\nfn main() {\n    let ledger = entry(5, entry(7, entry(3, Ledger::Closed)));\n    println!(\"{:?}\", ledger);\n    println!(\"owed: {}\", total(&ledger));\n}\n";
+
+const WARDEN_BOX_IF_LET_ALT: &str = "#[derive(Debug)]\nenum Ledger {\n    Entry(u32, Box<Ledger>),\n    Closed,\n}\nfn entry(amount: u32, rest: Ledger) -> Ledger {\n    Ledger::Entry(amount, Box::new(rest))\n}\nfn total(ledger: &Ledger) -> u32 {\n    if let Ledger::Entry(owed, rest) = ledger {\n        owed + total(rest)\n    } else {\n        0\n    }\n}\nfn main() {\n    let ledger = entry(5, entry(7, entry(3, Ledger::Closed)));\n    println!(\"{ledger:?}\");\n    println!(\"owed: {}\", total(&ledger));\n}\n";
+
+const WARDEN_SHARED_ALT: &str = "use std::cell::RefCell;\nuse std::rc::Rc;\nstruct Debtor {\n    name: &'static str,\n    vault: Rc<RefCell<u32>>,\n}\nfn pay(debtor: &Debtor, coins: u32) {\n    let mut held = debtor.vault.borrow_mut();\n    *held += coins;\n}\nfn main() {\n    let vault: Rc<RefCell<u32>> = Rc::new(RefCell::new(0));\n    let miller = Debtor { name: \"miller\", vault: vault.clone() };\n    let smith = Debtor { name: \"smith\", vault: vault.clone() };\n    pay(&miller, 5);\n    pay(&smith, 7);\n    println!(\"{} and {} paid\", miller.name, smith.name);\n    println!(\"vault holds {}\", *vault.borrow());\n    println!(\"handles: {}\", Rc::strong_count(&vault));\n}\n";
+
+const WARDEN_WEAK_NAMES_ALT: &str = "use std::cell::RefCell;\nuse std::rc::{Rc, Weak};\nstruct Debtor {\n    name: &'static str,\n    owes: RefCell<Weak<Debtor>>,\n}\nfn debtor(name: &'static str) -> Rc<Debtor> {\n    Rc::new(Debtor { name, owes: RefCell::new(Weak::new()) })\n}\nfn circle(start: &Rc<Debtor>) -> Vec<&'static str> {\n    let mut names = vec![start.name];\n    let mut next = start.owes.borrow().upgrade();\n    while let Some(d) = next {\n        if d.name == start.name {\n            break;\n        }\n        names.push(d.name);\n        next = d.owes.borrow().upgrade();\n    }\n    names\n}\nfn main() {\n    let warden = debtor(\"warden\");\n    let you = debtor(\"you\");\n    let teller = debtor(\"teller\");\n    *warden.owes.borrow_mut() = Rc::downgrade(&you);\n    *you.owes.borrow_mut() = Rc::downgrade(&teller);\n    *teller.owes.borrow_mut() = Rc::downgrade(&warden);\n    println!(\"circle: {:?}\", circle(&warden));\n    println!(\n        \"warden: strong {}, weak {}\",\n        Rc::strong_count(&warden),\n        Rc::weak_count(&warden)\n    );\n    let probe = Rc::downgrade(&warden);\n    drop(warden);\n    drop(you);\n    drop(teller);\n    println!(\"after the ledger closes: {:?}\", probe.upgrade().map(|d| d.name));\n}\n";
+
+const WARDEN_WEAK_WHILE_ALT: &str = "use std::cell::RefCell;\nuse std::rc::{Rc, Weak};\nstruct Debtor {\n    name: &'static str,\n    owes: RefCell<Weak<Debtor>>,\n}\nfn debtor(name: &'static str) -> Rc<Debtor> {\n    let owes = RefCell::new(Weak::new());\n    Rc::new(Debtor { name, owes })\n}\nfn circle(start: &Rc<Debtor>) -> Vec<&'static str> {\n    let mut names = Vec::new();\n    let mut at = Some(Rc::clone(start));\n    while let Some(d) = at {\n        names.push(d.name);\n        at = d.owes.borrow().upgrade().filter(|n| !Rc::ptr_eq(n, start));\n    }\n    names\n}\nfn main() {\n    let warden = debtor(\"warden\");\n    let you = debtor(\"you\");\n    let teller = debtor(\"teller\");\n    *warden.owes.borrow_mut() = Rc::downgrade(&you);\n    *you.owes.borrow_mut() = Rc::downgrade(&teller);\n    *teller.owes.borrow_mut() = Rc::downgrade(&warden);\n    println!(\"circle: {:?}\", circle(&warden));\n    let strong = Rc::strong_count(&warden);\n    let weak = Rc::weak_count(&warden);\n    println!(\"warden: strong {strong}, weak {weak}\");\n    let probe = Rc::downgrade(&warden);\n    drop((warden, you, teller));\n    let left = probe.upgrade().map(|d| d.name);\n    println!(\"after the ledger closes: {left:?}\");\n}\n";
 
 /// Wrong programs the old substring grader ACCEPTED and a token-level
 /// check now catches. `(mission, audit id, source)`.
@@ -1354,6 +1594,22 @@ const WRONG: &[(&str, &str, &str)] = &[
             quest_items!(),
             "fn quest(map: &str, key: &str) -> Result<Reward, QuestError> { match read_map(map) { Ok(leagues) => match open_vault(key) { Ok(gold) => match pay_guide(gold, leagues) { Ok(left) => Ok(Reward { gold: left }), Err(e) => Err(e.into()) }, Err(e) => Err(e.into()) }, Err(e) => Err(e.into()) } }\n"
         ),
+    ),
+    // ── the Act 6-8 trials: the shortcuts their hints name ──
+    (
+        "golem_parts",
+        "trial: map first, then drop the chest and the head by name",
+        "struct Part { name: &'static str, armoured: bool, weakness: u32 }\nfn weak_points(parts: &[Part]) -> Vec<String> { parts.iter().map(|p| format!(\"{} ({})\", p.name, p.weakness)).filter(|l| !l.starts_with(\"chest\") && !l.starts_with(\"head\")).collect() }\nfn main() { let parts = vec![Part { name: \"arm\", armoured: false, weakness: 3 }]; println!(\"{:?}\", weak_points(&parts)); }\n",
+    ),
+    (
+        "golem_core",
+        "trial: `take_while` stops at the first armoured part",
+        "struct Part { armoured: bool, weakness: u32 }\nfn total_damage(parts: &[Part], blow: u32) -> u32 { parts.iter().take_while(|p| !p.armoured).map(|p| blow * p.weakness).sum() }\nfn main() { let parts = vec![Part { armoured: false, weakness: 3 }]; println!(\"{}\", total_damage(&parts, 2)); }\n",
+    ),
+    (
+        "hydra_threads",
+        "trial: threads, but the reports are never sorted",
+        "use std::sync::mpsc;\nuse std::thread;\nfn main() { let (tx, rx) = mpsc::channel(); for head in [\"fang\", \"venom\"] { let tx = tx.clone(); thread::spawn(move || tx.send(head).unwrap()); } drop(tx); let reports: Vec<&str> = rx.iter().collect(); println!(\"{reports:?}\"); }\n",
     ),
     (
         "if_else_sign",

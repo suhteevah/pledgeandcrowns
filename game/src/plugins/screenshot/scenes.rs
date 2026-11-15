@@ -438,11 +438,14 @@ fn trial_scenes(v: &mut Vec<Scene>) {
         0.4,
         boxed(reset_trial_scene),
     ));
-    // The Act 3-5 trials: each owner's offer of stage 1, the same way.
+    // The Act 3-8 trials: each owner's offer of stage 1, the same way.
     for (name, npc, stage1) in [
         ("trial-offer-wraith", "impl_method", "wraith_forms"),
         ("trial-offer-chimera", "trait_def", "chimera_heads"),
         ("trial-offer-wager", "result_match", "wager_stake"),
+        ("trial-offer-golem", "hashmap_basic", "golem_parts"),
+        ("trial-offer-hydra", "thread_spawn", "hydra_senders"),
+        ("trial-offer-warden", "box_basic", "warden_box"),
     ] {
         v.push(scene(
             name,

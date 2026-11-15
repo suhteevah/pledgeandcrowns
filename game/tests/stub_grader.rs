@@ -572,6 +572,38 @@ fn main() {
     greet();
 }"#
         }
+        // ── Act 6 boss: the Forge-Golem (mirror of contract.rs).
+        "golem_parts" => {
+            r#"struct Part { name: &'static str, armoured: bool, weakness: u32 }
+fn weak_points(parts: &[Part]) -> Vec<String> {
+    parts.iter().filter(|p| !p.armoured).map(|p| format!("{} ({})", p.name, p.weakness)).collect()
+}
+fn main() {
+    let parts = vec![Part { name: "arm", armoured: false, weakness: 3 }];
+    println!("{:?}", weak_points(&parts));
+}"#
+        }
+        "golem_sum" => {
+            r#"struct Part { armoured: bool, weakness: u32 }
+fn core_damage(parts: &[Part]) -> u32 {
+    let total: u32 = parts.iter().filter(|p| !p.armoured).map(|p| p.weakness).sum();
+    total * 2
+}
+fn main() {
+    let parts = vec![Part { armoured: false, weakness: 3 }];
+    println!("{}", core_damage(&parts));
+}"#
+        }
+        "golem_core" => {
+            r#"struct Part { armoured: bool, weakness: u32 }
+fn total_damage(parts: &[Part], blow: u32) -> u32 {
+    parts.iter().filter(|p| !p.armoured).map(|p| blow * p.weakness).fold(0, |total, hit| total + hit)
+}
+fn main() {
+    let parts = vec![Part { armoured: false, weakness: 3 }];
+    println!("{}", total_damage(&parts, 2));
+}"#
+        }
         // ── Act 7: Concurrent Coast (mirror of contract.rs).
         "thread_spawn" => {
             r#"use std::thread;
@@ -629,6 +661,57 @@ fn main() {
     let _future = run();
 }"#
         }
+        // ── Act 7 boss: the Tide Hydra (mirror of contract.rs).
+        "hydra_senders" => {
+            r#"use std::sync::mpsc::{self, Sender};
+fn fight(head: &'static str, tx: Sender<String>) {
+    tx.send(format!("{head} down")).unwrap();
+}
+fn main() {
+    let (tx, rx) = mpsc::channel();
+    for head in ["fang", "venom"] {
+        fight(head, tx.clone());
+    }
+    drop(tx);
+    let _: Vec<String> = rx.iter().collect();
+}"#
+        }
+        "hydra_threads" => {
+            r#"use std::sync::mpsc;
+use std::thread;
+fn main() {
+    let (tx, rx) = mpsc::channel();
+    for head in ["fang", "venom"] {
+        let tx = tx.clone();
+        thread::spawn(move || tx.send(head).unwrap());
+    }
+    drop(tx);
+    let mut reports: Vec<&str> = rx.iter().collect();
+    reports.sort();
+}"#
+        }
+        "hydra_body" => {
+            r#"use std::sync::mpsc::{self, Receiver};
+enum Report { Hit, Down }
+fn await_heads(rx: &Receiver<Report>, heads: usize) -> u32 {
+    let mut hits = 0;
+    let mut down = 0;
+    while down < heads {
+        match rx.recv() {
+            Ok(Report::Hit) => hits += 1,
+            Ok(Report::Down) => down += 1,
+            Err(_) => break,
+        }
+    }
+    hits
+}
+fn main() {
+    let (tx, rx) = mpsc::channel();
+    tx.send(Report::Hit).unwrap();
+    tx.send(Report::Down).unwrap();
+    println!("{}", await_heads(&rx, 1));
+}"#
+        }
         // ── Act 8: Vault of Pointers (mirror of contract.rs).
         "box_basic" => {
             r#"struct Node {
@@ -683,6 +766,46 @@ fn main() {
     let strong = Rc::new(5);
     let weak: Weak<i32> = Rc::downgrade(&strong);
     let _ = weak.upgrade();
+}"#
+        }
+        // ── Act 8 boss: the Memory Warden (mirror of contract.rs).
+        "warden_box" => {
+            r#"enum Ledger { Entry(u32, Box<Ledger>), Closed }
+fn total(ledger: &Ledger) -> u32 {
+    match ledger {
+        Ledger::Entry(amount, rest) => amount + total(rest),
+        Ledger::Closed => 0,
+    }
+}
+fn main() {
+    let ledger = Ledger::Entry(5, Box::new(Ledger::Closed));
+    println!("{}", total(&ledger));
+}"#
+        }
+        "warden_shared" => {
+            r#"use std::cell::RefCell;
+use std::rc::Rc;
+struct Debtor { vault: Rc<RefCell<u32>> }
+fn pay(debtor: &Debtor, coins: u32) {
+    *debtor.vault.borrow_mut() += coins;
+}
+fn main() {
+    let vault = Rc::new(RefCell::new(0));
+    let miller = Debtor { vault: Rc::clone(&vault) };
+    pay(&miller, 5);
+    println!("{}", vault.borrow());
+}"#
+        }
+        "warden_weak" => {
+            r#"use std::cell::RefCell;
+use std::rc::{Rc, Weak};
+struct Debtor { name: &'static str, owes: RefCell<Weak<Debtor>> }
+fn main() {
+    let a = Rc::new(Debtor { name: "a", owes: RefCell::new(Weak::new()) });
+    let b = Rc::new(Debtor { name: "b", owes: RefCell::new(Weak::new()) });
+    *a.owes.borrow_mut() = Rc::downgrade(&b);
+    let next = a.owes.borrow().upgrade().map(|d| d.name);
+    println!("{} owes {:?}", a.name, next);
 }"#
         }
         _ => return None,

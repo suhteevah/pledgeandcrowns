@@ -42,6 +42,12 @@ const STARTERS_THAT_MUST_FAIL: &[(&str, &str)] = &[
     ("lifetimes", "E0106"),
     ("wager_stake", "E0277"),
     ("wager_from", "E0277"),
+    ("golem_parts", "E0609"),
+    ("golem_sum", "E0283"),
+    ("hydra_senders", "E0382"),
+    ("hydra_threads", "E0373"),
+    ("warden_box", "E0072"),
+    ("warden_shared", "E0594"),
 ];
 
 /// Fresh per-test, per-process scratch dir (the slow tests run in
@@ -159,14 +165,51 @@ const PINNED_OUTPUT: &[(&str, &str)] = &[
         "Ok(22)\nErr(BadMap)\nErr(Locked)\nErr(Broke)",
     ),
     ("hashmap_basic", "Some(7)\nNone"),
+    (
+        "golem_parts",
+        "weak points: [\"arm (3)\", \"knee (4)\", \"eye (6)\"]",
+    ),
+    (
+        "golem_sum",
+        "golem: arm chest knee head eye\ncore damage: 26",
+    ),
+    (
+        "golem_core",
+        "golem: arm chest knee head eye\nblow 1: 13\nblow 3: 39",
+    ),
     ("arc_mutex", "5"),
     ("mpsc_channel", "7\n11"),
     ("atomic", "10\n11"),
+    (
+        "hydra_senders",
+        "fang down after 3 blows\nvenom down after 2 blows\nbrine down after 4 blows\n3 heads down",
+    ),
+    // The `main` of these two thread stages cannot run on the server, so
+    // this native run is its behaviour proof. Both outputs are fixed
+    // whatever order the threads run in: the reports are sorted, and a
+    // head's hits reach the channel before its `Down`.
+    (
+        "hydra_threads",
+        "brine down after 4 blows\nfang down after 3 blows\nvenom down after 2 blows\n3 heads down",
+    ),
+    ("hydra_body", "3 heads down after 9 hits\nstrike the body"),
     ("rc_basic", "1\n2\n1"),
     ("refcell", "10\n15"),
     ("cell", "1\n5"),
     ("rc_refcell", "15"),
     ("weak_ref", "Some(5)\nNone"),
+    (
+        "warden_box",
+        "Entry(5, Entry(7, Entry(3, Closed)))\nowed: 15",
+    ),
+    (
+        "warden_shared",
+        "miller and smith paid\nvault holds 12\nhandles: 3",
+    ),
+    (
+        "warden_weak",
+        "circle: [\"warden\", \"you\", \"teller\"]\nwarden: strong 1, weak 1\nafter the ledger closes: None",
+    ),
 ];
 
 /// `(mission, program, stdout)`: the mistakes the Hint text of a pinned
@@ -253,11 +296,86 @@ fn edited_starter(id: &str, edits: &[(&str, &str)]) -> String {
     s
 }
 
+/// The player-facing solution of `id` with each `(from, to)` replacement
+/// applied (each `from` must occur in it), for claims about a variation
+/// of the finished program.
+fn edited_solution(id: &str, edits: &[(&str, &str)]) -> String {
+    let mut s = canonical_solution(id)
+        .unwrap_or_else(|| panic!("no solution for `{id}`"))
+        .to_string();
+    for (from, to) in edits {
+        assert!(
+            s.contains(from),
+            "`{id}` solution no longer contains {from:?}"
+        );
+        s = s.replacen(from, to, 1);
+    }
+    s
+}
+
 /// `(mission, program, stdout)` like [`HINT_CLAIMS`], for the trial
-/// stages: the programs are the real starters, edited the way the hint
-/// says.
+/// stages: the programs are the real starters (or solutions), edited the
+/// way the text says.
 fn trial_hint_claims() -> Vec<(&'static str, String, &'static str)> {
     vec![
+        (
+            // "Dropping the chest and the head by name would print the
+            // same line here."
+            "golem_parts",
+            edited_starter(
+                "golem_parts",
+                &[(
+                    ".filter(|p| !p.armoured)",
+                    ".filter(|l| !l.starts_with(\"chest\") && !l.starts_with(\"head\"))",
+                )],
+            ),
+            "weak points: [\"arm (3)\", \"knee (4)\", \"eye (6)\"]",
+        ),
+        (
+            // "summing every part, armour and all, prints
+            // `core damage: 52`."
+            "golem_sum",
+            edited_starter(
+                "golem_sum",
+                &[
+                    ("let total = parts", "let total: u32 = parts"),
+                    ("        .filter(|p| !p.armoured)\n", ""),
+                ],
+            ),
+            "golem: arm chest knee head eye\ncore damage: 52",
+        ),
+        (
+            // "As written, the starter prints `blow 1: 3` and `blow 3: 9`."
+            "golem_core",
+            edited_starter("golem_core", &[]),
+            "golem: arm chest knee head eye\nblow 1: 3\nblow 3: 9",
+        ),
+        (
+            // "`.take_while(..)` in place of `.filter(..)` makes the same
+            // mistake."
+            "golem_core",
+            edited_solution(
+                "golem_core",
+                &[(".filter(|p| !p.armoured)", ".take_while(|p| !p.armoured)")],
+            ),
+            "golem: arm chest knee head eye\nblow 1: 3\nblow 3: 9",
+        ),
+        (
+            // "While any sender is alive ... `rx.recv_timeout(..)` on an
+            // empty channel gives `Err(Timeout)`. Once the last sender is
+            // dropped it gives `Err(Disconnected)`."
+            "hydra_senders",
+            "use std::sync::mpsc;\nuse std::time::Duration;\nfn main() {\n    let (tx, rx) = mpsc::channel::<u32>();\n    tx.send(1).unwrap();\n    let wait = Duration::from_millis(50);\n    println!(\"{:?}\", rx.recv_timeout(wait));\n    println!(\"{:?}\", rx.recv_timeout(wait));\n    drop(tx);\n    println!(\"{:?}\", rx.recv_timeout(wait));\n}\n"
+                .to_string(),
+            "Ok(1)\nErr(Timeout)\nErr(Disconnected)",
+        ),
+        (
+            // "As written, the starter prints `warden: strong 2, weak 0`
+            // and `after the ledger closes: Some(\"warden\")`."
+            "warden_weak",
+            edited_starter("warden_weak", &[]),
+            "circle: [\"warden\", \"you\", \"teller\"]\nwarden: strong 2, weak 0\nafter the ledger closes: Some(\"warden\")",
+        ),
         (
             // "The compiler's help writes `Wraith::Solid { armor: _ }`. That
             // compiles, but ... the program then prints
@@ -307,6 +425,35 @@ fn trial_hint_claims() -> Vec<(&'static str, String, &'static str)> {
     ]
 }
 
+/// Pinned missions whose solution spawns threads. Their output must not
+/// depend on scheduling, so the built program is run again
+/// `THREADED_RERUNS` times and must print the same lines each time.
+const THREADED_PINNED: &[&str] = &["hydra_threads", "hydra_body"];
+const THREADED_RERUNS: usize = 20;
+
+/// Run the program `run_native` already built as `name` again.
+fn rerun_native(dir: &std::path::Path, name: &str) -> String {
+    let run = Command::new(dir.join(format!("{name}.exe")))
+        .output()
+        .expect("rerun program");
+    assert!(
+        run.status.success(),
+        "{name} did not exit cleanly on a rerun"
+    );
+    normalise_stdout(&run.stdout)
+}
+
+fn normalise_stdout(stdout: &[u8]) -> String {
+    String::from_utf8_lossy(stdout)
+        .replace("\r\n", "\n")
+        .lines()
+        .map(str::trim_end)
+        .collect::<Vec<_>>()
+        .join("\n")
+        .trim_end()
+        .to_string()
+}
+
 /// Build `src` with rustc (warnings allowed: the mistakes are deliberate)
 /// and return its stdout, normalised like the server does.
 fn run_native(dir: &std::path::Path, name: &str, src: &str) -> String {
@@ -327,14 +474,7 @@ fn run_native(dir: &std::path::Path, name: &str, src: &str) -> String {
     );
     let run = Command::new(&exe).output().expect("run program");
     assert!(run.status.success(), "{name} did not exit cleanly");
-    String::from_utf8_lossy(&run.stdout)
-        .replace("\r\n", "\n")
-        .lines()
-        .map(str::trim_end)
-        .collect::<Vec<_>>()
-        .join("\n")
-        .trim_end()
-        .to_string()
+    normalise_stdout(&run.stdout)
 }
 
 #[test]
@@ -349,6 +489,17 @@ fn pinned_outputs_and_hint_claims_are_true() {
             problems.push(format!(
                 "`{id}` solution prints {got:?}, Task says {want:?}"
             ));
+        }
+        // Thread stages: the same output on every run, not just the first.
+        if THREADED_PINNED.contains(id) {
+            for run in 0..THREADED_RERUNS {
+                let again = rerun_native(&dir, id);
+                if again != *want {
+                    problems.push(format!(
+                        "`{id}` rerun {run} prints {again:?}, Task says {want:?}"
+                    ));
+                }
+            }
         }
     }
     let trial = trial_hint_claims();
@@ -431,10 +582,10 @@ fn demo_boundary_is_the_last_act_2_mission() {
     assert_eq!(reg.missions[idx + 1].id, "impl_method");
     assert_eq!(
         reg.missions.len() - (idx + 1),
-        45,
+        54,
         "missions after the demo"
     );
-    assert_eq!(reg.missions.len(), 69, "missions in the full game");
+    assert_eq!(reg.missions.len(), 78, "missions in the full game");
 }
 
 #[test]
@@ -721,6 +872,94 @@ fn trial_claims(trial: &str) -> Vec<(&'static str, String, Claimed)> {
                 },
             ),
         ],
+        "forge_golem" => vec![
+            (
+                "golem_parts starter: E0609, a label has no `armoured` field",
+                s("golem_parts"),
+                Claimed::Error("E0609", &["no field `armoured` on type `&String`"]),
+            ),
+            (
+                "golem_sum starter: E0283, and rustc's help names `total: u32`",
+                s("golem_sum"),
+                Claimed::Error(
+                    "E0283",
+                    &["type annotations needed", "let total: u32 = parts"],
+                ),
+            ),
+            (
+                "golem_sum: `.fold(0, |acc, w| acc + w)` in place of `.sum()` compiles",
+                edited_starter("golem_sum", &[(".sum();", ".fold(0, |acc, w| acc + w);")]),
+                Claimed::Compiles,
+            ),
+        ],
+        "tide_hydra" => vec![
+            (
+                "hydra_senders starter: E0382 in the loop, rustc's help clones",
+                s("hydra_senders"),
+                Claimed::Error(
+                    "E0382",
+                    &[
+                        "use of moved value: `tx`",
+                        "value moved here, in previous iteration of loop",
+                        "fight(head, hp, tx.clone());",
+                    ],
+                ),
+            ),
+            (
+                "hydra_senders hint: lending `&tx` to a `fight` that borrows compiles",
+                edited_starter(
+                    "hydra_senders",
+                    &[
+                        ("tx: Sender<String>)", "tx: &Sender<String>)"),
+                        ("fight(head, hp, tx);", "fight(head, hp, &tx);"),
+                    ],
+                ),
+                Claimed::Compiles,
+            ),
+            (
+                "hydra_threads starter: E0373 on `hp`, rustc's help says `move`",
+                s("hydra_threads"),
+                Claimed::Error(
+                    "E0373",
+                    &[
+                        "closure may outlive the current function, but it borrows `hp`, which is owned by the current function",
+                        "use the `move` keyword",
+                    ],
+                ),
+            ),
+        ],
+        "memory_warden" => vec![
+            (
+                "warden_box starter: E0072, and rustc's help quoted in the text",
+                s("warden_box"),
+                Claimed::Error(
+                    "E0072",
+                    &[
+                        "recursive type `Ledger` has infinite size",
+                        "insert some indirection (e.g., a `Box`, `Rc`, or `&`) to break the cycle",
+                    ],
+                ),
+            ),
+            (
+                "warden_shared starter: E0594 through the `Rc`",
+                s("warden_shared"),
+                Claimed::Error("E0594", &["cannot assign to data in an `Rc`"]),
+            ),
+            (
+                "warden_shared hint: a `borrow()` held across `pay` panics at run time",
+                edited_solution(
+                    "warden_shared",
+                    &[(
+                        "    pay(&miller, 5);\n",
+                        "    let open = vault.borrow();\n    pay(&miller, 5);\n",
+                    )],
+                ),
+                Claimed::Panics {
+                    stdout: "",
+                    stderr: "RefCell already borrowed",
+                },
+            ),
+        ],
         other => panic!("no claims table for trial `{other}`: add one"),
     }
 }
@@ -733,6 +972,9 @@ const NAMED_CODES: &[(&str, &[&str])] = &[
     ("variant_wraith", &["E0004", "E0533"]),
     ("chimera", &["E0308", "E0599"]),
     ("wager", &["E0277"]),
+    ("forge_golem", &["E0283", "E0609"]),
+    ("tide_hydra", &["E0373", "E0382"]),
+    ("memory_warden", &["E0072", "E0594"]),
 ];
 
 /// Error codes in `text` (`E` followed by exactly four digits).

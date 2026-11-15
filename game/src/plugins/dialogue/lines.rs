@@ -73,9 +73,10 @@ pub const NOT_YET_NOTHING: &str = "I'm not ready for you yet. Come back another 
 /// - `not_yet`: only stage 1 of a trial whose owner has no prologue
 ///   mission. Every trial owner so far has one (the Borrow Checker's
 ///   `borrow_preview`, the Guildmaster's `impl_method`, Vexis's
-///   `trait_def`, the Barkeep's `result_match`) and talks as a cleared
-///   villager until the trial opens, so their stages leave `not_yet`
-///   empty.
+///   `trait_def`, the Barkeep's `result_match`, the Keymaster's
+///   `hashmap_basic`, the Dockmaster's `thread_spawn`, the Vaultwright's
+///   `box_basic`) and talks as a cleared villager until the trial opens,
+///   so their stages leave `not_yet` empty.
 ///
 /// Every compiler error named here is compiled in
 /// `tests/mission_text.rs` (`trial_claims`), hard rule 3.
@@ -271,6 +272,151 @@ pub const TRIAL_STAGES: &[NpcLines] = &[
             cleared: &[
                 "Every step chained, every failure handed back, and not one broken glass. The wager is yours.",
                 "A `Result` tells the truth about failure. Keep it, and a bad night ends in an `Err`, not a crash.",
+            ],
+        },
+    },
+    // ── The Keymaster: The Forge-Golem (Act 6) ───────────────────────
+    NpcLines {
+        npc_id: "golem_parts",
+        lines: StatusLines {
+            not_yet: &[],
+            offer: &[
+                "The Forge-Golem is awake, and every forge key is in my keeping. Three stages to bring it down.",
+                "First, its weak points. Your chain turns each part into a label, then asks the label for armour.",
+                "A label has no armour field, so the compiler says E0609. Filter while you still hold the whole part.",
+            ],
+            in_progress: &[
+                "Put `.filter(|p| !p.armoured)` before the `.map(...)`. Sort the parts first, label them after.",
+            ],
+            cleared: &[],
+        },
+    },
+    NpcLines {
+        npc_id: "golem_sum",
+        lines: StatusLines {
+            not_yet: &[],
+            offer: &[
+                "Second stage. The core takes every weak point's weakness, added up and doubled.",
+                "`sum` can make many kinds of number, and nothing tells it which. The compiler says E0283.",
+                "Name the type you want. Every store in my keeping carries a label.",
+            ],
+            in_progress: &[
+                "Write `let total: u32 = ...`, or `.sum::<u32>()`. Then `total * 2` is plain arithmetic.",
+            ],
+            cleared: &[],
+        },
+    },
+    NpcLines {
+        npc_id: "golem_core",
+        lines: StatusLines {
+            not_yet: &[],
+            offer: &[
+                "Final stage. One blow at the whole Golem: every weak point takes it, times its weakness.",
+                "Your loop stops at the first armoured plate and never reaches the knee or the eye.",
+                "Write it as one chain: filter, map, fold. No `for`, no `while`, no `loop`, no `mut`. I will check.",
+            ],
+            in_progress: &[
+                "`.filter(..)` skips a plate and keeps going. Then `.map(..)` to the hit, and `.fold(0, ..)` the total.",
+            ],
+            cleared: &[
+                "One chain, top to bottom, and the Golem comes apart at every seam.",
+                "Filter skips, map changes, fold gathers. Every key back on its hook.",
+            ],
+        },
+    },
+    // ── The Dockmaster: The Tide Hydra (Act 7) ───────────────────────
+    NpcLines {
+        npc_id: "hydra_senders",
+        lines: StatusLines {
+            not_yet: &[],
+            offer: &[
+                "The Tide Hydra is rising in the harbour. Three heads, and we fight it in three stages.",
+                "First, the signals. Every head reports on one channel, but your loop hands the only sender to the first head.",
+                "The next head finds it gone: E0382, use of moved value. Give each head its own `tx.clone()`.",
+            ],
+            in_progress: &["`fight(head, hp, tx.clone())`. Every clone feeds the same receiver."],
+            cleared: &[],
+        },
+    },
+    NpcLines {
+        npc_id: "hydra_threads",
+        lines: StatusLines {
+            not_yet: &[],
+            offer: &[
+                "Second stage. One worker per head now, each on a thread of its own.",
+                "Your closure only borrows `hp`, and a thread can outlive the function that sent it. E0373.",
+                "Send each worker off with `move`, so it owns everything it carries.",
+            ],
+            in_progress: &[
+                "`thread::spawn(move || fight(head, hp, tx))`. Nothing fixes the order the reports come back in, so keep the sort.",
+            ],
+            cleared: &[],
+        },
+    },
+    NpcLines {
+        npc_id: "hydra_body",
+        lines: StatusLines {
+            not_yet: &[],
+            offer: &[
+                "Final stage. The body opens only when every head is down.",
+                "Your watch strikes at the first `Down`, before the other two heads report down.",
+                "Count the heads as they report, and strike only when all of them have.",
+            ],
+            in_progress: &[
+                "Count the `Down` reports and stop when the count reaches `heads`. Every hit before that counts.",
+            ],
+            cleared: &[
+                "Three workers out, three reports in, one strike at the body. The Hydra sinks.",
+                "Send them off with `move`, hear them on one channel, wait for all. That is how a harbour runs.",
+            ],
+        },
+    },
+    // ── The Vaultwright: The Memory Warden (Act 8) ───────────────────
+    NpcLines {
+        npc_id: "warden_box",
+        lines: StatusLines {
+            not_yet: &[],
+            offer: &[
+                "The Memory Warden holds the Vault below us. Three phases, and each wants a different grip.",
+                "First, his ledger. Each entry holds the rest of the ledger inline, so the type never ends. E0072.",
+                "Put the rest in a `Box`. A box is one pointer wide, however long the ledger runs.",
+            ],
+            in_progress: &[
+                "`Entry(u32, Box<Ledger>)`, and `Box::new(rest)` where you build an entry.",
+            ],
+            cleared: &[],
+        },
+    },
+    NpcLines {
+        npc_id: "warden_shared",
+        lines: StatusLines {
+            not_yet: &[],
+            offer: &[
+                "Second phase. Two debtors pay into one vault, and each holds a handle to it.",
+                "An `Rc` shares the vault, but only to read. Adding coins through one is E0594.",
+                "Put a `RefCell` inside the `Rc`. Then any handle can borrow the vault to write.",
+            ],
+            in_progress: &[
+                "`vault: Rc<RefCell<u32>>`, then `*debtor.vault.borrow_mut() += coins`.",
+            ],
+            cleared: &[],
+        },
+    },
+    NpcLines {
+        npc_id: "warden_weak",
+        lines: StatusLines {
+            not_yet: &[],
+            offer: &[
+                "Final phase. The Warden owes you, you owe the teller, and the teller owes the Warden.",
+                "With strong links each debtor keeps the next alive. Drop every handle and the ring is still there.",
+                "Make each debt a `Weak`, and walk the ring with `.upgrade()` until you are back where you began.",
+            ],
+            in_progress: &[
+                "`owes: RefCell<Weak<Debtor>>`, `Rc::downgrade` to link, `.upgrade()` to follow. Stop at the start.",
+            ],
+            cleared: &[
+                "The ring walked once, and nothing left behind when it closed. The Warden steps aside.",
+                "Box to hold, Rc to share, RefCell to change, Weak to let go. The Vault is yours.",
             ],
         },
     },

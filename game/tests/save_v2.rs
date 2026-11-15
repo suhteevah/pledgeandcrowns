@@ -387,6 +387,89 @@ fn save_cleared_past_acts_3_to_5_offers_each_new_trial() {
     assert_eq!(unlocked("iter_filter"), full);
 }
 
+/// A v2 save written before the Act 6-8 trials existed, cleared past the
+/// end of Act 8 (every mission of the 69-mission registry, ending on
+/// `weak_ref`), loads unchanged. No format change: each new trial's stage
+/// 1 is unlocked and is what its owner offers, stage 2 stays locked, and
+/// the earliest unfinished mission is the Forge-Golem's first stage.
+#[test]
+fn save_cleared_past_act_8_offers_each_new_trial() {
+    use pledge_and_crown::plugins::mission::MissionRegistry;
+    use pledge_and_crown::plugins::trial;
+
+    #[derive(Serialize)]
+    struct S {
+        a: u8,
+        b: u8,
+        c: u8,
+    }
+    #[derive(Serialize)]
+    struct V2 {
+        version: u32,
+        cleared: Vec<String>,
+        settings: S,
+        player_position: Option<[f32; 2]>,
+    }
+    const NEW_TRIALS: [&str; 3] = ["forge_golem", "tide_hydra", "memory_warden"];
+    let reg = MissionRegistry::default();
+    let new_stage = |id: &str| trial::trial_of(id).is_some_and(|(t, _)| NEW_TRIALS.contains(&t.id));
+    // The old registry: every current mission except the new stages.
+    let cleared: Vec<String> = reg
+        .missions
+        .iter()
+        .filter(|m| !new_stage(m.id))
+        .map(|m| m.id.to_string())
+        .collect();
+    assert_eq!(cleared.len(), 69, "the whole 69-mission registry");
+    assert_eq!(cleared.last().map(String::as_str), Some("weak_ref"));
+    let bytes = bincode::serde::encode_to_vec(
+        &V2 {
+            version: 2,
+            cleared: cleared.clone(),
+            settings: S {
+                a: 70,
+                b: 50,
+                c: 30,
+            },
+            player_position: Some([12.0, -3.5]),
+        },
+        bincode::config::standard(),
+    )
+    .unwrap();
+
+    let data = SaveData::decode(&bytes).expect("pre-trial v2 save must load");
+    let p = &data.progress;
+    assert_eq!(p.cleared_count(), cleared.len());
+    for id in &cleared {
+        assert!(p.is_cleared(id), "lost {id}");
+    }
+    assert_eq!(data.player_position, Some(Vec2::new(12.0, -3.5)));
+    assert_eq!(SaveData::decode(&data.encode().unwrap()).unwrap(), data);
+
+    let unlocked = |id: &str| reg.find(id).is_some_and(|m| m.is_unlocked(p));
+    let full = !cfg!(feature = "demo");
+    for (owner, stage1, stage2) in [
+        ("hashmap_basic", "golem_parts", "golem_sum"),
+        ("thread_spawn", "hydra_senders", "hydra_threads"),
+        ("box_basic", "warden_box", "warden_shared"),
+    ] {
+        let offered = trial::current_mission(&reg, p, owner).map(|m| m.id);
+        if full {
+            assert_eq!(offered, Some(stage1), "{owner} offers its trial");
+        } else {
+            // The demo has none of these missions: the owner stays its prologue.
+            assert_eq!(offered, Some(owner), "{owner} in the demo");
+        }
+        assert_eq!(unlocked(stage1), full, "{stage1}");
+        assert!(!unlocked(stage2), "{stage2} waits for {stage1}");
+    }
+    if full {
+        assert_eq!(reg.next_locked(p).map(|m| m.id), Some("golem_parts"));
+    }
+    // Not everything is cleared any more: no epilogue for this save.
+    assert!(p.cleared_count() < reg.missions.len());
+}
+
 #[test]
 fn has_progress_reflects_clears_or_position() {
     let mut d = SaveData::default();

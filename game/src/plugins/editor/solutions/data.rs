@@ -1126,6 +1126,114 @@ fn main() {
 }
 "#,
     ),
+    // ── Act 6 boss: the Keymaster's trial, The Forge-Golem ───────────
+    (
+        "golem_parts",
+        r#"struct Part {
+    name: &'static str,
+    armoured: bool,
+    weakness: u32,
+}
+
+fn golem() -> Vec<Part> {
+    vec![
+        Part { name: "arm", armoured: false, weakness: 3 },
+        Part { name: "chest", armoured: true, weakness: 8 },
+        Part { name: "knee", armoured: false, weakness: 4 },
+        Part { name: "head", armoured: true, weakness: 5 },
+        Part { name: "eye", armoured: false, weakness: 6 },
+    ]
+}
+
+// Filter first, while each item is still a whole Part; label after.
+fn weak_points(parts: &[Part]) -> Vec<String> {
+    parts
+        .iter()
+        .filter(|p| !p.armoured)
+        .map(|p| format!("{} ({})", p.name, p.weakness))
+        .collect()
+}
+
+fn main() {
+    let parts = golem();
+    println!("weak points: {:?}", weak_points(&parts));
+}
+"#,
+    ),
+    (
+        "golem_sum",
+        r#"struct Part {
+    name: &'static str,
+    armoured: bool,
+    weakness: u32,
+}
+
+fn golem() -> Vec<Part> {
+    vec![
+        Part { name: "arm", armoured: false, weakness: 3 },
+        Part { name: "chest", armoured: true, weakness: 8 },
+        Part { name: "knee", armoured: false, weakness: 4 },
+        Part { name: "head", armoured: true, weakness: 5 },
+        Part { name: "eye", armoured: false, weakness: 6 },
+    ]
+}
+
+// The core takes every weak point's weakness, added up and doubled.
+fn core_damage(parts: &[Part]) -> u32 {
+    // `: u32` tells `sum` which kind of number to make.
+    let total: u32 = parts
+        .iter()
+        .filter(|p| !p.armoured)
+        .map(|p| p.weakness)
+        .sum();
+    total * 2
+}
+
+fn main() {
+    let parts = golem();
+    let names: Vec<&str> = parts.iter().map(|p| p.name).collect();
+    println!("golem: {}", names.join(" "));
+    println!("core damage: {}", core_damage(&parts));
+}
+"#,
+    ),
+    (
+        "golem_core",
+        r#"struct Part {
+    name: &'static str,
+    armoured: bool,
+    weakness: u32,
+}
+
+fn golem() -> Vec<Part> {
+    vec![
+        Part { name: "arm", armoured: false, weakness: 3 },
+        Part { name: "chest", armoured: true, weakness: 8 },
+        Part { name: "knee", armoured: false, weakness: 4 },
+        Part { name: "head", armoured: true, weakness: 5 },
+        Part { name: "eye", armoured: false, weakness: 6 },
+    ]
+}
+
+// One chain: armour skipped, each weak point mapped to its hit, the
+// hits folded into one total. No loop, no mutable total.
+fn total_damage(parts: &[Part], blow: u32) -> u32 {
+    parts
+        .iter()
+        .filter(|p| !p.armoured)
+        .map(|p| blow * p.weakness)
+        .fold(0, |total, hit| total + hit)
+}
+
+fn main() {
+    let parts = golem();
+    let names: Vec<&str> = parts.iter().map(|p| p.name).collect();
+    println!("golem: {}", names.join(" "));
+    println!("blow 1: {}", total_damage(&parts, 1));
+    println!("blow 3: {}", total_damage(&parts, 3));
+}
+"#,
+    ),
     // ── Act 7: The Concurrent Coast ──────────────────────────────────
     (
         "thread_spawn",
@@ -1222,6 +1330,118 @@ fn main() {
 }
 "#,
     ),
+    // ── Act 7 boss: the Dockmaster's trial, The Tide Hydra ───────────
+    (
+        "hydra_senders",
+        r#"use std::sync::mpsc::{self, Sender};
+
+// A head fights until it falls, then reports on the sender it holds.
+fn fight(head: &'static str, hp: u32, tx: Sender<String>) {
+    let blows = hp.div_ceil(4);
+    let report = format!("{head} down after {blows} blows");
+    tx.send(report).expect("receiver dropped");
+}
+
+fn hunt(heads: &[(&'static str, u32)]) -> Vec<String> {
+    let (tx, rx) = mpsc::channel();
+    for &(head, hp) in heads {
+        // Each head gets its own sender into the same channel.
+        fight(head, hp, tx.clone());
+    }
+    // No sender left: the receiver knows no more reports are coming.
+    drop(tx);
+    rx.iter().collect()
+}
+
+fn main() {
+    let reports = hunt(&[("fang", 9), ("venom", 6), ("brine", 13)]);
+    for report in &reports {
+        println!("{report}");
+    }
+    println!("{} heads down", reports.len());
+}
+"#,
+    ),
+    (
+        "hydra_threads",
+        r#"use std::sync::mpsc::{self, Sender};
+use std::thread;
+
+// A head fights until it falls, then reports on the sender it holds.
+fn fight(head: &'static str, hp: u32, tx: Sender<String>) {
+    let blows = hp.div_ceil(4);
+    let report = format!("{head} down after {blows} blows");
+    tx.send(report).expect("receiver dropped");
+}
+
+fn hunt(heads: &[(&'static str, u32)]) -> Vec<String> {
+    let (tx, rx) = mpsc::channel();
+    for &(head, hp) in heads {
+        let tx = tx.clone();
+        // `move`: the thread owns its head, its hp and its sender.
+        thread::spawn(move || fight(head, hp, tx));
+    }
+    drop(tx);
+    // Threads finish in no promised order: sort what comes back.
+    let mut reports: Vec<String> = rx.iter().collect();
+    reports.sort();
+    reports
+}
+
+fn main() {
+    let reports = hunt(&[("fang", 9), ("venom", 6), ("brine", 13)]);
+    for report in &reports {
+        println!("{report}");
+    }
+    println!("{} heads down", reports.len());
+}
+"#,
+    ),
+    (
+        "hydra_body",
+        r#"use std::sync::mpsc::{self, Receiver};
+use std::thread;
+
+enum Report {
+    Hit,
+    Down,
+}
+
+// Count the hits, and return only once every head has reported down.
+fn await_heads(rx: &Receiver<Report>, heads: usize) -> u32 {
+    let mut hits = 0;
+    let mut down = 0;
+    while down < heads {
+        match rx.recv() {
+            Ok(Report::Hit) => hits += 1,
+            Ok(Report::Down) => down += 1,
+            // Every sender is gone: no more reports can come.
+            Err(_) => break,
+        }
+    }
+    hits
+}
+
+fn main() {
+    // The blows each head takes: fang, venom, brine.
+    let blows = [3, 2, 4];
+    let (tx, rx) = mpsc::channel();
+    for n in blows {
+        let tx = tx.clone();
+        thread::spawn(move || {
+            for _ in 0..n {
+                tx.send(Report::Hit).expect("receiver dropped");
+            }
+            tx.send(Report::Down).expect("receiver dropped");
+        });
+    }
+    drop(tx);
+    let hits = await_heads(&rx, blows.len());
+    println!("{} heads down after {hits} hits", blows.len());
+    println!("strike the body");
+}
+"#,
+    ),
     // ── Act 8: The Vault of Pointers ─────────────────────────────────
     (
         "box_basic",
@@ -1314,6 +1534,114 @@ fn main() {
     println!("{:?}", weak.upgrade());
     drop(strong); // the last strong owner is gone, so the value is freed
     println!("{:?}", weak.upgrade());
+}
+"#,
+    ),
+    // ── Act 8 boss: the Vaultwright's trial, The Memory Warden ───────
+    (
+        "warden_box",
+        r#"// A ledger is either closed, or one entry and the rest of the ledger.
+#[derive(Debug)]
+enum Ledger {
+    // The Box is a pointer of fixed size; the rest lives on the heap.
+    Entry(u32, Box<Ledger>),
+    Closed,
+}
+
+fn entry(amount: u32, rest: Ledger) -> Ledger {
+    Ledger::Entry(amount, Box::new(rest))
+}
+
+fn total(ledger: &Ledger) -> u32 {
+    match ledger {
+        Ledger::Entry(amount, rest) => amount + total(rest),
+        Ledger::Closed => 0,
+    }
+}
+
+fn main() {
+    let ledger = entry(5, entry(7, entry(3, Ledger::Closed)));
+    println!("{ledger:?}");
+    println!("owed: {}", total(&ledger));
+}
+"#,
+    ),
+    (
+        "warden_shared",
+        r#"use std::cell::RefCell;
+use std::rc::Rc;
+
+// Every debtor holds a handle to the one vault.
+struct Debtor {
+    name: &'static str,
+    vault: Rc<RefCell<u32>>,
+}
+
+// The RefCell lends the vault out for writing, one borrow at a time.
+fn pay(debtor: &Debtor, coins: u32) {
+    *debtor.vault.borrow_mut() += coins;
+}
+
+fn main() {
+    let vault = Rc::new(RefCell::new(0));
+    let miller = Debtor { name: "miller", vault: Rc::clone(&vault) };
+    let smith = Debtor { name: "smith", vault: Rc::clone(&vault) };
+    pay(&miller, 5);
+    pay(&smith, 7);
+    println!("{} and {} paid", miller.name, smith.name);
+    println!("vault holds {}", vault.borrow());
+    println!("handles: {}", Rc::strong_count(&vault));
+}
+"#,
+    ),
+    (
+        "warden_weak",
+        r#"use std::cell::RefCell;
+use std::rc::{Rc, Weak};
+
+struct Debtor {
+    name: &'static str,
+    // Weak: owing someone does not keep them alive.
+    owes: RefCell<Weak<Debtor>>,
+}
+
+fn debtor(name: &'static str) -> Rc<Debtor> {
+    let owes = RefCell::new(Weak::new());
+    Rc::new(Debtor { name, owes })
+}
+
+// Follow the debts from `start` until they come back round, or end.
+fn circle(start: &Rc<Debtor>) -> Vec<&'static str> {
+    let mut names = vec![start.name];
+    let mut at = Rc::clone(start);
+    loop {
+        let next = at.owes.borrow().upgrade();
+        match next {
+            Some(d) if !Rc::ptr_eq(&d, start) => {
+                names.push(d.name);
+                at = d;
+            }
+            _ => return names,
+        }
+    }
+}
+
+fn main() {
+    let warden = debtor("warden");
+    let you = debtor("you");
+    let teller = debtor("teller");
+    // The Warden owes you, you owe the teller, the teller owes him.
+    *warden.owes.borrow_mut() = Rc::downgrade(&you);
+    *you.owes.borrow_mut() = Rc::downgrade(&teller);
+    *teller.owes.borrow_mut() = Rc::downgrade(&warden);
+    println!("circle: {:?}", circle(&warden));
+    let strong = Rc::strong_count(&warden);
+    let weak = Rc::weak_count(&warden);
+    println!("warden: strong {strong}, weak {weak}");
+    let probe = Rc::downgrade(&warden);
+    drop((warden, you, teller));
+    let left = probe.upgrade().map(|d| d.name);
+    println!("after the ledger closes: {left:?}");
 }
 "#,
     ),
