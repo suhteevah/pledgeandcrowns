@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-47 - The Cellarer, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-47-cellarer-v2.jsx (approved by Matt 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REFnn.png).
 // Stands beside a wooden cask/barrel (frame-left), a Bronze ladle in the
 // frame-right hand. If the cask still holds brew he ladles from it; if the
 // cask is EMPTY he does not error - he brews a fresh default batch on the

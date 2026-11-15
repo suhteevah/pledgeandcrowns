@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-34 - The Surveyor, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-34-surveyor-v2.jsx (approved by Matt 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REFnn.png).
 // A Crypt-robed surveyor stands beside a tall graduated measuring rod held
 // in the right hand: a bronze staff ticked in old gold at each unit. A bare
 // length, but every tick names it - a number wrapped in a newtype `Meters`.

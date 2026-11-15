@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-58 - The Harbormaster, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-58-harbormaster-v2.jsx (approved by Matt 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REFnn.png).
 // The authority of the whole harbor. A great Old-gold harbor bell hangs at
 // his right (frame-right); a Bronze spyglass rides in his left hand. He
 // rings the bell to OPEN the harbor, sends every boat out to its work, and

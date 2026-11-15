@@ -12,16 +12,21 @@
 //! holds on Bevy's `ButtonInput` (F to talk, WASD to walk).
 
 use bevy::prelude::*;
+use bevy::sprite::Anchor;
 
 use super::collision::{PUSH_SECS, feet_inside_any, gap_to_wall, probe_wall, probes};
 use super::{Action, Scene, ShotLog, WorldFn};
+use crate::plugins::animation::{
+    CharacterSheets, Facing, IdleBob, Scuttle, SpriteLift, WalkAnim, apply_frame, ferris_frame,
+    player_frame,
+};
 use crate::plugins::compile_client::CompileMode;
 use crate::plugins::compile_client::outcome::{HttpReply, classify, verdict_with_server};
 use crate::plugins::dialogue::Dialogue;
 use crate::plugins::editor::{EditorSession, EditorState};
 use crate::plugins::menu::{MenuScreen, MenuUi};
 use crate::plugins::mission::{ActiveMission, CompletionView, MissionRegistry};
-use crate::plugins::npc::{NPC_ROSTER, TALK_SPOT_OFFSET};
+use crate::plugins::npc::{NPC_ROSTER, Npc, TALK_SPOT_OFFSET};
 use crate::plugins::player::Player;
 use crate::plugins::progress::{MissionProgress, SavedPlayerPosition, Settings};
 use crate::plugins::prop::{MEADOW_OAKS, Prop, PropKind, Solid};
@@ -369,6 +374,8 @@ pub(super) fn all_scenes() -> Vec<Scene> {
     let mut v = Vec::new();
     title_scenes(&mut v);
     world_scenes(&mut v);
+    district_npc_scenes(&mut v);
+    animation_scenes(&mut v);
     ysort_scenes(&mut v);
     collision_scenes(&mut v);
     fade_scenes(&mut v);
@@ -622,6 +629,176 @@ fn world_scenes(v: &mut Vec<Scene>) {
         ],
         0.8,
         None,
+    ));
+}
+
+// --- Act 3-8 villagers and animation frames ----------------------------------
+
+/// The ring districts that hold the Act 3-8 casts (roster order fills
+/// `DISTRICTS` in order; index 0 is the hub, 1-2 hold Act 2).
+const ACT_DISTRICTS: std::ops::RangeInclusive<usize> = 3..=8;
+
+/// Lowercase, dash-separated file label for a district name.
+fn district_label(name: &str) -> String {
+    name.chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == ' ')
+        .collect::<String>()
+        .to_ascii_lowercase()
+        .replace(' ', "-")
+}
+
+/// One capture per Act 3-8 district, camera on the plaza centre: all six of
+/// its villagers (3x2 grid) fit in the 280 px tall view.
+fn district_npc_scenes(v: &mut Vec<Scene>) {
+    let mut first = 0usize;
+    for (d, district) in crate::plugins::world::DISTRICTS.iter().enumerate() {
+        let roster = first..first + district.count;
+        first += district.count;
+        if !ACT_DISTRICTS.contains(&d) {
+            continue;
+        }
+        let names: Vec<&'static str> = NPC_ROSTER
+            .get(roster)
+            .unwrap_or_default()
+            .iter()
+            .map(|s| s.name)
+            .collect();
+        let label = district.name;
+        let center = district.center;
+        v.push(scene(
+            &format!("npcs-{}", district_label(label)),
+            vec![
+                Action::EnterState(GameState::InGame, ENTER_GAME_SETTLE),
+                teleport_to(center),
+                act(move |w| {
+                    let line = format!("npcs {label}: {}", names.join(", "));
+                    tracing::info!("{line}");
+                    w.resource_mut::<ShotLog>().0.push(line);
+                }),
+            ],
+            0.7,
+            None,
+        ));
+    }
+}
+
+/// Open hub flagstone, clear of every NPC slot and prop, for the walk poses.
+const WALK_SPOT: Vec2 = Vec2::new(120.0, -120.0);
+
+/// Freeze the player on one walk frame. The animation system only drives
+/// entities that carry `WalkAnim`, so removing it lets the forced frame
+/// stand for the capture; [`restore_player_walk`] puts it back.
+fn force_player_frame(world: &mut World, facing: Facing, cycle: usize) {
+    let Some(sheets) = world.get_resource::<CharacterSheets>().cloned() else {
+        tracing::warn!("walk scene: CharacterSheets not loaded");
+        return;
+    };
+    let players: Vec<Entity> = {
+        let mut q = world.query_filtered::<Entity, With<Player>>();
+        q.iter(world).collect()
+    };
+    for e in &players {
+        world.entity_mut(*e).remove::<WalkAnim>();
+    }
+    let frame = player_frame(facing, Some(cycle));
+    let mut q = world.query_filtered::<(&mut Sprite, &mut Anchor, &mut SpriteLift), With<Player>>();
+    for (mut sprite, mut anchor, mut lift) in q.iter_mut(world) {
+        apply_frame(&mut sprite, &mut anchor, &mut lift, frame, &sheets.player);
+    }
+    tracing::info!(?facing, cycle, ?frame, "walk scene: player frame forced");
+}
+
+fn restore_player_walk(world: &mut World) {
+    let players: Vec<Entity> = {
+        let mut q = world.query_filtered::<Entity, With<Player>>();
+        q.iter(world).collect()
+    };
+    for e in players {
+        world.entity_mut(e).insert(WalkAnim::default());
+    }
+}
+
+/// The Ferris NPC entity (the first mission's owner).
+fn ferris_entity(world: &mut World) -> Option<Entity> {
+    let mut q = world.query::<(Entity, &Npc)>();
+    q.iter(world)
+        .find(|(_, n)| n.mission_id == FIRST_MISSION)
+        .map(|(e, _)| e)
+}
+
+/// Freeze Ferris on a scuttle frame (his scuttle and bob are removed for
+/// the capture and restored by [`restore_ferris`]).
+fn force_ferris_frame(world: &mut World, cycle: usize) {
+    let Some(sheets) = world.get_resource::<CharacterSheets>().cloned() else {
+        tracing::warn!("scuttle scene: CharacterSheets not loaded");
+        return;
+    };
+    let Some(e) = ferris_entity(world) else {
+        tracing::warn!("scuttle scene: no Ferris entity");
+        return;
+    };
+    world.entity_mut(e).remove::<(Scuttle, IdleBob)>();
+    let frame = ferris_frame(Some(cycle));
+    let mut q = world.query::<(&mut Sprite, &mut Anchor, &mut SpriteLift)>();
+    if let Ok((mut sprite, mut anchor, mut lift)) = q.get_mut(world, e) {
+        apply_frame(&mut sprite, &mut anchor, &mut lift, frame, &sheets.ferris);
+        tracing::info!(cycle, ?frame, "scuttle scene: Ferris frame forced");
+    }
+}
+
+fn restore_ferris(world: &mut World) {
+    let Some(e) = ferris_entity(world) else {
+        return;
+    };
+    let index = NPC_ROSTER
+        .iter()
+        .position(|s| s.mission_id == FIRST_MISSION)
+        .unwrap_or(0);
+    let frame = ferris_frame(None);
+    if let Some(sheets) = world.get_resource::<CharacterSheets>().cloned() {
+        let mut q = world.query::<(&mut Sprite, &mut Anchor, &mut SpriteLift)>();
+        if let Ok((mut sprite, mut anchor, mut lift)) = q.get_mut(world, e) {
+            apply_frame(&mut sprite, &mut anchor, &mut lift, frame, &sheets.ferris);
+        }
+    }
+    world
+        .entity_mut(e)
+        .insert((Scuttle::default(), IdleBob::for_roster_index(index)));
+}
+
+/// The player in each facing mid-stride (stride A, cycle frame 0) and Ferris
+/// mid-scuttle (`walk_0`). Static captures, so the frames are forced.
+fn animation_scenes(v: &mut Vec<Scene>) {
+    let enter = || Action::EnterState(GameState::InGame, ENTER_GAME_SETTLE);
+    for (name, facing) in [
+        ("down", Facing::Down),
+        ("up", Facing::Up),
+        ("left", Facing::Left),
+        ("right", Facing::Right),
+    ] {
+        v.push(scene(
+            &format!("walk-{name}"),
+            vec![
+                enter(),
+                teleport_to(WALK_SPOT),
+                Action::Wait(0.1),
+                act(move |w| force_player_frame(w, facing, 0)),
+            ],
+            0.4,
+            boxed(restore_player_walk),
+        ));
+    }
+    let ferris = npc_slot(FIRST_MISSION).unwrap_or(Vec2::ZERO);
+    v.push(scene(
+        "ferris-scuttle",
+        vec![
+            enter(),
+            teleport_to(ferris + Vec2::new(-40.0, -40.0)),
+            Action::Wait(0.1),
+            act(|w| force_ferris_frame(w, 0)),
+        ],
+        0.4,
+        boxed(restore_ferris),
     ));
 }
 

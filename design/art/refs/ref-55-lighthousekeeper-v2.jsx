@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-55 v2 - The Lighthouse Keeper on the Coast kit, 32x32, idle, transparent bg.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/npc/lighthousekeeper_idle_0.png.
 //
 // Kit: teal knit cap, hayfield scarf, cobalt peacoat with gold buttons
 // (REF-73). The keeper stands at frame-left. Lesson prop (arc_mutex): a small

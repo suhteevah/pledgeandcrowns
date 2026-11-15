@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-32 v2 - The Locksmith on the Guildhall kit, 32x32, idle, transparent bg.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/npc/locksmith_idle_0.png.
 //
 // Kit: flat cap, aged-paper ruff, long oxblood coat (REF-69). A tradesman, so
 // the cap is the darker crypt cloth, with a basalt moustache and a pine hem.

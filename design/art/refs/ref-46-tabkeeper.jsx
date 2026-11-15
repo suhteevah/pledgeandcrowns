@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-46 - The Tabkeeper, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-46-tabkeeper-v2.jsx (approved by Matt 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REFnn.png).
 // Holds a long Parchment-cream tab strip that hangs from his hand down the
 // frame-right side: a CHAIN of orders, one entry under the next, each
 // Coalblack rule mark a link. Every order must succeed for the next to be

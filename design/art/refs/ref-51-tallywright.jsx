@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-51 - The Tallywright, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-51-tallywright-v2.jsx (approved by Matt 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REFnn.png).
 // A row of items runs along a low Bronze rail before him (frame-low). In
 // his hand a counter-stamp; as each item passes he brings the stamp down
 // and prints its NUMBER on it - 0, 1, 2 - so each carries both its place

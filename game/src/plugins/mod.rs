@@ -6,6 +6,7 @@
 use bevy::camera::ScalingMode;
 use bevy::prelude::*;
 
+pub mod animation;
 pub mod audio;
 pub mod compile_client;
 pub mod dialogue;
@@ -51,7 +52,9 @@ impl Plugin for CorePlugin {
                 mission::MissionPlugin,
                 compile_client::CompileClientPlugin,
                 audio::GameAudioPlugin,
-            ));
+            ))
+            // Outside the tuple above: Bevy plugin tuples stop at 15.
+            .add_plugins(animation::AnimationPlugin);
     }
 }
 

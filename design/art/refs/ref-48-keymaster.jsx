@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-48 - The Keymaster, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-48-keymaster-v2.jsx (approved by Matt 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REFnn.png).
 // Stands before a rack of labeled pigeonhole slots (frame-left/back), each
 // slot a keyed cubby. In his raised hand a ring of Old-gold keys, one key
 // per slot. To fetch a thing you do not search every slot - you carry the

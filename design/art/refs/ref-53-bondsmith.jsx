@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-53 - The Bondsmith, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-53-bondsmith-v2.jsx (approved by Matt 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REFnn.png).
 // Holds a Bronze locket-vessel close against his chest and seals a glowing
 // Old-gold item down INTO it with cupped hands. Once sealed, the item is
 // his - it lives inside the vessel he carries, gone from the world outside.

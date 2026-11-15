@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-37 v2 - The Wandwright on the Tower kit, 32x32, idle, transparent bg.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/npc/wandwright_idle_0.png.
 //
 // Kit: pointed hat, cobalt-deep robe, gold hem (REF-70). The Tower's
 // craftsman: a short workshop cap instead of the tall hat, clean-shaven, and a

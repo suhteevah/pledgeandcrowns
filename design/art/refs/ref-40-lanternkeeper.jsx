@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-40 - The Lanternkeeper, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-40-lanternkeeper-v2.jsx (approved by Matt 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REFnn.png).
 // Holds the Lifetime Lantern aloft on a raised arm: an Old-gold lantern,
 // Coalblack-framed, with a small STEADY Mage-glow flame inside kept alive.
 // The flame must outlive the hand that carries it - a borrow valid for

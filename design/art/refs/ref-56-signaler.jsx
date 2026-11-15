@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-56 - The Signaler, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-56-signaler-v2.jsx (approved by Matt 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REFnn.png).
 // Stands on the seawall with TWO semaphore flags - one raised high to
 // frame-left, one lowered to frame-right - spelling a message out across
 // the water to the next station down the line. He holds the SENDING end;

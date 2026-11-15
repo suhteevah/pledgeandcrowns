@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-49 - The Sifter, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-49-sifter-v2.jsx (approved by Matt 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REFnn.png).
 // Holds a round sieve/screen out before him, shaking grain through it. The
 // fine grain that meets the test falls through the Antique-brass mesh and
 // is kept; the chaff that fails stays on top and is let go. He does not

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-77 - Player walk frames, 32x32 each, 4-column sheet (128x64).
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/player/player_walk.png (atlas, 4 cols x 2 rows).
 //
 // Built on the approved REF-01 player: same head, tunic, belt and staff, same
 // palette roles. The pixels above the knees of the two down frames are REF-01

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-65 - The Ghostkeeper, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-65-ghostkeeper-v2.jsx (approved by Matt 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REFnn.png).
 // A faded, half-there figure rendered in low-contrast aged-paper and stone
 // grey with a Cobalt wash - he reads as ghostly, NON-owning. From one open
 // hand a thin dashed Cobalt tether runs out to a hoard chest at frame-right

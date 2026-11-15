@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-59 - The Tideforecaster, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-59-tideforecaster-v2.jsx (approved by Matt 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REFnn.png).
 // Stands at the sea's edge, spyglass raised to one eye, a tide-almanac
 // tucked under the other arm, GAZING out to a Teal horizon - waiting for a
 // tide the almanac promises but that has not yet arrived. She does not hold

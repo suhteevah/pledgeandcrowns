@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-39 v2 - The Familiar's keeper on the Tower kit, 32x32, idle, transparent bg.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/npc/familiar_idle_0.png.
 //
 // Kit: pointed hat, cobalt-deep robe, gold hem (REF-70). A younger keeper:
 // clean-shaven, a brass belt. Lesson prop (dyn_trait): a bronze cage balanced

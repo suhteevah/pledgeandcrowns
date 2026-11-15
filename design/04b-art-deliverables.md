@@ -141,6 +141,7 @@ Rules:
 - All lowercase. Underscores between words. No spaces, no dashes.
 - Frame index is `_0`, `_1`, … — zero-indexed, no zero-padding.
 - Direction suffixes: `_down`, `_up`, `_left`. (Right is flipped from left at runtime.)
+- A ref drawn as a tile sheet ships as the one atlas PNG render-refs writes (e.g. `player/player_walk.png`, `tiles_village_v3.png`); its frames are atlas indices in the ref's declaration order, not separate files.
 - 9-slice frames use the `_9slice.png` suffix and ship with a sibling `.json` describing border insets.
 - Boss assets that need >20 files get their own subdirectory under `bosses/`.
 
@@ -209,41 +210,41 @@ Refs landed against the bible. Source `.jsx` lives at `design/art/refs/ref-NN-<s
 | 28 | The Chronicler | 32×32 | ref-28-chronicler.jsx | specs/chronicler.md | `sprites/npc/chronicler_idle_0.png` |
 | 29 | The Alchemist | 32×32 | ref-29-alchemist.jsx | specs/alchemist.md | `sprites/npc/alchemist_idle_0.png` |
 | 30 | The Guildmaster | 32×32 | ref-30-guildmaster.jsx | specs/guildmaster.md | `sprites/npc/guildmaster_idle_0.png` |
-| 31 | The Recruiter | 32×32 | ref-31-recruiter.jsx | specs/recruiter.md | `sprites/npc/recruiter_idle_0.png` |
-| 32 | The Locksmith | 32×32 | ref-32-locksmith.jsx | specs/locksmith.md | `sprites/npc/locksmith_idle_0.png` |
-| 33 | The Porter | 32×32 | ref-33-porter.jsx | specs/porter.md | `sprites/npc/porter_idle_0.png` |
-| 34 | The Surveyor | 32×32 | ref-34-surveyor.jsx | specs/surveyor.md | `sprites/npc/surveyor_idle_0.png` |
-| 35 | The Armorer | 32×32 | ref-35-armorer.jsx | specs/armorer.md | `sprites/npc/armorer_idle_0.png` |
-| 36 | Vexis the Archmage | 32×32 | ref-36-vexis.jsx | specs/vexis.md | `sprites/npc/vexis_idle_0.png` |
-| 37 | The Wandwright | 32×32 | ref-37-wandwright.jsx | specs/wandwright.md | `sprites/npc/wandwright_idle_0.png` |
+| 31 | The Recruiter | 32×32 | ref-31-recruiter-v2.jsx (supersedes ref-31-recruiter.jsx) | specs/recruiter.md | `sprites/npc/recruiter_idle_0.png` (REF31v2.png, tranche 2) |
+| 32 | The Locksmith | 32×32 | ref-32-locksmith-v2.jsx (supersedes ref-32-locksmith.jsx) | specs/locksmith.md | `sprites/npc/locksmith_idle_0.png` (REF32v2.png, tranche 2) |
+| 33 | The Porter | 32×32 | ref-33-porter-v2.jsx (supersedes ref-33-porter.jsx) | specs/porter.md | `sprites/npc/porter_idle_0.png` (REF33v2.png, tranche 2) |
+| 34 | The Surveyor | 32×32 | ref-34-surveyor-v2.jsx (supersedes ref-34-surveyor.jsx) | specs/surveyor.md | `sprites/npc/surveyor_idle_0.png` (REF34v2.png, tranche 2) |
+| 35 | The Armorer | 32×32 | ref-35-armorer-v2.jsx (supersedes ref-35-armorer.jsx) | specs/armorer.md | `sprites/npc/armorer_idle_0.png` (REF35v2.png, tranche 2) |
+| 36 | Vexis the Archmage | 32×32 | ref-36-vexis-v2.jsx (supersedes ref-36-vexis.jsx) | specs/vexis.md | `sprites/npc/vexis_idle_0.png` (REF36v2.png, tranche 2) |
+| 37 | The Wandwright | 32×32 | ref-37-wandwright-v2.jsx (supersedes ref-37-wandwright.jsx) | specs/wandwright.md | `sprites/npc/wandwright_idle_0.png` (REF37v2.png, tranche 2) |
 | 38 | The Conjurer | 32×32 | ref-38-conjurer.jsx | specs/conjurer.md | `sprites/npc/conjurer_idle_0.png` |
-| 39 | The Familiar | 32×32 | ref-39-familiar.jsx | specs/familiar.md | `sprites/npc/familiar_idle_0.png` |
-| 40 | The Lanternkeeper | 32×32 | ref-40-lanternkeeper.jsx | specs/lanternkeeper.md | `sprites/npc/lanternkeeper_idle_0.png` |
-| 41 | The Loremaster | 32×32 | ref-41-loremaster.jsx | specs/loremaster.md | `sprites/npc/loremaster_idle_0.png` |
+| 39 | The Familiar | 32×32 | ref-39-familiar-v2.jsx (supersedes ref-39-familiar.jsx) | specs/familiar.md | `sprites/npc/familiar_idle_0.png` (REF39v2.png, tranche 2) |
+| 40 | The Lanternkeeper | 32×32 | ref-40-lanternkeeper-v2.jsx (supersedes ref-40-lanternkeeper.jsx) | specs/lanternkeeper.md | `sprites/npc/lanternkeeper_idle_0.png` (REF40v2.png, tranche 2) |
+| 41 | The Loremaster | 32×32 | ref-41-loremaster-v2.jsx (supersedes ref-41-loremaster.jsx) | specs/loremaster.md | `sprites/npc/loremaster_idle_0.png` (REF41v2.png, tranche 2) |
 | 42 | The Barkeep | 32×32 | ref-42-barkeep.jsx | specs/barkeep.md | `sprites/npc/barkeep_idle_0.png` |
-| 43 | The Bouncer | 32×32 | ref-43-bouncer.jsx | specs/bouncer.md | `sprites/npc/bouncer_idle_0.png` |
-| 44 | The Interpreter | 32×32 | ref-44-interpreter.jsx | specs/interpreter.md | `sprites/npc/interpreter_idle_0.png` |
-| 45 | The Mixologist | 32×32 | ref-45-mixologist.jsx | specs/mixologist.md | `sprites/npc/mixologist_idle_0.png` |
-| 46 | The Tabkeeper | 32×32 | ref-46-tabkeeper.jsx | specs/tabkeeper.md | `sprites/npc/tabkeeper_idle_0.png` |
-| 47 | The Cellarer | 32×32 | ref-47-cellarer.jsx | specs/cellarer.md | `sprites/npc/cellarer_idle_0.png` |
-| 48 | The Keymaster | 32×32 | ref-48-keymaster.jsx | specs/keymaster.md | `sprites/npc/keymaster_idle_0.png` |
-| 49 | The Sifter | 32×32 | ref-49-sifter.jsx | specs/sifter.md | `sprites/npc/sifter_idle_0.png` |
+| 43 | The Bouncer | 32×32 | ref-43-bouncer-v2.jsx (supersedes ref-43-bouncer.jsx) | specs/bouncer.md | `sprites/npc/bouncer_idle_0.png` (REF43v2.png, tranche 2) |
+| 44 | The Interpreter | 32×32 | ref-44-interpreter-v2.jsx (supersedes ref-44-interpreter.jsx) | specs/interpreter.md | `sprites/npc/interpreter_idle_0.png` (REF44v2.png, tranche 2) |
+| 45 | The Mixologist | 32×32 | ref-45-mixologist-v2.jsx (supersedes ref-45-mixologist.jsx) | specs/mixologist.md | `sprites/npc/mixologist_idle_0.png` (REF45v2.png, tranche 2) |
+| 46 | The Tabkeeper | 32×32 | ref-46-tabkeeper-v2.jsx (supersedes ref-46-tabkeeper.jsx) | specs/tabkeeper.md | `sprites/npc/tabkeeper_idle_0.png` (REF46v2.png, tranche 2) |
+| 47 | The Cellarer | 32×32 | ref-47-cellarer-v2.jsx (supersedes ref-47-cellarer.jsx) | specs/cellarer.md | `sprites/npc/cellarer_idle_0.png` (REF47v2.png, tranche 2) |
+| 48 | The Keymaster | 32×32 | ref-48-keymaster-v2.jsx (supersedes ref-48-keymaster.jsx) | specs/keymaster.md | `sprites/npc/keymaster_idle_0.png` (REF48v2.png, tranche 2) |
+| 49 | The Sifter | 32×32 | ref-49-sifter-v2.jsx (supersedes ref-49-sifter.jsx) | specs/sifter.md | `sprites/npc/sifter_idle_0.png` (REF49v2.png, tranche 2) |
 | 50 | The Smelter | 32×32 | ref-50-smelter.jsx | specs/smelter.md | `sprites/npc/smelter_idle_0.png` |
-| 51 | The Tallywright | 32×32 | ref-51-tallywright.jsx | specs/tallywright.md | `sprites/npc/tallywright_idle_0.png` |
-| 52 | The Riveter | 32×32 | ref-52-riveter.jsx | specs/riveter.md | `sprites/npc/riveter_idle_0.png` |
-| 53 | The Bondsmith | 32×32 | ref-53-bondsmith.jsx | specs/bondsmith.md | `sprites/npc/bondsmith_idle_0.png` |
+| 51 | The Tallywright | 32×32 | ref-51-tallywright-v2.jsx (supersedes ref-51-tallywright.jsx) | specs/tallywright.md | `sprites/npc/tallywright_idle_0.png` (REF51v2.png, tranche 2) |
+| 52 | The Riveter | 32×32 | ref-52-riveter-v2.jsx (supersedes ref-52-riveter.jsx) | specs/riveter.md | `sprites/npc/riveter_idle_0.png` (REF52v2.png, tranche 2) |
+| 53 | The Bondsmith | 32×32 | ref-53-bondsmith-v2.jsx (supersedes ref-53-bondsmith.jsx) | specs/bondsmith.md | `sprites/npc/bondsmith_idle_0.png` (REF53v2.png, tranche 2) |
 | 54 | The Dockmaster | 32×32 | ref-54-dockmaster.jsx | specs/dockmaster.md | `sprites/npc/dockmaster_idle_0.png` |
-| 55 | The Lighthouse Keeper | 32×32 | ref-55-lighthousekeeper.jsx | specs/lighthousekeeper.md | `sprites/npc/lighthousekeeper_idle_0.png` |
-| 56 | The Signaler | 32×32 | ref-56-signaler.jsx | specs/signaler.md | `sprites/npc/signaler_idle_0.png` |
-| 57 | The Tidewatch | 32×32 | ref-57-tidewatch.jsx | specs/tidewatch.md | `sprites/npc/tidewatch_idle_0.png` |
-| 58 | The Harbormaster | 32×32 | ref-58-harbormaster.jsx | specs/harbormaster.md | `sprites/npc/harbormaster_idle_0.png` |
-| 59 | The Tideforecaster | 32×32 | ref-59-tideforecaster.jsx | specs/tideforecaster.md | `sprites/npc/tideforecaster_idle_0.png` |
-| 60 | The Vaultwright | 32×32 | ref-60-vaultwright.jsx | specs/vaultwright.md | `sprites/npc/vaultwright_idle_0.png` |
-| 61 | The Sharekeeper | 32×32 | ref-61-sharekeeper.jsx | specs/sharekeeper.md | `sprites/npc/sharekeeper_idle_0.png` |
+| 55 | The Lighthouse Keeper | 32×32 | ref-55-lighthousekeeper-v2.jsx (supersedes ref-55-lighthousekeeper.jsx) | specs/lighthousekeeper.md | `sprites/npc/lighthousekeeper_idle_0.png` (REF55v2.png, tranche 2) |
+| 56 | The Signaler | 32×32 | ref-56-signaler-v2.jsx (supersedes ref-56-signaler.jsx) | specs/signaler.md | `sprites/npc/signaler_idle_0.png` (REF56v2.png, tranche 2) |
+| 57 | The Tidewatch | 32×32 | ref-57-tidewatch-v2.jsx (supersedes ref-57-tidewatch.jsx) | specs/tidewatch.md | `sprites/npc/tidewatch_idle_0.png` (REF57v2.png, tranche 2) |
+| 58 | The Harbormaster | 32×32 | ref-58-harbormaster-v2.jsx (supersedes ref-58-harbormaster.jsx) | specs/harbormaster.md | `sprites/npc/harbormaster_idle_0.png` (REF58v2.png, tranche 2) |
+| 59 | The Tideforecaster | 32×32 | ref-59-tideforecaster-v2.jsx (supersedes ref-59-tideforecaster.jsx) | specs/tideforecaster.md | `sprites/npc/tideforecaster_idle_0.png` (REF59v2.png, tranche 2) |
+| 60 | The Vaultwright | 32×32 | ref-60-vaultwright-v2.jsx (supersedes ref-60-vaultwright.jsx) | specs/vaultwright.md | `sprites/npc/vaultwright_idle_0.png` (REF60v2.png, tranche 2) |
+| 61 | The Sharekeeper | 32×32 | ref-61-sharekeeper-v2.jsx (supersedes ref-61-sharekeeper.jsx) | specs/sharekeeper.md | `sprites/npc/sharekeeper_idle_0.png` (REF61v2.png, tranche 2) |
 | 62 | The Warden | 32×32 | ref-62-warden.jsx | specs/warden.md | `sprites/npc/warden_idle_0.png` |
-| 63 | The Swapwarden | 32×32 | ref-63-swapwarden.jsx | specs/swapwarden.md | `sprites/npc/swapwarden_idle_0.png` |
-| 64 | The Strongbox | 32×32 | ref-64-strongbox.jsx | specs/strongbox.md | `sprites/npc/strongbox_idle_0.png` |
-| 65 | The Ghostkeeper | 32×32 | ref-65-ghostkeeper.jsx | specs/ghostkeeper.md | `sprites/npc/ghostkeeper_idle_0.png` |
+| 63 | The Swapwarden | 32×32 | ref-63-swapwarden-v2.jsx (supersedes ref-63-swapwarden.jsx) | specs/swapwarden.md | `sprites/npc/swapwarden_idle_0.png` (REF63v2.png, tranche 2) |
+| 64 | The Strongbox | 32×32 | ref-64-strongbox-v2.jsx (supersedes ref-64-strongbox.jsx) | specs/strongbox.md | `sprites/npc/strongbox_idle_0.png` (REF64v2.png, tranche 2) |
+| 65 | The Ghostkeeper | 32×32 | ref-65-ghostkeeper-v2.jsx (supersedes ref-65-ghostkeeper.jsx) | specs/ghostkeeper.md | `sprites/npc/ghostkeeper_idle_0.png` (REF65v2.png, tranche 2) |
 | 66 | Hearthstone Village terrain v2 | 16×16 ×22 (8-col atlas, 128×48) | ref-66-terrain.jsx | (header) | `sprites/tiles_village_v2.png` (file kept, unused; its tiles ship in the world via REF-76, indices 0-21) |
 | 67 | Village oak (prop sprite) | 32×48 | ref-67-oak.jsx | (header) | `sprites/props/oak.png` |
 | 68 | Hearthstone cottage (prop sprite) | 64×64 | ref-68-cottage.jsx | (header) | `sprites/props/cottage.png` |
@@ -255,10 +256,14 @@ Refs landed against the bible. Source `.jsx` lives at `design/art/refs/ref-NN-<s
 | 74 | Costume kit, Act 8 Vault (Warden) | 32×32 | ref-74-vaultkit.jsx | (header) | (kit exemplar, not wired) |
 | 75 | Plaza flagstone | 16×16 ×2 (2-col sheet, 32×16) | ref-75-flagstone.jsx | (header) | via REF-76: `sprites/tiles_village_v3.png` indices 22-23 (plaza interiors) |
 | 76 | Village combined atlas (REF-66 + REF-75, mechanical copy, no new art) | 16×16 ×24 (8-col atlas, 128×48) | ref-76-village-atlas.jsx | (header) | `sprites/tiles_village_v3.png` (the world's terrain atlas) |
+| 77 | Player walk frames (down_0, down_2, up_0, up_1, up_2, left_0, left_1, left_2) | 32×32 ×8 (4-col atlas, 128×64) | ref-77-playerwalk.jsx | (header) | `sprites/player/player_walk.png` (atlas; cycles with `player_idle_0.png`, see below) |
+| 78 | Ferris walk frames (walk_0, walk_2) | 32×32 ×2 (2-col atlas, 64×32) | ref-78-ferriswalk.jsx | (header) | `sprites/npc/ferris_walk.png` (atlas; cycles with `ferris_idle_0.png`) |
 
 Props (REF-67, REF-68) are sprites, not tiles: y-sorted, anchored bottom-centre. Terrain (REF-66) uses an opaque base layer plus a transparent grass-edge overlay layer.
 
 A tilemap binds one atlas texture, so the plaza flagstone (REF-75) reaches the world through REF-76, a verbatim copy of the REF-66 tiles (0-21) followed by the REF-75 tiles (22-23). render-refs' `ref76_atlas_is_verbatim_copy_of_ref66_and_ref75` test fails if the copy drifts from either source; edit the source ref, never REF-76's rows. Plaza interiors are flagstone inside a one-tile REF-66 cobble ring; roads stay dirt.
+
+Walk cycles (`game/src/plugins/animation.rs`, 150 ms per frame, sheets sliced as texture atlases by the ref's column count, index = tile declaration order): player down `down_0`, idle, `down_2`, idle; up `up_0`, `up_1`, `up_2`, `up_1`; left `left_0`, `left_1`, `left_2`, `left_1`; right = left flipped. The second and fourth frames (the pass) are the standing pose lifted 1 px by the engine. Standing shows idle / `up_1` / `left_1` (flipped for right). Ferris: `walk_0`, idle, `walk_2`, idle in every direction, no lift. NPCs get a 1 px idle bob (2.4 s period, phase-offset per roster index). All lifts move the sprite's anchor, never its transform: collision, y-sort, talk range and quest markers are unaffected.
 
 **NPC batches landed:**
 - Batch 1 (2026-05-02) — REF-11..15: Smith, Cartographer, Trait Mage, Bellringer, Cooper. Specs in `design/art/specs/`. Replaces SPRITE_PLAYER placeholders for the corresponding entries in `NPC_ROSTER`.
@@ -275,11 +280,11 @@ A tilemap binds one atlas texture, so the plaza flagstone (REF-75) reaches the w
 **Tranches (canvas flow):**
 - Tranche 1 (approved by Matt 2026-11-13) — REF-66 terrain v2, REF-67 oak, REF-68 cottage, REF-69..74 costume-kit exemplars for Acts 3-8. REF-66/67/68 are wired into the game. REF-69..74 are approved kits only and are not wired to any NPC.
 - REF-75 plaza flagstone (approved by Matt 2026-11-14) — wired 2026-11-14 via the REF-76 combined atlas.
-- Tranche 2 (planned) — redraw the 40 Act 3-8 villagers on the REF-69..74 kits.
+- Tranche 2 (approved by Matt 2026-11-15, wired 2026-11-15) — the 30 Act 3-8 villagers redrawn on the REF-69..74 kits: REF-31..37, 39..41, 43..49, 51..53, 55..61, 63..65, each as `ref-NN-<slug>-v2.jsx` rendered to `REFNNv2.png` and installed over that NPC's own `sprites/npc/<slug>_idle_0.png` (every one was already its own file, no shared placeholder). The first-pass `ref-NN-<slug>.jsx` files are kept, marked SUPERSEDED in their headers, and still render to their old `REFNN.png`. `game/tests/art_wiring.rs` pins every game file to its v2 render. Same approval: REF-77 player walk and REF-78 Ferris walk frames, wired as atlases (see "Walk cycles" above). Refs 79-94 (Acts 9-10 drafts) are not wired.
 
-**Remaining placeholders:** no `SPRITE_PLAYER` placeholders remain; all 57 NPCs (Acts 1-8) carry distinct art. That art is not final: the 40 Act 3-8 villagers still use their first-pass sprites (batches 5-10) until tranche 2 redraws them. See `game/src/plugins/npc.rs` for live truth.
+**Remaining placeholders:** no `SPRITE_PLAYER` placeholders remain; all 57 NPCs (Acts 1-8) carry distinct art. In Acts 3-8, 30 villagers carry the approved kit redraws; the six kit holders (REF-30 Guildmaster, REF-38 Conjurer, REF-42 Barkeep, REF-50 Smelter, REF-54 Dockmaster, REF-62 Warden) still use their first-pass sprites: their kit exemplars (REF-69..74) are approved but not wired. See `game/src/plugins/npc.rs` for live truth.
 
-**Owner action, due before 2026-12-14:** six of the "rough nine" NPC conversions (REF-29 Alchemist, REF-32 Locksmith, REF-33 Porter, REF-35 Armorer, REF-40 Lanternkeeper, REF-41 Loremaster) depend on an approved artboard in the old claude.ai/design project. Matt must export that artboard before standalone claude.ai/design closes.
+**Owner action, due before 2026-12-14:** six of the "rough nine" NPC conversions (REF-29 Alchemist, REF-32 Locksmith, REF-33 Porter, REF-35 Armorer, REF-40 Lanternkeeper, REF-41 Loremaster) depend on an approved artboard in the old claude.ai/design project. Five of them (REF-32/33/35/40/41) are now replaced in game by approved v2 redraws, so the export matters for the game only for REF-29 Alchemist; the others are history. Matt must export that artboard before standalone claude.ai/design closes if he wants it kept.
 
 ## 10. Revision history
 
@@ -288,3 +293,4 @@ A tilemap binds one atlas texture, so the plaza flagstone (REF-75) reaches the w
 - **1.2 (2026-05-02)** — logged NPC batch 2 (Oracle, Herald, Twin, Tinker, Heraldic Sage). 5 of 9 P2 placeholders remain.
 - **1.3 (2026-05-02)** — logged NPC batch 3 (Forgewright, Linguist, Pilgrim, Drillmaster, Reckoner). 4 of 9 Act-2 P2 placeholders remain.
 - **1.4 (2026-11-14)** — §5 rewritten for the canvas flow (Fable drafts, Matt approves on the design canvas, render-refs preview to scratch). §9: added REF-66..74 and the tranche 1 log; corrected the placeholder line (Acts 3-8 await the kit redraw); logged the pre-2026-12-14 artboard export as an owner action.
+- **1.5 (2026-11-15)** — §9: tranche 2 approved and wired (30 Act 3-8 villager v2 redraws; manifest rows point at the v2 sources), REF-77/78 walk sheets added and wired, walk-cycle assembly documented, placeholder and owner-action lines updated.

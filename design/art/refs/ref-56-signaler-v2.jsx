@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-56 v2 - The Signaler on the Coast kit, 32x32, idle, transparent bg.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/npc/signaler_idle_0.png.
 //
 // Kit: teal knit cap, hayfield scarf, cobalt peacoat with gold buttons
 // (REF-73). Lesson prop (mpsc_channel): two signal flags on poles - a gold

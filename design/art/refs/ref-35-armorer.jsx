@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-35 - The Armorer, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-35-armorer-v2.jsx (approved by Matt 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REFnn.png).
 // A lean Crypt-tunic smith stands by a weapon rack. In the right hand a
 // stone-grey blade (Weapon variant); in the left a small teal vial (Potion
 // variant). Two variants of the same enum, each carrying its own data;

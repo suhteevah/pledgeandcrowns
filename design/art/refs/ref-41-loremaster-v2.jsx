@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-41 v2 - The Loremaster on the Tower kit, 32x32, idle, transparent bg.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/npc/loremaster_idle_0.png.
 //
 // Kit: pointed hat, cobalt-deep robe, gold hem, aged-paper beard (REF-70).
 // Lesson prop (assoc_type): an open gold-trimmed tome held forward at the

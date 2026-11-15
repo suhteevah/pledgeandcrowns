@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-58 v2 - The Harbormaster on the Coast kit, 32x32, idle, transparent bg.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/npc/harbormaster_idle_0.png.
 //
 // Kit: Coast cobalt (REF-73), cut for command: a peaked cap with a gold badge,
 // a full grey beard, gold epaulettes, and a coat that runs to the ankles with

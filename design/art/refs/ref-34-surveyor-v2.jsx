@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-34 v2 - The Surveyor on the Guildhall kit, 32x32, idle, transparent bg.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/npc/surveyor_idle_0.png.
 //
 // Kit: beret, aged-paper ruff, long oxblood coat (REF-69). A field officer:
 // plain beret, brass collar studs, gold belt buckle, pine hem, fair hair.

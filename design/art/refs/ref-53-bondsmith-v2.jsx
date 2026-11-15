@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-53 v2 - The Bondsmith on the Forge kit, 32x32, idle, transparent bg.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/npc/bondsmith_idle_0.png.
 //
 // Kit: brass goggles, basalt apron, bare arms (REF-72), under a basalt cowl
 // instead of the cap - the only hooded head in the forge. Lesson prop

@@ -4,11 +4,13 @@
 //! Native sprite resolution is 32x32 (REF-01); displayed at scale 1x, i.e.
 //! 2 tiles tall, in proportion to the 16px village tiles (was 2x = 4 tiles,
 //! which dwarfed the world).
-//! Movement is WASD or arrow keys. Speed is constant for MVP — no
-//! animation states yet. Bounded by `world::WORLD_HALF_*` so the
-//! player can't walk off the painted background.
+//! Movement is WASD or arrow keys at a constant speed. Facing and the walk
+//! cycle live in `plugins::animation` (REF-77), driven by the same input
+//! ([`input_dir`]). Bounded by `world::WORLD_HALF_*` so the player can't
+//! walk off the painted background.
 
 use crate::assets::SPRITE_PLAYER;
+use crate::plugins::animation::{SpriteLift, WalkAnim};
 use crate::plugins::prop::{Aabb, Solid, slide_move, ysort_z};
 use crate::plugins::state::GameState;
 use crate::plugins::world::{PLAYER_SPAWN, WORLD_HALF_H, WORLD_HALF_W};
@@ -95,7 +97,29 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
             ysort_z(PLAYER_SPAWN.y - PLAYER_DISPLAY * 0.5),
         ),
         Player,
+        WalkAnim::default(),
+        SpriteLift::default(),
     ));
+}
+
+/// The movement direction the keyboard asks for (WASD or arrows), not
+/// normalised. Shared by `move_player` and the walk animation so facing
+/// always agrees with motion.
+pub fn input_dir(keys: &ButtonInput<KeyCode>) -> Vec2 {
+    let mut dir = Vec2::ZERO;
+    if keys.pressed(KeyCode::KeyW) || keys.pressed(KeyCode::ArrowUp) {
+        dir.y += 1.0;
+    }
+    if keys.pressed(KeyCode::KeyS) || keys.pressed(KeyCode::ArrowDown) {
+        dir.y -= 1.0;
+    }
+    if keys.pressed(KeyCode::KeyA) || keys.pressed(KeyCode::ArrowLeft) {
+        dir.x -= 1.0;
+    }
+    if keys.pressed(KeyCode::KeyD) || keys.pressed(KeyCode::ArrowRight) {
+        dir.x += 1.0;
+    }
+    dir
 }
 
 /// Public (unchanged behaviour) so the screenshot plugin's headless
@@ -118,20 +142,7 @@ pub fn move_player(
         return;
     };
 
-    let mut dir = Vec2::ZERO;
-    if keys.pressed(KeyCode::KeyW) || keys.pressed(KeyCode::ArrowUp) {
-        dir.y += 1.0;
-    }
-    if keys.pressed(KeyCode::KeyS) || keys.pressed(KeyCode::ArrowDown) {
-        dir.y -= 1.0;
-    }
-    if keys.pressed(KeyCode::KeyA) || keys.pressed(KeyCode::ArrowLeft) {
-        dir.x -= 1.0;
-    }
-    if keys.pressed(KeyCode::KeyD) || keys.pressed(KeyCode::ArrowRight) {
-        dir.x += 1.0;
-    }
-
+    let dir = input_dir(&keys);
     if dir == Vec2::ZERO {
         return;
     }

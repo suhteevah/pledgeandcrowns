@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-39 - The Familiar Keeper, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-39-familiar-v2.jsx (approved by Matt 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REFnn.png).
 // Accompanied by a polyglot familiar in a bronze cage held aloft: the
 // creature is painted in several element colors AT ONCE - a Main-teal
 // wing, an Old-gold body, a Forest tail - many concrete types behind one

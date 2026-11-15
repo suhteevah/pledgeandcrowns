@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-44 - The Interpreter, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-44-interpreter-v2.jsx (approved by Matt 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REFnn.png).
 // Holds two small signs - one in each raised hand - of DIFFERENT make:
 // frame-left a Forest-green token (the source complaint), frame-right a
 // Teal token (the translated complaint). Between them his hands gesture

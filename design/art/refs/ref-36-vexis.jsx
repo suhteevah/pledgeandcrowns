@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-36 - Vexis the Archmage, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-36-vexis-v2.jsx (approved by Matt 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REFnn.png).
 // The tower master. The tallest, most imposing robe in the cast: a full
 // Crypt mantle of office, Oxblood primary, Wineflesh lit folds, an Old
 // gold collar yoke. In the right hand a tall staff whose finial is a

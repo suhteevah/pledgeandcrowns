@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-37 - The Wandwright, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-37-wandwright-v2.jsx (approved by Matt 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REFnn.png).
 // A craftsman who turns out wands that will work for ANY element: the
 // blank he holds is plain (no element bound yet), gold-fitted at the
 // collar. A small work-bench with a tool fills the frame-left lower

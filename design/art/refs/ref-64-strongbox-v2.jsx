@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-64 v2 - The Strongbox keeper on the Vault kit, 32x32, idle, transparent bg.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/npc/strongbox_idle_0.png.
 //
 // Kit: crested, visored helm and stone-grey plate with old-gold trim (REF-74).
 // Lesson prop (rc_refcell): a strongbox so large it hides the guard from neck

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-33 - The Porter, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-33-porter-v2.jsx (approved by Matt 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REFnn.png).
 // A Crypt-tunic labourer drains a stack of bog-umber crates: one crate is
 // lifted in both hands off the top of the pile to his right. Pop until the
 // stack is empty - `while let Some(crate) = stack.pop()`.

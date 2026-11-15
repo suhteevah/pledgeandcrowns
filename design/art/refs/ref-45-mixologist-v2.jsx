@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-45 v2 - The Mixologist on the Tavern kit, 32x32, idle, transparent bg.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/npc/mixologist_idle_0.png.
 //
 // Kit: Tavern shirtsleeves and bronze, no robe (REF-71). The bartender: dark
 // hair in a bun, cream blouse, bronze apron over a long basalt skirt - the

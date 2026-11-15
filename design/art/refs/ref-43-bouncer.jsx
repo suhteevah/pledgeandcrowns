@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-43 - The Bouncer, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-43-bouncer-v2.jsx (approved by Matt 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REFnn.png).
 // Burly, broad-shouldered, ARMS CROSSED over the chest. On his belt or
 // frame-side a small Old-gold tally board lists the kinds of trouble by
 // name: each Coalblack rule mark is one named variant. Every sort of
