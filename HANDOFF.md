@@ -1,7 +1,7 @@
 # HANDOFF.md
 
 ## Last Updated
-2026-11-15 — **Orchestrated build-out: waves 1-8 merged and signed off (HEAD `50823a3`); art for Acts 3-8 awaiting approval.**
+2026-11-15 — **Orchestrated build-out: waves 1-9 merged and signed off; art for Acts 3-8 awaiting approval.**
 
 Branch **`finish/integration`** (not pushed, `main` untouched). Fable
 orchestrates Opus agents in git worktrees, reviews each branch, merges, and
@@ -52,12 +52,22 @@ runs `scripts/ci.ps1` on the merged result as the sign-off gate.
   one NPC owns an ordered run of stage missions; stages are ordinary missions.
   First trial is the Borrow Checker's, **The Bridge** (`bridge_toll`,
   `bridge_quill`, `bridge_lantern`) after `while_loop`; `borrow_preview` stays
-  his prologue. **60 missions, 57 NPCs; demo = 24 free, ends on
+  his prologue. **60 missions (69 after wave 9), 57 NPCs; demo = 24 free, ends on
   `bridge_lantern`.** Every error he names is compiled in
   `game/tests/mission_text.rs`. Voice pass done. `PNC_SHOTS_ONLY` filters
   capture scenes.
   Polish left: on completion panels the viewed stage shows a ring, not a tick;
   he has no marker between mission 3 and the trial.
+
+- **Wave 9** (`4e97211`): trials for Acts 3-5: the Variant Wraith (the
+  Guildmaster), the Chimera of Vexis (Vexis), the Tavernkeeper's Wager (the
+  Barkeep), three stages each, owned by existing NPCs, no new art. **69
+  missions, 57 NPCs; demo unchanged (24 free), 45 after.** New
+  `MissionCheck::forbids` on the server (only `wager_quest` uses it). All 19
+  trial compiler claims are compiled in `game/tests/mission_text.rs`.
+  Open: no voice-editor pass on the three owners' new lines; trial owners
+  stand on the plaza edge wall in the offer scenes (NPC placement, older
+  issue); `pitch/deck.template.html` still says 57 missions.
 
 ### Art awaiting Matt's approval (design canvas, none wired)
 30 villagers of Acts 3-8 redrawn on their kits (`ref-31..65 *-v2.jsx`), player
@@ -74,14 +84,15 @@ animation system (facing, 4-frame cycle, flip for right, NPC idle bob).
 2. **Nobody has played the build.** UI is checked only through capture scenes.
    No human has confirmed audio is audible (wav never decoded; now ogg).
 3. **3 missions are static-only on the server** (two thread missions,
-   `async_fn`); the other 57 are behaviour-checked.
+   `async_fn`); the other 66 are behaviour-checked.
 4. **Art still owed by the designer:** pixel font, district landmarks, Act 9/10
    casts (Librarian, Compiler), Borrow Checker intro/defeat frames, title
    redraw. Held until Matt reacts to the 30 redraws.
 5. **Acts 9-10 are specified, not implemented.** The trial mechanism now
    exists; still blocked on art and on the Act 9 harness design for `unsafe`
    (`compile-api/HARNESS-NOTES.md`).
-6. **Other bosses** (Acts 3-8) have no trials yet; each is a `TRIALS` entry
+6. **Bosses of Acts 6-8** (Forge-Golem, Tide Hydra, Memory Warden) have no
+   trials yet; each is a `TRIALS` entry
    plus stage missions following the Bridge as the pattern.
 7. Owner actions: TESS + RF check; domain; Android keystore;
    export the old claude.ai/design artboard before 2026-12-14; install
