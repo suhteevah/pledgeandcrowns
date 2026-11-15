@@ -1,7 +1,7 @@
 # HANDOFF.md
 
 ## Last Updated
-2026-11-15 — **Orchestrated build-out: waves 1-6 merged; art for Acts 3-8 awaiting approval.**
+2026-11-15 — **Orchestrated build-out: waves 1-8 merged and signed off (HEAD `50823a3`); art for Acts 3-8 awaiting approval.**
 
 Branch **`finish/integration`** (not pushed, `main` untouched). Fable
 orchestrates Opus agents in git worktrees, reviews each branch, merges, and
@@ -41,6 +41,24 @@ runs `scripts/ci.ps1` on the merged result as the sign-off gate.
   enforced (a sleeping guest now answers in ~5 s); OOM path exercised;
   `verify-sandbox.sh` has a pass that runs under the real unit (46 checks).
 
+### Waves 7-8 (signed off, CI green on the merged tree)
+- **Wave 7** (`774828f`, `e6cdfde`): third security review closed. wasmtime now
+  runs in its own bwrap run sandbox, connect timeout, no internal paths in
+  500s, `#![forbid(unsafe_code)]` in the harness entry. Verified on cnc (391
+  Linux tests, `verify-sandbox.sh` PASS 111 checks). Verdict: safe to deploy on
+  a host like the one tested; Debian 12, Ubuntu 24.04 and SELinux enforcing are
+  untested (all fail closed). Never deployed.
+- **Wave 8** (`6d022c6`..`50823a3`): boss trials (`game/src/plugins/trial.rs`):
+  one NPC owns an ordered run of stage missions; stages are ordinary missions.
+  First trial is the Borrow Checker's, **The Bridge** (`bridge_toll`,
+  `bridge_quill`, `bridge_lantern`) after `while_loop`; `borrow_preview` stays
+  his prologue. **60 missions, 57 NPCs; demo = 24 free, ends on
+  `bridge_lantern`.** Every error he names is compiled in
+  `game/tests/mission_text.rs`. Voice pass done. `PNC_SHOTS_ONLY` filters
+  capture scenes.
+  Polish left: on completion panels the viewed stage shows a ring, not a tick;
+  he has no marker between mission 3 and the trial.
+
 ### Art awaiting Matt's approval (design canvas, none wired)
 30 villagers of Acts 3-8 redrawn on their kits (`ref-31..65 *-v2.jsx`), player
 walk frames (`ref-77`), Ferris walk frames (`ref-78`), and the editor code-page
@@ -50,20 +68,21 @@ animation system (facing, 4-frame cycle, flip for right, NPC idle bob).
 
 
 ### Known-open, in priority order
-1. **compile-api is NOT safe to deploy publicly.** Two reviews filed in
-   `.claude/reviews/security-2026-11-14-*.md`. The bwrap sandbox has never run
-   (Windows box); it must be proven on Linux with `deploy/verify-sandbox.sh`.
+1. **compile-api has never been deployed.** Three reviews in
+   `.claude/reviews/security-*.md`; before a VPS deploy, run the builder
+   self-test and `deploy/verify-sandbox.sh` on that exact host.
 2. **Nobody has played the build.** UI is checked only through capture scenes.
    No human has confirmed audio is audible (wav never decoded; now ogg).
-3. **UI is default-dark egui** outside the dialogue box (wave 4 fixes).
-4. **16 missions cannot be behaviour-checked by the server:** 13 where the
-   mission text never fixes the output, 3 that cannot run on wasm (two thread
-   missions, `async_fn`). The 13 need their text tightened.
-5. **Art still owed by the designer:** tranche 2 (34 kit villagers, player and
-   Ferris walk cycles), UI kit and pixel font, Act 9/10 casts and landmarks,
-   title redraw, a larger lower-contrast flagstone for the big plazas.
-6. **Acts 9-10 are specified, not implemented** (blocked on art and on one NPC
-   owning three missions for boss trials).
+3. **3 missions are static-only on the server** (two thread missions,
+   `async_fn`); the other 57 are behaviour-checked.
+4. **Art still owed by the designer:** pixel font, district landmarks, Act 9/10
+   casts (Librarian, Compiler), Borrow Checker intro/defeat frames, title
+   redraw. Held until Matt reacts to the 30 redraws.
+5. **Acts 9-10 are specified, not implemented.** The trial mechanism now
+   exists; still blocked on art and on the Act 9 harness design for `unsafe`
+   (`compile-api/HARNESS-NOTES.md`).
+6. **Other bosses** (Acts 3-8) have no trials yet; each is a `TRIALS` entry
+   plus stage missions following the Bridge as the pattern.
 7. Owner actions: TESS + RF check; domain; Android keystore;
    export the old claude.ai/design artboard before 2026-12-14; install
    `wasm-opt`, `butler`, Miri; decide the `repository` URL.
