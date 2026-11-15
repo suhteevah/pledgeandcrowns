@@ -21,7 +21,7 @@ use crate::plugins::dialogue::Dialogue;
 use crate::plugins::editor::{EditorSession, EditorState};
 use crate::plugins::menu::{MenuScreen, MenuUi};
 use crate::plugins::mission::{ActiveMission, CompletionView, MissionRegistry};
-use crate::plugins::npc::NPC_ROSTER;
+use crate::plugins::npc::{NPC_ROSTER, TALK_SPOT_OFFSET};
 use crate::plugins::player::Player;
 use crate::plugins::progress::{MissionProgress, SavedPlayerPosition, Settings};
 use crate::plugins::prop::{MEADOW_OAKS, Prop, PropKind, Solid};
@@ -281,10 +281,11 @@ fn npc_slot(mission_id: &str) -> Option<Vec2> {
         .map(district_slot)
 }
 
-/// Stand just south-west of an NPC, inside the talk radius.
+/// Stand in front of (south of) an NPC, inside the talk radius, as a
+/// player walking up to them would (see `npc::TALK_SPOT_OFFSET`).
 fn beside_npc(mission_id: &'static str) -> Action {
     act(move |w| match npc_slot(mission_id) {
-        Some(slot) => teleport(w, slot + Vec2::new(-14.0, -14.0)),
+        Some(slot) => teleport(w, slot + TALK_SPOT_OFFSET),
         None => tracing::warn!(mission_id, "no NPC slot"),
     })
 }

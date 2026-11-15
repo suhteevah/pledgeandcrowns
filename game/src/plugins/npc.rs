@@ -29,7 +29,18 @@ use bevy::prelude::*;
 // which put NPCs at 3 tiles over 1-tile scenery — half of why the world read
 // "toy-sized." The player matches this (see player::PLAYER_SCALE).
 const NPC_SCALE: f32 = 1.0;
-const INTERACT_RADIUS_PX: f32 = 28.0;
+/// Talk range: the player's centre within this distance of an NPC's centre.
+pub const INTERACT_RADIUS_PX: f32 = 28.0;
+
+/// Where a player stands to talk to an NPC, relative to the NPC's centre:
+/// directly in front (south), 2 px inside [`INTERACT_RADIUS_PX`]. The player
+/// sorts in front of the NPC there. At a 28 px radius two 32 px sprites
+/// always overlap a little: here the player's (transparent) top rows reach
+/// 6 px over the NPC's bottom edge, about 1-3 px of visible hair over feet.
+/// The 64 px Borrow Checker is larger than the whole radius, so the player
+/// always overlaps his lower body. Capture scenes and the placement test use
+/// this, the game itself only checks the radius.
+pub const TALK_SPOT_OFFSET: Vec2 = Vec2::new(0.0, -(INTERACT_RADIUS_PX - 2.0));
 
 #[derive(Component)]
 pub struct Npc {
@@ -478,6 +489,8 @@ pub struct NpcSpec {
     pub name: &'static str,
     pub mission_id: &'static str,
     pub sprite_path: &'static str,
+    /// Legacy hand-typed scatter. NOT used for spawning: NPCs stand at
+    /// `world::district_slot(roster index)` (see `spawn_npcs`).
     pub pos: (f32, f32),
     pub native_px: f32,
 }
@@ -488,13 +501,22 @@ fn spawn_npcs(mut commands: Commands, asset_server: Res<AssetServer>) {
     // superseded. Roster order maps to quarters: early NPCs fill Hearthstone
     // Square, later acts spread to the ring.
     for (i, spec) in NPC_ROSTER.iter().enumerate() {
+        let pos = crate::plugins::world::district_slot(i);
+        tracing::debug!(
+            index = i,
+            npc = spec.name,
+            x = pos.x,
+            y = pos.y,
+            ground = ?crate::plugins::world::ground_at(pos),
+            "spawning NPC"
+        );
         spawn_npc(
             &mut commands,
             &asset_server,
             spec.name,
             spec.mission_id,
             spec.sprite_path,
-            crate::plugins::world::district_slot(i),
+            pos,
             spec.native_px,
         );
     }
