@@ -1,7 +1,7 @@
 # HANDOFF.md
 
 ## Last Updated
-2026-11-15 — **Orchestrated build-out: waves 1-11 merged and signed off; art for Acts 3-8 awaiting approval.**
+2026-11-15 — **Orchestrated build-out: waves 1-13 merged and signed off; art for Acts 3-8 awaiting approval.**
 
 Branch **`finish/integration`** (not pushed, `main` untouched). Fable
 orchestrates Opus agents in git worktrees, reviews each branch, merges, and
@@ -94,12 +94,38 @@ runs `scripts/ci.ps1` on the merged result as the sign-off gate.
   reads. Open: curriculum doc calls the barkeep "Old Maybe, speaks in
   `Option`" but no shipped text does.
 
-### Art awaiting Matt's approval (design canvas, none wired)
-30 villagers of Acts 3-8 redrawn on their kits (`ref-31..65 *-v2.jsx`), player
-walk frames (`ref-77`), Ferris walk frames (`ref-78`), and the editor code-page
-decision (ink vs parchment). Wiring is one batch task once approved: copy each
-`REFnnv2.png` over `game/assets/sprites/npc/<slug>_idle_0.png`, add the walk
-animation system (facing, 4-frame cycle, flip for right, NPC idle bob).
+- **Wave 12** (`cf9bc47`, merged `9a9f4cd`, CI green): server grading mode
+  for Act 9's `unsafe` missions, `HarnessMode::UnsafeLateNonce` (opt-in per
+  mission in the static table; no `forbid(unsafe_code)`; the nonce arrives
+  through a one-shot host import after player code has finished). **No
+  mission uses it yet.** Fourth security review
+  (`.claude/reviews/security-2026-11-15-cf9bc47.md`): no P0/P1, deploy verdict
+  unchanged. Linux run (`linux-verification-2026-11-15c.md`): 406 tests pass,
+  one fixture graded end to end through real bwrap build + run;
+  `verify-sandbox.sh` was NOT re-run. Known, documented limit: a player can
+  forge a pass in this mode by rewriting the checker's stored results
+  (`known_limit_heap_patch_forges_a_pass`); accepted, same class as C-2.
+  When Act 9 registers missions: turn
+  `every_registered_mission_keeps_forbid_unsafe` into an allow-list (P2-3)
+  and add the two host-import edge tests (P2-2).
+- **Wave 13** (`c998890`, merged `a3872fe`): Matt approved all art on
+  2026-11-15. The 30 Act 3-8 villager redraws are the in-game sprites; walk
+  animation in `game/src/plugins/animation.rs` (player four facings, Ferris
+  scuttle, NPC idle bob; draw-anchor lifts only, so collision, y-sort and
+  talk range are untouched); `game/tests/art_wiring.rs`; style bible is v2.2
+  (ink code surface default). **Not done: the six kit holders
+  (Guildmaster, Conjurer, Barkeep, Smelter, Dockmaster, Warden) still show
+  first-pass maroon art; their approved kit exemplars REF-69..74 are their
+  sprites and need wiring.** District names do not match their casts (the
+  Forge cast stands in "The Wharf", the Coast cast in "Stonebridge").
+
+### Art status (Matt is the sole approver; design canvas)
+- **Approved 2026-11-15, not wired:** Act 9 Library kit and cast (REF-79..85),
+  the Librarian (REF-93), Act 10 Throne kit and cast (REF-86..92), the
+  Compiler (REF-94). Second passes Matt delegated are applied.
+- **Awaiting approval:** landmarks REF-95 Sealed Stacks, REF-96 Throne Dais.
+- **Not drawn:** boss intro/defeat frames, the Librarian's lectern, pixel
+  font pick, title redraw, a renderable Borrow Checker.
 
 
 ### Known-open, in priority order
@@ -111,7 +137,7 @@ animation system (facing, 4-frame cycle, flip for right, NPC idle bob).
 3. **4 missions are static-only on the server** (`thread_spawn`,
    `thread_scope`, `hydra_threads`, `async_fn`); the other 74 are
    behaviour-checked (`hydra_body` without running its threaded `main`).
-4. **Art still owed by the designer:** pixel font, district landmarks, Act 9/10
+4. **Art still owed by the designer (see Art status above; this line is older):** pixel font, district landmarks, Act 9/10
    casts (Librarian, Compiler), Borrow Checker intro/defeat frames, title
    redraw. Held until Matt reacts to the 30 redraws.
 5. **Acts 9-10 are specified, not implemented.** The trial mechanism now
