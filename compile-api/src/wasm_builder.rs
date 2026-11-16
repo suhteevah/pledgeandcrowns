@@ -568,6 +568,9 @@ fn run_cargo_build(job: &Path, sandbox: &SandboxSettings) -> Result<BuildVerdict
             // Not the player's fault: never report it as a compile error.
             // The `Err` becomes the setup-failure outcome (HTTP 500, ok =
             // false, generic "please try again"), which is never a clear.
+            // The tail is player-influenced (lld echoes symbol names raw):
+            // `stderr_tail` escapes every control character, so it stays
+            // one field on one log line.
             tracing::error!(
                 kind = crash.kind(),
                 exit = ?out.status.code(),
@@ -688,15 +691,31 @@ pub fn toolchain_crash(stderr: &str) -> Option<ToolchainCrash> {
     None
 }
 
-/// The last ~2 KiB of `stderr`, ANSI-stripped, for an error log line.
+/// The last ~2 KiB of `stderr` for an error log line: ANSI-stripped, then
+/// every control character (`\n`, `\r`, NUL, ESC, ...) and the Unicode
+/// line/paragraph separators replaced by their `escape_default` text, so
+/// the result is a single line with no control characters at all. The
+/// text is player-influenced (lld echoes undefined symbol names, newlines
+/// included); without this a player could write whole forged lines into
+/// the job log, the builder's relog and the journal, or plant the
+/// `pnc-job-phase` marker `jobs.rs` looks for. The bound applies to the
+/// escaped result.
 fn stderr_tail(stderr: &str) -> String {
     const TAIL_BYTES: usize = 2048;
     let clean = proc_tree::strip_ansi(stderr);
-    let mut start = clean.len().saturating_sub(TAIL_BYTES);
-    while !clean.is_char_boundary(start) {
+    let mut escaped = String::with_capacity(clean.len());
+    for c in clean.chars() {
+        if c.is_control() || matches!(c, '\u{2028}' | '\u{2029}') {
+            escaped.extend(c.escape_default());
+        } else {
+            escaped.push(c);
+        }
+    }
+    let mut start = escaped.len().saturating_sub(TAIL_BYTES);
+    while !escaped.is_char_boundary(start) {
         start += 1;
     }
-    clean[start..].to_string()
+    escaped.split_off(start)
 }
 
 /// Outcome of [`read_artifact`].
@@ -918,5 +937,29 @@ error: a
         let t = stderr_tail(&long);
         assert!(t.ends_with("\u{e9}end") && t.len() <= 2048, "{}", t.len());
         assert_eq!(stderr_tail("short"), "short");
+    }
+
+    #[test]
+    fn stderr_tail_has_no_control_characters() {
+        let t = stderr_tail("a\nINFO forged\rb\x1b[31m\x00");
+        assert!(!t.chars().any(char::is_control), "{t:?}");
+        assert_eq!(t, "a\\nINFO forged\\rb\\u{0}");
+        // A planted job-phase marker cannot start a line of the log.
+        let planted = format!(
+            "x\n{}\ny\u{2028}z",
+            crate::wasm_runner::JOB_RUN_PHASE_MARKER
+        );
+        let t = stderr_tail(&planted);
+        assert_eq!(t.lines().count(), 1, "{t:?}");
+        assert!(
+            !t.lines()
+                .any(|l| l.trim() == crate::wasm_runner::JOB_RUN_PHASE_MARKER),
+            "{t:?}"
+        );
+        assert!(!t.chars().any(|c| c.is_control() || c == '\u{2028}'));
+        // The bound holds for the escaped text: 4000 newlines escape to
+        // 8000 bytes, cut to the last 2048.
+        let t = stderr_tail(&"\n".repeat(4000));
+        assert!(t.len() <= 2048 && !t.contains('\n'), "{}", t.len());
     }
 }

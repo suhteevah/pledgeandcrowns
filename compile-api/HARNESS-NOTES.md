@@ -353,6 +353,14 @@ use your code"). See `.claude/reviews/linux-verification-2026-11-16-e86b519.md` 
   an undefined `#[link_name]` raw, newlines included), but only for code
   that fails to link anyway, and the forged result is a server error,
   never a pass.
+- The stderr tail in that error log is player-influenced for the same
+  reason, so `stderr_tail` escapes every control character (`\n`, `\r`,
+  NUL, ...) before the 2 KiB cut: it is always one field on one line and
+  cannot forge separate journal entries or plant the `pnc-job-phase`
+  marker (security review 2026-11-16, P1-1). Checked on cnc: the forge
+  gets HTTP 500 in the plain and `UnsafeLateNonce` layouts, and in
+  `ForbidUnsafe` it never links (`unsafe extern` is refused by the
+  checker's `forbid(unsafe_code)`: `compile_error`); never a pass.
 
 **Measured on cnc (56 cores, rustc 1.99.0), record method** (player crate
 built repeatedly under `prlimit --as=1280MiB`, 4 workers x `-j4`):
