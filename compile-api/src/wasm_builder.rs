@@ -232,7 +232,8 @@ pub fn build_wasm(source: &str) -> Result<BuildVerdict> {
 /// the security contract.
 ///
 /// Returns `Err` only for setup-time failures (empty source, can't create
-/// the job dir, can't spawn the build, process tree would not die). A
+/// the job dir, can't spawn the build, process tree would not die) and
+/// for a toolchain crash ([`ToolchainCrash`]). A
 /// failed `cargo build` or a deny-listed source is a *successful* call
 /// returning `Ok(BuildVerdict { ok: false, .. })`.
 pub fn build_wasm_in(source: &str, settings: &BuildSettings) -> Result<BuildVerdict> {
@@ -563,6 +564,18 @@ fn run_cargo_build(job: &Path, sandbox: &SandboxSettings) -> Result<BuildVerdict
     }
 
     if !out.status.success() {
+        if let Some(crash) = toolchain_crash(&out.stderr) {
+            // Not the player's fault: never report it as a compile error.
+            // The `Err` becomes the setup-failure outcome (HTTP 500, ok =
+            // false, generic "please try again"), which is never a clear.
+            tracing::error!(
+                kind = crash.kind(),
+                exit = ?out.status.code(),
+                stderr_tail = %stderr_tail(&out.stderr),
+                "wasm_builder: the toolchain crashed while building player code"
+            );
+            return Err(crash.into());
+        }
         return Ok(BuildVerdict {
             ok: false,
             // On a build failure cargo's diagnostics are on stderr;
@@ -608,6 +621,82 @@ fn run_cargo_build(job: &Path, sandbox: &SandboxSettings) -> Result<BuildVerdict
         stderr: out.stdout,
         wasm: Some(bytes),
     })
+}
+
+/// A failed build whose stderr shows the toolchain itself died, as
+/// opposed to rejecting the player's code. Returned as an `Err`, so it is
+/// reported as a server-side failure, never as a compile error.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum ToolchainCrash {
+    /// A native toolchain component (rust-lld, LLVM) aborted through the
+    /// C++ runtime: a line starting `terminate called after throwing`.
+    #[error("the toolchain aborted (C++ terminate) while building player code")]
+    CxxTerminate,
+    /// rustc reported the linker killed by a signal.
+    #[error("the linker was killed by a signal while building player code")]
+    LinkerSignal,
+}
+
+impl ToolchainCrash {
+    /// Stable label for logs.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::CxxTerminate => "cxx_terminate",
+            Self::LinkerSignal => "linker_signal",
+        }
+    }
+}
+
+/// Classify a failed build's stderr (pure). `None` means the failure is
+/// the player's (a compile error, an undefined symbol, ...).
+///
+/// Deliberately narrow: only inside rustc's linker-failure block (a
+/// column-0 `error: linking with `...` line and the indented notes under
+/// it), either the C++ runtime's abort line or rustc saying the linker
+/// died by a signal. Every rustc diagnostic a player can provoke starts
+/// with its level at column 0 and indents continuation lines, so a
+/// multi-line `compile_error!` cannot open that block. It is NOT
+/// unforgeable: lld quotes symbol names raw, so an undefined
+/// `#[link_name = "x\n  terminate called after throwing an instance of
+/// y"]` lands inside the block (checked on 1.99.0). That code fails to
+/// link anyway; forging only turns the player's own failure into the
+/// server-error outcome (HTTP 500, `ok: false`), which is never a clear
+/// (the client treats it as offline and does not save). So this must
+/// never be, and is not, what decides a pass.
+pub fn toolchain_crash(stderr: &str) -> Option<ToolchainCrash> {
+    const LINK_FAILED: &str = "error: linking with `";
+    let mut in_link_block = false;
+    for line in stderr.lines() {
+        if line.starts_with(LINK_FAILED) {
+            if line.contains("` failed: signal: ") {
+                return Some(ToolchainCrash::LinkerSignal);
+            }
+            in_link_block = true;
+            continue;
+        }
+        if line.starts_with(|c: char| !c.is_whitespace()) {
+            // Any other column-0 line ends the block (`error:`, `warning:`).
+            in_link_block = false;
+            continue;
+        }
+        let note = line.trim_start();
+        let note = note.strip_prefix("= note:").unwrap_or(note).trim_start();
+        if in_link_block && note.starts_with("terminate called after throwing an instance of ") {
+            return Some(ToolchainCrash::CxxTerminate);
+        }
+    }
+    None
+}
+
+/// The last ~2 KiB of `stderr`, ANSI-stripped, for an error log line.
+fn stderr_tail(stderr: &str) -> String {
+    const TAIL_BYTES: usize = 2048;
+    let clean = proc_tree::strip_ansi(stderr);
+    let mut start = clean.len().saturating_sub(TAIL_BYTES);
+    while !clean.is_char_boundary(start) {
+        start += 1;
+    }
+    clean[start..].to_string()
 }
 
 /// Outcome of [`read_artifact`].
@@ -748,4 +837,86 @@ fn same_device(a: &fs::Metadata, b: &fs::Metadata) -> bool {
 #[cfg(not(unix))]
 fn same_device(_a: &fs::Metadata, _b: &fs::Metadata) -> bool {
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The failure seen on the 56-core Linux host (2026-11-16), as cargo
+    /// printed it.
+    const LLD_EAGAIN: &str = "\
+error: linking with `rust-lld` failed: exit status: 1
+  |
+  = note: \"rust-lld\" \"-flavor\" \"wasm\" \"--threads=4\"
+  = note: some arguments are omitted. use `--verbose` to show all linker arguments
+  = note: terminate called after throwing an instance of 'std::system_error'
+            what():  Resource temporarily unavailable
+          rust-lld: error: failed to write output '/build/target/wasm32-wasip1/release/deps/player_submission-0123.wasm': No such file or directory
+
+
+error: could not compile `player_submission` (bin \"player_submission\") due to 1 previous error
+";
+
+    #[test]
+    fn linker_abort_is_a_toolchain_crash() {
+        assert_eq!(
+            toolchain_crash(LLD_EAGAIN),
+            Some(ToolchainCrash::CxxTerminate)
+        );
+        assert_eq!(
+            toolchain_crash(
+                "error: linking with `rust-lld` failed: signal: 6 (SIGABRT) (core dumped)\n"
+            ),
+            Some(ToolchainCrash::LinkerSignal)
+        );
+    }
+
+    #[test]
+    fn player_errors_stay_player_errors() {
+        let compile_error = "\
+error[E0308]: mismatched types
+ --> src/main.rs:3:18
+  |
+3 |     let x: u32 = \"seven\";
+  |            ---   ^^^^^^^ expected `u32`, found `&str`
+
+error: could not compile `player_submission` (bin \"player_submission\") due to 1 previous error
+";
+        assert_eq!(toolchain_crash(compile_error), None);
+        // An ordinary link error (undefined symbol) is the player's.
+        let undefined = "\
+error: linking with `rust-lld` failed: exit status: 1
+  |
+  = note: rust-lld: error: player_submission.o: undefined symbol: missing_fn
+";
+        assert_eq!(toolchain_crash(undefined), None);
+        // A one-line `compile_error!` cannot reach it: rustc prefixes the
+        // message with `error: `.
+        let forged = "error: terminate called after throwing an instance of 'std::system_error'\n";
+        assert_eq!(toolchain_crash(forged), None);
+        // Nor a multi-line one (rustc 1.99.0 renders the second line
+        // indented under the first, as here).
+        let forged_multiline = "\
+error: a
+       = note: terminate called after throwing an instance of x
+ --> src/main.rs:1:1
+";
+        assert_eq!(toolchain_crash(forged_multiline), None);
+        // Nor a multi-line warning followed by a real (player-caused) link
+        // error: the warning block ends at the column-0 `error: linking`.
+        let warning_then_link = format!(
+            "warning: a\n       terminate called after throwing an instance of x\n\n{undefined}"
+        );
+        assert_eq!(toolchain_crash(&warning_then_link), None);
+        assert_eq!(toolchain_crash(""), None);
+    }
+
+    #[test]
+    fn stderr_tail_keeps_the_end_on_a_char_boundary() {
+        let long = format!("{}\u{e9}end", "x".repeat(4000));
+        let t = stderr_tail(&long);
+        assert!(t.ends_with("\u{e9}end") && t.len() <= 2048, "{}", t.len());
+        assert_eq!(stderr_tail("short"), "short");
+    }
 }

@@ -22,7 +22,7 @@ use pledge_compile_api::ipc::{self, IpcError, JobReply, JobRequest, WireGradedRu
 use pledge_compile_api::jobs::{ExecError, JobRun};
 use pledge_compile_api::proc_tree::{self, ProcError};
 use pledge_compile_api::run_sandbox::{self, RunChildReply, RunSandboxError};
-use pledge_compile_api::wasm_builder::{BuildSettings, RunLimits};
+use pledge_compile_api::wasm_builder::{BuildSettings, RunLimits, ToolchainCrash};
 use pledge_compile_api::{AppState, CompileResponse, Config, MissionGrader, build_router, serve};
 
 const EXE: &str = env!("CARGO_BIN_EXE_pledge_compile_api");
@@ -359,6 +359,11 @@ fn setup_failure_classes() -> Vec<(&'static str, ErrMaker)> {
         ("run sandbox", || {
             RunSandboxError::Image("/proc/self/maps: /usr/lib64/libc.so.6 (deleted)".to_string())
                 .into()
+        }),
+        ("toolchain crash", || {
+            // A rust-lld abort while linking a correct solution: a server
+            // fault, so it must take this path and never grade the player.
+            anyhow::Error::from(ToolchainCrash::CxxTerminate)
         }),
         ("survivors", || {
             ProcError::Survivors {

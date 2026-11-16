@@ -312,3 +312,59 @@ player controls anyway; there is no server secret in that process to read
 or forge. The late-nonce allow-list is unchanged (the four Act 9
 missions). The sandbox's run limits apply to the allocator's code like any
 other player code.
+
+## rust-lld crash on many-core hosts (2026-11-16)
+
+**Defect.** `rust-lld` starts one thread per host core. On the 56-core
+Linux host, the thread stacks and per-thread glibc malloc arenas
+sometimes pushed a player build past the build sandbox's 1280 MiB
+`RLIMIT_AS`; `pthread_create` failed with EAGAIN and lld printed
+`terminate called after throwing an instance of 'std::system_error' /
+what(): Resource temporarily unavailable`. Sometimes the link still
+succeeded (rustc shows it as `warning: linker stderr: ...`); sometimes it
+failed, and a correct solution was graded `compile_error`. In a harness
+build the message also blamed the player ("the mission checker could not
+use your code"). See `.claude/reviews/linux-verification-2026-11-16-e86b519.md` §4.
+
+**Fix.**
+
+- Every player build (plain and both harness modes go through the one
+  `build_sandbox::cargo_build_spec`) passes
+  `--config target.wasm32-wasip1.rustflags=["-C", "link-arg=--threads=4"]`
+  (`PLAYER_LINK_THREADS = 4`). rustc 1.99.0 hands it to rust-lld as
+  `--threads=4` (checked with `--print link-args`). It is a command-line
+  config, so it outranks cargo config files, and neither build environment
+  carries `RUSTFLAGS` / `CARGO_ENCODED_RUSTFLAGS` /
+  `CARGO_TARGET_*_RUSTFLAGS`. Player source cannot add linker arguments:
+  `#[link]` and `#![feature]` are refused by the source policy, there is
+  no `#[link_args]` on stable, and the player never touches the manifest
+  or the argv. (`#[link_name]` only names a symbol; it reaches lld as a
+  symbol, not an option.)
+- The bwrap build environment also sets `MALLOC_ARENA_MAX=2`.
+- A failed build whose stderr shows the toolchain itself dying
+  (`wasm_builder::toolchain_crash`: a `terminate called after throwing`
+  note inside rustc's `error: linking with` block, or the linker killed
+  by a signal) is no longer a verdict: `run_cargo_build` logs it at
+  `error` with the stderr tail and returns `Err(ToolchainCrash)`. That is
+  the existing setup-failure path: HTTP 500, `ok: false`, generic "please
+  try again" text with a request id. The game client maps 500 to
+  `Offline`, which is never saved as a clear (`persist_clear == false`).
+  The classification is text-based and a player can forge it (lld quotes
+  an undefined `#[link_name]` raw, newlines included), but only for code
+  that fails to link anyway, and the forged result is a server error,
+  never a pass.
+
+**Measured on cnc (56 cores, rustc 1.99.0), record method** (player crate
+built repeatedly under `prlimit --as=1280MiB`, 4 workers x `-j4`):
+
+| Build | lld `terminate` | build failed |
+|---|---|---|
+| unfixed, 40 builds | 10 / 40 | 0 / 40 |
+| unfixed, 200 builds | 35 / 200 | 6 / 200 (all six: the lld abort) |
+| `--threads=4` + `MALLOC_ARENA_MAX=2`, 200 builds | 0 / 200 | 0 / 200 |
+
+Through the real binary (`sandbox-verify`: bwrap, rlimits, server argv),
+200 runs of the fixed build compiled and ran 200 / 200, with no crash.
+That path was pinned to 8 cores per worker (the run's 16-job budget), so
+it is a check of the wiring, not of the 56-core condition: the unfixed
+binary under the same pinning also passed 200 / 200.

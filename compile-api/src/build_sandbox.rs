@@ -504,7 +504,40 @@ fn sandbox_build_env(toolchain: &Path) -> Vec<(&'static str, OsString)> {
         ("CARGO_INCREMENTAL", os("0")),
         ("RUSTC", join_os(toolchain, "bin/rustc")),
         ("TMPDIR", os("/tmp")),
+        // glibc otherwise creates one malloc arena per thread (up to 8 per
+        // core); each reserves address space that counts against the
+        // build's RLIMIT_AS. Second guard next to `PLAYER_LINK_THREADS`.
+        ("MALLOC_ARENA_MAX", os(BUILD_MALLOC_ARENA_MAX)),
     ]
+}
+
+/// Threads `rust-lld` may use when it links player code.
+///
+/// lld otherwise starts one thread per host core. On a 56-core host the
+/// stacks and per-thread malloc arenas of those threads sometimes pushed
+/// the build past its address-space rlimit (`RLimits::address_space_bytes`,
+/// 1280 MiB): `pthread_create` failed with EAGAIN, lld died with
+/// `terminate called after throwing an instance of 'std::system_error'`,
+/// and a correct solution came back as a compile error (6 of 40 builds,
+/// 2026-11-16 Linux record). A curriculum program links in milliseconds,
+/// so 4 threads cost nothing and make the link independent of core count.
+pub const PLAYER_LINK_THREADS: u32 = 4;
+const _: () = assert!(PLAYER_LINK_THREADS >= 1 && PLAYER_LINK_THREADS <= 4);
+
+/// `MALLOC_ARENA_MAX` inside the build sandbox (see `sandbox_build_env`).
+/// Measured alone it also removed the lld crash (0 of 40).
+pub const BUILD_MALLOC_ARENA_MAX: &str = "2";
+
+/// The cargo `--config` value that caps lld's threads for the wasm target.
+/// Passed on the command line, so it outranks every cargo config file;
+/// the build environment carries no `RUSTFLAGS`/`CARGO_ENCODED_RUSTFLAGS`
+/// that could replace it. rustc hands `-C link-arg` straight to rust-lld
+/// (`--threads=N` on its argv, verified with `--print link-args` on
+/// 1.99.0).
+pub fn player_link_threads_config() -> String {
+    format!(
+        "target.{WASIP1_TARGET}.rustflags=[\"-C\", \"link-arg=--threads={PLAYER_LINK_THREADS}\"]"
+    )
 }
 
 fn cargo_build_args(manifest: OsString) -> Vec<OsString> {
@@ -515,6 +548,8 @@ fn cargo_build_args(manifest: OsString) -> Vec<OsString> {
         os("--release"),
         os("--offline"),
         os("--quiet"),
+        os("--config"),
+        os(player_link_threads_config()),
         os("--manifest-path"),
         manifest,
     ]
@@ -1124,6 +1159,54 @@ mod tests {
             );
         }
         assert!(s.args.iter().any(|a| a == "--offline"));
+    }
+
+    /// The `--config <value>` pair in an argv, if any.
+    fn config_values(argv: &[String]) -> Vec<&str> {
+        argv.windows(2)
+            .filter(|w| w[0] == "--config")
+            .map(|w| w[1].as_str())
+            .collect()
+    }
+
+    #[test]
+    fn linker_threads_are_capped_in_every_sandbox_mode() {
+        let want = "target.wasm32-wasip1.rustflags=[\"-C\", \"link-arg=--threads=4\"]";
+        assert_eq!(player_link_threads_config(), want);
+        // bwrap (production): on the inner cargo argv, after the last `--`.
+        let argv = spec().argv_lossy();
+        let inner_start = argv.iter().rposition(|a| a == "--").unwrap() + 1;
+        assert_eq!(config_values(&argv[inner_start..]), vec![want], "{argv:?}");
+        // none (dev): on host cargo's argv.
+        let none = cargo_build_spec(&SandboxSettings::default(), Path::new("job")).unwrap();
+        assert_eq!(config_values(&none.argv_lossy()), vec![want]);
+        // Nothing in either environment can replace target rustflags.
+        let b = bwrap_args(&argv);
+        let set: Vec<&str> = b
+            .windows(2)
+            .filter(|w| w[0] == "--setenv")
+            .map(|w| w[1].as_str())
+            .collect();
+        for env in [
+            set,
+            none.env.iter().filter_map(|(k, _)| k.to_str()).collect(),
+        ] {
+            assert!(
+                !env.iter()
+                    .any(|k| k.contains("RUSTFLAGS") || k.starts_with("CARGO_TARGET_W")),
+                "{env:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn build_sandbox_limits_malloc_arenas() {
+        let b = bwrap_args(&spec().argv_lossy()).to_vec();
+        assert!(
+            b.windows(3)
+                .any(|w| w[0] == "--setenv" && w[1] == "MALLOC_ARENA_MAX" && w[2] == "2"),
+            "{b:?}"
+        );
     }
 
     // ---- run sandbox ----------------------------------------------------
