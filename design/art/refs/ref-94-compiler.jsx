@@ -2,7 +2,8 @@
 // REF-94 - The Compiler, Act 10 final boss, 64x64, idle.
 // APPROVED by Matt 2026-11-15, with the designer's notes applied (the cape
 // tapers to the floor in four steps instead of hanging as one rectangle, and
-// two gauntlets rest on the belt). Not wired yet.
+// two gauntlets rest on the belt).
+// Wired as game/assets/sprites/npc/compiler_idle_0.png.
 //
 // Colossal, filling the frame edge to edge at the shoulders. A brass-leaf
 // crown over a stone-grey helm with two cobalt eyes and a row of vents for a

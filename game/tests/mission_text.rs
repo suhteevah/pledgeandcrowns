@@ -24,10 +24,12 @@
 //! - Outputs claimed for common mistakes in those missions' Hints
 //!   (`HINT_CLAIMS`) are what those programs really print (`--ignored`).
 
+mod act10_programs;
 mod act9_programs;
 mod common;
 
 use act9_programs as a9;
+use act10_programs as a10;
 use common::PLAYER_EDITION;
 use pledge_and_crown::plugins::editor::solutions::canonical_solution;
 use pledge_and_crown::plugins::mission::{DEMO_LAST_MISSION_ID, MissionRegistry};
@@ -61,6 +63,11 @@ const STARTERS_THAT_MUST_FAIL: &[(&str, &str)] = &[
     ("send_sync", "E0277"),
     ("maybe_uninit", "E0381"),
     ("librarian_index", "E0133"),
+    ("const_eval", "E0015"),
+    // Also a code-less "cannot find macro `format`"; E0425 is its only code.
+    ("no_std", "E0425"),
+    ("compiler_lifetime", "E0106"),
+    ("compiler_bound", "E0369"),
 ];
 
 /// Starters meant to fail with an error that has no code (macro errors),
@@ -279,6 +286,39 @@ const PINNED_OUTPUT: &[(&str, &str)] = &[
     (
         "librarian_seal",
         "page 0: Some(5)\npage 2: Some(13)\npage 3: None\nthe Librarian closes the book\nthe codex is sealed (3 pages returned)",
+    ),
+    // Act 10. The two allocation counts are `1` by std's documented
+    // guarantee (exact capacity, no reallocation within it), and the same
+    // in the server sandbox (`compile-api/tests/expectations_proof.rs`).
+    ("prealloc", "coins: 1000\nallocations: 1"),
+    (
+        "cow_borrow",
+        "Grimoire (borrowed)\nBook_of_Crowns (copied)\nLedger (borrowed)",
+    ),
+    (
+        "const_eval",
+        "star chart: [1, 2, 5, 10, 17, 26, 37, 50]\nbrightest: 50",
+    ),
+    (
+        "chunks_exact",
+        "choir sum: 55\nplain sum: 55\nempty choir: 0",
+    ),
+    (
+        "no_std",
+        "tower 7: lit (sent: true)\noverflow refused: true",
+    ),
+    (
+        "semver_caret",
+        "^1.2.3 accepts 1.9.0: true\n^1.2.3 accepts 2.0.0: false\n^1.2.3 accepts 1.2.2: false\n^0.2.3 accepts 0.2.9: true\n^0.2.3 accepts 0.3.0: false\n^0.0.3 accepts 0.0.3: true\n^0.0.3 accepts 0.0.4: false\n^1.2.3 vs 1.x.0: not a version",
+    ),
+    (
+        "compiler_alloc",
+        "Ferris, the Borrow Checker, Vexis, the Librarian\nallocations: 1",
+    ),
+    ("compiler_lifetime", "Ferris (borrowed)\nSir Ferris (owned)"),
+    (
+        "compiler_bound",
+        "Some(9)\nSome(2.5)\nSome(\"vexis\")\nNone",
     ),
 ];
 
@@ -665,10 +705,10 @@ fn demo_boundary_is_the_last_act_2_mission() {
     assert_eq!(reg.missions[idx + 1].id, "impl_method");
     assert_eq!(
         reg.missions.len() - (idx + 1),
-        63,
+        72,
         "missions after the demo"
     );
-    assert_eq!(reg.missions.len(), 87, "missions in the full game");
+    assert_eq!(reg.missions.len(), 96, "missions in the full game");
 }
 
 #[test]
@@ -1085,6 +1125,98 @@ fn trial_claims(trial: &str) -> Vec<(&'static str, String, Claimed)> {
                 Claimed::Prints("3"),
             ),
         ],
+        // The Compiler. His dialogue quotes no compiler output (the result
+        // pane shows the player's real stderr); these are the claims in
+        // his stages' tutorials and his one framing claim ("my help mends
+        // the signature; it does not know your callers": the E0106 help,
+        // followed, compiles `herald` and moves the error to `main`).
+        "compiler" => vec![
+            (
+                "compiler_alloc: the starter's count is above 1 (12 on rustc \
+                 1.99.0; std does not promise a number, so no text quotes it)",
+                s("compiler_alloc"),
+                Claimed::Prints(
+                    "Ferris, the Borrow Checker, Vexis, the Librarian\nallocations: 12",
+                ),
+            ),
+            (
+                "compiler_alloc hint: `names.join(\", \")` also measures 1 here",
+                a10::ALT_COMPILER_ALLOC_0.to_string(),
+                Claimed::Prints("Ferris, the Borrow Checker, Vexis, the Librarian\nallocations: 1"),
+            ),
+            (
+                "compiler_alloc syntax: 11 bytes fit `with_capacity(11)`, same buffer",
+                a10::CLAIM_WITH_CAPACITY.to_string(),
+                Claimed::Prints("crown, seal: 11 bytes, same buffer: true"),
+            ),
+            (
+                "compiler_lifetime starter: E0106, and the help ties both inputs",
+                s("compiler_lifetime"),
+                Claimed::Error(
+                    "E0106",
+                    &[
+                        "missing lifetime specifier",
+                        "the signature does not say whether it is borrowed from `name` or `title`",
+                        "fn herald<'a>(name: &'a str, title: &'a str) -> Cow<'a, str>",
+                    ],
+                ),
+            ),
+            (
+                "compiler_lifetime: the help followed literally, `main` fails with E0597",
+                a10::WRONG_COMPILER_LIFETIME_1.to_string(),
+                Claimed::Error(
+                    "E0597",
+                    &[
+                        "`title` does not live long enough",
+                        "`title` dropped here while still borrowed",
+                    ],
+                ),
+            ),
+            (
+                "compiler_lifetime syntax: `pick` borrows only `keep`",
+                a10::CLAIM_PICK_SYNTAX.to_string(),
+                Claimed::Prints("[crown]"),
+            ),
+            (
+                "compiler_bound starter: E0369, and the help names `PartialOrd`",
+                s("compiler_bound"),
+                Claimed::Error(
+                    "E0369",
+                    &[
+                        "binary operation `>` cannot be applied to type `&T`",
+                        "consider restricting type parameter `T` with trait `PartialOrd`",
+                    ],
+                ),
+            ),
+            (
+                "compiler_bound hint: `Ord` with `.iter().max()` refuses the floats",
+                a10::WRONG_COMPILER_BOUND_1.to_string(),
+                Claimed::Error(
+                    "E0277",
+                    &["the trait bound `{float}: Ord` is not satisfied"],
+                ),
+            ),
+            (
+                "compiler_bound: `sort` and `Iterator::max` need `Ord`",
+                a10::CLAIM_FLOAT_ORD.to_string(),
+                Claimed::Error(
+                    "E0277",
+                    &["the trait bound `{float}: Ord` is not satisfied"],
+                ),
+            ),
+            (
+                "compiler_bound: NaN is not equal to itself, every comparison is false",
+                a10::CLAIM_NAN.to_string(),
+                Claimed::Prints(
+                    "nan == nan: false\nnan < 1.0: false\nnan > 1.0: false\npartial_cmp: None",
+                ),
+            ),
+            (
+                "compiler_bound syntax: one `PartialOrd` bound, three kinds of `T`",
+                a10::CLAIM_BIGGER_SYNTAX.to_string(),
+                Claimed::Prints("9 2.5 vexis"),
+            ),
+        ],
         other => panic!("no claims table for trial `{other}`: add one"),
     }
 }
@@ -1101,6 +1233,7 @@ const NAMED_CODES: &[(&str, &[&str])] = &[
     ("tide_hydra", &["E0373", "E0382"]),
     ("memory_warden", &["E0072", "E0594"]),
     ("librarian", &["E0133"]),
+    ("compiler", &["E0106", "E0277", "E0369", "E0597"]),
 ];
 
 /// Error codes in `text` (`E` followed by exactly four digits).
@@ -1600,4 +1733,228 @@ fn act9_villager_claims_are_what_rustc_emits() {
     let _ = std::fs::remove_dir_all(&dir);
     println!("{checked} claims checked");
     assert!(problems.is_empty(), "{}", problems.join("\n\n"));
+}
+
+// ── Hard rule 3 for the Act 10 villagers ─────────────────────────────
+//
+// The six Act 10 villagers teach measuring allocations, `Cow`, `const fn`,
+// `chunks_exact`, `no_std` and Cargo's caret rule. Their tutorials and
+// hints name compiler errors and describe what programs print; each claim
+// is compiled (and, where it is about behaviour, run) here. Allocation
+// counts above 1 are std's growth strategy, which std does not promise:
+// the claims pin what rustc 1.99.0 prints, and no player-facing text
+// quotes those numbers. What the Cargo text says about Cargo (the caret
+// table, `Cargo.lock`, the tools) follows the Cargo Book; nothing here
+// runs Cargo.
+
+/// The Act 10 villager missions, with the error codes their text names.
+const ACT10_VILLAGER_CODES: &[(&str, &[&str])] = &[
+    ("prealloc", &[]),
+    ("cow_borrow", &[]),
+    ("const_eval", &["E0015", "E0080"]),
+    ("chunks_exact", &["E0658"]),
+    ("no_std", &["E0425"]),
+    ("semver_caret", &[]),
+];
+
+/// Every claim the Act 10 villager of mission `id` makes.
+fn act10_villager_claims(id: &str) -> Vec<(&'static str, String, Claimed)> {
+    let s = |id: &str| edited_starter(id, &[]);
+    match id {
+        "prealloc" => vec![
+            (
+                "prealloc hint: the scale reads more than 1 (9 on rustc 1.99.0; \
+                 not a std guarantee, so no text quotes it)",
+                s("prealloc"),
+                Claimed::Prints("coins: 1000\nallocations: 9"),
+            ),
+            (
+                "prealloc hint: collecting a range measures 1 here too",
+                a10::ALT_PREALLOC_0.to_string(),
+                Claimed::Prints("coins: 1000\nallocations: 1"),
+            ),
+        ],
+        "cow_borrow" => vec![(
+            "cow_borrow: `replace` always makes a new String; a Cow derefs to \
+             `&str`; `into_owned` copies only a borrowed value",
+            a10::CLAIM_COW_FACTS.to_string(),
+            Claimed::Prints(
+                "replace made a new string: true\nowned kept its buffer: true\n\
+                 borrowed was copied: true\nlength through deref: 8",
+            ),
+        )],
+        "const_eval" => vec![
+            (
+                "const_eval starter: E0015, a `const` calls a non-const fn",
+                s("const_eval"),
+                Claimed::Error(
+                    "E0015",
+                    &["cannot call non-const function `star_table` in constants"],
+                ),
+            ),
+            (
+                "const_eval hint: `const` added, the `for` loop is a second E0015",
+                a10::CLAIM_CONST_FOR.to_string(),
+                Claimed::Error(
+                    "E0015",
+                    &["cannot use `for` loop on `std::ops::Range<usize>` in constant functions"],
+                ),
+            ),
+            (
+                "const_eval: a false compile-time `assert!` fails the build, E0080",
+                a10::CLAIM_CONST_ASSERT_FAILS.to_string(),
+                Claimed::Error(
+                    "E0080",
+                    &[
+                        "evaluation panicked: ",
+                        "evaluation panicked: the last star is misplaced",
+                    ],
+                ),
+            ),
+            (
+                "const_eval syntax: `square`, `NINE` and the assert compile",
+                a10::CLAIM_CONST_SYNTAX.to_string(),
+                Claimed::Prints("9"),
+            ),
+        ],
+        "chunks_exact" => vec![
+            (
+                "chunks_exact hint: the starter's choir sings 36",
+                s("chunks_exact"),
+                Claimed::Prints("choir sum: 36\nplain sum: 55\nempty choir: 0"),
+            ),
+            (
+                "chunks_exact hint: `chunks(4)` is also correct",
+                a10::ALT_CHUNKS_EXACT_0.to_string(),
+                Claimed::Prints("choir sum: 55\nplain sum: 55\nempty choir: 0"),
+            ),
+            (
+                "chunks_exact: `std::simd` is unstable, E0658 on stable",
+                a10::CLAIM_SIMD_UNSTABLE.to_string(),
+                Claimed::Error(
+                    "E0658",
+                    &["use of unstable library feature `portable_simd`"],
+                ),
+            ),
+        ],
+        "no_std" => vec![
+            (
+                "no_std starter: E0425 for `String` and a code-less error for \
+                 `format!`; rustc suggests `crate::host::format`",
+                s("no_std"),
+                Claimed::Error(
+                    "E0425",
+                    &[
+                        "cannot find type `String` in this scope",
+                        "cannot find macro `format` in this scope",
+                        "use crate::host::format;",
+                    ],
+                ),
+            ),
+            (
+                "no_std hint: rustc's suggestion compiles",
+                edited_starter(
+                    "no_std",
+                    &[(
+                        "mod firmware {\n",
+                        "mod firmware {\n    use crate::host::format;\n    use crate::host::string::String;\n",
+                    )],
+                ),
+                Claimed::Compiles,
+            ),
+            (
+                "no_std: no `println!` under `#![no_std]`",
+                a10::CLAIM_NO_STD_PRINTLN.to_string(),
+                Claimed::ErrorNoCode(&["cannot find macro `println` in this scope"]),
+            ),
+            (
+                "no_std: `extern crate alloc;` brings `String` and `Vec` back",
+                a10::CLAIM_NO_STD_ALLOC.to_string(),
+                Claimed::Prints("towers: one"),
+            ),
+        ],
+        "semver_caret" => vec![(
+            "semver_caret hint: the starter lets 0.3.0 (and 0.0.4) through",
+            s("semver_caret"),
+            Claimed::Prints(
+                "^1.2.3 accepts 1.9.0: true\n^1.2.3 accepts 2.0.0: false\n\
+                 ^1.2.3 accepts 1.2.2: false\n^0.2.3 accepts 0.2.9: true\n\
+                 ^0.2.3 accepts 0.3.0: true\n^0.0.3 accepts 0.0.3: true\n\
+                 ^0.0.3 accepts 0.0.4: true\n^1.2.3 vs 1.x.0: not a version",
+            ),
+        )],
+        other => panic!("no claims table for Act 10 mission `{other}`: add one"),
+    }
+}
+
+#[test]
+fn every_error_an_act10_villager_names_is_a_compiled_claim() {
+    let reg = MissionRegistry::default();
+    let act10: Vec<&str> = reg
+        .missions
+        .iter()
+        .map(|m| m.id)
+        .skip_while(|id| *id != "prealloc")
+        .take_while(|id| *id != "compiler_alloc")
+        .collect();
+    assert_eq!(
+        act10,
+        ACT10_VILLAGER_CODES
+            .iter()
+            .map(|(id, _)| *id)
+            .collect::<Vec<_>>(),
+        "every Act 10 villager mission has a claims table"
+    );
+    for (id, want) in ACT10_VILLAGER_CODES {
+        assert_claims_cover_texts(id, &act10_villager_claims(id), &mission_texts(&[id]), want);
+    }
+}
+
+#[test]
+#[ignore = "slow: runs rustc once per claim"]
+fn act10_villager_claims_are_what_rustc_emits() {
+    let dir = scratch_dir("act10-claims");
+    print_rustc_version();
+    let mut problems = Vec::new();
+    let mut checked = 0usize;
+    for (id, _) in ACT10_VILLAGER_CODES {
+        for (n, (label, src, claim)) in act10_villager_claims(id).into_iter().enumerate() {
+            checked += 1;
+            let tag = format!("{id}_{n}");
+            check_claim(&dir, &tag, label, &src, &claim, &mut problems);
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    println!("{checked} claims checked");
+    assert!(problems.is_empty(), "{}", problems.join("\n\n"));
+}
+
+/// The epilogue is plain and true for the finished game: it no longer
+/// promises more acts, names the company and no person, and the last
+/// trial stage is the last mission (clearing it shows the epilogue).
+#[test]
+fn the_epilogue_closes_the_whole_game() {
+    use pledge_and_crown::plugins::mission::EPILOGUE_LINES;
+    let all: Vec<&str> = [
+        EPILOGUE_LINES.heading,
+        EPILOGUE_LINES.body,
+        EPILOGUE_LINES.after,
+    ]
+    .into_iter()
+    .chain(EPILOGUE_LINES.credits.iter().copied())
+    .collect();
+    let text = all.join("\n");
+    for stale in ["being forged", "more acts", "coming soon", "@"] {
+        assert!(
+            !text.to_lowercase().contains(stale),
+            "epilogue says {stale:?}"
+        );
+    }
+    assert!(text.contains("Chico Cell Repair LLC"));
+    assert!(text.contains("the Compiler"), "{text}");
+    assert_eq!(
+        TRIALS.last().map(|t| t.stages[t.stages.len() - 1]),
+        MissionRegistry::default().missions.last().map(|m| m.id),
+        "the last trial stage is the last mission"
+    );
 }

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-96 - The Throne Dais, Act 10 district landmark and arena prop, 64x64.
-// APPROVED by Matt 2026-11-15. Not wired yet (lands with Act 10).
+// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/props/throne_dais.png.
 //
 // A three-step stone-grey dais with a wine runner down the middle and a
 // high-backed stone throne on top: brass inlay around a wine cushion panel,

@@ -296,3 +296,19 @@ upgrade path is design 2 or 3 above; a cheap intermediate step would be a
 second one-shot import that takes each result line the moment it is
 formatted, so no stored result survives a later call into player code
 (it would close the rewrite attack, not the late-print hooks).
+
+## Act 10: a player `#[global_allocator]` in the plain build (2026-11-15)
+
+`prealloc` and `compiler_alloc` teach measuring allocations with a
+counting `GlobalAlloc`, so the player's program declares
+`unsafe impl GlobalAlloc` and `#[global_allocator]`. Both missions are
+`Check::Stdout` entries (`mu` in `expectations/data.rs`): the plain
+layout, no harness, no checker, no nonce; their `harness_mode` is the
+default `ForbidUnsafe`, which a stdout check never reads. The plain build
+has never carried `#![forbid(unsafe_code)]`, and `UNSAFE_HARNESS_FORBIDS`
+applies only to `UnsafeLateNonce` harness checks, so neither rule changes.
+An allocator here can only change the program's own stdout, which the
+player controls anyway; there is no server secret in that process to read
+or forge. The late-nonce allow-list is unchanged (the four Act 9
+missions). The sandbox's run limits apply to the allocator's code like any
+other player code.

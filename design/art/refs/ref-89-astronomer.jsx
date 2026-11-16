@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 // REF-89 - The Astronomer on the Throne kit (REF-86), 32x32, idle.
 // APPROVED by Matt 2026-11-15, with the designer's note applied (narrowed
-// kit). Not wired yet.
+// kit).
+// Wired as game/assets/sprites/npc/astronomer_idle_0.png.
 //
 // Chart-maker. The collar stands two pixels taller than anyone else at the
 // Throne. Lesson prop (const_eval): a brass astrolabe on the tabard - the

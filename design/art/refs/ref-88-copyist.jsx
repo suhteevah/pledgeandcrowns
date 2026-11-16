@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 // REF-88 - The Copyist on the Throne kit (REF-86), 32x32, idle.
 // APPROVED by Matt 2026-11-15, with the designer's note applied (narrowed
-// kit). Not wired yet.
+// kit).
+// Wired as game/assets/sprites/npc/copyist_idle_0.png.
 //
 // Scribe. Lesson prop (cow_borrow): an open book with a wine ribbon marking
 // the place, and a quill held ready but not yet used. Read from the page

@@ -157,6 +157,24 @@ pub const SPRITE_COURIER: &str = "sprites/npc/courier_idle_0.png";
 pub const SPRITE_BOOKBINDER: &str = "sprites/npc/bookbinder_idle_0.png";
 pub const SPRITE_LIBRARIAN: &str = "sprites/npc/librarian_idle_0.png";
 
+// NPC batch 12 (approved by Matt 2026-11-15) — Act 10 The Throne: Assayer,
+// Copyist, Astronomer, Choirmaster, Hermit, Registrar (32x32, drawn on the
+// REF-86 Throne kit exemplar) and the Compiler, the final boss, at 64x64.
+// Sources: design/art/refs/ref-87..92-*.jsx and ref-94-compiler.jsx,
+// rendered via `cargo run -p render-refs`.
+pub const SPRITE_ASSAYER: &str = "sprites/npc/assayer_idle_0.png";
+pub const SPRITE_COPYIST: &str = "sprites/npc/copyist_idle_0.png";
+pub const SPRITE_ASTRONOMER: &str = "sprites/npc/astronomer_idle_0.png";
+pub const SPRITE_CHOIRMASTER: &str = "sprites/npc/choirmaster_idle_0.png";
+pub const SPRITE_HERMIT: &str = "sprites/npc/hermit_idle_0.png";
+pub const SPRITE_REGISTRAR: &str = "sprites/npc/registrar_idle_0.png";
+pub const SPRITE_COMPILER: &str = "sprites/npc/compiler_idle_0.png";
+
+// Act 10 district landmark (approved by Matt 2026-11-15): the Throne Dais,
+// REF-96, a 64x64 prop like the cottage (bottom-centre anchor, y-sorted,
+// solid). Source: design/art/refs/ref-96-thronedais.jsx.
+pub const SPRITE_PROP_THRONE_DAIS: &str = "sprites/props/throne_dais.png";
+
 // Audio (Stable Audio Open generated, baked via tools/synthwave-gen).
 // Generation is a Matt-action: `powershell -ExecutionPolicy Bypass
 // -File scripts/synthwave-gen.ps1`. Files may be absent during early
@@ -256,4 +274,12 @@ pub const ALL_SPRITE_PATHS: &[&str] = &[
     SPRITE_COURIER,
     SPRITE_BOOKBINDER,
     SPRITE_LIBRARIAN,
+    SPRITE_ASSAYER,
+    SPRITE_COPYIST,
+    SPRITE_ASTRONOMER,
+    SPRITE_CHOIRMASTER,
+    SPRITE_HERMIT,
+    SPRITE_REGISTRAR,
+    SPRITE_COMPILER,
+    SPRITE_PROP_THRONE_DAIS,
 ];

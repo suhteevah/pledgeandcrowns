@@ -1455,6 +1455,84 @@ pub static MISSION_RULES: &[MissionRule] = &[
         ],
         pass: "the Librarian closes the codex. \"borrowed from the heap, returned to it. the Library is yours.\"",
     },
+    // ── Act 10 (The Throne). `unsafe` and `#[global_allocator]` appear
+    // only in the players' programs, never in these patterns' crate.
+    MissionRule {
+        id: "prealloc",
+        npc: "the Assayer reads the scale",
+        checks: &[
+            check(&["with_capacity", "reserve", "collect"], "size the ledger before the loop: `Vec::with_capacity(1000)`"),
+        ],
+        pass: "the Assayer sets down the weights. \"one allocation. an honest measure.\"",
+    },
+    MissionRule {
+        id: "cow_borrow",
+        npc: "the Copyist lifts his quill",
+        checks: &[
+            check(&["Cow<", "Cow::"], "return a `Cow<'_, str>` instead of a fresh `String`"),
+            check(&["Borrowed"], "hand back titles that need no change as `Cow::Borrowed`"),
+        ],
+        pass: "the Copyist lays down his quill. \"copy only what must change.\"",
+    },
+    MissionRule {
+        id: "const_eval",
+        npc: "the Astronomer squints at an empty sky",
+        checks: &[
+            check(&["const fn"], "let the compiler run `star_table`: make it a `const fn`"),
+            check(&["const _", ": () = assert!"], "check the chart at compile time: `const _: () = assert!(...)`"),
+        ],
+        pass: "the Astronomer unrolls the chart. \"drawn before the night began.\"",
+    },
+    MissionRule {
+        id: "chunks_exact",
+        npc: "the Choirmaster cups an ear",
+        checks: &[
+            check(&["remainder", "chunks("], "the last voices fill no whole chunk: add `chunks.remainder()`"),
+        ],
+        pass: "the Choirmaster lowers the pipes. \"four lanes, and every soloist heard.\"",
+    },
+    MissionRule {
+        id: "no_std",
+        npc: "the Hermit shakes his head",
+        checks: &[
+            check(&["#![no_std]"], "the outpost has no standard library: keep `#![no_std]`"),
+            check(&["core::"], "build the line with `core::fmt::Write` into a fixed buffer, not a `String`"),
+        ],
+        pass: "the Hermit trims the lantern. \"no heap, no harbour, and still it shines.\"",
+    },
+    MissionRule {
+        id: "semver_caret",
+        npc: "the Registrar checks the register",
+        checks: &[
+            check(&["> 0", "== 0", "!= 0", "(0,", ">= 1"], "below 1.0 the caret pins the first non-zero part: handle a zero major"),
+        ],
+        pass: "the Registrar stamps the entry. \"compatible, by the caret's rule.\"",
+    },
+    // ── Act 10 boss: the Compiler's trial (stages 1-3).
+    MissionRule {
+        id: "compiler_alloc",
+        npc: "the Compiler weighs the proclamation",
+        checks: &[
+            check(&["with_capacity", "reserve", "join("], "know the length first: `String::with_capacity`"),
+        ],
+        pass: "the Compiler inclines its head. \"one allocation. proceed.\"",
+    },
+    MissionRule {
+        id: "compiler_lifetime",
+        npc: "the Compiler waits for an honest signature",
+        checks: &[
+            check(&["<$'_>", "<$'_,", "&$'_"], "name the lifetime the result borrows from: `fn herald<'a>(name: &'a str, ...)`"),
+        ],
+        pass: "the Compiler is silent, which is its highest praise.",
+    },
+    MissionRule {
+        id: "compiler_bound",
+        npc: "the Compiler waits on the Throne",
+        checks: &[
+            check(&["PartialOrd"], "bound `T` by what `>` needs: `PartialOrd`"),
+        ],
+        pass: "the Compiler rises from the Throne. \"it compiles. it was always yours.\"",
+    },
 ];
 // END MISSION TABLE
 

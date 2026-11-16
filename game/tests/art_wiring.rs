@@ -380,3 +380,95 @@ fn npc_sprite_sizes_match_their_native_px() {
     }
     assert_eq!(png_size(&root.join(SPRITE_BORROW_CHECKER)), (64, 64));
 }
+
+/// The Act 10 cast (approved by Matt 2026-11-15): roster name -> ref
+/// number, ref slug (= sprite slug) and native size.
+const ACT10_CAST: &[(&str, &str, &str, u32)] = &[
+    ("The Assayer", "87", "assayer", 32),
+    ("The Copyist", "88", "copyist", 32),
+    ("The Astronomer", "89", "astronomer", 32),
+    ("The Choirmaster", "90", "choirmaster", 32),
+    ("The Hermit", "91", "hermit", 32),
+    ("The Registrar", "92", "registrar", 32),
+    ("The Compiler", "94", "compiler", 64),
+];
+
+/// The Act 10 cast ships its approved REF-87..92 and REF-94 renders, and
+/// each ref header says where it is wired (the approval line and the
+/// designer's notes kept as written). The Throne kit exemplar REF-86 is
+/// no NPC's sprite.
+#[test]
+fn act10_cast_ships_its_approved_render() {
+    let root = game_assets();
+    let refs = refs_dir();
+    for (name, num, slug, px) in ACT10_CAST {
+        let spec = NPC_ROSTER
+            .iter()
+            .find(|s| s.name == *name)
+            .unwrap_or_else(|| panic!("{name} not in the roster"));
+        let expected_path = format!("sprites/npc/{slug}_idle_0.png");
+        assert_eq!(spec.sprite_path, expected_path, "{name}");
+        assert_eq!(spec.native_px as u32, *px, "{name}");
+        assert!(
+            read(&root.join(spec.sprite_path)) == read(&refs.join(format!("png/REF{num}.png"))),
+            "{name}: {} is not the REF{num}.png render",
+            spec.sprite_path
+        );
+        assert_eq!(png_size(&root.join(spec.sprite_path)), (*px, *px), "{name}");
+        let src = std::fs::read_to_string(refs.join(format!("ref-{num}-{slug}.jsx")))
+            .unwrap_or_else(|e| panic!("ref-{num}-{slug}.jsx: {e}"));
+        assert!(
+            src.lines()
+                .any(|l| l.starts_with("// APPROVED by Matt 2026-11-15")),
+            "ref-{num}: approval line"
+        );
+        let wired = format!("// Wired as game/assets/{expected_path}.");
+        assert!(
+            src.lines().any(|l| l.trim_end() == wired),
+            "ref-{num} header does not say {wired}"
+        );
+        assert!(
+            !src.contains("DRAFT") && !src.contains("Not wired yet"),
+            "ref-{num}"
+        );
+    }
+    let kit = read(&refs.join("png/REF86.png"));
+    for s in NPC_ROSTER {
+        assert!(
+            read(&root.join(s.sprite_path)) != kit,
+            "{} ships REF-86",
+            s.name
+        );
+    }
+    let kit_src = std::fs::read_to_string(refs.join("ref-86-thronekit.jsx")).expect("REF-86");
+    assert!(kit_src.contains("not wired to any NPC"));
+}
+
+/// The Throne Dais (REF-96, approved 2026-11-15) ships its render as the
+/// landmark prop; the Sealed Stacks (REF-95) is still a draft and ships
+/// nowhere.
+#[test]
+fn the_throne_dais_ships_its_approved_render_and_the_stacks_do_not() {
+    use pledge_and_crown::assets::{ALL_SPRITE_PATHS, SPRITE_PROP_THRONE_DAIS};
+    let root = game_assets();
+    let refs = refs_dir();
+    assert_eq!(SPRITE_PROP_THRONE_DAIS, "sprites/props/throne_dais.png");
+    let dais = read(&root.join(SPRITE_PROP_THRONE_DAIS));
+    assert!(
+        dais == read(&refs.join("png/REF96.png")),
+        "throne_dais.png is not the REF96.png render"
+    );
+    assert_eq!(png_size(&root.join(SPRITE_PROP_THRONE_DAIS)), (64, 64));
+    let src = std::fs::read_to_string(refs.join("ref-96-thronedais.jsx")).expect("REF-96");
+    assert!(src.lines().any(|l| l.trim_end()
+        == "// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/props/throne_dais.png."));
+    let stacks = std::fs::read_to_string(refs.join("ref-95-sealedstacks.jsx")).expect("REF-95");
+    assert!(stacks.contains("DRAFT") && stacks.contains("NOT wired"));
+    assert!(
+        !refs.join("png/REF95.png").exists()
+            || ALL_SPRITE_PATHS
+                .iter()
+                .all(|p| read(&root.join(p)) != read(&refs.join("png/REF95.png"))),
+        "REF-95 is not approved and must not ship"
+    );
+}

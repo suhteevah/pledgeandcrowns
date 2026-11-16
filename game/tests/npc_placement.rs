@@ -140,43 +140,53 @@ fn npc_ground_audit() {
     assert_eq!(total, NPC_ROSTER.len());
 }
 
-/// Every roster slot belongs to a district (none falls to the south-edge
-/// safety net), the Act 9 cast stands in the Forbidden Library with the
-/// 64 px Librarian alone and centred in its back (north) row, and the
-/// Throne is built but empty until Act 10.
-#[test]
-fn act9_stands_in_the_library_and_the_throne_waits() {
-    let total: usize = DISTRICTS.iter().map(|d| d.count).sum();
-    assert_eq!(total, NPC_ROSTER.len(), "district counts cover the roster");
-    let library = DISTRICTS
+/// The seven NPCs from roster name `first` to `boss` stand in `district`,
+/// and the 64 px boss stands alone, centred, in its back (north) row,
+/// with the six villagers in front of him.
+fn assert_cast_with_boss_at_the_back(district: &str, first: &str, boss: &str) {
+    let d_index = DISTRICTS
         .iter()
-        .position(|d| d.name == "The Forbidden Library")
-        .expect("the Library district");
-    let throne = DISTRICTS
-        .iter()
-        .find(|d| d.name == "The Throne")
-        .expect("the Throne district");
-    assert_eq!(throne.count, 0);
+        .position(|d| d.name == district)
+        .unwrap_or_else(|| panic!("no district {district}"));
+    let d = &DISTRICTS[d_index];
+    assert_eq!(d.count, 7, "{district}");
     let first = NPC_ROSTER
         .iter()
-        .position(|s| s.name == "The Shelfmark")
-        .expect("the first Act 9 NPC");
-    for (i, spec) in NPC_ROSTER.iter().enumerate().skip(first) {
-        assert_eq!(district_of(i), Some(library), "{}", spec.name);
+        .position(|s| s.name == first)
+        .unwrap_or_else(|| panic!("{first} not in the roster"));
+    let boss_i = first + 6;
+    assert_eq!(NPC_ROSTER[boss_i].name, boss);
+    assert_eq!(NPC_ROSTER[boss_i].native_px, 64.0, "{boss}");
+    for (i, spec) in NPC_ROSTER.iter().enumerate().skip(first).take(7) {
+        assert_eq!(district_of(i), Some(d_index), "{}", spec.name);
     }
-    let librarian = NPC_ROSTER.len() - 1;
-    assert_eq!(NPC_ROSTER[librarian].name, "The Librarian");
-    assert_eq!(NPC_ROSTER[librarian].native_px, 64.0);
-    let d = &DISTRICTS[library];
-    let p = district_slot(librarian);
-    assert_eq!(p.x, d.center.x, "centred in its row");
-    for (i, spec) in NPC_ROSTER.iter().enumerate().take(librarian).skip(first) {
+    let p = district_slot(boss_i);
+    assert_eq!(p.x, d.center.x, "{boss} is centred in its row");
+    for (i, spec) in NPC_ROSTER.iter().enumerate().skip(first).take(6) {
         assert!(
             district_slot(i).y < p.y,
-            "{} stands in front of him",
+            "{} stands in front of {boss}",
             spec.name
         );
     }
+}
+
+/// Every roster slot belongs to a district (none falls to the south-edge
+/// safety net); the Act 9 cast stands in the Forbidden Library with the
+/// 64 px Librarian alone and centred in its back (north) row; the Act 10
+/// cast stands in the Throne the same way, the 64 px Compiler at the back
+/// in front of the dais. The Compiler is the last roster entry.
+#[test]
+fn acts_9_and_10_stand_in_the_library_and_the_throne() {
+    let total: usize = DISTRICTS.iter().map(|d| d.count).sum();
+    assert_eq!(total, NPC_ROSTER.len(), "district counts cover the roster");
+    assert_cast_with_boss_at_the_back("The Forbidden Library", "The Shelfmark", "The Librarian");
+    assert_cast_with_boss_at_the_back("The Throne", "The Assayer", "The Compiler");
+    assert_eq!(
+        NPC_ROSTER.last().map(|s| s.name),
+        Some("The Compiler"),
+        "the Compiler ends the roster"
+    );
 }
 
 /// The placement gate for every roster NPC, so a new act cannot put a

@@ -27,8 +27,10 @@ use std::sync::Mutex;
 use pledge_compile_api::expectations::{self, Check, GradeState};
 use pledge_compile_api::wasm_builder::{self, BuildSettings, Layout, RunLimits};
 
+mod act10_programs;
 mod act9_programs;
 use act9_programs as a9;
+use act10_programs as a10;
 
 /// Parallel build workers: `CARGO_BUILD_JOBS` when set (so a run on a
 /// shared machine can be kept light), else 6.
@@ -1102,6 +1104,42 @@ fn wrong_variants() -> HashMap<&'static str, Vec<&'static str>> {
                 a9::WRONG_LIBRARIAN_SEAL_2,
             ],
         ),
+        // ── Act 10 (tests/act10_programs): the spec's wrong variants, all
+        // pass the `uses` tokens and fail the pinned stdout (the two
+        // allocator ones print a count above 1 in the sandbox), plus two
+        // more per Compiler stage.
+        ("prealloc", vec![a10::WRONG_PREALLOC_0]),
+        ("cow_borrow", vec![a10::WRONG_COW_BORROW_0]),
+        ("const_eval", vec![a10::WRONG_CONST_EVAL_0]),
+        ("chunks_exact", vec![a10::WRONG_CHUNKS_EXACT_0]),
+        ("no_std", vec![a10::WRONG_NO_STD_0]),
+        ("semver_caret", vec![a10::WRONG_SEMVER_CARET_0]),
+        (
+            "compiler_alloc",
+            vec![
+                a10::WRONG_COMPILER_ALLOC_0,
+                a10::WRONG_COMPILER_ALLOC_1,
+                a10::WRONG_COMPILER_ALLOC_2,
+            ],
+        ),
+        (
+            "compiler_lifetime",
+            vec![
+                a10::WRONG_COMPILER_LIFETIME_0,
+                // rustc's E0106 help followed literally: E0597 in `main`.
+                a10::WRONG_COMPILER_LIFETIME_1,
+                a10::WRONG_COMPILER_LIFETIME_2,
+            ],
+        ),
+        (
+            "compiler_bound",
+            vec![
+                a10::WRONG_COMPILER_BOUND_0,
+                // `T: Ord` with `.iter().max()`: E0277 on the float call.
+                a10::WRONG_COMPILER_BOUND_1,
+                a10::WRONG_COMPILER_BOUND_2,
+            ],
+        ),
     ])
 }
 
@@ -1194,6 +1232,17 @@ fn literal_prints() -> HashMap<&'static str, &'static str> {
         ("librarian_index", a9::LITERAL_LIBRARIAN_INDEX),
         ("librarian_demand", a9::LITERAL_LIBRARIAN_DEMAND),
         ("librarian_seal", a9::LITERAL_LIBRARIAN_SEAL),
+        // ── Act 10: the right lines without the construct; only the `uses`
+        // tokens reject them.
+        ("prealloc", a10::LITERAL_PREALLOC),
+        ("cow_borrow", a10::LITERAL_COW_BORROW),
+        ("const_eval", a10::LITERAL_CONST_EVAL),
+        ("chunks_exact", a10::LITERAL_CHUNKS_EXACT),
+        ("no_std", a10::LITERAL_NO_STD),
+        ("semver_caret", a10::LITERAL_SEMVER_CARET),
+        ("compiler_alloc", a10::LITERAL_COMPILER_ALLOC),
+        ("compiler_lifetime", a10::LITERAL_COMPILER_LIFETIME),
+        ("compiler_bound", a10::LITERAL_COMPILER_BOUND),
     ])
 }
 
@@ -1338,6 +1387,14 @@ fn alternatives() -> HashMap<&'static str, Vec<&'static str>> {
         ("librarian_index", vec![a9::ALT_LIBRARIAN_INDEX_0]),
         ("librarian_demand", vec![a9::ALT_LIBRARIAN_DEMAND_0]),
         ("librarian_seal", vec![a9::ALT_LIBRARIAN_SEAL_0]),
+        // Act 10: the spec's three alternatives. `collect` and `join` are
+        // not promised to allocate once; they measure 1 in the sandbox,
+        // which is what this pins.
+        ("prealloc", vec![a10::ALT_PREALLOC_0]),
+        ("chunks_exact", vec![a10::ALT_CHUNKS_EXACT_0]),
+        ("compiler_alloc", vec![a10::ALT_COMPILER_ALLOC_0]),
+        ("compiler_lifetime", vec![a10::ALT_COMPILER_LIFETIME_0]),
+        ("compiler_bound", vec![a10::ALT_COMPILER_BOUND_0]),
     ])
 }
 
@@ -1460,8 +1517,8 @@ fn run_parallel(cases: Vec<Case>) -> Vec<(Case, expectations::GradedRun)> {
 fn game_sources_parse() {
     let sols = canonical_solutions();
     let starters = starters();
-    assert_eq!(sols.len(), 87, "solutions parsed");
-    assert_eq!(starters.len(), 87, "starters parsed");
+    assert_eq!(sols.len(), 96, "solutions parsed");
+    assert_eq!(starters.len(), 96, "starters parsed");
     for m in expectations::all() {
         assert!(
             sols.contains_key(m.id),
@@ -1528,6 +1585,9 @@ fn game_sources_parse() {
         "librarian_index",
         "librarian_demand",
         "librarian_seal",
+        "compiler_alloc",
+        "compiler_lifetime",
+        "compiler_bound",
     ] {
         let n = wrong.get(t).map_or(0, Vec::len) + forbidden.get(t).map_or(0, Vec::len);
         assert!(n >= 3, "{t}: {n} wrong variants");

@@ -88,11 +88,11 @@ pub struct District {
 }
 
 /// Hub + a ring of eight quarters + two districts at the ends of the
-/// north-south main street. `count`s sum to the 64-NPC roster
-/// (9 + 8*6 + 7 + 0). Roster order fills them, so the earliest (Act 1-2)
+/// north-south main street. `count`s sum to the 71-NPC roster
+/// (9 + 8*6 + 7 + 7). Roster order fills them, so the earliest (Act 1-2)
 /// NPCs gather in the central square, Acts 3-8 spread round the ring (one
 /// act per quarter, each named for its act), Act 9 stands in the
-/// Forbidden Library, and the Throne waits, empty, for Act 10.
+/// Forbidden Library and Act 10 at the Throne.
 pub const DISTRICTS: &[District] = &[
     // Acts 1-2 (the village prelude, the Borrow Checker among them) fill
     // the hub and the two quarters on the east-west street.
@@ -165,13 +165,15 @@ pub const DISTRICTS: &[District] = &[
         plaza_half: 260.0,
         count: 7,
     },
-    // Act 10: past Tavern Row, at the north end of the main street. Built
-    // now so Act 10 needs no map change; nobody stands here yet.
+    // Act 10: past Tavern Row, at the north end of the main street. Six
+    // villagers and the Compiler (64 px), alone in the centre of the back
+    // (north) row; the Throne Dais (REF-96) stands on the plaza's east
+    // side (`prop::PropKind::ThroneDais`).
     District {
         name: "The Throne",
         center: Vec2::new(0.0, 1400.0),
         plaza_half: 260.0,
-        count: 0,
+        count: 7,
     },
 ];
 

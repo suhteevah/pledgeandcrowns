@@ -1424,4 +1424,90 @@ pub(super) const CHECKS: &[MissionCheck] = &[
         &[&["impl Drop for"], &["from_raw"], &["unsafe {", "unsafe{"]],
         &["no_mangle"],
     ),
+    // ── Act 10: The Throne ───────────────────────────────────────────
+    // All nine are pinned by their stdout in the plain layout, with the
+    // construct's tokens. No harness and no harness mode: `prealloc` and
+    // `compiler_alloc` contain the player's own counting
+    // `#[global_allocator]` (the plain build has never carried the
+    // `forbid`, and the allocator is the measuring instrument, so it must
+    // be the player's); `no_std` is a crate-root attribute, which a
+    // harness build (player file as a module) cannot have. The allocation
+    // counts below come from the real sandbox run, identical to native:
+    // `Vec::with_capacity` / `String::with_capacity` with the exact final
+    // size allocate once and never reallocate (std's documented
+    // guarantee), so `allocations: 1` does not depend on the allocator.
+    mu(
+        "prealloc",
+        Stdout {
+            matchers: &[Exact("coins: 1000\nallocations: 1")],
+        },
+        &[&["with_capacity", "reserve", "collect"]],
+    ),
+    mu(
+        "cow_borrow",
+        Stdout {
+            matchers: &[Exact(
+                "Grimoire (borrowed)\nBook_of_Crowns (copied)\nLedger (borrowed)",
+            )],
+        },
+        &[&["Cow<", "Cow::"], &["Borrowed"]],
+    ),
+    mu(
+        "const_eval",
+        Stdout {
+            matchers: &[Exact(
+                "star chart: [1, 2, 5, 10, 17, 26, 37, 50]\nbrightest: 50",
+            )],
+        },
+        &[&["const fn"], &["const _", ": () = assert!"]],
+    ),
+    mu(
+        "chunks_exact",
+        Stdout {
+            matchers: &[Exact("choir sum: 55\nplain sum: 55\nempty choir: 0")],
+        },
+        &[&["remainder", "chunks("]],
+    ),
+    mu(
+        "no_std",
+        Stdout {
+            matchers: &[Exact("tower 7: lit (sent: true)\noverflow refused: true")],
+        },
+        &[&["#![no_std]"], &["core::"]],
+    ),
+    mu(
+        "semver_caret",
+        Stdout {
+            matchers: &[Exact(
+                "^1.2.3 accepts 1.9.0: true\n^1.2.3 accepts 2.0.0: false\n^1.2.3 accepts 1.2.2: false\n\
+                 ^0.2.3 accepts 0.2.9: true\n^0.2.3 accepts 0.3.0: false\n^0.0.3 accepts 0.0.3: true\n\
+                 ^0.0.3 accepts 0.0.4: false\n^1.2.3 vs 1.x.0: not a version",
+            )],
+        },
+        &[&["> 0", "== 0", "!= 0", "(0,", ">= 1"]],
+    ),
+    // ── Act 10 boss: the Compiler's trial ────────────────────────────
+    mu(
+        "compiler_alloc",
+        Stdout {
+            matchers: &[Exact(
+                "Ferris, the Borrow Checker, Vexis, the Librarian\nallocations: 1",
+            )],
+        },
+        &[&["with_capacity", "reserve", "join("]],
+    ),
+    mu(
+        "compiler_lifetime",
+        Stdout {
+            matchers: &[Exact("Ferris (borrowed)\nSir Ferris (owned)")],
+        },
+        &[&["<'", "&'"]],
+    ),
+    mu(
+        "compiler_bound",
+        Stdout {
+            matchers: &[Exact("Some(9)\nSome(2.5)\nSome(\"vexis\")\nNone")],
+        },
+        &[&["PartialOrd"]],
+    ),
 ];

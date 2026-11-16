@@ -178,8 +178,11 @@ pub fn code_chip(ui: &mut egui::Ui, text: &str) {
         });
 }
 
-/// The verdict banner: a coloured strip with the title, then the plain
-/// one-line reason underneath.
+/// The verdict banner: a coloured strip with the title, then the one-line
+/// reason underneath. The reason goes through the tutorials' inline
+/// markdown renderer, so `` `code` `` in a banner line or a server note
+/// (e.g. "`unsafe` allowed") is drawn as an inline-code chip, not as raw
+/// backticks.
 pub fn draw_banner(ui: &mut egui::Ui, b: &Banner) {
     let (fill, fg) = match b.style {
         BannerStyle::Pass => (palette::BANNER_PASS, palette::TEXT_ON_DARK),
@@ -196,14 +199,16 @@ pub fn draw_banner(ui: &mut egui::Ui, b: &Banner) {
             ui.set_width(ui.available_width());
             ui.label(RichText::new(b.title).color(fg).strong().size(BODY_SIZE));
         });
-    ui.add(
-        egui::Label::new(
-            RichText::new(&b.reason)
-                .color(palette::TEXT)
-                .size(BODY_SIZE),
-        )
-        .wrap(),
+    let scale = ui_theme::markdown::TextScale {
+        body: BODY_SIZE,
+        ..ui_theme::markdown::TextScale::PANEL
+    };
+    let job = ui_theme::markdown::inline_job(
+        &ui_theme::markdown::parse_inline(&b.reason),
+        scale,
+        ui.available_width(),
     );
+    ui.add(egui::Label::new(job).wrap());
 }
 
 /// Is `cleaned` rustc-shaped (headers, `-->` locations, ASCII art)?

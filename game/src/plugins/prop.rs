@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
-//! Village props: oaks (REF-67, 32x48) and cottages (REF-68, 64x64).
+//! Village props: oaks (REF-67, 32x48), cottages (REF-68, 64x64) and the
+//! district landmarks (the Throne Dais, REF-96, 64x64).
 //!
 //! Props are ordinary sprites, not tiles. Each one is anchored bottom-centre
 //! at its ground line, y-sorted (lower on screen = drawn in front) and owns a
@@ -20,7 +21,7 @@
 //! [`OCCLUDER_ALPHA`] over [`FADE_SECS`], and back to opaque once clear. The
 //! decision ([`occludes`]) and the ramp ([`step_alpha`]) are pure functions.
 
-use crate::assets::{SPRITE_PROP_COTTAGE, SPRITE_PROP_OAK};
+use crate::assets::{SPRITE_PROP_COTTAGE, SPRITE_PROP_OAK, SPRITE_PROP_THRONE_DAIS};
 use crate::plugins::animation::{SpriteLift, unlifted_anchor};
 use crate::plugins::npc::Npc;
 use crate::plugins::player::Player;
@@ -95,6 +96,9 @@ pub fn slide_move(pos: Vec2, delta: Vec2, foot: Aabb, solids: &[Aabb]) -> Vec2 {
 pub enum PropKind {
     Oak,
     Cottage,
+    /// The Throne Dais (REF-96, approved 2026-11-15), the Act 10 district
+    /// landmark: 64x64, placed at [`LANDMARKS`].
+    ThroneDais,
 }
 
 impl PropKind {
@@ -102,6 +106,7 @@ impl PropKind {
         match self {
             PropKind::Oak => SPRITE_PROP_OAK,
             PropKind::Cottage => SPRITE_PROP_COTTAGE,
+            PropKind::ThroneDais => SPRITE_PROP_THRONE_DAIS,
         }
     }
 
@@ -109,7 +114,7 @@ impl PropKind {
     pub fn size(self) -> Vec2 {
         match self {
             PropKind::Oak => Vec2::new(32.0, 48.0),
-            PropKind::Cottage => Vec2::new(64.0, 64.0),
+            PropKind::Cottage | PropKind::ThroneDais => Vec2::new(64.0, 64.0),
         }
     }
 
@@ -118,8 +123,9 @@ impl PropKind {
     /// standing just in front of a wall sorts in front of it.
     pub fn ground_offset(self) -> f32 {
         match self {
-            PropKind::Oak => 3.0,     // REF-67 row 44 is the trunk base
-            PropKind::Cottage => 5.0, // REF-68 row 58 is the footing
+            PropKind::Oak => 3.0,        // REF-67 row 44 is the trunk base
+            PropKind::Cottage => 5.0,    // REF-68 row 58 is the footing
+            PropKind::ThroneDais => 3.0, // REF-96 row 60 is the bottom step's edge
         }
     }
 
@@ -131,10 +137,14 @@ impl PropKind {
     /// 3 px, while the player's body reaches ~5 px past its feet box, so a
     /// wider box would still overlap the eave and only push the player off
     /// the wall. The occlusion fade keeps a character under the eave visible.
+    /// Throne Dais: the three steps (REF-96 cols 2..61, rows 44..60 =
+    /// 60x17), so the player cannot climb onto the dais but can walk behind
+    /// the throne and banners, which fade like a roof.
     pub fn solid_local(self) -> Aabb {
         match self {
             PropKind::Oak => Aabb::from_base(0.0, 6.0, 3.0, 11.0),
             PropKind::Cottage => Aabb::from_base(0.0, 27.0, 5.0, 27.0),
+            PropKind::ThroneDais => Aabb::from_base(0.0, 30.0, 3.0, 20.0),
         }
     }
 
@@ -144,11 +154,14 @@ impl PropKind {
 
     /// Opaque bounds of the art relative to the anchor, used for the
     /// occlusion fade. Oak: REF-67 cols 2..29, rows 1..44. Cottage: REF-68
-    /// cols 2..61 (the eave), rows 0..58 (chimney top to footing).
+    /// cols 2..61 (the eave), rows 0..58 (chimney top to footing). Throne
+    /// Dais: REF-96 cols 2..61 (the bottom step), rows 0..60 (finial to the
+    /// bottom step).
     pub fn visual_local(self) -> Aabb {
         match self {
             PropKind::Oak => Aabb::from_base(0.0, 14.0, 3.0, 47.0),
             PropKind::Cottage => Aabb::from_base(0.0, 30.0, 5.0, 64.0),
+            PropKind::ThroneDais => Aabb::from_base(0.0, 30.0, 3.0, 64.0),
         }
     }
 
@@ -234,24 +247,29 @@ pub const COTTAGE_SPOTS: &[(usize, Side, f32)] = &[
     (9, Side::West, -100.0),
     (9, Side::East, -100.0),
     (9, Side::East, 100.0),
-    // The Throne (Act 10), the same way; its north-east spot is kept for
-    // the dais.
+    // The Throne (Act 10), the same way; its north-east spot holds the
+    // dais (`LANDMARKS`).
     (10, Side::West, -100.0),
     (10, Side::West, 100.0),
     (10, Side::East, -100.0),
 ];
 
-/// Where each district landmark will stand once its art is approved:
-/// `(district index, side, offset, ref)`, in [`COTTAGE_SPOTS`] terms (a
-/// landmark is a 64x64 bottom-centre-anchored prop like REF-68). NOT
-/// spawned: REF-95 (The Sealed Stacks) and REF-96 (The Throne Dais) are
-/// drafts awaiting Matt's approval. Wiring one is a new `PropKind` placed
-/// here; `pending_landmark_spots_are_clear` keeps each spot on open grass,
-/// clear of every prop and NPC, so that is all it takes.
-pub const PENDING_LANDMARKS: &[(usize, Side, f32, &str)] = &[
-    (9, Side::West, 100.0, "REF-95 The Sealed Stacks"),
-    (10, Side::East, 100.0, "REF-96 The Throne Dais"),
-];
+/// District landmarks that are approved and spawned: `(district index,
+/// side, offset, kind)`, in [`COTTAGE_SPOTS`] terms (a landmark is a 64x64
+/// bottom-centre-anchored prop like REF-68, so [`cottage_base`] places it).
+/// The Throne Dais (REF-96, approved by Matt 2026-11-15) stands on the
+/// Throne plaza's north-east side, the spot Act 9 reserved for it.
+pub const LANDMARKS: &[(usize, Side, f32, PropKind)] =
+    &[(10, Side::East, 100.0, PropKind::ThroneDais)];
+
+/// Where each remaining district landmark will stand once its art is
+/// approved: `(district index, side, offset, ref)`, in [`COTTAGE_SPOTS`]
+/// terms. NOT spawned: REF-95 (The Sealed Stacks) is a draft awaiting
+/// Matt's approval. Wiring it is a new `PropKind` moved to [`LANDMARKS`];
+/// `pending_landmark_spots_are_clear` keeps the spot on open grass, clear
+/// of every prop and NPC, so that is all it takes.
+pub const PENDING_LANDMARKS: &[(usize, Side, f32, &str)] =
+    &[(9, Side::West, 100.0, "REF-95 The Sealed Stacks")];
 
 /// Free-standing oaks in open meadow, between the quarters.
 pub const MEADOW_OAKS: &[Vec2] = &[
@@ -338,6 +356,12 @@ pub fn all_props() -> Vec<(PropKind, Vec2)> {
             None => tracing::warn!("cottage spot references unknown district {d}; skipped"),
         }
     }
+    for &(d, side, offset, kind) in LANDMARKS {
+        match cottage_base(d, side, offset) {
+            Some(base) => out.push((kind, base)),
+            None => tracing::warn!(?kind, "landmark references unknown district {d}; skipped"),
+        }
+    }
     out
 }
 
@@ -410,10 +434,12 @@ fn spawn_props(mut commands: Commands, asset_server: Res<AssetServer>) {
     let props = all_props();
     let mut oaks = 0usize;
     let mut cottages = 0usize;
+    let mut landmarks = 0usize;
     for (kind, base) in &props {
         match kind {
             PropKind::Oak => oaks += 1,
             PropKind::Cottage => cottages += 1,
+            PropKind::ThroneDais => landmarks += 1,
         }
         tracing::trace!(?kind, x = base.x, y = base.y, "spawning prop");
         commands.spawn((
@@ -429,7 +455,7 @@ fn spawn_props(mut commands: Commands, asset_server: Res<AssetServer>) {
         ));
     }
     tracing::info!(
-        "spawned {} props ({oaks} oaks, {cottages} cottages)",
+        "spawned {} props ({oaks} oaks, {cottages} cottages, {landmarks} landmarks)",
         props.len()
     );
 }
@@ -658,7 +684,7 @@ mod tests {
 
     #[test]
     fn visual_rect_covers_the_solid_and_sits_in_the_sprite() {
-        for k in [PropKind::Oak, PropKind::Cottage] {
+        for k in [PropKind::Oak, PropKind::Cottage, PropKind::ThroneDais] {
             let v = k.visual_local();
             let s = k.solid_local();
             let sprite = k.sprite_rect_at(Vec2::ZERO);
@@ -716,7 +742,7 @@ mod tests {
         let props = all_props();
         let big: Vec<(PropKind, Aabb)> = props
             .iter()
-            .filter(|(k, b)| *k == PropKind::Cottage || MEADOW_OAKS.contains(b))
+            .filter(|(k, b)| *k != PropKind::Oak || MEADOW_OAKS.contains(b))
             .map(|(k, b)| (*k, k.sprite_rect_at(*b)))
             .collect();
         for (i, (ka, a)) in big.iter().enumerate() {
@@ -732,8 +758,8 @@ mod tests {
             }
             let r = k.sprite_rect_at(*b);
             for (kc, c) in &big {
-                if *kc == PropKind::Cottage {
-                    assert!(!r.overlaps(c), "oak at {b:?} overlaps a cottage");
+                if *kc != PropKind::Oak {
+                    assert!(!r.overlaps(c), "oak at {b:?} overlaps the {kc:?}");
                 }
             }
         }
@@ -760,7 +786,7 @@ mod tests {
     #[test]
     fn pending_landmark_spots_are_clear() {
         let props = all_props();
-        assert_eq!(PENDING_LANDMARKS.len(), 2);
+        assert_eq!(PENDING_LANDMARKS.len(), 1, "only REF-95 waits");
         for &(d, side, offset, art) in PENDING_LANDMARKS {
             let base =
                 cottage_base(d, side, offset).unwrap_or_else(|| panic!("{art}: no district {d}"));
@@ -785,6 +811,52 @@ mod tests {
                 assert!(!npc.overlaps(&plot), "{art} covers NPC slot {i}");
             }
         }
+    }
+
+    /// The Throne Dais (REF-96) is spawned exactly once, at the spot Act 9
+    /// reserved for it on the Throne plaza's north-east side, as a solid,
+    /// y-sorted 64x64 prop; the player can stand just in front of its
+    /// bottom step (drawn in front) and behind the throne (it fades).
+    #[test]
+    fn the_throne_dais_stands_at_its_reserved_spot() {
+        let dais: Vec<Vec2> = all_props()
+            .into_iter()
+            .filter(|(k, _)| *k == PropKind::ThroneDais)
+            .map(|(_, b)| b)
+            .collect();
+        let throne = DISTRICTS
+            .iter()
+            .position(|d| d.name == "The Throne")
+            .expect("the Throne district");
+        assert_eq!(LANDMARKS.len(), 1);
+        let (d, side, offset, kind) = LANDMARKS[0];
+        assert_eq!((d, offset, kind), (throne, 100.0, PropKind::ThroneDais));
+        assert!(matches!(side, Side::East));
+        let base = cottage_base(throne, Side::East, 100.0).expect("spot");
+        assert_eq!(dais, vec![base], "one dais, at the reserved spot");
+        assert!(
+            PENDING_LANDMARKS.iter().all(|(d, ..)| *d != throne),
+            "the Throne's spot is no longer pending"
+        );
+        let k = PropKind::ThroneDais;
+        assert_eq!(k.size(), Vec2::new(64.0, 64.0));
+        assert_eq!(k.sprite_path(), crate::assets::SPRITE_PROP_THRONE_DAIS);
+        let solid = k.solid_at(base);
+        let prop_z = ysort_z(base.y + k.ground_offset());
+        let front = Vec2::new(base.x, solid.min.y - 6.0);
+        assert!(!occludes(
+            player_body_at_feet(front),
+            ysort_z(front.y),
+            k.visual_at(base),
+            prop_z
+        ));
+        let behind = Vec2::new(base.x, solid.max.y);
+        assert!(occludes(
+            player_body_at_feet(behind),
+            ysort_z(behind.y),
+            k.visual_at(base),
+            prop_z
+        ));
     }
 
     #[test]

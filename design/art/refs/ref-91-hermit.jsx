@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 // REF-91 - The Hermit on the Throne kit (REF-86), 32x32, idle.
 // APPROVED by Matt 2026-11-15, with the designer's note applied (narrowed
-// kit). Not wired yet.
+// kit).
+// Wired as game/assets/sprites/npc/hermit_idle_0.png.
 //
 // Outpost keeper. The mantle is worn short and ragged at the edge, so far
 // more of the cobalt underrobe shows; white hair and beard, a dulled

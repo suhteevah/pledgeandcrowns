@@ -2,7 +2,7 @@
 // REF-86 - Costume kit exemplar, Act 10 The Throne, 32x32.
 // APPROVED by Matt 2026-11-15, with the designer's note applied (narrowed
 // by two pixels so the figure reads statuesque, not stout). Kit exemplar:
-// not wired to any NPC.
+// not wired to any NPC: the Act 10 cast (REF-87..92) is drawn on it.
 //
 // Kit rule for the Throne cast: a stiff stone-grey mantle squared at the
 // shoulders like carved stone, a raised collar framing the head, an

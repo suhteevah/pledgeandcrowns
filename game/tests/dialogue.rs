@@ -1015,3 +1015,144 @@ fn librarian_offers_stage_one_then_is_cleared_on_the_last_stage() {
         ))
     );
 }
+
+// --- the Act 10 boss: the Compiler, no prologue either --------------------
+
+/// The Compiler's roster mission is his stage 1. While it is locked and
+/// the Registrar (the mission just before) is next, he says his own
+/// authored `not_yet` line naming them; further back, the neutral line.
+#[test]
+fn compiler_says_his_not_yet_line_while_stage_one_is_locked() {
+    let reg = MissionRegistry::default();
+    let npc = "compiler_alloc";
+    let through = |last: &str| {
+        let mut p = MissionProgress::default();
+        for m in &reg.missions {
+            p.mark_cleared(m.id);
+            if m.id == last {
+                break;
+            }
+        }
+        p
+    };
+    let hint = next_hint(&reg, &through("no_std"), npc);
+    if cfg!(feature = "demo") {
+        assert_eq!(hint, NextHint::Nothing);
+        return;
+    }
+    assert_eq!(hint, NextHint::DirectPrereq("The Registrar"));
+    let c = select_conversation(npc, MissionStatus::NotYetAvailable, hint);
+    assert_eq!(
+        c.lines,
+        vec![
+            "The Throne is not yours to climb yet. See The Registrar first, and come back with the register stamped."
+                .to_string()
+        ]
+    );
+    let hint = next_hint(&reg, &through("prealloc"), npc);
+    assert_eq!(hint, NextHint::Elsewhere("The Copyist"));
+    let c = select_conversation(npc, MissionStatus::NotYetAvailable, hint);
+    assert_eq!(
+        c.lines,
+        vec![render_line(NOT_YET_ELSEWHERE, Some("The Copyist"))]
+    );
+}
+
+/// None of the Compiler's authored lines quotes compiler output or names
+/// an error code: rustc's real words for the player's program are in the
+/// editor's result pane, not in his mouth.
+#[test]
+fn the_compiler_quotes_no_compiler_output() {
+    use pledge_and_crown::plugins::dialogue::lines::TRIAL_STAGES;
+    let mut seen = 0;
+    for row in TRIAL_STAGES
+        .iter()
+        .filter(|r| r.npc_id.starts_with("compiler_"))
+    {
+        let l = row.lines;
+        for line in l
+            .not_yet
+            .iter()
+            .chain(l.offer)
+            .chain(l.in_progress)
+            .chain(l.cleared)
+        {
+            seen += 1;
+            assert!(
+                !line.contains("error[") && !line.contains("error:") && !line.contains("-->"),
+                "quotes compiler output: {line}"
+            );
+            let has_code = line
+                .as_bytes()
+                .windows(5)
+                .any(|w| w[0] == b'E' && w[1..].iter().all(u8::is_ascii_digit));
+            assert!(!has_code, "names an error code: {line}");
+        }
+    }
+    assert!(
+        seen >= 10,
+        "the Compiler's three stages have authored lines"
+    );
+}
+
+/// Locked, the Compiler talks about stage 1 itself, with its trial header.
+#[test]
+fn compiler_is_locked_on_stage_one_before_the_registrar() {
+    let mut app = app_with_nearby("The Compiler", "compiler_alloc");
+    clear_through(&mut app, "no_std");
+    tap(&mut app, KeyCode::KeyF);
+    assert_eq!(
+        open_dialogue(&app),
+        Some((
+            "compiler_alloc",
+            MissionStatus::NotYetAvailable,
+            Some("Trial: The Compiler - stage 1 of 3".to_string())
+        ))
+    );
+}
+
+#[test]
+#[cfg_attr(feature = "demo", ignore = "Act 10 is not in the demo build")]
+fn compiler_offers_stage_one_then_is_cleared_on_the_last_stage() {
+    let mut app = app_with_nearby("The Compiler", "compiler_alloc");
+    clear_through(&mut app, "semver_caret");
+    tap(&mut app, KeyCode::KeyF);
+    assert_eq!(
+        open_dialogue(&app),
+        Some((
+            "compiler_alloc",
+            MissionStatus::Offer,
+            Some("Trial: The Compiler - stage 1 of 3".to_string())
+        ))
+    );
+    finish_dialogue(&mut app);
+    assert!(editor_open(&app), "the offer opens the editor");
+    assert_eq!(
+        app.world().resource::<EditorState>().encounter_id,
+        "compiler_alloc"
+    );
+
+    let mut app = app_with_nearby("The Compiler", "compiler_alloc");
+    clear_through(&mut app, "compiler_alloc");
+    tap(&mut app, KeyCode::KeyF);
+    assert_eq!(
+        open_dialogue(&app),
+        Some((
+            "compiler_lifetime",
+            MissionStatus::Offer,
+            Some("Trial: The Compiler - stage 2 of 3".to_string())
+        ))
+    );
+
+    let mut app = app_with_nearby("The Compiler", "compiler_alloc");
+    clear_through(&mut app, "compiler_bound");
+    tap(&mut app, KeyCode::KeyF);
+    assert_eq!(
+        open_dialogue(&app),
+        Some((
+            "compiler_bound",
+            MissionStatus::Cleared,
+            Some("Trial: The Compiler - stage 3 of 3".to_string())
+        ))
+    );
+}

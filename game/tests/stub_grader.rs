@@ -1143,6 +1143,372 @@ fn main() {
     println!("the Librarian closes the book");
 }"#
         }
+        // ── Act 10: The Throne (player-facing solutions; their `unsafe`
+        // and `#[global_allocator]` are text in a string) ──
+        "prealloc" => {
+            r#"use std::alloc::{GlobalAlloc, Layout, System};
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+/// The Assayer's scale: wraps the system allocator and counts every
+/// allocation and reallocation.
+struct CountingAlloc;
+
+static ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);
+
+// SAFETY: every method passes its arguments unchanged to `System`,
+// which keeps the GlobalAlloc contract. Adding to an atomic does not
+// allocate.
+unsafe impl GlobalAlloc for CountingAlloc {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
+        unsafe { System.alloc(layout) }
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        unsafe { System.dealloc(ptr, layout) }
+    }
+
+    unsafe fn realloc(
+        &self,
+        ptr: *mut u8,
+        layout: Layout,
+        new_size: usize,
+    ) -> *mut u8 {
+        ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
+        unsafe { System.realloc(ptr, layout, new_size) }
+    }
+}
+
+#[global_allocator]
+static GLOBAL: CountingAlloc = CountingAlloc;
+
+fn main() {
+    let before = ALLOCATIONS.load(Ordering::Relaxed);
+
+    // Ask for room for every coin up front: one allocation, and `push`
+    // never reallocates while the length is below the capacity.
+    let mut ledger = Vec::with_capacity(1000);
+    for coin in 0..1000u32 {
+        ledger.push(coin);
+    }
+
+    let after = ALLOCATIONS.load(Ordering::Relaxed);
+    // Measure first, print after: printing is not part of the ledger.
+    println!("coins: {}", ledger.len());
+    println!("allocations: {}", after - before);
+}"#
+        }
+        "cow_borrow" => {
+            r#"use std::borrow::Cow;
+
+/// Shelf names use underscores instead of spaces. Most titles have no
+/// spaces, so borrow those as they are and copy only when something
+/// must change.
+fn shelf_name(title: &str) -> Cow<'_, str> {
+    if title.contains(' ') {
+        Cow::Owned(title.replace(' ', "_"))
+    } else {
+        Cow::Borrowed(title)
+    }
+}
+
+fn main() {
+    for title in ["Grimoire", "Book of Crowns", "Ledger"] {
+        let name = shelf_name(title);
+        let how = match &name {
+            Cow::Borrowed(_) => "borrowed",
+            Cow::Owned(_) => "copied",
+        };
+        println!("{name} ({how})");
+    }
+}"#
+        }
+        "const_eval" => {
+            r#"/// A `const fn` can run inside the compiler when it is used to compute
+/// a constant. `for` loops are not allowed in const fns (they call
+/// `Iterator::next`, which is not const), so this uses `while`.
+const fn star_table() -> [u32; 8] {
+    let mut table = [0u32; 8];
+    let mut i = 0;
+    while i < 8 {
+        table[i] = (i as u32) * (i as u32) + 1;
+        i += 1;
+    }
+    table
+}
+
+/// Computed once, during compilation. The finished array is baked into
+/// the program; no work happens at run time to build it.
+const STARS: [u32; 8] = star_table();
+
+// Checked during compilation: if this were false, the program would not
+// build at all.
+const _: () = assert!(STARS[7] == 50, "the last star is misplaced");
+
+fn main() {
+    println!("star chart: {STARS:?}");
+    println!("brightest: {}", STARS[7]);
+}"#
+        }
+        "chunks_exact" => {
+            r#"/// Sums in four independent lanes: the data-parallel shape that SIMD
+/// hardware (and the compiler's auto-vectoriser) is built for.
+fn choir_sum(voices: &[u32]) -> u32 {
+    let mut lanes = [0u32; 4];
+    let mut chunks = voices.chunks_exact(4);
+    for chunk in &mut chunks {
+        for (lane, voice) in lanes.iter_mut().zip(chunk) {
+            *lane += voice;
+        }
+    }
+    // chunks_exact only yields full chunks of 4. Whatever is left over
+    // (0 to 3 voices) waits in the remainder and must be added by hand.
+    let soloists: u32 = chunks.remainder().iter().sum();
+    lanes.iter().sum::<u32>() + soloists
+}
+
+fn main() {
+    let voices: Vec<u32> = (1..=10).collect();
+    println!("choir sum: {}", choir_sum(&voices));
+    println!("plain sum: {}", voices.iter().sum::<u32>());
+    println!("empty choir: {}", choir_sum(&[]));
+}"#
+        }
+        "no_std" => {
+            r#"#![no_std]
+
+// The sandbox still needs std to print, so this program links it under
+// another name for `main`. A real firmware crate has no such line.
+extern crate std as host;
+
+mod firmware {
+    use core::fmt::{self, Write};
+
+    /// A 32-byte text buffer on the stack: no heap, no allocator.
+    pub struct Beacon {
+        bytes: [u8; 32],
+        len: usize,
+    }
+
+    impl Beacon {
+        pub const fn new() -> Self {
+            Beacon { bytes: [0; 32], len: 0 }
+        }
+
+        pub fn as_str(&self) -> &str {
+            // Only whole &str values are ever copied in, so this is UTF-8.
+            core::str::from_utf8(&self.bytes[..self.len]).unwrap_or("<garbled>")
+        }
+    }
+
+    impl Write for Beacon {
+        fn write_str(&mut self, s: &str) -> fmt::Result {
+            let end = self.len + s.len();
+            if end > self.bytes.len() {
+                return Err(fmt::Error); // refuse, never truncate silently
+            }
+            self.bytes[self.len..end].copy_from_slice(s.as_bytes());
+            self.len = end;
+            Ok(())
+        }
+    }
+
+    /// Formats a status line into the beacon. `write!` works without std:
+    /// it only needs a type that implements core::fmt::Write.
+    pub fn signal(beacon: &mut Beacon, tower: u8, lit: bool) -> fmt::Result {
+        write!(beacon, "tower {tower}: {}", if lit { "lit" } else { "dark" })
+    }
+}
+
+fn main() {
+    use core::fmt::Write;
+    use firmware::{signal, Beacon};
+
+    let mut beacon = Beacon::new();
+    let sent = signal(&mut beacon, 7, true).is_ok();
+    host::println!("{} (sent: {sent})", beacon.as_str());
+
+    let mut small = Beacon::new();
+    let refused = write!(small, "{}", "a message far longer than thirty-two bytes").is_err();
+    host::println!("overflow refused: {refused}");
+}"#
+        }
+        "semver_caret" => {
+            r#"/// A plain MAJOR.MINOR.PATCH version (no pre-release or build tags).
+/// Deriving Ord compares fields in declaration order, which is exactly
+/// semver precedence for plain versions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct Version {
+    major: u64,
+    minor: u64,
+    patch: u64,
+}
+
+fn parse(text: &str) -> Option<Version> {
+    let mut parts = text.split('.');
+    let major = parts.next()?.parse().ok()?;
+    let minor = parts.next()?.parse().ok()?;
+    let patch = parts.next()?.parse().ok()?;
+    if parts.next().is_some() {
+        return None;
+    }
+    Some(Version { major, minor, patch })
+}
+
+/// Cargo's default requirement: `serde = "1.2.3"` means `^1.2.3`.
+/// The leftmost non-zero part may never change; everything after it
+/// may rise.
+fn caret_allows(required: Version, candidate: Version) -> bool {
+    if candidate < required {
+        return false;
+    }
+    if required.major > 0 {
+        candidate.major == required.major
+    } else if required.minor > 0 {
+        candidate.major == 0 && candidate.minor == required.minor
+    } else {
+        candidate.major == 0 && candidate.minor == 0 && candidate.patch == required.patch
+    }
+}
+
+fn main() {
+    let checks = [
+        ("1.2.3", "1.9.0"),
+        ("1.2.3", "2.0.0"),
+        ("1.2.3", "1.2.2"),
+        ("0.2.3", "0.2.9"),
+        ("0.2.3", "0.3.0"),
+        ("0.0.3", "0.0.3"),
+        ("0.0.3", "0.0.4"),
+        ("1.2.3", "1.x.0"),
+    ];
+    for (req, cand) in checks {
+        match (parse(req), parse(cand)) {
+            (Some(r), Some(c)) => println!("^{req} accepts {cand}: {}", caret_allows(r, c)),
+            _ => println!("^{req} vs {cand}: not a version"),
+        }
+    }
+}"#
+        }
+        "compiler_alloc" => {
+            r#"use std::alloc::{GlobalAlloc, Layout, System};
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+/// The Assayer's scale: wraps the system allocator and counts every
+/// allocation and reallocation.
+struct CountingAlloc;
+
+static ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);
+
+// SAFETY: every method passes its arguments unchanged to `System`,
+// which keeps the GlobalAlloc contract. Adding to an atomic does not
+// allocate.
+unsafe impl GlobalAlloc for CountingAlloc {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
+        unsafe { System.alloc(layout) }
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        unsafe { System.dealloc(ptr, layout) }
+    }
+
+    unsafe fn realloc(
+        &self,
+        ptr: *mut u8,
+        layout: Layout,
+        new_size: usize,
+    ) -> *mut u8 {
+        ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
+        unsafe { System.realloc(ptr, layout, new_size) }
+    }
+}
+
+#[global_allocator]
+static GLOBAL: CountingAlloc = CountingAlloc;
+
+/// Joins the court's names with ", " in exactly one allocation: the
+/// final length is known before the first byte is written.
+fn proclaim(names: &[&str]) -> String {
+    let letters: usize = names.iter().map(|name| name.len()).sum();
+    let separators = names.len().saturating_sub(1) * ", ".len();
+    // `len()` counts bytes, so this is the exact size of the result.
+    let mut line = String::with_capacity(letters + separators);
+    for (i, name) in names.iter().enumerate() {
+        if i > 0 {
+            line.push_str(", ");
+        }
+        // Still within the capacity: `push_str` never reallocates here.
+        line.push_str(name);
+    }
+    line
+}
+
+fn main() {
+    let court = [
+        "Ferris",
+        "the Borrow Checker",
+        "Vexis",
+        "the Librarian",
+    ];
+    let before = ALLOCATIONS.load(Ordering::Relaxed);
+    let line = proclaim(&court);
+    let after = ALLOCATIONS.load(Ordering::Relaxed);
+    println!("{line}");
+    println!("allocations: {}", after - before);
+}"#
+        }
+        "compiler_lifetime" => {
+            r#"use std::borrow::Cow;
+
+/// Only `name` can end up inside the result (when it is borrowed), so
+/// only `name` shares the lifetime of the result. `title` is read and
+/// let go.
+fn herald<'a>(name: &'a str, title: &str) -> Cow<'a, str> {
+    if title.is_empty() {
+        Cow::Borrowed(name)
+    } else {
+        Cow::Owned(format!("{title} {name}"))
+    }
+}
+
+fn main() {
+    let name = String::from("Ferris");
+    let plain = herald(&name, "");
+    let titled = {
+        let title = String::from("Sir");
+        herald(&name, &title)
+    }; // `title` is dropped here, but `titled` does not borrow from it
+    for line in [&plain, &titled] {
+        let how = match line {
+            Cow::Borrowed(_) => "borrowed",
+            Cow::Owned(_) => "owned",
+        };
+        println!("{line} ({how})");
+    }
+}"#
+        }
+        "compiler_bound" => {
+            r#"/// Works for any T that can be compared with `>`. PartialOrd, not Ord:
+/// floats have a partial order (NaN compares false with everything), so
+/// they implement PartialOrd but not Ord.
+fn strongest<T: PartialOrd>(champions: &[T]) -> Option<&T> {
+    let mut best = champions.first()?;
+    for champion in champions {
+        if champion > best {
+            best = champion;
+        }
+    }
+    Some(best)
+}
+
+fn main() {
+    println!("{:?}", strongest(&[3, 9, 4]));
+    println!("{:?}", strongest(&[0.5, 2.5, 1.0]));
+    println!("{:?}", strongest(&["ferris", "vexis", "borrow"]));
+    println!("{:?}", strongest::<i32>(&[]));
+}"#
+        }
         _ => return None,
     })
 }

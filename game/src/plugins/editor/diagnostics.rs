@@ -826,6 +826,23 @@ error: could not compile `player` (bin \"player\") due to 1 previous error; 1 wa
         );
         assert!(b.reason.contains("not verified"), "{}", b.reason);
         assert_eq!(parse_result("[ok:unsafe] 42").kind, ResultKind::Pass);
+        // The banner draws its reason as inline markdown
+        // (`widgets::draw_banner`): both `unsafe`s become code spans and
+        // no backtick is left in the plain text.
+        use crate::plugins::ui_theme::markdown::{SpanKind, parse_inline};
+        let spans = parse_inline(&b.reason);
+        let code: Vec<&str> = spans
+            .iter()
+            .filter(|s| s.kind == SpanKind::Code)
+            .map(|s| s.text.as_str())
+            .collect();
+        assert_eq!(code, ["unsafe", "unsafe"], "{}", b.reason);
+        assert!(
+            spans
+                .iter()
+                .all(|s| s.kind != SpanKind::Text || !s.text.contains('`')),
+            "{spans:?}"
+        );
 
         let b = banner(
             &parse_result("[offline mode — server unreachable]\n[ok:pattern] x"),

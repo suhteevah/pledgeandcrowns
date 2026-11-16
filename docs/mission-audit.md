@@ -5,9 +5,10 @@ Covers all 57 missions in `MissionRegistry::default()` (Acts 1-8) as of
 was run, listed under **Evidence**. Since then the Borrow Checker's trial
 added three missions (60 missions, 57 NPCs), the Act 3-5 boss trials
 nine more (69 missions, 57 NPCs), the Act 6-8 boss trials nine more
-(78 missions, 57 NPCs), and Act 9 nine more (87 missions, 64 NPCs); see
-**The Borrow Checker's trial**, **The Act 3-5 trials**, **The Act 6-8
-trials** and **Act 9: The Forbidden Library** at the end.
+(78 missions, 57 NPCs), Act 9 nine more (87 missions, 64 NPCs) and Act
+10 the last nine (96 missions, 71 NPCs); see **The Borrow Checker's
+trial**, **The Act 3-5 trials**, **The Act 6-8 trials**, **Act 9: The
+Forbidden Library** and **Act 10: The Throne** at the end.
 
 Player-facing solutions live in
 `game/src/plugins/editor/solutions/data.rs`. The "Show solution" button
@@ -385,13 +386,14 @@ Task let the player choose the values, and 3 are compile-only. The 13
 Tasks now name the values and show every expected line in a code span,
 so one behaviour is specified.
 
-**Totals now: 83 of 87 behaviour-checked (34 output checks, 49 harness
+**Totals now: 92 of 96 behaviour-checked (43 output checks, 49 harness
 checks), 4 static-only, 0 unverified** (the Borrow Checker's trial,
 2026-11-14, added three harness-checked stages, the Act 3-5 trials,
 2026-11-15, nine more, the Act 6-8 trials, 2026-11-15, eight harness
-checks and one static-only stage, and Act 9, 2026-11-15, five output
-checks and four harness checks, those four in `UnsafeLateNonce` mode;
-see the sections below). Before the
+checks and one static-only stage, Act 9, 2026-11-15, five output
+checks and four harness checks, those four in `UnsafeLateNonce` mode,
+and Act 10, 2026-11-15, nine output checks; see the sections below).
+Before the
 trials: 54 of 57 (25 harness checks). The 4 static-only missions cannot
 run on `wasm32-wasip1`: `thread_spawn`, `thread_scope` and
 `hydra_threads` trap (asserted by
@@ -668,3 +670,52 @@ spec's Implementation record):
   attack/fixture cases graded as expected against the REGISTERED checks;
   the two documented known-limit tests still behave as documented.
 - Grader snapshots: new rows only, 0 changed rows.
+
+## Act 10: The Throne (2026-11-15)
+
+Six missions and the Compiler's trial, after the Librarian: `prealloc`
+(the Assayer), `cow_borrow` (the Copyist), `const_eval` (the Astronomer),
+`chunks_exact` (the Choirmaster), `no_std` (the Hermit), `semver_caret`
+(the Registrar), then `compiler_alloc`, `compiler_lifetime`,
+`compiler_bound` (the Compiler, no prologue: his roster mission is stage
+1). 96 missions, 71 NPCs, the last act. The demo is unchanged: 24 free
+missions, ending on `bridge_lantern`; 72 after.
+
+Server checks: all nine pin their stdout (exact) and need the construct's
+tokens (`uses`), in the plain build. `prealloc` and `compiler_alloc`
+contain the player's own counting `#[global_allocator]`; the plain build
+has never carried `forbid(unsafe_code)`, so no harness mode is involved
+(`compile-api/HARNESS-NOTES.md`, "Act 10"). Their pinned
+`allocations: 1` is std's documented guarantee for an exact
+`with_capacity`, and the same in the sandbox as natively. No mission
+grades speed.
+
+Evidence (rustc 1.99.0, edition 2024; editions 2021 and 2024 and
+`wasm32-wasip1` checked separately for every Act 10 program, see the
+spec's Implementation record):
+
+- `mission_text -- --include-ignored`: 16/16. Four new starters fail with
+  exactly their code (E0015, E0425 plus one code-less macro error, E0106,
+  E0369); the other five compile and print the wrong output.
+  `trial_claims_are_what_rustc_emits`: 44 claims (11 new, the
+  Compiler's); `act10_villager_claims_are_what_rustc_emits`: 15 claims
+  (E0015 x2, E0080, E0658, E0425, `println!` missing under `no_std`,
+  rustc's `crate::host` suggestion compiling, `extern crate alloc`, `Cow`
+  facts, starter outputs including the allocator counts above 1, which no
+  text quotes). Pinned outputs for all nine. The epilogue test: no "more
+  acts", the company named, the last trial stage is the last mission.
+- `solutions -- --include-ignored`: 96/96 native, 96/96 `wasm32-wasip1`,
+  sandbox 92 of 96 ran cleanly (the four thread programs trap, as listed;
+  every Act 10 solution runs cleanly).
+- `contract -- --include-ignored`: grader corpus 96/96 (a, b, c, f),
+  81/81 correct (5 new), 37/37 wrong (9 new), 177/177 corpus programs
+  compile.
+- `expectations_proof -- --include-ignored`: 443 cases, 0 unexpected (47
+  Act 10: 9 canonicals pass, 9 starters fail, 15 wrong variants fail with
+  `WrongOutput` or `CompileError`, 9 literal variants fail with
+  `StaticCheckFailed`, 5 alternatives pass); 92 behaviour-checked
+  missions proven. Sandbox stdout: `prealloc` prints
+  `coins: 1000` / `allocations: 1`, `compiler_alloc` its proclamation and
+  `allocations: 1`.
+- `act9_unsafe_harness -- --include-ignored`: unchanged, passes.
+- Grader snapshots: 430 new rows per grader, 0 changed rows.
