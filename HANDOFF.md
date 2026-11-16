@@ -1,7 +1,7 @@
 # HANDOFF.md
 
 ## Last Updated
-2026-11-15 — **Orchestrated build-out: waves 1-14 merged; wave 15 (Act 10, the last act: the game now has all ten acts) on its branch for review.**
+2026-11-16 — **Orchestrated build-out: waves 1-16 merged. All ten acts, 96 missions, 71 NPCs. Rust-lead pre-release blockers fixed. Branch is ready for the owner to play and decide on.**
 
 Branch **`finish/integration`** (not pushed, `main` untouched). Fable
 orchestrates Opus agents in git worktrees, reviews each branch, merges, and
@@ -173,6 +173,38 @@ runs `scripts/ci.ps1` on the merged result as the sign-off gate.
   real stderr). Every Act 10 compiler/runtime claim is compiled or run in
   `mission_text.rs`; spec corrections in its "Implementation record".
   Art REF-87..92 and the Compiler REF-94 wired, REF-86 kit catalogued.
+  Merged at `dd5d7ff`; sixth security review filed (`6f00655`, safe);
+  voice-editor pass over Acts 9-10 (`45f05e3`).
+- **Wave 16** (`72d5525`, merged at `e86b519`): the rust-lead pre-release
+  review (`.claude/reviews/rust-lead-2026-11-15-6f00655.md`) found three
+  blockers; all fixed. **(B1) Release scripts default to the 24-mission
+  demo** (owner decision 2026-11-16: the free web/itch build is the demo).
+  `web-build.ps1` takes `-Features` (default `demo`) and `-Full`; every
+  build writes `web/pkg/build-stamp.json` (flavour, commit, wasm sha256);
+  `web-package.ps1`, `itch-push.ps1`, `mobile/build-android.ps1` and the
+  Tauri `build.rs` (`web_gate.rs`, `PNC_ALLOW_FULL_BUILD=1`) refuse a full
+  build unless asked, and refuse a missing or mismatched stamp
+  (`scripts/build-stamp-lib.ps1`). **(B2) A native release build with no
+  server is now offline mode** (passes count, as on web): run-time
+  `PLEDGE_API_URL` > build-time `PLEDGE_BAKED_API_URL` > localhost (debug
+  only) > offline. Release exe has no console window and writes
+  `pledge-and-crown.log` beside the save (`game/src/log_file.rs`).
+  **(B3) Hard rule 3 is enforced:** the rustc-claims tests assert rustc is
+  the server's pinned 1.99.0 and run in `ci.ps1` (`rustc-claims` step);
+  `scripts/ci-slow.ps1` runs every ignored suite and writes
+  `logs/ci-slow-<sha>.txt` (green on `72d5525`, 53 tests, ~18 min). **A
+  release tag needs a green ci-slow record.** Also: a saved position
+  inside a solid or off the map is moved to the nearest free spot; a late
+  verdict is saved for its own mission but not shown in another mission's
+  editor; `ci.ps1` runs the demo-feature tests (`test-demo`); server and
+  game mission ids are compared in `contract.rs`; `#![forbid(unsafe_code)]`
+  in compile-api, render-refs and web-serve; `design/01-curriculum.md` now
+  says modules (ch. 7) and writing tests (ch. 11) are NOT taught in v1.0.
+  `ci.ps1` is slower: ~90 s warm, plus ~2.5 min after any game-crate
+  change. **Not verified:** the Tauri `build.rs` was never compiled with
+  Tauri; no release exe was built, so the console-less window and log
+  file are unit-tested only. No native packaging script exists (no asset
+  bundling, see `BEVY_ASSET_ROOT`).
 
 ### Art status (Matt is the sole approver; design canvas)
 - **Wired 2026-11-15 (wave 14):** the kit exemplars REF-69..74 as the six
@@ -204,7 +236,24 @@ runs `scripts/ci.ps1` on the merged result as the sign-off gate.
    approval of the Sealed Stacks landmark (REF-95), Borrow Checker,
    Librarian and Compiler intro/defeat frames, the Librarian's lectern,
    title redraw.
-5. **All ten acts are implemented** (Act 9 in wave 14, Act 10 in wave
+5. **Linux verification at `e86b519` on cnc (2026-11-16) passed**
+   (`.claude/reviews/linux-verification-2026-11-16-e86b519.md`): 410
+   normal + 45/45 ignored compile-api tests on rustc 1.99.0, the bwrap
+   late-nonce case, end-to-end grades of all four late-nonce missions and
+   the Act 10 allocator missions as the builder user, journal nonce grep
+   (0 matches), `verify-sandbox.sh` PASS (110 checks) in a temporary
+   deploy that was fully torn down. **Still deploy-host gates:**
+   `verify-sandbox.sh` on the real host; SELinux enforcing / AppArmor
+   untested; game `solutions --include-ignored` on Linux not run (host
+   lacks ALSA/libudev headers). **Copy the tree with
+   `git -c core.autocrlf=false archive`** or the shell scripts arrive
+   with CRLF. **Defect found: `rust-lld` sometimes crashes ("Resource
+   temporarily unavailable") on many-core hosts** because it starts one
+   thread per core under the 1280 MiB build limit (6 of 40 builds on 56
+   cores; 0 of 40 with lld threads capped at 4); a correct solution is
+   then wrongly failed. See the wave after 16 for the fix status.
+   The text below predates that run.
+   **All ten acts are implemented** (Act 9 in wave 14, Act 10 in wave
    15). **Before any deploy that serves Act 9**, run the security review's
    Linux list (`.claude/reviews/security-2026-11-15-cf9bc47.md`, "Must run
    on Linux"): the bwrap late-nonce test, end-to-end grades of the
@@ -218,8 +267,18 @@ runs `scripts/ci.ps1` on the merged result as the sign-off gate.
    combat flavour (Hydra regrowth, Cliphy the imp, a fourth Warden phase,
    the Sanity meter, the Compiler's HP and timed optimisation battle), the
    watching cast on the Throne plaza, credits over a `cargo doc`
-   rendering. No voice-editor pass on the Act 9-10 lines yet.
-7. Owner actions: TESS + RF check; domain; Android keystore;
+   rendering. Act 9-10 villagers still use generic idle dialogue.
+7. **`pitch/deck.template.html` is out of date and overclaims** (owner's
+   file, not edited): line 330 "every concept in the Rust Book through
+   Chapter 20" (modules and tests are not taught); 375 "57 missions
+   across Acts 1-8" (now 96, ten acts); 317/376 "57 NPCs" (now 71); 355
+   credits `egui_code_editor` (the highlighter is hand-written); 427
+   promises email capture (not built); 263 shows a TEST tab.
+8. Small known visual issues: the quest marker overlaps the dais step;
+   the player overlaps the 64 px bosses at the talk spot.
+9. Owner actions: play the build (`scripts/dev.ps1`); approve or reject
+   REF-95; the epilogue credits carry a Rust trademark non-affiliation
+   line that needs the RF check; TESS + RF check; domain; Android keystore;
    export the old claude.ai/design artboard before 2026-12-14; install
    `wasm-opt`, `butler`, Miri; decide the `repository` URL.
 
