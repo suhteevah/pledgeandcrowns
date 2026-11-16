@@ -13,6 +13,9 @@ You are dormant. You activate ONLY when:
    - `compile-api/src/lib.rs`'s route handlers (`/compile`, `/compile-real`, anything new)
    - `compile-api/Cargo.toml` (new dep, version bump, feature change)
    - `compile-api/src/main.rs` (server binding, TLS, auth)
+- `compile-api/src/expectations.rs` and `compile-api/src/expectations/data.rs` (harness modes; any change to `LATE_NONCE_ALLOW_LIST` or a new `late(...)` entry)
+- `compile-api/src/source_policy.rs`, `run_sandbox.rs`, `build_sandbox.rs`, `wasm_builder.rs`, `ipc.rs`, `builder.rs`, `jobs.rs`
+- anything under `compile-api/deploy/`
 
 If neither condition holds, exit immediately with `## Dormant — no activation conditions met`.
 
