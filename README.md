@@ -63,10 +63,26 @@ cd pledge-and-crown/game
 cargo run --features dev
 ```
 
-```bash
-# Web build
-cargo build --target wasm32-unknown-unknown --release
-wasm-bindgen --out-dir ./web/pkg --target web ./target/wasm32-unknown-unknown/release/pledge_and_crown.wasm
+```powershell
+# Web build. The free web / itch / mobile build IS the demo (24 missions):
+powershell -ExecutionPolicy Bypass -File scripts/web-build.ps1           # demo (default)
+powershell -ExecutionPolicy Bypass -File scripts/web-build.ps1 -Full     # full game, on purpose
+# Each build writes web/pkg/build-stamp.json (flavour, features, commit,
+# date, .wasm hash). web-package.ps1, itch-push.ps1 and the Tauri shell
+# read it and refuse a full build unless given -Full
+# (PNC_ALLOW_FULL_BUILD=1 for the Tauri build).
+powershell -ExecutionPolicy Bypass -File scripts/web-package.ps1         # dist/pledge-and-crown-web-demo.zip
+```
+
+```powershell
+# Native release build. A release exe never defaults to the local dev
+# server: it uses PLEDGE_API_URL at run time, else the URL baked in at
+# build time from PLEDGE_BAKED_API_URL, else offline mode (pattern-checked
+# passes count, labelled as such). Debug builds default to 127.0.0.1:7878.
+$env:PLEDGE_BAKED_API_URL = "https://<compile-api host>"   # optional
+cargo build --release -p pledge_and_crown --features demo
+# Logs: %APPDATA%\pledge-and-crown\pledge-and-crown.log (no console window
+# in a Windows release build).
 ```
 
 ```powershell

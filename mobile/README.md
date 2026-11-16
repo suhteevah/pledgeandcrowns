@@ -21,8 +21,18 @@ The wrapper serves **prebuilt static assets** — there is no dev server and
 no `beforeBuildCommand` that invokes a JS bundler. The build order is:
 
 1. `powershell -ExecutionPolicy Bypass -File scripts/web-build.ps1`
-   (produces `web/pkg/*.wasm` + `web/assets/` + `web/index.html`)
+   (produces `web/pkg/*.wasm` + `web/assets/` + `web/index.html`, and
+   `web/pkg/build-stamp.json`). This builds the **demo** by default.
 2. `cargo tauri build` from `mobile/src-tauri/` (bundles `../../web`)
+
+**Demo gate.** The free mobile build is the demo (the `demo` cargo
+feature, 24 missions). `src-tauri/build.rs` (via `web_gate.rs`) reads
+`web/pkg/build-stamp.json` and fails every build of the shell unless it
+says `demo`, or `PNC_ALLOW_FULL_BUILD=1` is set for a deliberate
+full-game bundle. No stamp fails too. `build-android.ps1 build -Full`
+sets that variable after printing the stamp; without `-Full` it refuses a
+full web build up front. A full web build comes from
+`scripts/web-build.ps1 -Full`.
 
 ## Toolchain status on kokonoe (2026-06-18)
 

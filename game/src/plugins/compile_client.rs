@@ -260,6 +260,78 @@ fn drain_results(
                 "non-persisting pass for `{encounter_id}` (offline fallback; server configured but unavailable)"
             );
         }
-        editor.set_result(verdict.formatted, verdict.detail);
+        // The clear (above) always goes to the mission the code was sent
+        // for. The banner only goes to the editor if it still shows that
+        // mission: a real compile can take up to a minute, and by then the
+        // player may have closed it and opened another mission.
+        if encounter_id == editor.encounter_id {
+            editor.set_result(verdict.formatted, verdict.detail);
+        } else {
+            tracing::info!(
+                "late result for `{encounter_id}` not shown: the editor is now on `{}`",
+                editor.encounter_id
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn passing_verdict() -> Verdict {
+        let formatted = "[ok] verified".to_string();
+        Verdict {
+            detail: crate::plugins::editor::diagnostics::ResultDetail::bare(&formatted),
+            formatted,
+            ok: true,
+            persist_clear: true,
+            grade: Some(Grade::Passed),
+        }
+    }
+
+    fn app_with_editor_on(encounter: &str) -> App {
+        let mut app = App::new();
+        app.init_resource::<CompileChannel>()
+            .init_resource::<MissionProgress>()
+            .insert_resource(EditorState {
+                encounter_id: encounter.to_string(),
+                ..EditorState::default()
+            })
+            .add_systems(Update, drain_results);
+        app
+    }
+
+    fn deliver(app: &mut App, encounter: &str, verdict: Verdict) {
+        let sender = app.world().resource::<CompileChannel>().sender.clone();
+        send(&sender, encounter.to_string(), verdict);
+        app.update();
+    }
+
+    #[test]
+    fn a_result_for_the_open_mission_is_shown_and_saved() {
+        let mut app = app_with_editor_on("mut_binding");
+        deliver(&mut app, "mut_binding", passing_verdict());
+        let editor = app.world().resource::<EditorState>();
+        assert_eq!(editor.last_compile_result.as_deref(), Some("[ok] verified"));
+        assert!(
+            app.world()
+                .resource::<MissionProgress>()
+                .is_cleared("mut_binding")
+        );
+    }
+
+    /// Compile A, close, open B: A's slow verdict must not show on B, but
+    /// A's clear still counts.
+    #[test]
+    fn a_late_result_for_another_mission_is_saved_but_not_shown() {
+        let mut app = app_with_editor_on("if_else_sign");
+        deliver(&mut app, "mut_binding", passing_verdict());
+        let editor = app.world().resource::<EditorState>();
+        assert_eq!(editor.last_compile_result, None, "stale banner shown on B");
+        assert_eq!(editor.encounter_id, "if_else_sign");
+        let progress = app.world().resource::<MissionProgress>();
+        assert!(progress.is_cleared("mut_binding"), "A's clear was lost");
+        assert!(!progress.is_cleared("if_else_sign"));
     }
 }

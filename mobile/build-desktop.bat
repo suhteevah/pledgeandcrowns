@@ -6,6 +6,11 @@ REM Windows needs MSVC. This script locates VS via vswhere, loads the x64
 REM dev environment (so the MSVC linker finds the CRT + Windows SDK libs),
 REM then builds the standalone mobile/src-tauri crate with the MSVC
 REM toolchain. Pass-through args go to cargo, e.g. build-desktop.bat --release
+REM
+REM The shell bundles ..\web. The free build is the DEMO: src-tauri\build.rs
+REM fails the build unless web\pkg\build-stamp.json (from
+REM scripts\web-build.ps1) says demo. To bundle a full web build on purpose:
+REM   set PNC_ALLOW_FULL_BUILD=1
 setlocal
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 if not exist "%VSWHERE%" (

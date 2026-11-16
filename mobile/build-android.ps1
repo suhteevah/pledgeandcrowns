@@ -8,17 +8,40 @@
 #   powershell -ExecutionPolicy Bypass -File mobile/build-android.ps1 build         # all ABIs, release
 #   powershell -ExecutionPolicy Bypass -File mobile/build-android.ps1 build --debug
 #   powershell -ExecutionPolicy Bypass -File mobile/build-android.ps1 dev           # needs a device/emulator
+#   powershell -ExecutionPolicy Bypass -File mobile/build-android.ps1 build -Full   # bundle a FULL web build on purpose
+#
+# The app bundles ../web (the wasm web build). The free mobile build is the
+# DEMO: for `build` and `dev` this script reads web/pkg/build-stamp.json
+# (written by scripts/web-build.ps1), prints it, and refuses a full build
+# unless -Full is passed (it then sets PNC_ALLOW_FULL_BUILD=1, which the
+# shell's build.rs gate also requires). Build the web side first:
+#   powershell -ExecutionPolicy Bypass -File scripts/web-build.ps1          # demo
 #
 # ASCII-only + verbose by project convention.
 
 param(
     [Parameter(Mandatory = $true)]
     [string]$Step,
+    # Allow bundling a full-game web build.
+    [switch]$Full,
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$Rest
 )
 
 $ErrorActionPreference = 'Stop'
+
+. (Join-Path $PSScriptRoot '..\scripts\build-stamp-lib.ps1')
+if ($Step -eq 'build' -or $Step -eq 'dev') {
+    $webDir = (Resolve-Path (Join-Path $PSScriptRoot '..\web')).Path
+    $stamp = Read-BuildStamp -WebDir $webDir
+    Show-BuildStamp -Stamp $stamp -Source '(web/pkg)'
+    $wasm = Join-Path $webDir 'pkg\pledge_and_crown_bg.wasm'
+    $wasmHash = if (Test-Path $wasm) { Get-FileSha256Hex -Path $wasm } else { 'missing' }
+    if (-not (Test-BuildAllowed -Stamp $stamp -Full ([bool]$Full) -ActualWasmSha256 $wasmHash)) {
+        exit 4
+    }
+    if ($Full) { $env:PNC_ALLOW_FULL_BUILD = '1' } else { Remove-Item Env:PNC_ALLOW_FULL_BUILD -ErrorAction SilentlyContinue }
+}
 
 $Sdk    = 'G:\AndroidSdk'
 $NdkVer = '27.3.13750724'

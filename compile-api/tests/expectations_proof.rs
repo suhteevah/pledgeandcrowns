@@ -1603,6 +1603,7 @@ fn game_sources_parse() {
 fn print_canonical_transcripts() {
     // Regenerates the recorded data in src/expectations/data.rs: harness
     // results and the stdout each canonical solution prints.
+    assert_pinned_toolchain();
     let sols = canonical_solutions();
     let settings = BuildSettings::default();
     for m in expectations::all() {
@@ -1654,9 +1655,24 @@ fn print_canonical_transcripts() {
     }
 }
 
+/// The proof is only a proof for the compiler players get: fail fast,
+/// with the fix in the message, if the builds would use any rustc but
+/// `toolchain::PINNED_RUSTC_VERSION`.
+fn assert_pinned_toolchain() {
+    use pledge_compile_api::toolchain::{check_version, probe_rustc};
+    let found = probe_rustc(&BuildSettings::default().sandbox)
+        .unwrap_or_else(|e| panic!("cannot tell which rustc the builds use: {e}"));
+    if let Err(e) = check_version(&found) {
+        panic!(
+            "{e}\n(run this suite on the pinned toolchain, e.g. `rustup run <pinned> cargo test ...`)"
+        );
+    }
+}
+
 #[test]
 #[ignore = "slow: ~200 real wasm builds"]
 fn every_expectation_discriminates() {
+    assert_pinned_toolchain();
     let sols = canonical_solutions();
     let starters = starters();
     let wrong = wrong_variants();

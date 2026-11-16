@@ -2,24 +2,61 @@
 # Requires: rustup target add wasm32-unknown-unknown; cargo install wasm-bindgen-cli.
 # Optional: wasm-opt (binaryen) on PATH, or WASM_OPT=<path to wasm-opt.exe>.
 #
-#   powershell -ExecutionPolicy Bypass -File scripts/web-build.ps1
+#   powershell -ExecutionPolicy Bypass -File scripts/web-build.ps1                 # the DEMO (default)
+#   powershell -ExecutionPolicy Bypass -File scripts/web-build.ps1 -Full           # the full game
 #   powershell -ExecutionPolicy Bypass -File scripts/web-build.ps1 -CargoProfile release
 #   powershell -ExecutionPolicy Bypass -File scripts/web-build.ps1 -SkipWasmOpt
 #
-# Output: web/pkg/ (wasm-bindgen glue + .wasm) and web/assets/ (copy of
-# game/assets). web/index.html is the hand-written loader page and is
-# checked in; this script never overwrites it.
+# The free web / itch / mobile build IS the demo (product decision,
+# 2026-11-15): `-Features` defaults to `demo` (24 missions, then the
+# end-of-demo panel). Building the whole game takes an explicit -Full.
+# A feature list without `demo` and without -Full is refused.
+#
+# Output: web/pkg/ (wasm-bindgen glue + .wasm), web/assets/ (copy of
+# game/assets) and web/pkg/build-stamp.json, which records the flavour
+# (demo/full), features, commit, date, profile and .wasm hash. Packaging
+# and shipping scripts read that stamp and refuse a full build unless
+# they too are given -Full (see scripts/build-stamp-lib.ps1).
+# web/index.html is the hand-written loader page and is checked in; this
+# script never overwrites it.
+#
+# Server URL: the web build reads window.PLEDGE_CONFIG from the page (none
+# set = offline mode, pattern-checked passes count). The build-time
+# variable PLEDGE_BAKED_API_URL only applies to NATIVE release builds
+# (`$env:PLEDGE_BAKED_API_URL = "https://..."; cargo build --release -p
+# pledge_and_crown --features demo`); see compile_client/config.rs.
 
 param(
     # Cargo profile. `wasm-release` (root Cargo.toml) is size-tuned:
     # opt-level "s", fat LTO, 1 CGU, strip, panic=abort.
     [string]$CargoProfile = "wasm-release",
+    # Cargo features, comma- or space-separated. Default: the demo.
+    [string]$Features = "demo",
+    # Build the full game (drops the default `demo` feature).
+    [switch]$Full,
     [switch]$SkipWasmOpt
 )
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
+. (Join-Path $PSScriptRoot "build-stamp-lib.ps1")
+
+# --- which game ----------------------------------------------------------
+$featureList = @($Features -split '[,\s]+' | Where-Object { $_ -ne "" })
+if ($Full) {
+    if ($PSBoundParameters.ContainsKey("Features") -and ($featureList -contains "demo")) {
+        Write-Host "[FAIL] -Full contradicts -Features '$Features' (it contains demo)." -ForegroundColor Red
+        exit 2
+    }
+    $featureList = @($featureList | Where-Object { $_ -ne "demo" })
+} elseif (-not ($featureList -contains "demo")) {
+    Write-Host "[FAIL] -Features '$Features' has no 'demo': that is the FULL game. Pass -Full to build it on purpose." -ForegroundColor Red
+    exit 2
+}
+$flavour = if ($featureList -contains "demo") { "demo" } else { "full" }
+$featureArg = ($featureList -join ",")
+Write-Host ("[info] building the {0} (features: '{1}')" -f $(if ($flavour -eq "demo") { "DEMO" } else { "FULL GAME" }), $featureArg) -ForegroundColor $(if ($flavour -eq "demo") { "Green" } else { "Magenta" })
 
 function Get-GzipSize {
     param([string]$Path)
@@ -40,10 +77,13 @@ function Write-SizeLine {
     Write-Host ("[size] {0,-22} raw {1,8:N2} MB   gzip {2,8:N2} MB" -f $Label, ($raw / 1MB), ($gz / 1MB))
 }
 
-Write-Host "=== pledge & crown - web build (profile: $CargoProfile) ===" -ForegroundColor Cyan
+Write-Host "=== pledge & crown - web build (profile: $CargoProfile, $flavour) ===" -ForegroundColor Cyan
 
 $buildStart = Get-Date
-cargo build -p pledge_and_crown --target wasm32-unknown-unknown --profile $CargoProfile
+$cargoArgs = @("build", "-p", "pledge_and_crown", "--target", "wasm32-unknown-unknown", "--profile", $CargoProfile)
+if ($featureArg -ne "") { $cargoArgs += @("--features", $featureArg) }
+Write-Host "> cargo $($cargoArgs -join ' ')"
+& cargo @cargoArgs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Write-Host ("[ok] cargo build finished in {0:N0}s" -f ((Get-Date) - $buildStart).TotalSeconds) -ForegroundColor Green
 
@@ -130,5 +170,9 @@ if (-not (Test-Path "web/index.html")) {
     Write-Host "[FAIL] web/index.html (the loader page) is missing - restore it from git." -ForegroundColor Red
     exit 1
 }
+
+$stampPath = Write-BuildStamp -WebDir (Resolve-Path "web").Path -Flavour $flavour -Features $featureArg -CargoProfile $CargoProfile
+Write-Host "[ok] wrote $stampPath" -ForegroundColor Green
+Show-BuildStamp -Stamp (Read-BuildStamp -WebDir (Resolve-Path "web").Path)
 
 Write-Host "[ok] web build at web/. Serve with: cargo run -p web-serve --release" -ForegroundColor Green

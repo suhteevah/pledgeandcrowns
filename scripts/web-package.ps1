@@ -1,10 +1,18 @@
 # Build the web version and zip it for itch.io (HTML5 upload).
 #
-#   powershell -ExecutionPolicy Bypass -File scripts/web-package.ps1
-#   powershell -ExecutionPolicy Bypass -File scripts/web-package.ps1 -SkipBuild
+#   powershell -ExecutionPolicy Bypass -File scripts/web-package.ps1                  # build + zip the DEMO
+#   powershell -ExecutionPolicy Bypass -File scripts/web-package.ps1 -SkipBuild       # zip what is in web/ (must be the demo)
+#   powershell -ExecutionPolicy Bypass -File scripts/web-package.ps1 -Full            # build + zip the FULL game
+#   powershell -ExecutionPolicy Bypass -File scripts/web-package.ps1 -SkipBuild -Full # zip a full build already in web/
 #
-# Output: dist/pledge-and-crown-web.zip with index.html at the ZIP ROOT
-# (itch requirement), plus pkg/ and assets/.
+# Output: dist/pledge-and-crown-web-<flavour>.zip (flavour = demo or full)
+# with index.html at the ZIP ROOT (itch requirement), plus pkg/ (including
+# pkg/build-stamp.json) and assets/.
+#
+# The free itch build is the demo. This script reads web/pkg/build-stamp.json
+# (written by web-build.ps1), prints it, and refuses to zip a full build
+# unless -Full is passed, a demo build when -Full is passed, a build with
+# no stamp, or a .wasm that does not match its stamp.
 #
 # Entry names are written with forward slashes on purpose: PS 5.1's
 # Compress-Archive writes backslashes, which itch's Linux-side extractor
@@ -12,17 +20,22 @@
 
 param(
     [switch]$SkipBuild,
-    [string]$CargoProfile = "wasm-release"
+    [string]$CargoProfile = "wasm-release",
+    # Package the full game instead of the demo.
+    [switch]$Full
 )
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
+. (Join-Path $PSScriptRoot "build-stamp-lib.ps1")
 
 Write-Host "=== pledge & crown - web package (itch.io) ===" -ForegroundColor Cyan
 
 if (-not $SkipBuild) {
-    & powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "web-build.ps1") -CargoProfile $CargoProfile
+    $buildArgs = @("-ExecutionPolicy", "Bypass", "-File", (Join-Path $PSScriptRoot "web-build.ps1"), "-CargoProfile", $CargoProfile)
+    if ($Full) { $buildArgs += "-Full" }
+    & powershell @buildArgs
     if ($LASTEXITCODE -ne 0) {
         Write-Host "[FAIL] web-build.ps1 exit $LASTEXITCODE" -ForegroundColor Red
         exit $LASTEXITCODE
@@ -37,6 +50,13 @@ foreach ($req in @("index.html", "pkg/pledge_and_crown.js", "pkg/pledge_and_crow
     }
 }
 
+$stamp = Read-BuildStamp -WebDir $webDir
+Show-BuildStamp -Stamp $stamp -Source "(web/pkg)"
+$wasmHash = Get-FileSha256Hex -Path (Join-Path $webDir "pkg/pledge_and_crown_bg.wasm")
+if (-not (Test-BuildAllowed -Stamp $stamp -Full ([bool]$Full) -ActualWasmSha256 $wasmHash)) {
+    exit 4
+}
+
 # Only ship what the page needs: the loader, the wasm-bindgen pkg and assets.
 $files = @()
 $files += Get-Item (Join-Path $webDir "index.html")
@@ -46,7 +66,7 @@ if (Test-Path (Join-Path $webDir "assets")) {
 }
 
 New-Item -ItemType Directory -Force -Path "dist" | Out-Null
-$zipPath = Join-Path (Resolve-Path "dist").Path "pledge-and-crown-web.zip"
+$zipPath = Join-Path (Resolve-Path "dist").Path ("pledge-and-crown-web-{0}.zip" -f $stamp.flavour)
 if (Test-Path $zipPath) { Remove-Item -Force $zipPath }
 
 Add-Type -AssemblyName System.IO.Compression
@@ -89,4 +109,8 @@ if (-not ($okZip -and $okExtracted -and $okCount -and $okFile)) {
     Write-Host "[FAIL] package exceeds an itch.io HTML5 limit." -ForegroundColor Red
     exit 1
 }
-Write-Host "Upload: scripts/itch-push.ps1 -Target <user>/<game>:html5 -Confirm" -ForegroundColor Cyan
+if ($stamp.flavour -eq "full") {
+    Write-Host "Upload (FULL game): scripts/itch-push.ps1 -Target <user>/<game>:<channel> -Full -Confirm" -ForegroundColor Magenta
+} else {
+    Write-Host "Upload (demo): scripts/itch-push.ps1 -Target <user>/<game>:html5 -Confirm" -ForegroundColor Cyan
+}

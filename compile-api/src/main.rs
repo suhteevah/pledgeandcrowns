@@ -17,6 +17,7 @@
 //!
 //! Configuration comes from `PNC_*` environment variables (see
 //! `config.rs` and `deploy/env.example`).
+#![forbid(unsafe_code)]
 
 use std::io::IsTerminal;
 use std::process::ExitCode;

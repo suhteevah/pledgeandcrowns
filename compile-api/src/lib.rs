@@ -38,6 +38,7 @@
 //! request including queue wait and build: `PNC_REQUEST_DEADLINE_SECS`
 //! (503 `deadline_exceeded`). A build that is cut off by the request
 //! deadline keeps its build slot until the build itself has ended.
+#![forbid(unsafe_code)]
 
 pub mod build_root;
 pub mod build_sandbox;

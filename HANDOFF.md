@@ -441,8 +441,10 @@ The stated fear: *"without Claude I wouldn't be viable."* The resolution:
 > uses AI (ZoomInfo is literally hiring for *MCP* fluency). The only AI-free gate
 > is a ~45-min live interview. That gate is **prep-able**, not a verdict.
 
-And the prep tool already exists — **this game.** Acts 1–10 teach the Rust Book
-through Ch. 20, which is the exact surface an interview probes. So:
+And the prep tool already exists — **this game.** Acts 1–10 teach most of the
+Rust Book through Ch. 20, which is the exact surface an interview probes (not
+modules/visibility, Book ch. 7, or writing tests, ch. 11: see
+`design/01-curriculum.md`, "What is not taught"). So:
 
 > **The plan is: play Pledge & Crown, unaided, as the interview gym.**
 

@@ -37,8 +37,10 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use crate::plugins::player::Player;
+use crate::plugins::player::{PLAYER_FOOT, Player};
+use crate::plugins::prop::{Aabb, Solid};
 use crate::plugins::state::GameState;
+use crate::plugins::world::{PLAYER_SPAWN, WORLD_HALF_H, WORLD_HALF_W};
 
 /// Current on-disk schema version. See the module docs for migration.
 pub const SAVE_VERSION: u32 = 2;
@@ -746,14 +748,31 @@ impl Plugin for ProgressPlugin {
 /// saved position. Runs from `ProgressPlugin` so `player.rs` needs no
 /// changes: `OnEnter(InGame)` runs in `StateTransition`, before `Update`,
 /// so `Added<Player>` is seen on the very frame the player spawns.
+///
+/// A saved spot can become solid after the save was written (a prop or
+/// map change put something there, as the Throne Dais did to part of the
+/// plaza). The movement code refuses every step out of a solid, so
+/// restoring into one would trap the player for good: [`restore_spot`]
+/// moves them to a free spot nearby, or to the spawn point.
 fn restore_player_position(
     saved: Res<SavedPlayerPosition>,
+    solids_q: Query<&Solid>,
     mut player_q: Query<&mut Transform, (Added<Player>, Without<Camera2d>)>,
     mut cam_q: Query<&mut Transform, (With<Camera2d>, Without<Player>)>,
 ) {
-    let Some(pos) = saved.0 else {
+    let Some(saved_pos) = saved.0 else {
         return;
     };
+    let solids: Vec<Aabb> = solids_q.iter().map(|s| s.0).collect();
+    let pos = restore_spot(saved_pos, &solids);
+    if pos != saved_pos {
+        tracing::warn!(
+            ?saved_pos,
+            restored = ?pos,
+            solids = solids.len(),
+            "saved player position is blocked or off the map; moved to a free spot"
+        );
+    }
     for mut t in player_q.iter_mut() {
         t.translation.x = pos.x;
         t.translation.y = pos.y;
@@ -763,6 +782,53 @@ fn restore_player_position(
             cam.translation.y = pos.y;
         }
     }
+}
+
+/// Step between candidate spots when a saved position is blocked.
+const RESTORE_SEARCH_STEP_PX: f32 = 8.0;
+/// How many square rings of candidates to try (16 x 8 px = 128 px out).
+const RESTORE_SEARCH_RINGS: i32 = 16;
+
+/// True when the player's feet at `pos` are inside the map and clear of
+/// every solid.
+fn spot_is_free(pos: Vec2, solids: &[Aabb]) -> bool {
+    let foot = PLAYER_FOOT.translated(pos);
+    pos.is_finite()
+        && pos.x.abs() <= WORLD_HALF_W
+        && pos.y.abs() <= WORLD_HALF_H
+        && !solids.iter().any(|s| foot.overlaps(s))
+}
+
+/// Where to put a player whose save says `saved`: `saved` itself if the
+/// feet are clear there; else the closest free spot on the first square
+/// ring around it (8 px apart, out to 128 px) that has one; else
+/// [`PLAYER_SPAWN`]. Pure, for tests.
+pub fn restore_spot(saved: Vec2, solids: &[Aabb]) -> Vec2 {
+    if spot_is_free(saved, solids) {
+        return saved;
+    }
+    if saved.is_finite() {
+        for ring in 1..=RESTORE_SEARCH_RINGS {
+            let mut best: Option<Vec2> = None;
+            for i in -ring..=ring {
+                for j in -ring..=ring {
+                    if i.abs() != ring && j.abs() != ring {
+                        continue; // inside the ring: tried already
+                    }
+                    let p = saved + Vec2::new(i as f32, j as f32) * RESTORE_SEARCH_STEP_PX;
+                    let closer =
+                        best.is_none_or(|b| p.distance_squared(saved) < b.distance_squared(saved));
+                    if closer && spot_is_free(p, solids) {
+                        best = Some(p);
+                    }
+                }
+            }
+            if let Some(p) = best {
+                return p;
+            }
+        }
+    }
+    PLAYER_SPAWN
 }
 
 /// Mirror the live player position into [`SavedPlayerPosition`] so every
@@ -997,5 +1063,93 @@ mod tests {
         let mut s = Settings::default();
         s.set(SettingKind::MusicVolume, 250);
         assert_eq!(s.music_volume, 100);
+    }
+
+    // ── Restoring a saved position (rust-lead should-fix 1) ──────────
+
+    fn real_solids() -> Vec<Aabb> {
+        crate::plugins::prop::all_props()
+            .into_iter()
+            .map(|(kind, base)| kind.solid_at(base))
+            .collect()
+    }
+
+    #[test]
+    fn a_free_saved_spot_is_kept() {
+        let solids = real_solids();
+        assert_eq!(restore_spot(PLAYER_SPAWN, &solids), PLAYER_SPAWN);
+        let open = Vec2::new(-240.5, 312.25);
+        if spot_is_free(open, &solids) {
+            assert_eq!(restore_spot(open, &solids), open);
+        }
+    }
+
+    #[test]
+    fn a_save_inside_the_throne_dais_moves_to_a_free_spot_nearby() {
+        use crate::plugins::prop::{PropKind, all_props};
+        let solids = real_solids();
+        let (_, base) = all_props()
+            .into_iter()
+            .find(|(k, _)| *k == PropKind::ThroneDais)
+            .expect("the Throne Dais is placed");
+        let dais = PropKind::ThroneDais.solid_at(base);
+        // Feet in the middle of the dais: exactly the trap the review found.
+        let inside = (dais.min + dais.max) * 0.5 - PLAYER_FOOT.min.lerp(PLAYER_FOOT.max, 0.5);
+        assert!(!spot_is_free(inside, &solids), "test spot must be blocked");
+        let got = restore_spot(inside, &solids);
+        assert!(spot_is_free(got, &solids), "restored into a solid: {got:?}");
+        assert_ne!(got, PLAYER_SPAWN, "a free spot is near the dais");
+        assert!(
+            got.distance(inside) <= RESTORE_SEARCH_STEP_PX * RESTORE_SEARCH_RINGS as f32 * 1.5,
+            "moved too far: {inside:?} -> {got:?}"
+        );
+    }
+
+    /// The system, not just the pure helper: a player spawned onto a saved
+    /// spot inside a `Solid` entity ends up on a free spot.
+    #[test]
+    fn restore_system_checks_solid_entities() {
+        let saved = Vec2::new(500.0, 500.0);
+        let block = Aabb::from_base(saved.x, 20.0, saved.y - 30.0, saved.y + 10.0);
+        let mut app = App::new();
+        app.insert_resource(SavedPlayerPosition(Some(saved)))
+            .add_systems(Update, restore_player_position);
+        app.world_mut().spawn(Solid(block));
+        let player = app
+            .world_mut()
+            .spawn((Player, Transform::from_xyz(0.0, 0.0, 0.0)))
+            .id();
+        app.update();
+        let at = app
+            .world()
+            .get::<Transform>(player)
+            .expect("player transform")
+            .translation
+            .truncate();
+        assert_ne!(at, saved, "must not restore into the block");
+        assert!(
+            spot_is_free(at, &[block]),
+            "restored into the block: {at:?}"
+        );
+    }
+
+    #[test]
+    fn a_save_with_no_free_spot_nearby_goes_to_spawn() {
+        // One solid far bigger than the search area, centred on the save.
+        let at = Vec2::new(1000.0, 400.0);
+        let wall = Aabb::from_base(at.x, 500.0, at.y - 500.0, at.y + 500.0);
+        assert_eq!(restore_spot(at, &[wall]), PLAYER_SPAWN);
+    }
+
+    #[test]
+    fn a_save_off_the_map_goes_back_onto_it() {
+        let far = Vec2::new(WORLD_HALF_W * 4.0, 0.0);
+        assert_eq!(restore_spot(far, &[]), PLAYER_SPAWN);
+        let just_outside = Vec2::new(WORLD_HALF_W + 3.0, 0.0);
+        let got = restore_spot(just_outside, &[]);
+        assert!(spot_is_free(got, &[]));
+        assert!(got.x <= WORLD_HALF_W);
+        assert!(!spot_is_free(Vec2::new(f32::NAN, 0.0), &[]));
+        assert_eq!(restore_spot(Vec2::new(f32::NAN, 0.0), &[]), PLAYER_SPAWN);
     }
 }

@@ -1620,15 +1620,12 @@ fn server_and_stub_flavor_agree_byte_for_byte() {
 /// and asserting compilation succeeds.
 ///
 /// `#[ignore]` because each invocation forks a real `cargo check` (~1-3s
-/// warm × 21 missions ≈ 30-60s total). Runs alongside the other slow
-/// audits via:
-///
-/// ```text
-/// cargo test --workspace -- --ignored
-/// ```
+/// warm, once per mission). Runs alongside the other slow audits via
+/// `scripts/ci-slow.ps1`.
 #[test]
-#[ignore = "slow: forks cargo check 21 times"]
+#[ignore = "slow: forks cargo check once per mission"]
 fn every_canonical_solution_passes_cargo_check() {
+    common::assert_pinned_rustc();
     let reg = MissionRegistry::default();
     for m in &reg.missions {
         let src =
@@ -2596,6 +2593,7 @@ fn grader_corpus() {
 #[test]
 #[ignore = "slow: runs rustc once per corpus program"]
 fn corpus_correct_programs_compile() {
+    common::assert_pinned_rustc();
     let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
         .join(format!("grader-corpus-{}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("create scratch dir");
@@ -2649,4 +2647,40 @@ fn no_mission_falls_through_to_freeform() {
             m.id
         );
     }
+}
+
+/// The server's behaviour checks are keyed by mission id. A typo'd or
+/// missing id there makes the server answer `ran_not_checked` for that
+/// mission, the client shows NOT VERIFIED, and the clear still counts: the
+/// behaviour check silently disappears. So the id lists must match
+/// exactly, in registry order (a count check would miss a typo).
+#[test]
+fn server_expectation_ids_match_the_registry() {
+    let game: Vec<&str> = MissionRegistry::default()
+        .missions
+        .iter()
+        .map(|m| m.id)
+        .collect();
+    let server: Vec<&str> = pledge_compile_api::expectations::all()
+        .iter()
+        .map(|c| c.id)
+        .collect();
+    let only_game: Vec<&&str> = game.iter().filter(|id| !server.contains(id)).collect();
+    let only_server: Vec<&&str> = server.iter().filter(|id| !game.contains(id)).collect();
+    assert!(
+        only_game.is_empty() && only_server.is_empty(),
+        "mission ids differ: only in the game {only_game:?}, only on the server {only_server:?}"
+    );
+    assert_eq!(game, server, "same ids, different order");
+}
+
+/// The audit suites keep their own copy of the server's pinned rustc
+/// (`common::PINNED_RUSTC_VERSION`); this keeps the two in step.
+#[test]
+fn pinned_rustc_copy_matches_the_server() {
+    assert_eq!(
+        common::PINNED_RUSTC_VERSION,
+        pledge_compile_api::toolchain::PINNED_RUSTC_VERSION,
+        "update game/tests/common/mod.rs when the server's toolchain pin moves"
+    );
 }

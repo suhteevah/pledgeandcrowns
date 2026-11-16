@@ -13,7 +13,11 @@
 
 ## Curriculum coverage matrix
 
-This is the contract. Every concept in the **Rust Book** through Chapter 20 is taught somewhere in Acts 1–10. The Temple (Act 11) does not introduce new Rust content — it tests Rust mastery by contrast with HolyC.
+This is the contract: every concept area in the table below is taught somewhere in Acts 1–10 (the Act 9 and Act 10 code-status notes record the substitutions). The Temple (Act 11) does not introduce new Rust content — it tests Rust mastery by contrast with HolyC.
+
+**What is not taught (2026-11-15).** The game does not cover the whole Rust Book. Two Book topics have no mission and no tutorial section: **modules and visibility** (`mod`, `pub`, `use` paths, crates and packages; Book ch. 7; starters use `use std::...` lines but nothing teaches the module system) and **writing tests** (`#[test]`, `assert!`/`assert_eq!` in tests, `cargo test`; Book ch. 11). Every player program is a single file with `fn main`. They are cut from v1.0, not hidden: adding them (Act 3 and Act 5 fit) is a v1.1 option. Do not describe the game as covering "every concept in the Rust Book".
+
+**How the compiler claims are proven.** Where the code-status notes below say an NPC's compiler claims "are compiled in `game/tests/mission_text.rs`": every error code named in any mission text or dialogue row is bound to a claim by a fast test that runs in `scripts/ci.ps1`. Compiling and running those claims is `#[ignore]`d (slow) and runs in `scripts/ci-slow.ps1`, which first requires rustc to be the server's pinned release; a release tag requires a recorded green `ci-slow` run.
 
 | Concept area                     | Primary Act | Reinforced In |
 |----------------------------------|-------------|---------------|
@@ -55,6 +59,8 @@ This is the contract. Every concept in the **Rust Book** through Chapter 20 is t
 **Story beat.** The player wakes in Hearthstone Village, a peaceful starter town. **Ferris** (small crab guide, recurring throughout the game) explains that the world's magic system has been corrupted — only those who can speak the Old Tongue (Rust) can wield it. The village elder asks the player to fetch firewood, count chickens, and ring the bell at sundown — each a coding exercise.
 
 **Mechanic introduction: The Cast Editor.** First time the player attempts a magical action, the in-game code editor opens. They must complete a `fn cast()` stub. The editor highlights the line their code is currently executing as the spell visually fires. This is the core loop for the entire game.
+
+**Code status (2026-11-15): the live line highlight is cut from v1.0.** The Cast Editor ships (syntax highlighting, compile, graded result with VERIFIED / NOT VERIFIED / PATTERN CHECK ONLY banners, compiler diagnostics), but it does not highlight the line being executed and no spell animation follows the code: player code runs on the server (or is pattern-checked offline), never step by step in the game. The core loop as built is write, compile, read the verdict.
 
 **Encounters:**
 1. **Firewood Quest:** complete a function `fn count_logs(pile: i32) -> i32` that returns logs + 1. Tutorial-level scaffolding.
@@ -219,7 +225,7 @@ When the player finally passes, the Checker bows: "You may cross. The Old Tongue
 
 **Estimated playtime:** 4 hours. This is one of the meatiest acts.
 
-**Code status (2026-06-18).** The Act 7 *concepts* ship as 6 missions: `thread_spawn` (The Dockmaster), `arc_mutex` (The Lighthouse Keeper), `mpsc_channel` (The Signaler), `atomic` (The Tidewatch), `thread_scope` (The Harbormaster), `async_fn` (The Tideforecaster). The std-concurrency five compile + grade fully on the host sandbox; **`async_fn` is compile-only** — `async fn`/`.await` type-check and are token-graded, but actually running them needs a runtime (`tokio`) the dependency-free sandbox can't load (the tutorial says so). Design: `docs/superpowers/specs/2026-06-18-act7-concurrent-coast-missions-design.md`.
+**Code status (2026-06-18).** The Act 7 *concepts* ship as 6 missions: `thread_spawn` (The Dockmaster), `arc_mutex` (The Lighthouse Keeper), `mpsc_channel` (The Signaler), `atomic` (The Tidewatch), `thread_scope` (The Harbormaster), `async_fn` (The Tideforecaster). *(Corrected 2026-11-15: the server's sandbox has no threads (wasm32-wasip1), so `thread_spawn` and `thread_scope` are static-only there (`CompileOnly`: compiled and token-checked, never run). `arc_mutex`, `mpsc_channel` and `atomic` are behaviour-checked. The original sentence follows.)* ~~The std-concurrency five compile + grade fully on the host sandbox~~; **`async_fn` is compile-only** — `async fn`/`.await` type-check and are token-graded, but actually running them needs a runtime (`tokio`) the dependency-free sandbox can't load (the tutorial says so). Design: `docs/superpowers/specs/2026-06-18-act7-concurrent-coast-missions-design.md`.
 
 **Code status (2026-11-15).** The Tide Hydra ships as a trial owned by the Dockmaster, after `async_fn`; `thread_spawn` stays his prologue. Stages: `hydra_senders` (each head reports on its own `tx.clone()`; passing the one `Sender` into a loop is E0382; one thread, so the server calls `hunt` on heads of its own), `hydra_threads` (one `thread::spawn` per head; without `move` the closure borrows `hp`, E0373; the reports are sorted because nothing fixes the order threads finish in), `hydra_body` (count `Report::Down` until every head is down before striking; the starter strikes at the first `Down`). The server has no threads (wasm32-wasip1): `hydra_threads` is compile-only there (static checks for `spawn(`, a `move` closure and a sort), and `hydra_body` is checked by feeding `await_heads` reports from one thread without running the player's `main`. Both thread programs' outputs are proven natively (`game/tests/mission_text.rs`, run 21 times each). Regrowing heads are not implemented (no real-time layer). Every compiler error he names is compiled in `game/tests/mission_text.rs`.
 
