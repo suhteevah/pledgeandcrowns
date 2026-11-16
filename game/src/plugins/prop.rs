@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 //! Village props: oaks (REF-67, 32x48), cottages (REF-68, 64x64) and the
-//! district landmarks (the Throne Dais, REF-96, 64x64).
+//! district landmarks (the Sealed Stacks, REF-95, and the Throne Dais,
+//! REF-96, both 64x64).
 //!
 //! Props are ordinary sprites, not tiles. Each one is anchored bottom-centre
 //! at its ground line, y-sorted (lower on screen = drawn in front) and owns a
@@ -21,7 +22,9 @@
 //! [`OCCLUDER_ALPHA`] over [`FADE_SECS`], and back to opaque once clear. The
 //! decision ([`occludes`]) and the ramp ([`step_alpha`]) are pure functions.
 
-use crate::assets::{SPRITE_PROP_COTTAGE, SPRITE_PROP_OAK, SPRITE_PROP_THRONE_DAIS};
+use crate::assets::{
+    SPRITE_PROP_COTTAGE, SPRITE_PROP_OAK, SPRITE_PROP_SEALED_STACKS, SPRITE_PROP_THRONE_DAIS,
+};
 use crate::plugins::animation::{SpriteLift, unlifted_anchor};
 use crate::plugins::npc::Npc;
 use crate::plugins::player::Player;
@@ -99,6 +102,9 @@ pub enum PropKind {
     /// The Throne Dais (REF-96, approved 2026-11-15), the Act 10 district
     /// landmark: 64x64, placed at [`LANDMARKS`].
     ThroneDais,
+    /// The Sealed Stacks (REF-95, approved 2026-11-16), the Act 9 district
+    /// landmark: 64x64, placed at [`LANDMARKS`].
+    SealedStacks,
 }
 
 impl PropKind {
@@ -107,6 +113,7 @@ impl PropKind {
             PropKind::Oak => SPRITE_PROP_OAK,
             PropKind::Cottage => SPRITE_PROP_COTTAGE,
             PropKind::ThroneDais => SPRITE_PROP_THRONE_DAIS,
+            PropKind::SealedStacks => SPRITE_PROP_SEALED_STACKS,
         }
     }
 
@@ -114,7 +121,9 @@ impl PropKind {
     pub fn size(self) -> Vec2 {
         match self {
             PropKind::Oak => Vec2::new(32.0, 48.0),
-            PropKind::Cottage | PropKind::ThroneDais => Vec2::new(64.0, 64.0),
+            PropKind::Cottage | PropKind::ThroneDais | PropKind::SealedStacks => {
+                Vec2::new(64.0, 64.0)
+            }
         }
     }
 
@@ -123,9 +132,10 @@ impl PropKind {
     /// standing just in front of a wall sorts in front of it.
     pub fn ground_offset(self) -> f32 {
         match self {
-            PropKind::Oak => 3.0,        // REF-67 row 44 is the trunk base
-            PropKind::Cottage => 5.0,    // REF-68 row 58 is the footing
-            PropKind::ThroneDais => 3.0, // REF-96 row 60 is the bottom step's edge
+            PropKind::Oak => 3.0,          // REF-67 row 44 is the trunk base
+            PropKind::Cottage => 5.0,      // REF-68 row 58 is the footing
+            PropKind::ThroneDais => 3.0,   // REF-96 row 60 is the bottom step's edge
+            PropKind::SealedStacks => 3.0, // REF-95 row 60 is the threshold's edge
         }
     }
 
@@ -140,11 +150,17 @@ impl PropKind {
     /// Throne Dais: the three steps (REF-96 cols 2..61, rows 44..60 =
     /// 60x17), so the player cannot climb onto the dais but can walk behind
     /// the throne and banners, which fade like a roof.
+    /// Sealed Stacks: the whole tower (REF-95 cols 6..57, rows 2..60 =
+    /// 52x59, merlons to threshold). It is one stone face with no roof to
+    /// walk behind, so the player goes round it, never into it; the six
+    /// empty columns either side and the empty rows above and below stay
+    /// walkable.
     pub fn solid_local(self) -> Aabb {
         match self {
             PropKind::Oak => Aabb::from_base(0.0, 6.0, 3.0, 11.0),
             PropKind::Cottage => Aabb::from_base(0.0, 27.0, 5.0, 27.0),
             PropKind::ThroneDais => Aabb::from_base(0.0, 30.0, 3.0, 20.0),
+            PropKind::SealedStacks => Aabb::from_base(0.0, 26.0, 3.0, 62.0),
         }
     }
 
@@ -156,12 +172,14 @@ impl PropKind {
     /// occlusion fade. Oak: REF-67 cols 2..29, rows 1..44. Cottage: REF-68
     /// cols 2..61 (the eave), rows 0..58 (chimney top to footing). Throne
     /// Dais: REF-96 cols 2..61 (the bottom step), rows 0..60 (finial to the
-    /// bottom step).
+    /// bottom step). Sealed Stacks: REF-95 cols 6..57, rows 2..60, the same
+    /// box as its solid, so no character ever stands behind it.
     pub fn visual_local(self) -> Aabb {
         match self {
             PropKind::Oak => Aabb::from_base(0.0, 14.0, 3.0, 47.0),
             PropKind::Cottage => Aabb::from_base(0.0, 30.0, 5.0, 64.0),
             PropKind::ThroneDais => Aabb::from_base(0.0, 30.0, 3.0, 64.0),
+            PropKind::SealedStacks => Aabb::from_base(0.0, 26.0, 3.0, 62.0),
         }
     }
 
@@ -243,7 +261,7 @@ pub const COTTAGE_SPOTS: &[(usize, Side, f32)] = &[
     (8, Side::East, -100.0),
     // The Forbidden Library. North is the main street and south is the
     // treeline, so cottages stand west and east. Its landmark stands on
-    // the plaza itself (`PENDING_LANDMARKS`).
+    // the plaza itself (`LANDMARKS`).
     (9, Side::West, -100.0),
     (9, Side::East, -100.0),
     (9, Side::East, 100.0),
@@ -258,16 +276,12 @@ pub const COTTAGE_SPOTS: &[(usize, Side, f32)] = &[
 /// kind)`. A landmark is a 64x64 bottom-centre-anchored prop standing ON
 /// its plaza at the back-centre (north edge), placed by
 /// [`world::back_landmark_base`](crate::plugins::world::back_landmark_base);
-/// the district's boss stands centred directly in front of it. The Throne
-/// Dais (REF-96, approved by Matt 2026-11-15) stands behind the Compiler.
-pub const LANDMARKS: &[(usize, PropKind)] = &[(10, PropKind::ThroneDais)];
-
-/// Landmarks reserved but not spawned, `(district index, ref)`, at the same
-/// back-centre spot: REF-95 (The Sealed Stacks) is a draft awaiting Matt's
-/// approval, its spot behind the Librarian. Wiring it is a new `PropKind`
-/// moved to [`LANDMARKS`]; `pending_landmark_spots_are_clear` keeps the
-/// spot on flagstone, clear of every prop and NPC, so that is all it takes.
-pub const PENDING_LANDMARKS: &[(usize, &str)] = &[(9, "REF-95 The Sealed Stacks")];
+/// the district's boss stands centred directly in front of it. The Sealed
+/// Stacks (REF-95, approved by Matt 2026-11-16) stand behind the Librarian,
+/// the Throne Dais (REF-96, approved by Matt 2026-11-15) behind the
+/// Compiler.
+pub const LANDMARKS: &[(usize, PropKind)] =
+    &[(9, PropKind::SealedStacks), (10, PropKind::ThroneDais)];
 
 /// Free-standing oaks in open meadow, between the quarters.
 pub const MEADOW_OAKS: &[Vec2] = &[
@@ -437,7 +451,7 @@ fn spawn_props(mut commands: Commands, asset_server: Res<AssetServer>) {
         match kind {
             PropKind::Oak => oaks += 1,
             PropKind::Cottage => cottages += 1,
-            PropKind::ThroneDais => landmarks += 1,
+            PropKind::ThroneDais | PropKind::SealedStacks => landmarks += 1,
         }
         tracing::trace!(?kind, x = base.x, y = base.y, "spawning prop");
         commands.spawn((
@@ -682,7 +696,12 @@ mod tests {
 
     #[test]
     fn visual_rect_covers_the_solid_and_sits_in_the_sprite() {
-        for k in [PropKind::Oak, PropKind::Cottage, PropKind::ThroneDais] {
+        for k in [
+            PropKind::Oak,
+            PropKind::Cottage,
+            PropKind::ThroneDais,
+            PropKind::SealedStacks,
+        ] {
             let v = k.visual_local();
             let s = k.solid_local();
             let sprite = k.sprite_rect_at(Vec2::ZERO);
@@ -722,18 +741,19 @@ mod tests {
         rect_all(r, Ground::Grass)
     }
 
-    /// A landmark plot at `base` in district `d` (64x64, bottom-centre):
+    /// A landmark `kind`'s plot at `base` in district `d` (64x64,
+    /// bottom-centre):
     /// on flagstone with a clear tile to the cobble ring on every side
     /// (the sprite grown by 16 px is still all flagstone), centred on the
-    /// plaza, at its back (north) half, clear of every prop but `skip`
-    /// and of every NPC sprite; the district's boss (its last roster slot,
+    /// plaza, at its back (north) half, clear of every other prop and of
+    /// every NPC sprite; the district's boss (its last roster slot,
     /// 64 px) stands centred directly in front of it, his sprite top at
     /// most 16 px below the plot and never overlapping it; and there is
     /// room to walk round it (two tiles of flagstone either side of its
-    /// steps).
-    fn landmark_plot_is_sound(d: usize, base: Vec2, what: &str, skip: Option<Vec2>) {
+    /// solid footprint).
+    fn landmark_plot_is_sound(d: usize, kind: PropKind, base: Vec2, what: &str) {
         let dist = &DISTRICTS[d];
-        let plot = PropKind::ThroneDais.sprite_rect_at(base);
+        let plot = kind.sprite_rect_at(base);
         let grown = Aabb {
             min: plot.min - Vec2::splat(16.0),
             max: plot.max + Vec2::splat(16.0),
@@ -745,7 +765,7 @@ mod tests {
         assert_eq!(base.x, dist.center.x, "{what}: centred");
         assert!(base.y > dist.center.y, "{what}: in the back (north) half");
         for (k, b) in all_props() {
-            if Some(b) == skip {
+            if (k, b) == (kind, base) {
                 continue;
             }
             assert!(
@@ -770,7 +790,7 @@ mod tests {
             "{what}: boss top {top} vs plot bottom {}",
             plot.min.y
         );
-        let solid = PropKind::ThroneDais.solid_at(base);
+        let solid = kind.solid_at(base);
         for side in [
             Aabb::from_base(solid.min.x - 16.0, 16.0, solid.min.y, solid.max.y),
             Aabb::from_base(solid.max.x + 16.0, 16.0, solid.min.y, solid.max.y),
@@ -790,7 +810,7 @@ mod tests {
                     && r.max.y <= WORLD_HALF_H,
                 "{kind:?} at {base:?} leaves the map"
             );
-            if kind == PropKind::ThroneDais {
+            if LANDMARKS.iter().any(|(_, k)| *k == kind) {
                 // Landmarks stand ON their plaza (flagstone, clear of the
                 // cobble ring); see `landmark_plot_is_sound`.
                 assert!(
@@ -849,23 +869,93 @@ mod tests {
         }
     }
 
-    /// The pending landmark spot (REF-95, art not approved, nothing
-    /// spawned) is the Library plaza's back-centre, with the Librarian
-    /// centred in front of it, so the approved art lands where the Throne
-    /// Dais does in its district.
+    /// The Sealed Stacks (REF-95) are spawned exactly once, ON the Library
+    /// plaza at its back-centre with the Librarian centred in front of
+    /// them, as a solid, y-sorted 64x64 prop. The tower is solid from
+    /// threshold to merlons, so a player in front of it is drawn in front
+    /// and none is ever behind it. The main street meets the plaza at its
+    /// north edge, right behind the tower: a player coming down the street
+    /// steps aside round the tower and walks on to the Librarian's talk
+    /// spot, which is free.
     #[test]
-    fn pending_landmark_spots_are_clear() {
-        assert_eq!(PENDING_LANDMARKS.len(), 1, "only REF-95 waits");
+    fn the_sealed_stacks_stand_behind_the_librarian() {
+        use crate::plugins::npc::TALK_SPOT_OFFSET;
+        use crate::plugins::player::PLAYER_FOOT;
+        let stacks: Vec<Vec2> = all_props()
+            .into_iter()
+            .filter(|(k, _)| *k == PropKind::SealedStacks)
+            .map(|(_, b)| b)
+            .collect();
         let library = DISTRICTS
             .iter()
             .position(|d| d.name == "The Forbidden Library")
             .expect("the Library district");
-        for &(d, art) in PENDING_LANDMARKS {
-            assert_eq!(d, library, "{art}");
-            let base = crate::plugins::world::back_landmark_base(d)
-                .unwrap_or_else(|| panic!("{art}: no back landmark in district {d}"));
-            landmark_plot_is_sound(d, base, art, None);
+        assert!(LANDMARKS.contains(&(library, PropKind::SealedStacks)));
+        let base = crate::plugins::world::back_landmark_base(library).expect("spot");
+        assert_eq!(stacks, vec![base], "one tower, at the back-centre");
+        let k = PropKind::SealedStacks;
+        landmark_plot_is_sound(library, k, base, "the Sealed Stacks");
+        assert_eq!(k.size(), Vec2::new(64.0, 64.0));
+        assert_eq!(k.sprite_path(), crate::assets::SPRITE_PROP_SEALED_STACKS);
+        let solid = k.solid_at(base);
+        assert_eq!(k.visual_at(base), solid, "nothing to stand behind");
+        let prop_z = ysort_z(base.y + k.ground_offset());
+        let front = Vec2::new(base.x, solid.min.y - 6.0);
+        assert!(!occludes(
+            player_body_at_feet(front),
+            ysort_z(front.y),
+            k.visual_at(base),
+            prop_z
+        ));
+
+        // The Librarian's sprite is clear of the tower and his talk spot
+        // of every solid.
+        let first: usize = DISTRICTS[..library].iter().map(|x| x.count).sum();
+        let boss = first + DISTRICTS[library].count - 1;
+        assert_eq!(NPC_ROSTER[boss].name, "The Librarian");
+        let librarian = district_slot(boss);
+        assert!(
+            librarian.y + 32.0 <= solid.min.y,
+            "the Librarian is under it"
+        );
+        let talk = librarian + TALK_SPOT_OFFSET;
+        let solids: Vec<Aabb> = all_props().iter().map(|(k, b)| k.solid_at(*b)).collect();
+        assert!(
+            solids
+                .iter()
+                .all(|s| !PLAYER_FOOT.translated(talk).overlaps(s)),
+            "the Librarian's talk spot is blocked"
+        );
+
+        // In from the street: from the street north of the plaza down to
+        // the tower, a step aside (west, then east), and on south to the
+        // talk spot. Every leg arrives where it aims.
+        let dist = &DISTRICTS[library];
+        let street = Vec2::new(base.x, dist.center.y + dist.plaza_half + 64.0);
+        let up_against = solid.max.y - PLAYER_FOOT.min.y;
+        let clear_y = up_against + 2.0;
+        for dx in [-1.0, 1.0] {
+            let aside = base.x + dx * (solid.max.x - solid.min.x);
+            let legs = [
+                Vec2::new(base.x, clear_y),
+                Vec2::new(aside, clear_y),
+                Vec2::new(aside, talk.y),
+                talk,
+            ];
+            let mut p = street;
+            for to in legs {
+                p = slide_move(p, to - p, PLAYER_FOOT, &solids);
+                assert!(p.distance(to) < 0.01, "stopped at {p:?} heading for {to:?}");
+            }
         }
+        // Straight down the street the tower stops the player: it is solid.
+        let p = slide_move(
+            street,
+            Vec2::new(0.0, talk.y - street.y),
+            PLAYER_FOOT,
+            &solids,
+        );
+        assert!(p.y >= up_against - 0.01, "walked into the tower: {p:?}");
     }
 
     /// The Throne Dais (REF-96) is spawned exactly once, ON the Throne
@@ -883,14 +973,10 @@ mod tests {
             .iter()
             .position(|d| d.name == "The Throne")
             .expect("the Throne district");
-        assert_eq!(LANDMARKS, &[(throne, PropKind::ThroneDais)]);
+        assert!(LANDMARKS.contains(&(throne, PropKind::ThroneDais)));
         let base = crate::plugins::world::back_landmark_base(throne).expect("spot");
         assert_eq!(dais, vec![base], "one dais, at the back-centre");
-        landmark_plot_is_sound(throne, base, "the Throne Dais", Some(base));
-        assert!(
-            PENDING_LANDMARKS.iter().all(|(d, ..)| *d != throne),
-            "the Throne's spot is no longer pending"
-        );
+        landmark_plot_is_sound(throne, PropKind::ThroneDais, base, "the Throne Dais");
         let k = PropKind::ThroneDais;
         assert_eq!(k.size(), Vec2::new(64.0, 64.0));
         assert_eq!(k.sprite_path(), crate::assets::SPRITE_PROP_THRONE_DAIS);

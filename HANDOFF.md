@@ -213,8 +213,15 @@ runs `scripts/ci.ps1` on the merged result as the sign-off gate.
 - **Wired 2026-11-15 (wave 15):** Act 10 cast REF-87..92, the Compiler
   REF-94 (REF-86, the Throne kit, catalogued, not an NPC), the Throne Dais
   REF-96 (landmark prop).
-- **Awaiting approval:** landmark REF-95 Sealed Stacks (spot reserved in
-  `prop::PENDING_LANDMARKS`).
+- **Wired 2026-11-16:** the Sealed Stacks REF-95 (approved 2026-11-16),
+  `sprites/props/sealed_stacks.png`, a solid, y-sorted 64x64 prop ON the
+  Library plaza at its back-centre, the Librarian centred just in front
+  (`prop::LANDMARKS`; `PENDING_LANDMARKS` is gone). Its collision is the
+  whole tower (52x59, merlons to threshold). The main street meets the
+  plaza right behind it: the tower partly hides the street mouth (accepted)
+  and a player coming down the street steps round it
+  (`prop::tests::the_sealed_stacks_stand_behind_the_librarian`).
+- **Awaiting approval:** no landmark.
 - **Not drawn:** boss intro/defeat frames (Librarian, Compiler), the
   Librarian's lectern, pixel font pick, title redraw, a renderable Borrow
   Checker.
@@ -233,9 +240,9 @@ runs `scripts/ci.ps1` on the merged result as the sign-off gate.
    because a player's `unsafe` code can forge them; the nine Act 10
    missions are stdout checks).
 4. **Art still owed by the designer (see Art status above):** pixel font,
-   approval of the Sealed Stacks landmark (REF-95), Borrow Checker,
-   Librarian and Compiler intro/defeat frames, the Librarian's lectern,
-   title redraw.
+   Borrow Checker, Librarian and Compiler intro/defeat frames, the
+   Librarian's lectern, title redraw. (The Sealed Stacks, REF-95, was
+   approved and wired 2026-11-16.)
 5. **Linux verification at `e86b519` on cnc (2026-11-16) passed**
    (`.claude/reviews/linux-verification-2026-11-16-e86b519.md`): 410
    normal + 45/45 ignored compile-api tests on rustc 1.99.0, the bwrap
@@ -291,8 +298,7 @@ runs `scripts/ci.ps1` on the merged result as the sign-off gate.
    promises email capture (not built); 263 shows a TEST tab.
 8. Small known visual issues: the quest marker overlaps the dais step;
    the player overlaps the 64 px bosses at the talk spot.
-9. Owner actions: play the build (`scripts/dev.ps1`); approve or reject
-   REF-95; the epilogue credits carry a Rust trademark non-affiliation
+9. Owner actions: play the build (`scripts/dev.ps1`); the epilogue credits carry a Rust trademark non-affiliation
    line that needs the RF check; TESS + RF check; domain; Android keystore;
    export the old claude.ai/design artboard before 2026-12-14; install
    `wasm-opt`, `butler`, Miri; decide the `repository` URL.

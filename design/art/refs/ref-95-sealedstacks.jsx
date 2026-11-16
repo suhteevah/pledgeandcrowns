@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-95 - The Sealed Stacks, Act 9 district landmark, 64x64.
-// DRAFT - pending Matt approval on the Design canvas. NOT wired into the game.
+// APPROVED by Matt 2026-11-16. Wired as game/assets/sprites/props/sealed_stacks.png.
 //
 // A squat stone book-tower door for the Forbidden Library plaza. Four
 // merlons on top, a pale plaque with three violet sigils over the arch, and

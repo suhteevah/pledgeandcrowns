@@ -175,6 +175,11 @@ pub const SPRITE_COMPILER: &str = "sprites/npc/compiler_idle_0.png";
 // solid). Source: design/art/refs/ref-96-thronedais.jsx.
 pub const SPRITE_PROP_THRONE_DAIS: &str = "sprites/props/throne_dais.png";
 
+// Act 9 district landmark (approved by Matt 2026-11-16): the Sealed Stacks,
+// REF-95, a 64x64 prop like the dais (bottom-centre anchor, y-sorted,
+// solid). Source: design/art/refs/ref-95-sealedstacks.jsx.
+pub const SPRITE_PROP_SEALED_STACKS: &str = "sprites/props/sealed_stacks.png";
+
 // Audio (Stable Audio Open generated, baked via tools/synthwave-gen).
 // Generation is a Matt-action: `powershell -ExecutionPolicy Bypass
 // -File scripts/synthwave-gen.ps1`. Files may be absent during early
@@ -282,4 +287,5 @@ pub const ALL_SPRITE_PATHS: &[&str] = &[
     SPRITE_REGISTRAR,
     SPRITE_COMPILER,
     SPRITE_PROP_THRONE_DAIS,
+    SPRITE_PROP_SEALED_STACKS,
 ];

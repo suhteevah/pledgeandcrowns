@@ -2309,3 +2309,9 @@ wasip1 + wasmtime) and `act9_unsafe_harness.rs`.
    stand west and east of both new plazas (north is the street, south the
    treeline); the landmark spots are reserved, not built
    (`prop::PENDING_LANDMARKS`).
+8. **Landmark (2026-11-16).** REF-95, the Sealed Stacks, approved by
+   Matt and wired as `prop::PropKind::SealedStacks` in `prop::LANDMARKS`:
+   a solid 64x64 tower on the plaza at its back-centre, the Librarian
+   centred just in front. `PENDING_LANDMARKS` is removed. The main street
+   meets the plaza right behind the tower; a player coming down it steps
+   round the tower.

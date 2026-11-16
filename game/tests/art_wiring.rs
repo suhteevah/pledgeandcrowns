@@ -444,31 +444,46 @@ fn act10_cast_ships_its_approved_render() {
     assert!(kit_src.contains("not wired to any NPC"));
 }
 
-/// The Throne Dais (REF-96, approved 2026-11-15) ships its render as the
-/// landmark prop; the Sealed Stacks (REF-95) is still a draft and ships
-/// nowhere.
+/// The two district landmarks ship their approved renders as props: the
+/// Throne Dais (REF-96, approved 2026-11-15) and the Sealed Stacks (REF-95,
+/// approved 2026-11-16). Each PNG is byte-identical to its render, 64x64,
+/// and its ref header says where it is wired.
 #[test]
-fn the_throne_dais_ships_its_approved_render_and_the_stacks_do_not() {
-    use pledge_and_crown::assets::{ALL_SPRITE_PATHS, SPRITE_PROP_THRONE_DAIS};
+fn the_landmarks_ship_their_approved_renders() {
+    use pledge_and_crown::assets::{
+        ALL_SPRITE_PATHS, SPRITE_PROP_SEALED_STACKS, SPRITE_PROP_THRONE_DAIS,
+    };
     let root = game_assets();
     let refs = refs_dir();
-    assert_eq!(SPRITE_PROP_THRONE_DAIS, "sprites/props/throne_dais.png");
-    let dais = read(&root.join(SPRITE_PROP_THRONE_DAIS));
-    assert!(
-        dais == read(&refs.join("png/REF96.png")),
-        "throne_dais.png is not the REF96.png render"
-    );
-    assert_eq!(png_size(&root.join(SPRITE_PROP_THRONE_DAIS)), (64, 64));
-    let src = std::fs::read_to_string(refs.join("ref-96-thronedais.jsx")).expect("REF-96");
-    assert!(src.lines().any(|l| l.trim_end()
-        == "// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/props/throne_dais.png."));
-    let stacks = std::fs::read_to_string(refs.join("ref-95-sealedstacks.jsx")).expect("REF-95");
-    assert!(stacks.contains("DRAFT") && stacks.contains("NOT wired"));
-    assert!(
-        !refs.join("png/REF95.png").exists()
-            || ALL_SPRITE_PATHS
-                .iter()
-                .all(|p| read(&root.join(p)) != read(&refs.join("png/REF95.png"))),
-        "REF-95 is not approved and must not ship"
-    );
+    for (path, want, render, jsx, approved) in [
+        (
+            SPRITE_PROP_THRONE_DAIS,
+            "sprites/props/throne_dais.png",
+            "png/REF96.png",
+            "ref-96-thronedais.jsx",
+            "2026-11-15",
+        ),
+        (
+            SPRITE_PROP_SEALED_STACKS,
+            "sprites/props/sealed_stacks.png",
+            "png/REF95.png",
+            "ref-95-sealedstacks.jsx",
+            "2026-11-16",
+        ),
+    ] {
+        assert_eq!(path, want);
+        assert!(ALL_SPRITE_PATHS.contains(&path), "{path} is not preloaded");
+        assert!(
+            read(&root.join(path)) == read(&refs.join(render)),
+            "{path} is not the {render} render"
+        );
+        assert_eq!(png_size(&root.join(path)), (64, 64), "{path}");
+        let src = std::fs::read_to_string(refs.join(jsx)).expect(jsx);
+        let header = format!("// APPROVED by Matt {approved}. Wired as game/assets/{want}.");
+        assert!(
+            src.lines().any(|l| l.trim_end() == header),
+            "{jsx}: no approval header"
+        );
+        assert!(!src.contains("DRAFT"), "{jsx} still says DRAFT");
+    }
 }

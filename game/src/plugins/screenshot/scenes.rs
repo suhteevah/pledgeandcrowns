@@ -661,19 +661,25 @@ fn world_scenes(v: &mut Vec<Scene>) {
         0.8,
         None,
     ));
-    // The Throne Dais (REF-96) at the Throne plaza's back-centre: the
-    // player stands beside it (east of the steps, clear of every NPC), the
-    // dais and the Compiler in front of it in view. Logs the spot so the
-    // capture can be checked.
+    // Each back landmark (the Sealed Stacks, REF-95; the Throne Dais,
+    // REF-96) at its plaza's back-centre: the player stands beside it
+    // (east of its footing, clear of every NPC), the landmark and the boss
+    // in front of it in view. Logs the spot so the capture can be checked.
     for &(d, kind) in crate::plugins::prop::LANDMARKS {
         let Some(base) = crate::plugins::world::back_landmark_base(d) else {
             tracing::warn!(?kind, "landmark scene: no district {d}");
             continue;
         };
+        use crate::plugins::prop::PropKind;
+        let file = match kind {
+            PropKind::SealedStacks => "landmark-sealed-stacks",
+            PropKind::ThroneDais => "landmark-throne-dais",
+            PropKind::Oak | PropKind::Cottage => "landmark-other",
+        };
         let solid = kind.solid_at(base);
         let feet = Vec2::new(solid.max.x + 48.0, solid.min.y);
         v.push(scene(
-            "landmark-throne-dais",
+            file,
             vec![
                 Action::EnterState(GameState::InGame, ENTER_GAME_SETTLE),
                 act(hide_next_pin),

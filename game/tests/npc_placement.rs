@@ -171,11 +171,11 @@ fn assert_cast_with_boss_at_the_back(district: &str, first: &str, boss: &str) {
     }
 }
 
-/// No NPC stands under a back landmark (the Throne Dais, spawned, and the
-/// Library's reserved REF-95 spot, not spawned): no NPC sprite or talk
-/// spot overlaps either 64x64 plot, and each district's 64 px boss stands
-/// centred directly in front of (south of) its plot, his sprite ending at
-/// most 16 px below it.
+/// No NPC stands under a back landmark (the Sealed Stacks in the Library,
+/// the Throne Dais in the Throne, both spawned on their plot): no NPC
+/// sprite or talk spot overlaps either 64x64 plot, and each district's
+/// 64 px boss stands centred directly in front of (south of) its plot, his
+/// sprite ending at most 16 px below it.
 #[test]
 fn no_npc_stands_under_a_landmark() {
     use pledge_and_crown::plugins::world::{
@@ -191,6 +191,14 @@ fn no_npc_stands_under_a_landmark() {
             .position(|x| x.name == *name)
             .unwrap_or_else(|| panic!("no district {name}"));
         let base = back_landmark_base(d).expect("back landmark");
+        assert_eq!(
+            all_props()
+                .iter()
+                .filter(|(k, b)| *b == base && k.size() == Vec2::splat(BACK_LANDMARK_PX))
+                .count(),
+            1,
+            "{name}: one landmark spawned on its plot"
+        );
         let half = BACK_LANDMARK_PX * 0.5;
         let plot = Aabb::from_base(base.x, half, base.y, base.y + BACK_LANDMARK_PX);
         for (i, spec) in NPC_ROSTER.iter().enumerate() {

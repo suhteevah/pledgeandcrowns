@@ -158,7 +158,8 @@ pub const DISTRICTS: &[District] = &[
     },
     // Act 9: past the Vault, at the south end of the main street. Six
     // villagers and the Librarian (64 px), who stands alone in the
-    // centre of the back (north) row.
+    // centre of the back (north) row, in front of the Sealed Stacks
+    // (REF-95, `prop::PropKind::SealedStacks`) at the plaza's back-centre.
     District {
         name: "The Forbidden Library",
         center: Vec2::new(0.0, -1400.0),
@@ -167,8 +168,8 @@ pub const DISTRICTS: &[District] = &[
     },
     // Act 10: past Tavern Row, at the north end of the main street. Six
     // villagers and the Compiler (64 px), alone in the centre of the back
-    // (north) row; the Throne Dais (REF-96) stands on the plaza's east
-    // side (`prop::PropKind::ThroneDais`).
+    // (north) row, in front of the Throne Dais (REF-96,
+    // `prop::PropKind::ThroneDais`) at the plaza's back-centre.
     District {
         name: "The Throne",
         center: Vec2::new(0.0, 1400.0),
@@ -250,8 +251,8 @@ fn largest_sprite_px(first: usize, count: usize) -> f32 {
 const NPC_GRID_COLS: usize = 3;
 
 /// Districts with a 64x64 landmark at the back-centre of their plaza (the
-/// north edge): the Forbidden Library (REF-95, reserved, not yet approved)
-/// and the Throne (REF-96, the Throne Dais). Each district's boss stands
+/// north edge): the Forbidden Library (REF-95, the Sealed Stacks) and the
+/// Throne (REF-96, the Throne Dais). Each district's boss stands
 /// in the back row, centred, directly in front of it.
 pub const BACK_LANDMARK_DISTRICTS: &[&str] = &["The Forbidden Library", "The Throne"];
 

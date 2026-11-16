@@ -1084,25 +1084,35 @@ mod tests {
         }
     }
 
+    /// A save inside either landmark (the Throne Dais; the Sealed Stacks,
+    /// solid from threshold to merlons) restores to a free spot nearby.
     #[test]
-    fn a_save_inside_the_throne_dais_moves_to_a_free_spot_nearby() {
+    fn a_save_inside_a_landmark_moves_to_a_free_spot_nearby() {
         use crate::plugins::prop::{PropKind, all_props};
         let solids = real_solids();
-        let (_, base) = all_props()
-            .into_iter()
-            .find(|(k, _)| *k == PropKind::ThroneDais)
-            .expect("the Throne Dais is placed");
-        let dais = PropKind::ThroneDais.solid_at(base);
-        // Feet in the middle of the dais: exactly the trap the review found.
-        let inside = (dais.min + dais.max) * 0.5 - PLAYER_FOOT.min.lerp(PLAYER_FOOT.max, 0.5);
-        assert!(!spot_is_free(inside, &solids), "test spot must be blocked");
-        let got = restore_spot(inside, &solids);
-        assert!(spot_is_free(got, &solids), "restored into a solid: {got:?}");
-        assert_ne!(got, PLAYER_SPAWN, "a free spot is near the dais");
-        assert!(
-            got.distance(inside) <= RESTORE_SEARCH_STEP_PX * RESTORE_SEARCH_RINGS as f32 * 1.5,
-            "moved too far: {inside:?} -> {got:?}"
-        );
+        for kind in [PropKind::ThroneDais, PropKind::SealedStacks] {
+            let (_, base) = all_props()
+                .into_iter()
+                .find(|(k, _)| *k == kind)
+                .unwrap_or_else(|| panic!("{kind:?} is placed"));
+            let solid = kind.solid_at(base);
+            // Feet in the middle of it: exactly the trap the review found.
+            let inside = (solid.min + solid.max) * 0.5 - PLAYER_FOOT.min.lerp(PLAYER_FOOT.max, 0.5);
+            assert!(
+                !spot_is_free(inside, &solids),
+                "{kind:?}: spot must be blocked"
+            );
+            let got = restore_spot(inside, &solids);
+            assert!(
+                spot_is_free(got, &solids),
+                "{kind:?}: restored into a solid: {got:?}"
+            );
+            assert_ne!(got, PLAYER_SPAWN, "a free spot is near the {kind:?}");
+            assert!(
+                got.distance(inside) <= RESTORE_SEARCH_STEP_PX * RESTORE_SEARCH_RINGS as f32 * 1.5,
+                "{kind:?}: moved too far: {inside:?} -> {got:?}"
+            );
+        }
     }
 
     /// The system, not just the pure helper: a player spawned onto a saved
