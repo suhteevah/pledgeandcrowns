@@ -1,7 +1,7 @@
 # HANDOFF.md
 
 ## Last Updated
-2026-11-15 — **Orchestrated build-out: waves 1-13 merged and signed off; art for Acts 3-8 awaiting approval.**
+2026-11-15 — **Orchestrated build-out: waves 1-13 merged and signed off; wave 14 (kit holders, district names, Act 9) on its branch for review.**
 
 Branch **`finish/integration`** (not pushed, `main` untouched). Fable
 orchestrates Opus agents in git worktrees, reviews each branch, merges, and
@@ -113,17 +113,44 @@ runs `scripts/ci.ps1` on the merged result as the sign-off gate.
   animation in `game/src/plugins/animation.rs` (player four facings, Ferris
   scuttle, NPC idle bob; draw-anchor lifts only, so collision, y-sort and
   talk range are untouched); `game/tests/art_wiring.rs`; style bible is v2.2
-  (ink code surface default). **Not done: the six kit holders
-  (Guildmaster, Conjurer, Barkeep, Smelter, Dockmaster, Warden) still show
-  first-pass maroon art; their approved kit exemplars REF-69..74 are their
-  sprites and need wiring.** District names do not match their casts (the
-  Forge cast stands in "The Wharf", the Coast cast in "Stonebridge").
+  (ink code surface default). The six kit holders and the district names
+  were left open here; wave 14 closed both.
+- **Wave 14** (this branch, one commit): (1) the six kit holders
+  (Guildmaster, Conjurer, Barkeep, Smelter, Dockmaster, Warden) now ship
+  their act's approved kit exemplar REF-69..74 (first-pass refs marked
+  SUPERSEDED, `tests/art_wiring.rs` pins it); districts renamed to their
+  casts: Tradesmen's End -> The Mage's Tower (Act 4), The Wharf -> The
+  Forge (Act 6), Stonebridge -> The Wharf (Act 7), The Old Gate -> The
+  Vault (Act 8); no NPC moved district. (2) **Act 9, the Forbidden
+  Library**: six missions (`raw_pointer` Shelfmark, `extern_c` Envoy,
+  `macro_rules` Macro Monk, `drop_trait` Sexton, `send_sync` Courier,
+  `maybe_uninit` Bookbinder) and the Librarian's trial (`librarian_index`,
+  `librarian_demand`, `librarian_seal`; no prologue, his roster mission is
+  stage 1). **87 missions, 64 NPCs; demo unchanged (24 free), 63 after.**
+  Map 180x220: the N-S street runs on to the Forbidden Library (south,
+  7 NPCs, the 64 px Librarian centred in the back row) and the Throne
+  (north, empty for Act 10); grid clearance now comes from the largest
+  sprite (hub 228 px, Library 188 px). Landmarks NOT wired (REF-95/96 are
+  drafts): `prop::PENDING_LANDMARKS` holds their spots. Server: five
+  stdout checks + four `UnsafeLateNonce` harness checks (`extern_c`,
+  `send_sync`, `librarian_index`, `librarian_seal`; explicit allow-list
+  test, review P2-3; host-import tests for no `memory` export and
+  `ptr = 0xFFFFFFFF`, P2-2). The game labels late-nonce passes
+  `PASS · NOT VERIFIED` (`[ok:unsafe]`, keyed on the server's note),
+  still a clear. `#![forbid(unsafe_code)]` on the game crate. Every Act 9
+  compiler/runtime claim is compiled or run in `mission_text.rs`; spec
+  corrections in its "Implementation record". **No Miri run backs the
+  `unsafe` solutions** (Miri not installed). Art for Act 9 wired
+  (REF-80..85, REF-93; REF-79 kit catalogued).
 
 ### Art status (Matt is the sole approver; design canvas)
-- **Approved 2026-11-15, not wired:** Act 9 Library kit and cast (REF-79..85),
-  the Librarian (REF-93), Act 10 Throne kit and cast (REF-86..92), the
-  Compiler (REF-94). Second passes Matt delegated are applied.
-- **Awaiting approval:** landmarks REF-95 Sealed Stacks, REF-96 Throne Dais.
+- **Wired 2026-11-15 (wave 14):** the kit exemplars REF-69..74 as the six
+  kit holders; Act 9 cast REF-80..85 and the Librarian REF-93 (REF-79, the
+  Library kit, catalogued, not an NPC).
+- **Approved 2026-11-15, not wired:** Act 10 Throne kit and cast
+  (REF-86..92), the Compiler (REF-94): waiting on Act 10.
+- **Awaiting approval:** landmarks REF-95 Sealed Stacks, REF-96 Throne Dais
+  (spots reserved in `prop::PENDING_LANDMARKS`).
 - **Not drawn:** boss intro/defeat frames, the Librarian's lectern, pixel
   font pick, title redraw, a renderable Borrow Checker.
 
@@ -135,18 +162,24 @@ runs `scripts/ci.ps1` on the merged result as the sign-off gate.
 2. **Nobody has played the build.** UI is checked only through capture scenes.
    No human has confirmed audio is audible (wav never decoded; now ogg).
 3. **4 missions are static-only on the server** (`thread_spawn`,
-   `thread_scope`, `hydra_threads`, `async_fn`); the other 74 are
-   behaviour-checked (`hydra_body` without running its threaded `main`).
-4. **Art still owed by the designer (see Art status above; this line is older):** pixel font, district landmarks, Act 9/10
-   casts (Librarian, Compiler), Borrow Checker intro/defeat frames, title
-   redraw. Held until Matt reacts to the 30 redraws.
-5. **Acts 9-10 are specified, not implemented.** The trial mechanism now
-   exists; still blocked on art and on the Act 9 harness design for `unsafe`
-   (`compile-api/HARNESS-NOTES.md`).
-6. **Bosses of Acts 2-8 all have trials** (wave 10 closed Acts 6-8). Left
-   for the endgame: the Act 9-10 trials (item 5); the design doc's combat
-   flavour (Hydra regrowth, Cliphy the imp, a fourth Warden phase) is not
-   built, by decision D1.
+   `thread_scope`, `hydra_threads`, `async_fn`); the other 83 are
+   behaviour-checked (`hydra_body` without running its threaded `main`;
+   four Act 9 harness checks in `UnsafeLateNonce`, labelled NOT VERIFIED
+   because a player's `unsafe` code can forge them).
+4. **Art still owed by the designer (see Art status above):** pixel font,
+   approval of the two landmarks, Borrow Checker and Librarian intro/defeat
+   frames, the Librarian's lectern, title redraw.
+5. **Act 10 is specified, not implemented** (art approved, Throne district
+   built and empty). Act 9 shipped in wave 14. **Before any deploy that
+   serves Act 9**, run the security review's Linux list
+   (`.claude/reviews/security-2026-11-15-cf9bc47.md`, "Must run on Linux"):
+   the bwrap late-nonce test, end-to-end grades of the registered
+   `librarian_index` and `extern_c`, the journal nonce grep,
+   `verify-sandbox.sh`. Miri has never checked the Act 9 solutions.
+6. **Bosses of Acts 2-9 all have trials** (wave 14 added the Librarian's).
+   Left for the endgame: the Act 10 trial; the design doc's combat
+   flavour (Hydra regrowth, Cliphy the imp, a fourth Warden phase, the
+   Sanity meter) is not built, by decision D1.
 7. Owner actions: TESS + RF check; domain; Android keystore;
    export the old claude.ai/design artboard before 2026-12-14; install
    `wasm-opt`, `butler`, Miri; decide the `repository` URL.

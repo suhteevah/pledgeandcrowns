@@ -8,17 +8,19 @@
 
 use crate::assets::{
     SPRITE_ALCHEMIST, SPRITE_ARMORER, SPRITE_AUDITOR, SPRITE_BARKEEP, SPRITE_BELLRINGER,
-    SPRITE_BONDSMITH, SPRITE_BORROW_CHECKER, SPRITE_BOUNCER, SPRITE_CARTOGRAPHER, SPRITE_CELLARER,
-    SPRITE_CHRONICLER, SPRITE_CONJURER, SPRITE_COOPER, SPRITE_DOCKMASTER, SPRITE_DRILLMASTER,
-    SPRITE_FAMILIAR, SPRITE_FERRIS, SPRITE_FORGEWRIGHT, SPRITE_GHOSTKEEPER, SPRITE_GUILDMASTER,
-    SPRITE_HARBORMASTER, SPRITE_HERALD, SPRITE_HERALDIC_SAGE, SPRITE_INTERPRETER, SPRITE_KEYMASTER,
-    SPRITE_LANTERNKEEPER, SPRITE_LIGHTHOUSEKEEPER, SPRITE_LINGUIST, SPRITE_LOCKSMITH,
-    SPRITE_LOREMASTER, SPRITE_MIXOLOGIST, SPRITE_ORACLE, SPRITE_PILGRIM, SPRITE_PORTER,
-    SPRITE_QUARTERMASTER, SPRITE_RECKONER, SPRITE_RECRUITER, SPRITE_RIVETER, SPRITE_SHAREKEEPER,
-    SPRITE_SIFTER, SPRITE_SIGNALER, SPRITE_SMELTER, SPRITE_SMITH, SPRITE_STRONGBOX,
-    SPRITE_SURVEYOR, SPRITE_SWAPWARDEN, SPRITE_TABKEEPER, SPRITE_TALLYWRIGHT,
-    SPRITE_TIDEFORECASTER, SPRITE_TIDEWATCH, SPRITE_TINKER, SPRITE_TRAIT_MAGE, SPRITE_TWIN,
-    SPRITE_VAULTWRIGHT, SPRITE_VEXIS, SPRITE_WANDWRIGHT, SPRITE_WARDEN,
+    SPRITE_BONDSMITH, SPRITE_BOOKBINDER, SPRITE_BORROW_CHECKER, SPRITE_BOUNCER,
+    SPRITE_CARTOGRAPHER, SPRITE_CELLARER, SPRITE_CHRONICLER, SPRITE_CONJURER, SPRITE_COOPER,
+    SPRITE_COURIER, SPRITE_DOCKMASTER, SPRITE_DRILLMASTER, SPRITE_ENVOY, SPRITE_FAMILIAR,
+    SPRITE_FERRIS, SPRITE_FORGEWRIGHT, SPRITE_GHOSTKEEPER, SPRITE_GUILDMASTER, SPRITE_HARBORMASTER,
+    SPRITE_HERALD, SPRITE_HERALDIC_SAGE, SPRITE_INTERPRETER, SPRITE_KEYMASTER,
+    SPRITE_LANTERNKEEPER, SPRITE_LIBRARIAN, SPRITE_LIGHTHOUSEKEEPER, SPRITE_LINGUIST,
+    SPRITE_LOCKSMITH, SPRITE_LOREMASTER, SPRITE_MACRO_MONK, SPRITE_MIXOLOGIST, SPRITE_ORACLE,
+    SPRITE_PILGRIM, SPRITE_PORTER, SPRITE_QUARTERMASTER, SPRITE_RECKONER, SPRITE_RECRUITER,
+    SPRITE_RIVETER, SPRITE_SEXTON, SPRITE_SHAREKEEPER, SPRITE_SHELFMARK, SPRITE_SIFTER,
+    SPRITE_SIGNALER, SPRITE_SMELTER, SPRITE_SMITH, SPRITE_STRONGBOX, SPRITE_SURVEYOR,
+    SPRITE_SWAPWARDEN, SPRITE_TABKEEPER, SPRITE_TALLYWRIGHT, SPRITE_TIDEFORECASTER,
+    SPRITE_TIDEWATCH, SPRITE_TINKER, SPRITE_TRAIT_MAGE, SPRITE_TWIN, SPRITE_VAULTWRIGHT,
+    SPRITE_VEXIS, SPRITE_WANDWRIGHT, SPRITE_WARDEN,
 };
 use crate::plugins::animation::{IdleBob, Scuttle, SpriteLift};
 use crate::plugins::player::Player;
@@ -483,6 +485,58 @@ pub const NPC_ROSTER: &[NpcSpec] = &[
         sprite_path: SPRITE_GHOSTKEEPER,
         pos: (-60.0, -130.0),
         native_px: 32.0,
+    },
+    // ── Act 9: The Forbidden Library (batch 11). The Librarian is the
+    // Act 9 boss: 64x64 like the Borrow Checker, and his roster mission
+    // is the first stage of his trial (no prologue, see `plugins::trial`).
+    NpcSpec {
+        name: "The Shelfmark",
+        mission_id: "raw_pointer",
+        sprite_path: SPRITE_SHELFMARK,
+        pos: (0.0, 0.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Envoy",
+        mission_id: "extern_c",
+        sprite_path: SPRITE_ENVOY,
+        pos: (0.0, 0.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Macro Monk",
+        mission_id: "macro_rules",
+        sprite_path: SPRITE_MACRO_MONK,
+        pos: (0.0, 0.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Sexton",
+        mission_id: "drop_trait",
+        sprite_path: SPRITE_SEXTON,
+        pos: (0.0, 0.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Courier",
+        mission_id: "send_sync",
+        sprite_path: SPRITE_COURIER,
+        pos: (0.0, 0.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Bookbinder",
+        mission_id: "maybe_uninit",
+        sprite_path: SPRITE_BOOKBINDER,
+        pos: (0.0, 0.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Librarian",
+        mission_id: "librarian_index",
+        sprite_path: SPRITE_LIBRARIAN,
+        pos: (0.0, 0.0),
+        native_px: 64.0,
     },
 ];
 

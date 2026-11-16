@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-42 - The Barkeep, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-71-tavernkit.jsx (approved by Matt 2026-11-13, wired 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REF42.png).
 // Stands behind a Bronze bar/counter, a mug in each hand. The frame-left
 // mug stands UPRIGHT and FULL - Old-gold ale brimming, a Brass-leaf foam
 // head: the Ok(value). The frame-right mug is TIPPED and spilling - empty,

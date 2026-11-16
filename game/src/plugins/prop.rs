@@ -206,7 +206,7 @@ pub const COTTAGE_SPOTS: &[(usize, Side, f32)] = &[
     (3, Side::North, -130.0),
     (3, Side::North, 130.0),
     (3, Side::West, 0.0),
-    // Tradesmen's End
+    // The Mage's Tower
     (4, Side::North, -130.0),
     (4, Side::North, 130.0),
     (4, Side::East, 0.0),
@@ -215,19 +215,42 @@ pub const COTTAGE_SPOTS: &[(usize, Side, f32)] = &[
     (5, Side::South, 150.0),
     (5, Side::West, 100.0),
     (5, Side::East, 100.0),
-    // The Wharf
+    // The Forge
     (6, Side::North, -130.0),
     (6, Side::North, 130.0),
     (6, Side::West, 0.0),
-    // Stonebridge
+    // The Wharf
     (7, Side::North, -130.0),
     (7, Side::North, 130.0),
     (7, Side::East, 0.0),
-    // The Old Gate
+    // The Vault
     (8, Side::North, -150.0),
     (8, Side::North, 150.0),
     (8, Side::West, -100.0),
     (8, Side::East, -100.0),
+    // The Forbidden Library. North is the main street and south is the
+    // treeline, so cottages stand west and east; the north-west spot is
+    // kept for the landmark (`PENDING_LANDMARKS`).
+    (9, Side::West, -100.0),
+    (9, Side::East, -100.0),
+    (9, Side::East, 100.0),
+    // The Throne (Act 10), the same way; its north-east spot is kept for
+    // the dais.
+    (10, Side::West, -100.0),
+    (10, Side::West, 100.0),
+    (10, Side::East, -100.0),
+];
+
+/// Where each district landmark will stand once its art is approved:
+/// `(district index, side, offset, ref)`, in [`COTTAGE_SPOTS`] terms (a
+/// landmark is a 64x64 bottom-centre-anchored prop like REF-68). NOT
+/// spawned: REF-95 (The Sealed Stacks) and REF-96 (The Throne Dais) are
+/// drafts awaiting Matt's approval. Wiring one is a new `PropKind` placed
+/// here; `pending_landmark_spots_are_clear` keeps each spot on open grass,
+/// clear of every prop and NPC, so that is all it takes.
+pub const PENDING_LANDMARKS: &[(usize, Side, f32, &str)] = &[
+    (9, Side::West, 100.0, "REF-95 The Sealed Stacks"),
+    (10, Side::East, 100.0, "REF-96 The Throne Dais"),
 ];
 
 /// Free-standing oaks in open meadow, between the quarters.
@@ -647,6 +670,7 @@ mod tests {
 
     #[test]
     fn district_gets_two_to_four_cottages() {
+        assert_eq!(DISTRICTS.len(), 11, "hub, eight quarters, Library, Throne");
         for (i, d) in DISTRICTS.iter().enumerate() {
             let n = COTTAGE_SPOTS.iter().filter(|(di, _, _)| *di == i).count();
             assert!((2..=4).contains(&n), "{} has {n} cottages", d.name);
@@ -726,6 +750,39 @@ mod tests {
                     !kind.sprite_rect_at(base).overlaps(&npc),
                     "{kind:?} at {base:?} covers NPC slot {i} at {s:?}"
                 );
+            }
+        }
+    }
+
+    /// Each pending landmark spot (art not approved yet, nothing spawned)
+    /// is a real, free 64x64 plot: on grass inside the map, clear of every
+    /// prop and every NPC slot, in a district that exists.
+    #[test]
+    fn pending_landmark_spots_are_clear() {
+        let props = all_props();
+        assert_eq!(PENDING_LANDMARKS.len(), 2);
+        for &(d, side, offset, art) in PENDING_LANDMARKS {
+            let base =
+                cottage_base(d, side, offset).unwrap_or_else(|| panic!("{art}: no district {d}"));
+            let plot = PropKind::Cottage.sprite_rect_at(base);
+            assert!(
+                plot.min.x >= -WORLD_HALF_W
+                    && plot.max.x <= WORLD_HALF_W
+                    && plot.min.y >= -WORLD_HALF_H
+                    && plot.max.y <= WORLD_HALF_H,
+                "{art} leaves the map"
+            );
+            assert!(rect_all_grass(&plot), "{art} is not on open grass");
+            for (k, b) in &props {
+                assert!(
+                    !k.sprite_rect_at(*b).overlaps(&plot),
+                    "{art} overlaps the {k:?} at {b:?}"
+                );
+            }
+            for i in 0..NPC_ROSTER.len() {
+                let s = district_slot(i);
+                let npc = Aabb::from_base(s.x, 32.0, s.y - 32.0, s.y + 32.0);
+                assert!(!npc.overlaps(&plot), "{art} covers NPC slot {i}");
             }
         }
     }

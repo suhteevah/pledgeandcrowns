@@ -21,8 +21,10 @@
 //!   3 to 8 bosses have the same shape: the act's lead NPC (the
 //!   Guildmaster, Vexis, the Barkeep, the Keymaster, the Dockmaster, the
 //!   Vaultwright) keeps the act's first mission as a prologue and holds a
-//!   trial after the act's sixth mission. The Act 8 trial is the last
-//!   thing in the registry.
+//!   trial after the act's sixth mission. The Act 9 boss, the Librarian,
+//!   is the one owner with no prologue: his roster mission is stage 1,
+//!   placed after the act's six villagers, and his trial is the last thing
+//!   in the registry.
 //!
 //! # The NPC's current mission
 //!
@@ -124,14 +126,24 @@ pub const TRIALS: &[Trial] = &[
         stages: &["hydra_senders", "hydra_threads", "hydra_body"],
         complete_line: "\"Every report in, every flag read. The harbour is yours.\"",
     },
-    // Act 8 boss, the last missions in the registry. The Vaultwright's
-    // prologue is `box_basic`.
+    // Act 8 boss. The Vaultwright's prologue is `box_basic`.
     Trial {
         id: "memory_warden",
         name: "The Memory Warden",
         npc: "box_basic",
         stages: &["warden_box", "warden_shared", "warden_weak"],
         complete_line: "\"Every phase held with the right grip. The Vault is open to you.\"",
+    },
+    // Act 9 boss, the last missions in the registry. The Librarian has no
+    // prologue: his roster key IS stage 1, so `owned_missions` lists the
+    // three stages once each and he says his stage-1 `not_yet` line while
+    // it is locked.
+    Trial {
+        id: "librarian",
+        name: "The Librarian",
+        npc: "librarian_index",
+        stages: &["librarian_index", "librarian_demand", "librarian_seal"],
+        complete_line: "\"A safe door, an exact incantation, every page returned. The Library is yours.\"",
     },
 ];
 
@@ -457,6 +469,78 @@ mod tests {
             owned_missions("box_basic"),
             vec!["box_basic", "warden_box", "warden_shared", "warden_weak"]
         );
+        // No prologue: the roster mission is stage 1 and is not repeated.
+        assert_eq!(
+            owned_missions("librarian_index"),
+            vec!["librarian_index", "librarian_demand", "librarian_seal"]
+        );
+    }
+
+    /// The Act 9 trial: the Librarian's three stages come straight after
+    /// the act's six villagers (Shelfmark .. Bookbinder) and end the
+    /// registry. He owns no other mission.
+    #[test]
+    fn act_9_trial_follows_the_six_villagers_and_ends_the_registry() {
+        let reg = MissionRegistry::default();
+        let idx = |id: &str| {
+            reg.missions
+                .iter()
+                .position(|m| m.id == id)
+                .unwrap_or_else(|| panic!("{id} not in registry"))
+        };
+        let t = TRIALS
+            .iter()
+            .find(|t| t.id == "librarian")
+            .expect("librarian trial");
+        assert_eq!(t.npc, t.stages[0], "no prologue: the owner is stage 1");
+        assert_eq!(t.stages.len(), 3);
+        assert_eq!(idx("raw_pointer") + 6, idx(t.stages[0]));
+        assert_eq!(idx("maybe_uninit") + 1, idx(t.stages[0]));
+        assert_eq!(idx(t.stages[2]) + 1, reg.missions.len());
+        assert_eq!(
+            trial_for_npc("librarian_index").map(|t| t.id),
+            Some("librarian")
+        );
+        assert_eq!(
+            trial_of("librarian_index").map(|(t, i)| (t.id, i)),
+            Some(("librarian", 0))
+        );
+    }
+
+    /// A trial whose owner has no prologue (the Librarian): while stage 1
+    /// is locked his current mission is stage 1 itself (so he talks as a
+    /// locked NPC), then each stage in turn, then the final stage once all
+    /// are cleared.
+    #[test]
+    fn no_prologue_owner_walks_locked_stage_one_then_the_stages() {
+        let reg = MissionRegistry::default();
+        let npc = "librarian_index";
+        let cur = |p: &MissionProgress| current_mission(&reg, p, npc).map(|m| m.id);
+        let unlocked =
+            |p: &MissionProgress| reg.find(npc).expect("stage 1 in registry").is_unlocked(p);
+        // Fresh save and a save one mission short: stage 1, locked.
+        assert_eq!(cur(&MissionProgress::default()), Some(npc));
+        assert!(!unlocked(&MissionProgress::default()));
+        let p = cleared_through(&reg, "send_sync");
+        assert_eq!(cur(&p), Some(npc));
+        assert!(!unlocked(&p));
+        if cfg!(feature = "demo") {
+            // Act 9 is not in the demo: nothing unlocks.
+            let p = cleared_through(&reg, "maybe_uninit");
+            assert!(!unlocked(&p));
+            return;
+        }
+        // The Bookbinder done: stage 1 is open.
+        let p = cleared_through(&reg, "maybe_uninit");
+        assert_eq!(cur(&p), Some(npc));
+        assert!(unlocked(&p));
+        let p = cleared_through(&reg, "librarian_index");
+        assert_eq!(cur(&p), Some("librarian_demand"));
+        let p = cleared_through(&reg, "librarian_demand");
+        assert_eq!(cur(&p), Some("librarian_seal"));
+        let p = cleared_through(&reg, "librarian_seal");
+        assert_eq!(cur(&p), Some("librarian_seal"));
+        assert!(is_complete(&TRIALS[TRIALS.len() - 1], &p));
     }
 
     /// Each Act 3-5 trial sits after its act's sixth mission and before
@@ -500,10 +584,9 @@ mod tests {
         }
     }
 
-    /// Each Act 6-8 trial sits after its act's sixth mission; the Act 6 and
-    /// 7 trials end before the next act's first mission, and the Act 8
-    /// trial ends the registry. Each owner's prologue is its act's first
-    /// mission.
+    /// Each Act 6-8 trial sits after its act's sixth mission and ends
+    /// before the next act's first mission. Each owner's prologue is its
+    /// act's first mission.
     #[test]
     fn act_6_to_8_trials_close_their_acts() {
         let reg = MissionRegistry::default();
@@ -521,7 +604,12 @@ mod tests {
                 Some("thread_spawn"),
             ),
             ("tide_hydra", "thread_spawn", "async_fn", Some("box_basic")),
-            ("memory_warden", "box_basic", "weak_ref", None),
+            (
+                "memory_warden",
+                "box_basic",
+                "weak_ref",
+                Some("raw_pointer"),
+            ),
         ] {
             let t = TRIALS
                 .iter()

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-38 - The Conjurer, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-70-towerkit.jsx (approved by Matt 2026-11-13, wired 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REF38.png).
 // Conjures a Pair<T>: one small orb in each hand, IDENTICAL - same
 // shape, same Mage-glow color, same Royal-arcane halo. A generic struct
 // Pair<T> holds two of the same T; both fields are the one type, so both

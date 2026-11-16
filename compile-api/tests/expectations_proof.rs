@@ -27,6 +27,9 @@ use std::sync::Mutex;
 use pledge_compile_api::expectations::{self, Check, GradeState};
 use pledge_compile_api::wasm_builder::{self, BuildSettings, Layout, RunLimits};
 
+mod act9_programs;
+use act9_programs as a9;
+
 /// Parallel build workers: `CARGO_BUILD_JOBS` when set (so a run on a
 /// shared machine can be kept light), else 6.
 fn workers() -> usize {
@@ -1048,6 +1051,57 @@ fn wrong_variants() -> HashMap<&'static str, Vec<&'static str>> {
                 "use std::rc::{Rc, Weak};\nfn main() { let strong = Rc::new(5); let weak: Weak<i32> = Rc::downgrade(&strong); let alive = weak.upgrade(); println!(\"{alive:?}\"); drop(strong); println!(\"{:?}\", weak.upgrade()); }",
             ],
         ),
+        // ── Act 9 (tests/act9_programs). The `late` harness missions also
+        // have the spec's wrong variant plus checker-only wrongs: right
+        // `main` output, wrong for inputs only the checker sends.
+        ("raw_pointer", vec![a9::WRONG_RAW_POINTER_0]),
+        (
+            "extern_c",
+            vec![
+                // No repr(C): Rust's own layout, 8 bytes on this target.
+                a9::WRONG_EXTERN_C_0,
+                a9::WRONG_EXTERN_C_1,
+                a9::WRONG_EXTERN_C_2,
+            ],
+        ),
+        ("macro_rules", vec![a9::WRONG_MACRO_RULES_0]),
+        ("drop_trait", vec![a9::WRONG_DROP_TRAIT_0]),
+        (
+            "send_sync",
+            vec![
+                a9::WRONG_SEND_SYNC_0,
+                a9::WRONG_SEND_SYNC_1,
+                a9::WRONG_SEND_SYNC_2,
+            ],
+        ),
+        (
+            "maybe_uninit",
+            vec![a9::WRONG_MAYBE_UNINIT_0, a9::WRONG_MAYBE_UNINIT_1],
+        ),
+        (
+            "librarian_index",
+            vec![
+                a9::WRONG_LIBRARIAN_INDEX_0,
+                a9::WRONG_LIBRARIAN_INDEX_1,
+                a9::WRONG_LIBRARIAN_INDEX_2,
+            ],
+        ),
+        (
+            "librarian_demand",
+            vec![
+                a9::WRONG_LIBRARIAN_DEMAND_0,
+                a9::WRONG_LIBRARIAN_DEMAND_1,
+                a9::WRONG_LIBRARIAN_DEMAND_2,
+            ],
+        ),
+        (
+            "librarian_seal",
+            vec![
+                a9::WRONG_LIBRARIAN_SEAL_0,
+                a9::WRONG_LIBRARIAN_SEAL_1,
+                a9::WRONG_LIBRARIAN_SEAL_2,
+            ],
+        ),
     ])
 }
 
@@ -1127,6 +1181,19 @@ fn literal_prints() -> HashMap<&'static str, &'static str> {
                 golem_main3!()
             ),
         ),
+        // ── Act 9. Stdout missions: the lines as literals. Harness
+        // missions: behaviour right without the lesson (a direct call for
+        // FFI, a `Box` that needs no promise, safe `get`, a seal line with
+        // no `from_raw`), so only the `uses` tokens reject them.
+        ("raw_pointer", a9::LITERAL_RAW_POINTER),
+        ("extern_c", a9::LITERAL_EXTERN_C),
+        ("macro_rules", a9::LITERAL_MACRO_RULES),
+        ("drop_trait", a9::LITERAL_DROP_TRAIT),
+        ("send_sync", a9::LITERAL_SEND_SYNC),
+        ("maybe_uninit", a9::LITERAL_MAYBE_UNINIT),
+        ("librarian_index", a9::LITERAL_LIBRARIAN_INDEX),
+        ("librarian_demand", a9::LITERAL_LIBRARIAN_DEMAND),
+        ("librarian_seal", a9::LITERAL_LIBRARIAN_SEAL),
     ])
 }
 
@@ -1189,6 +1256,11 @@ fn forbidden_variants() -> HashMap<&'static str, Vec<&'static str>> {
                 ),
             ],
         ),
+        // ── Act 9 `late` missions that rule out `no_mangle` (a way to run
+        // code during the checker's late print): correct, plus an export.
+        ("send_sync", vec![a9::FORBID_SEND_SYNC]),
+        ("librarian_index", vec![a9::FORBID_LIBRARIAN_INDEX]),
+        ("librarian_seal", vec![a9::FORBID_LIBRARIAN_SEAL]),
     ])
 }
 
@@ -1259,6 +1331,13 @@ fn alternatives() -> HashMap<&'static str, Vec<&'static str>> {
             "warden_weak",
             vec![WARDEN_WEAK_NAMES_ALT, WARDEN_WEAK_WHILE_ALT],
         ),
+        // Act 9: the spec's two alternatives, and one per Librarian stage.
+        // The game's `tests/contract.rs` `CORRECT` corpus holds the same.
+        ("raw_pointer", vec![a9::ALT_RAW_POINTER_0]),
+        ("maybe_uninit", vec![a9::ALT_MAYBE_UNINIT_0]),
+        ("librarian_index", vec![a9::ALT_LIBRARIAN_INDEX_0]),
+        ("librarian_demand", vec![a9::ALT_LIBRARIAN_DEMAND_0]),
+        ("librarian_seal", vec![a9::ALT_LIBRARIAN_SEAL_0]),
     ])
 }
 
@@ -1381,8 +1460,8 @@ fn run_parallel(cases: Vec<Case>) -> Vec<(Case, expectations::GradedRun)> {
 fn game_sources_parse() {
     let sols = canonical_solutions();
     let starters = starters();
-    assert_eq!(sols.len(), 78, "solutions parsed");
-    assert_eq!(starters.len(), 78, "starters parsed");
+    assert_eq!(sols.len(), 87, "solutions parsed");
+    assert_eq!(starters.len(), 87, "starters parsed");
     for m in expectations::all() {
         assert!(
             sols.contains_key(m.id),
@@ -1446,6 +1525,9 @@ fn game_sources_parse() {
         "warden_box",
         "warden_shared",
         "warden_weak",
+        "librarian_index",
+        "librarian_demand",
+        "librarian_seal",
     ] {
         let n = wrong.get(t).map_or(0, Vec::len) + forbidden.get(t).map_or(0, Vec::len);
         assert!(n >= 3, "{t}: {n} wrong variants");
@@ -1467,9 +1549,12 @@ fn print_canonical_transcripts() {
         let src = &sols[m.id];
         match m.check {
             Check::Harness(h) => {
+                // The nonce-in-checker source keeps this dev printout
+                // simple; the entry is the mission's own (an Act 9
+                // `UnsafeLateNonce` mission's `unsafe` must still build).
                 let checker = expectations::harness_module_source(&h, "NONCE");
                 let layout = Layout::Harness {
-                    entry: expectations::HARNESS_ENTRY_SOURCE,
+                    entry: expectations::harness_entry_source(m.harness_mode),
                     checker: &checker,
                 };
                 let o = wasm_builder::compile_and_run_layout(

@@ -12,7 +12,10 @@
 //!      stub for that mission's id (catches "registered a mission but
 //!      forgot to add a grader case").
 
+mod act9_programs;
 mod common;
+
+use act9_programs as a9;
 
 use common::PLAYER_EDITION;
 use pledge_and_crown::plugins::mission::MissionRegistry;
@@ -824,6 +827,341 @@ fn main() {
     println!("{} owes {:?}", a.name, next);
 }"#
         }
+        // ── Act 9: Forbidden Library (the player-facing solutions; their
+        // `unsafe` is text in a string, compiled only as player code).
+        "raw_pointer" => {
+            r#"fn main() {
+    let mut gold: i32 = 10;
+
+    // Making a raw pointer is safe. Only dereferencing it needs `unsafe`.
+    let write_ptr: *mut i32 = &mut gold;
+    unsafe {
+        // SAFETY: write_ptr came from `&mut gold` on the line above, so it
+        // is non-null, aligned and points at a live i32. Nothing else
+        // touches `gold` until this write is done.
+        *write_ptr += 5;
+    }
+
+    let read_ptr: *const i32 = &gold;
+    // SAFETY: read_ptr came from `&gold` just above and `gold` is alive.
+    let seen = unsafe { *read_ptr };
+
+    println!("pointer is null: {}", read_ptr.is_null());
+    println!("gold through the pointer: {seen}");
+    println!("gold by name: {gold}");
+}"#
+        }
+        "extern_c" => {
+            r#"/// Laid out by C's rules: fields in declared order, C padding.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Rune {
+    pub glyph: u8,
+    pub power: u32,
+    pub tier: u8,
+}
+
+/// Exported under its plain, unmangled name with the C calling
+/// convention. A C program linked with this one could call it.
+/// `no_mangle` is an unsafe attribute: two items exporting the same
+/// symbol name would be undefined behaviour, and we promise there is one.
+#[unsafe(no_mangle)]
+pub extern "C" fn crown_seal(rune: Rune) -> u32 {
+    rune.power * 2 + rune.tier as u32 + rune.glyph as u32
+}
+
+mod foreign {
+    // A foreign declaration: "somewhere in the linked program there is a
+    // C-ABI function with this name and signature." The compiler cannot
+    // check that claim. Writing `unsafe extern` says we take
+    // responsibility for it, and each call is unsafe too.
+    unsafe extern "C" {
+        pub fn crown_seal(rune: super::Rune) -> u32;
+    }
+}
+
+fn main() {
+    let rune = Rune { glyph: 3, power: 20, tier: 1 };
+    println!(
+        "Rune: {} bytes, align {}",
+        std::mem::size_of::<Rune>(),
+        std::mem::align_of::<Rune>()
+    );
+
+    // Called by its Rust path it is an ordinary (safe) function call.
+    println!("direct call: {}", crown_seal(rune));
+
+    // SAFETY: the declaration in `foreign` matches the definition above
+    // exactly (same name, same repr(C) argument, same return type).
+    let sealed = unsafe { foreign::crown_seal(rune) };
+    println!("through the extern block: {sealed}");
+
+    // A C-ABI function pointer, the shape a C library takes for callbacks.
+    let callback: extern "C" fn(Rune) -> u32 = crown_seal;
+    println!("through a fn pointer: {}", callback(rune));
+}"#
+        }
+        "macro_rules" => {
+            r#"// `chant!` takes one or more expressions separated by commas, prints each
+// verse, and evaluates to their total.
+macro_rules! chant {
+    ($($verse:expr),+ $(,)?) => {{
+        let mut total = 0;
+        $(
+            // Bind once: a macro pastes tokens, so writing `$verse` twice
+            // would evaluate the expression twice.
+            let verse = $verse;
+            println!("  verse: {verse}");
+            total += verse;
+        )+
+        total
+    }};
+}
+
+fn main() {
+    let first = chant!(1);
+    println!("first chant: {first}");
+    let second = chant!(2, 3, 4);
+    println!("second chant: {second}");
+    let third = chant!(10, 20,);
+    println!("third chant: {third}");
+}"#
+        }
+        "drop_trait" => {
+            r#"use std::mem;
+
+struct Soul {
+    name: &'static str,
+}
+
+impl Drop for Soul {
+    // Runs automatically when a Soul goes out of scope. You never call it
+    // yourself; to drop early, hand the value to `drop(value)`.
+    fn drop(&mut self) {
+        println!("{} is released", self.name);
+    }
+}
+
+fn main() {
+    let _first = Soul { name: "first" };
+    let _second = Soul { name: "second" };
+    let early = Soul { name: "early" };
+    let bound = Soul { name: "bound" };
+
+    drop(early); // std::mem::drop takes ownership, so `early` drops here
+    println!("the ritual begins");
+
+    let _ = Soul { name: "unnamed" }; // `_` does not bind: dropped at once
+
+    {
+        let _inner = Soul { name: "inner" };
+        println!("inner scope ends");
+    } // `_inner` drops here
+
+    mem::forget(bound); // safe, but its destructor will never run
+    println!("main ends");
+} // remaining locals drop in reverse order: `_second`, then `_first`"#
+        }
+        "send_sync" => {
+            r#"/// A tome that owns one heap page through a raw pointer, the way `Box`
+/// does internally. Raw pointers are neither `Send` nor `Sync`, so the
+/// compiler does not derive either for `Tome`. We must decide.
+struct Tome {
+    page: *mut u32,
+}
+
+impl Tome {
+    fn new(value: u32) -> Self {
+        Tome {
+            page: Box::into_raw(Box::new(value)),
+        }
+    }
+
+    fn read(&self) -> u32 {
+        // SAFETY: `page` came from Box::into_raw in `new` and is freed only
+        // in Drop, so it is valid for as long as `self` exists.
+        unsafe { *self.page }
+    }
+}
+
+impl Drop for Tome {
+    fn drop(&mut self) {
+        // SAFETY: we own the allocation and this is the only place it is
+        // freed, exactly once.
+        unsafe { drop(Box::from_raw(self.page)) };
+        println!("the page is returned to the shelf");
+    }
+}
+
+// SAFETY (Send): a Tome is the only owner of its page, like Box<u32>.
+// Moving the Tome to another thread moves that sole ownership with it, and
+// u32 itself is Send.
+unsafe impl Send for Tome {}
+
+// SAFETY (Sync): through `&Tome` the only operation is `read`, which never
+// writes. Many threads reading the same u32 at once is not a data race.
+unsafe impl Sync for Tome {}
+
+/// Compiles only for types that may be moved to another thread.
+fn courier_accepts<T: Send>(item: T) -> T {
+    item
+}
+
+/// Compiles only for types that may be shared between threads by `&`.
+fn readers_accept<T: Sync>(item: &T) -> &T {
+    item
+}
+
+fn main() {
+    let tome = Tome::new(7);
+    let carried = courier_accepts(tome);
+    println!("the courier accepts the tome");
+    let shared = readers_accept(&carried);
+    println!("page reads {}", shared.read());
+}"#
+        }
+        "maybe_uninit" => {
+            r#"use std::mem::MaybeUninit;
+
+const PAGES: usize = 4;
+
+fn main() {
+    // Room for four u32s, deliberately not initialised yet.
+    let mut quire = MaybeUninit::<[u32; PAGES]>::uninit();
+    let first: *mut u32 = quire.as_mut_ptr().cast::<u32>();
+
+    for i in 0..PAGES {
+        // SAFETY: i < PAGES, so first.add(i) stays inside the array.
+        // `write` stores the value without reading or dropping whatever
+        // (uninitialised) bytes were there before.
+        unsafe { first.add(i).write((i as u32 + 1) * 10) };
+    }
+
+    // SAFETY: the loop above initialised every one of the PAGES elements.
+    let quire: [u32; PAGES] = unsafe { quire.assume_init() };
+
+    println!("bound pages: {quire:?}");
+    println!("total ink: {}", quire.iter().sum::<u32>());
+}"#
+        }
+        // ── Act 9 boss: the Librarian.
+        "librarian_index" => {
+            r#"/// Returns the volume `index` places past `shelf`.
+///
+/// # Safety
+///
+/// `shelf` must point into a live array of initialised `u32`s, and
+/// `shelf.add(index)` must still be inside that same array.
+unsafe fn volume_at(shelf: *const u32, index: usize) -> u32 {
+    // SAFETY: the caller upholds the contract above.
+    unsafe { *shelf.add(index) }
+}
+
+/// The safe door. No argument a caller can pass makes this read out
+/// of bounds, so it does not need to be `unsafe` itself.
+fn fetch(shelf: &[u32], index: usize) -> Option<u32> {
+    if index < shelf.len() {
+        // SAFETY: index < shelf.len(), and the slice is borrowed (so
+        // alive) for the whole call.
+        Some(unsafe { volume_at(shelf.as_ptr(), index) })
+    } else {
+        None
+    }
+}
+
+fn main() {
+    let shelf = [11, 22, 33, 44];
+    for index in [0, 3, 4, 99] {
+        match fetch(&shelf, index) {
+            Some(volume) => println!("index {index}: volume {volume}"),
+            None => println!("index {index}: no such volume"),
+        }
+    }
+}"#
+        }
+        "librarian_demand" => {
+            r#"fn page(n: u32) -> u32 {
+    n * 3
+}
+
+fn seal(left: u32, right: u32) -> u32 {
+    left * 2 + right
+}
+
+// incant!(a, b, c, d) must expand to the Librarian's exact demand:
+//     seal(seal(seal(page(a), page(b)), page(c)), page(d))
+// The internal `@acc` rules carry the expression built so far. A
+// literal `@` can never start an expression, so the entry rule never
+// swallows an `@acc` call, and a caller's verses never match `@acc`.
+macro_rules! incant {
+    (@acc $acc:expr) => { $acc };
+    (@acc $acc:expr, $next:expr $(, $rest:expr)*) => {
+        incant!(@acc seal($acc, page($next)) $(, $rest)*)
+    };
+    ($first:expr $(, $rest:expr)*) => {
+        incant!(@acc page($first) $(, $rest)*)
+    };
+}
+
+fn main() {
+    let demand = seal(seal(seal(page(1), page(2)), page(3)), page(4));
+    let answer = incant!(1, 2, 3, 4);
+    println!("the demand: {demand}");
+    println!("incant!(1, 2, 3, 4): {answer}");
+    println!("the incantation matches: {}", demand == answer);
+    println!("incant!(7): {}", incant!(7));
+    println!("incant!(2, 9): {}", incant!(2, 9));
+}"#
+        }
+        "librarian_seal" => {
+            r#"/// Owns a run of `len` u32s through a raw pointer, the way `Vec` does
+/// underneath. The raw pointer itself owns nothing: Drop must free it.
+struct Codex {
+    ptr: *mut u32,
+    len: usize,
+}
+
+impl Codex {
+    fn from_pages(pages: Vec<u32>) -> Self {
+        let boxed: Box<[u32]> = pages.into_boxed_slice();
+        let len = boxed.len();
+        // Box::into_raw gives up ownership: nothing frees this until
+        // we rebuild the Box in Drop.
+        let ptr = Box::into_raw(boxed).cast::<u32>();
+        Codex { ptr, len }
+    }
+
+    fn get(&self, index: usize) -> Option<u32> {
+        if index < self.len {
+            // SAFETY: index < len, and ptr points at len initialised
+            // u32s that stay alive until Drop.
+            Some(unsafe { *self.ptr.add(index) })
+        } else {
+            None
+        }
+    }
+}
+
+impl Drop for Codex {
+    fn drop(&mut self) {
+        let slice =
+            std::ptr::slice_from_raw_parts_mut(self.ptr, self.len);
+        // SAFETY: this is exactly the Box<[u32]> that from_pages turned
+        // into a raw pointer (same address, same length), and Drop runs
+        // once.
+        drop(unsafe { Box::from_raw(slice) });
+        println!("the codex is sealed ({} pages returned)", self.len);
+    }
+}
+
+fn main() {
+    let codex = Codex::from_pages(vec![5, 8, 13]);
+    println!("page 0: {:?}", codex.get(0));
+    println!("page 2: {:?}", codex.get(2));
+    println!("page 3: {:?}", codex.get(3));
+    println!("the Librarian closes the book");
+}"#
+        }
         _ => return None,
     })
 }
@@ -1510,6 +1848,33 @@ const CORRECT: &[(&str, &str, &str)] = &[
         "trial alt: `while let` with `Option::filter`",
         WARDEN_WEAK_WHILE_ALT,
     ),
+    // ── Act 9: the spec's alternatives and one per Librarian stage (the
+    // same programs pass the server check in `expectations_proof.rs`) ──
+    (
+        "raw_pointer",
+        "alt: `&raw mut` / `&raw const`, no intermediate reference",
+        a9::ALT_RAW_POINTER_0,
+    ),
+    (
+        "maybe_uninit",
+        "alt: an array of `MaybeUninit<u32>`, safe `write`, then `transmute`",
+        a9::ALT_MAYBE_UNINIT_0,
+    ),
+    (
+        "librarian_index",
+        "trial alt: early `return None`, `if let` in main",
+        a9::ALT_LIBRARIAN_INDEX_0,
+    ),
+    (
+        "librarian_demand",
+        "trial alt: `@fold` rules with a `;` separator",
+        a9::ALT_LIBRARIAN_DEMAND_0,
+    ),
+    (
+        "librarian_seal",
+        "trial alt: one `*mut [u32]` field, `Box::from_raw` on it",
+        a9::ALT_LIBRARIAN_SEAL_0,
+    ),
 ];
 
 // Alternatives for the Act 6-8 trials, the same text as in
@@ -1675,6 +2040,27 @@ const WRONG: &[(&str, &str, &str)] = &[
         "intro_let_binding",
         "G0b async fn main (rustc E0752)",
         "async fn main() {\n    let answer = 42;\n}\n",
+    ),
+    // ── Act 9: right output without the lesson; the tokens catch them ──
+    (
+        "extern_c",
+        "Act 9: calls `crown_seal` directly, never through the extern block",
+        a9::LITERAL_EXTERN_C,
+    ),
+    (
+        "send_sync",
+        "Act 9: a `Box` field is Send and Sync already, no promise made",
+        a9::LITERAL_SEND_SYNC,
+    ),
+    (
+        "librarian_index",
+        "trial: safe `get` instead of the `unsafe fn`",
+        a9::LITERAL_LIBRARIAN_INDEX,
+    ),
+    (
+        "librarian_seal",
+        "trial: prints the seal line, never calls `from_raw`",
+        a9::LITERAL_LIBRARIAN_SEAL,
     ),
 ];
 

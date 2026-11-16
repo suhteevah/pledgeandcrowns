@@ -2,9 +2,12 @@
 
 *Third security review (2026-11-15), findings C-1 and C-2. Act 9 grading:
 design 1 below is BUILT as the opt-in harness mode
-`HarnessMode::UnsafeLateNonce` (2026-11-15) and proven on test-only
-fixtures; no Act 9 mission is registered yet. It raises the bar for
-forged results; it does not guarantee them (see "Design 1 as built").*
+`HarnessMode::UnsafeLateNonce` (2026-11-15). Four registered Act 9
+missions use it (`extern_c`, `send_sync`, `librarian_index`,
+`librarian_seal`, 2026-11-15); the other five Act 9 missions are checked
+by their stdout. It raises the bar for forged results; it does not
+guarantee them (see "Design 1 as built"), so the game labels these passes
+NOT VERIFIED (they still count as clears).*
 
 ## How a harness mission is graded today
 
@@ -132,13 +135,22 @@ function), `src/run_sandbox.rs` (`RunHeader::late_nonce`). Proof:
 ### The switch
 
 `MissionCheck::harness_mode` is a field of the server's own table, chosen
-by mission id. Every registered mission is `ForbidUnsafe` (unit test
-`every_registered_mission_keeps_forbid_unsafe`); a player file that writes
-`#![allow(unsafe_code)]` on a registered harness mission is still a
-compile error with the plain "does not allow `unsafe`" message (slow test
-case `double_function: player file tries to opt into unsafe`). Only a
-`MissionCheck` with `harness_mode: UnsafeLateNonce` gets the entry file
-without `#![forbid(unsafe_code)]` and the late checker.
+by mission id. Exactly four registered missions are `UnsafeLateNonce`
+(`extern_c`, `send_sync`, `librarian_index`, `librarian_seal`); every
+other is `ForbidUnsafe`, and the unit test
+`only_the_act9_allow_list_uses_unsafe_late_nonce` (an explicit allow-list,
+review finding P2-3) fails if any other mission gains the mode. A player
+file that writes `#![allow(unsafe_code)]` on a `ForbidUnsafe` harness
+mission is still a compile error with the plain "does not allow `unsafe`"
+message (slow test case `double_function: player file tries to opt into
+unsafe`). Only a `MissionCheck` with `harness_mode: UnsafeLateNonce` gets
+the entry file without `#![forbid(unsafe_code)]` and the late checker.
+
+Act 9 missions whose lesson lives in `main` (`raw_pointer`,
+`macro_rules`, `drop_trait`, `maybe_uninit`, `librarian_demand`) are
+`Stdout` checks plus construct tokens. Their build is the plain layout,
+which has never carried the `forbid` and has no nonce, so their `unsafe`
+needs no mode and gains nothing from one.
 
 ### Delivery channel: a host import, not stdin
 
@@ -159,7 +171,9 @@ A host import cannot be reached from the player's file:
   checker finished".
 
 It writes exactly 35 bytes through `wasmtime::Memory::write` (bounds
-checked; out of range gives `-3`, wrong length `-2`), never blocks, and is
+checked; out of range gives `-3`, including an all-ones `0xFFFFFFFF`
+target and a module with no `memory` export, both tested since review
+finding P2-2; wrong length `-2`), never blocks, and is
 added to the `Linker` **only** for a run given a `LateNonce`. Every other
 run links WASIp1 alone, so a module importing it fails to instantiate.
 The engine `Config`, feature allow-list, fuel, epoch deadline, async
@@ -218,7 +232,9 @@ either: the `"C"` is blanked to `""`; use `unsafe extern` / `no_mangle`.
 
 ### What the proof shows (`tests/act9_unsafe_harness.rs`)
 
-Five Act 9 spec missions as `UnsafeLateNonce` fixtures: `librarian_index`
+Since the missions were registered, the fixtures grade the REGISTERED
+checks (looked up by id), so the proof covers what the server runs.
+Five Act 9 missions, four of them `UnsafeLateNonce`: `librarian_index`
 (`unsafe fn` call + raw-pointer deref), `extern_c` (FFI: `repr(C)`,
 `no_mangle`, `unsafe extern`), `librarian_seal` (`Box::into_raw`/
 `from_raw`, raw deref, `Drop`), `send_sync` (`unsafe impl`), `maybe_uninit`
@@ -239,7 +255,7 @@ not. For the four whose checker calls player items:
 `maybe_uninit` checks only `main`'s output (the spec's solution has no
 items to call), so it has nothing for the checker to key and the key
 attacks do not apply; it is the same trust level as a `Stdout` check
-plus its `uses` tokens.
+plus its `uses` tokens, which is what it is now registered as.
 
 ### What it cannot stop (the known limit, tested)
 

@@ -855,8 +855,8 @@ const ACT_3_TO_8_TRIALS: &[(&str, &str, &str, &str, &str)] = &[
     ),
 ];
 
-/// The Memory Warden ends the registry: with everything cleared, the
-/// Vaultwright's current mission is its final stage and he is Cleared.
+/// With every Act 8 mission cleared, the Vaultwright's current mission is
+/// the Memory Warden's final stage and he is Cleared.
 #[test]
 #[cfg_attr(feature = "demo", ignore = "Act 8 is not in the demo build")]
 fn vaultwright_is_cleared_on_the_last_stage_once_everything_is() {
@@ -908,4 +908,110 @@ fn act_3_to_8_trials_offer_stage_one_with_their_header() {
             "{stage1}: the offer is saved as heard"
         );
     }
+}
+
+// --- the Act 9 boss: a trial owner with no prologue -----------------------
+
+/// The Librarian's roster mission is his stage 1. While it is locked and
+/// the Bookbinder (the mission just before) is next, he says his own
+/// authored `not_yet` line naming them; further back, the neutral line.
+#[test]
+fn librarian_says_his_not_yet_line_while_stage_one_is_locked() {
+    let reg = MissionRegistry::default();
+    let npc = "librarian_index";
+    let through = |last: &str| {
+        let mut p = MissionProgress::default();
+        for m in &reg.missions {
+            p.mark_cleared(m.id);
+            if m.id == last {
+                break;
+            }
+        }
+        p
+    };
+    let hint = next_hint(&reg, &through("send_sync"), npc);
+    if cfg!(feature = "demo") {
+        // Nothing past Act 2 is playable in the demo.
+        assert_eq!(hint, NextHint::Nothing);
+        return;
+    }
+    assert_eq!(hint, NextHint::DirectPrereq("The Bookbinder"));
+    let c = select_conversation(npc, MissionStatus::NotYetAvailable, hint);
+    assert_eq!(
+        c.lines,
+        vec![
+            "The stacks are sealed to you. See The Bookbinder first, and come back when the quire is bound."
+                .to_string()
+        ]
+    );
+    let hint = next_hint(&reg, &through("raw_pointer"), npc);
+    assert_eq!(hint, NextHint::Elsewhere("The Envoy"));
+    let c = select_conversation(npc, MissionStatus::NotYetAvailable, hint);
+    assert_eq!(
+        c.lines,
+        vec![render_line(NOT_YET_ELSEWHERE, Some("The Envoy"))]
+    );
+}
+
+/// Locked, the Librarian talks about stage 1 itself (no prologue to fall
+/// back on), with its trial header.
+#[test]
+fn librarian_is_locked_on_stage_one_before_the_bookbinder() {
+    let mut app = app_with_nearby("The Librarian", "librarian_index");
+    clear_through(&mut app, "send_sync");
+    tap(&mut app, KeyCode::KeyF);
+    assert_eq!(
+        open_dialogue(&app),
+        Some((
+            "librarian_index",
+            MissionStatus::NotYetAvailable,
+            Some("Trial: The Librarian - stage 1 of 3".to_string())
+        ))
+    );
+}
+
+#[test]
+#[cfg_attr(feature = "demo", ignore = "Act 9 is not in the demo build")]
+fn librarian_offers_stage_one_then_is_cleared_on_the_last_stage() {
+    let mut app = app_with_nearby("The Librarian", "librarian_index");
+    clear_through(&mut app, "maybe_uninit");
+    tap(&mut app, KeyCode::KeyF);
+    assert_eq!(
+        open_dialogue(&app),
+        Some((
+            "librarian_index",
+            MissionStatus::Offer,
+            Some("Trial: The Librarian - stage 1 of 3".to_string())
+        ))
+    );
+    finish_dialogue(&mut app);
+    assert!(editor_open(&app), "the offer opens the editor");
+    assert_eq!(
+        app.world().resource::<EditorState>().encounter_id,
+        "librarian_index"
+    );
+
+    let mut app = app_with_nearby("The Librarian", "librarian_index");
+    clear_through(&mut app, "librarian_index");
+    tap(&mut app, KeyCode::KeyF);
+    assert_eq!(
+        open_dialogue(&app),
+        Some((
+            "librarian_demand",
+            MissionStatus::Offer,
+            Some("Trial: The Librarian - stage 2 of 3".to_string())
+        ))
+    );
+
+    let mut app = app_with_nearby("The Librarian", "librarian_index");
+    clear_through(&mut app, "librarian_seal");
+    tap(&mut app, KeyCode::KeyF);
+    assert_eq!(
+        open_dialogue(&app),
+        Some((
+            "librarian_seal",
+            MissionStatus::Cleared,
+            Some("Trial: The Librarian - stage 3 of 3".to_string())
+        ))
+    );
 }

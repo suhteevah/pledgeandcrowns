@@ -78,11 +78,13 @@
 //!
 //! # Harness modes ([`HarnessMode`], per mission, chosen by the server)
 //!
-//! - [`HarnessMode::ForbidUnsafe`] (every registered mission): the entry has
-//!   `#![forbid(unsafe_code)]` and the nonce is a `const` in the checker,
-//!   as described above.
-//! - [`HarnessMode::UnsafeLateNonce`] (opt-in, for Act 9's `unsafe`
-//!   lessons; HARNESS-NOTES.md design 1): no `forbid`, and NO nonce in the
+//! - [`HarnessMode::ForbidUnsafe`] (every registered mission but four):
+//!   the entry has `#![forbid(unsafe_code)]` and the nonce is a `const` in
+//!   the checker, as described above.
+//! - [`HarnessMode::UnsafeLateNonce`] (opt-in, for the four Act 9 harness
+//!   missions whose lesson needs `unsafe` in the code the checker calls:
+//!   `extern_c`, `send_sync`, `librarian_index`, `librarian_seal`, pinned
+//!   by a unit test; HARNESS-NOTES.md design 1): no `forbid`, and NO nonce in the
 //!   program. The checker formats every result to owned text while it
 //!   calls the player's code, lets every player value drop, resets the
 //!   panic hook, and only then fetches the nonce once from a host import
@@ -237,7 +239,7 @@ pub enum Check {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HarnessMode {
     /// `#![forbid(unsafe_code)]` in the server entry; the nonce is compiled
-    /// into the checker. Every mission before Act 9.
+    /// into the checker. Every mission but the four Act 9 opt-ins.
     ForbidUnsafe,
     /// `unsafe` allowed (the lesson needs it); the nonce is NOT compiled in
     /// and reaches the checker from the host only after its last call into
@@ -936,8 +938,8 @@ pub fn grade_in(
 }
 
 /// Grade `source` against the check `m` (what [`grade_in`] does for a
-/// registered id). Public so test-only fixtures (e.g. the Act 9
-/// `UnsafeLateNonce` proofs, whose missions are not registered yet) run
+/// registered id). Public so test fixtures (e.g. the Act 9
+/// `UnsafeLateNonce` attack proofs and documented known limits) run
 /// the exact production path.
 pub fn grade_check(
     m: &MissionCheck,
@@ -1161,17 +1163,23 @@ fn grade_harness(
         state: GradeState::Passed,
         expected: None,
         actual: None,
-        note: match mode {
-            HarnessMode::ForbidUnsafe => {
-                format!("checked by calling your code ({} checks)", h.expected.len())
-            }
-            HarnessMode::UnsafeLateNonce => format!(
-                "checked by calling your code ({} checks; `unsafe` allowed, results keyed \
-                 by the server only after your code finished)",
-                h.expected.len()
-            ),
-        },
+        note: harness_pass_note(mode, h.expected.len()),
     })
+}
+
+/// The note on a passing harness run. In [`HarnessMode::UnsafeLateNonce`]
+/// it says `unsafe` was allowed; the game client keys on those words
+/// (`UNSAFE_ALLOWED_NOTE_MARKER`) to label the pass NOT VERIFIED, because
+/// in that mode player code can rewrite the checker's results
+/// (HARNESS-NOTES.md, "What it cannot stop"). Unchanged wording.
+pub fn harness_pass_note(mode: HarnessMode, checks: usize) -> String {
+    match mode {
+        HarnessMode::ForbidUnsafe => format!("checked by calling your code ({checks} checks)"),
+        HarnessMode::UnsafeLateNonce => format!(
+            "checked by calling your code ({checks} checks; `unsafe` allowed, results keyed \
+             by the server only after your code finished)"
+        ),
+    }
 }
 
 fn grade_compile_only(
@@ -1323,24 +1331,65 @@ mod tests {
         assert!(!wasm_builder::PLAYER_PREAMBLE.contains("unsafe"));
     }
 
-    /// No registered mission opts into `UnsafeLateNonce`, so every harness
-    /// build the server makes today carries the `forbid`. The mode is a
-    /// field of the server's table, picked by mission id: nothing in a
-    /// player's source reaches `harness_entry_source`.
+    /// The Act 9 harness missions that opt into `UnsafeLateNonce` (review
+    /// finding P2-3 of `.claude/reviews/security-2026-11-15-cf9bc47.md`).
+    /// Adding a mission here is a security-reviewed change.
+    const LATE_NONCE_ALLOW_LIST: &[&str] =
+        &["extern_c", "send_sync", "librarian_index", "librarian_seal"];
+
+    /// Exactly the allow-listed missions build without the `forbid`; every
+    /// other registered mission keeps `ForbidUnsafe`, so any mission gaining
+    /// the mode fails here. The mode is a field of the server's table,
+    /// picked by mission id: nothing in a player's source reaches
+    /// `harness_entry_source`.
     #[test]
-    fn every_registered_mission_keeps_forbid_unsafe() {
+    fn only_the_act9_allow_list_uses_unsafe_late_nonce() {
+        let mut opted = Vec::new();
         for m in all() {
-            assert_eq!(m.harness_mode, HarnessMode::ForbidUnsafe, "{}", m.id);
-            assert!(
-                harness_entry_source(m.harness_mode).contains("#![forbid(unsafe_code)]"),
-                "{}",
-                m.id
-            );
+            if LATE_NONCE_ALLOW_LIST.contains(&m.id) {
+                assert_eq!(m.harness_mode, HarnessMode::UnsafeLateNonce, "{}", m.id);
+                assert!(
+                    matches!(m.check, Check::Harness(_)),
+                    "{}: the mode only means something for a harness check",
+                    m.id
+                );
+                assert!(
+                    !harness_entry_source(m.harness_mode).contains("forbid"),
+                    "{}",
+                    m.id
+                );
+                opted.push(m.id);
+            } else {
+                assert_eq!(m.harness_mode, HarnessMode::ForbidUnsafe, "{}", m.id);
+                assert!(
+                    harness_entry_source(m.harness_mode).contains("#![forbid(unsafe_code)]"),
+                    "{}",
+                    m.id
+                );
+            }
         }
+        assert_eq!(
+            opted, LATE_NONCE_ALLOW_LIST,
+            "allow-list ids are registered, in order"
+        );
         assert_eq!(
             harness_entry_source(HarnessMode::ForbidUnsafe),
             HARNESS_ENTRY_SOURCE
         );
+    }
+
+    /// The pass note of each mode. The game keys on "`unsafe` allowed" to
+    /// label a late-nonce pass NOT VERIFIED.
+    #[test]
+    fn harness_pass_notes_name_the_mode() {
+        assert_eq!(
+            harness_pass_note(HarnessMode::ForbidUnsafe, 3),
+            "checked by calling your code (3 checks)"
+        );
+        let late = harness_pass_note(HarnessMode::UnsafeLateNonce, 8);
+        assert!(late.starts_with("checked by calling your code (8 checks; "));
+        assert!(late.contains("`unsafe` allowed"), "{late}");
+        assert!(!harness_pass_note(HarnessMode::ForbidUnsafe, 8).contains("unsafe"));
     }
 
     #[test]
@@ -1662,7 +1711,7 @@ error: could not compile `player_submission` (bin \"player_submission\") due to 
                 }
             }
         }
-        assert_eq!(all().len(), 78, "one entry per registry mission");
+        assert_eq!(all().len(), 87, "one entry per registry mission");
     }
 
     #[test]
@@ -1723,7 +1772,7 @@ error: could not compile `player_submission` (bin \"player_submission\") due to 
         let unverified = count(|c| matches!(c, Check::RunOnly { .. }));
         assert_eq!(
             (behaviour, static_only, unverified),
-            (74, 4, 0),
+            (83, 4, 0),
             "behaviour-checked / static-only / run-only"
         );
     }

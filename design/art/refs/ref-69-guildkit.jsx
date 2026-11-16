@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-69 - Costume kit exemplar, Act 3 Guildhall Quarter (Guildmaster), 32x32.
-// APPROVED by Matt 2026-11-13 (tranche 1) as a kit exemplar. NOT wired to any NPC; tranche 2 redraws this Act's cast on it.
+// APPROVED by Matt 2026-11-13 (tranche 1) as a kit exemplar. Wired as game/assets/sprites/npc/guildmaster_idle_0.png (the Guildmaster's sprite, confirmed by Matt 2026-11-15).
 //
 // Kit rule for the Guildhall cast: flat oxblood beret, aged-paper ruff, long
 // oxblood coat with a gold chain of office and gold hem. Silhouette = wide hat

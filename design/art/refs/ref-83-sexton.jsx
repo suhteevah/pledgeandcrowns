@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-83 - The Sexton on the Library kit (REF-79), 32x32, idle.
-// APPROVED by Matt 2026-11-15. Not wired yet.
+// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/npc/sexton_idle_0.png.
 //
 // Candle-keeper. Three pixels shorter and two wider than the kit column.
 // Lesson prop (drop_trait): a long brass candle snuffer in the left hand -

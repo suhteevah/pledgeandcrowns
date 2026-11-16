@@ -140,6 +140,45 @@ fn npc_ground_audit() {
     assert_eq!(total, NPC_ROSTER.len());
 }
 
+/// Every roster slot belongs to a district (none falls to the south-edge
+/// safety net), the Act 9 cast stands in the Forbidden Library with the
+/// 64 px Librarian alone and centred in its back (north) row, and the
+/// Throne is built but empty until Act 10.
+#[test]
+fn act9_stands_in_the_library_and_the_throne_waits() {
+    let total: usize = DISTRICTS.iter().map(|d| d.count).sum();
+    assert_eq!(total, NPC_ROSTER.len(), "district counts cover the roster");
+    let library = DISTRICTS
+        .iter()
+        .position(|d| d.name == "The Forbidden Library")
+        .expect("the Library district");
+    let throne = DISTRICTS
+        .iter()
+        .find(|d| d.name == "The Throne")
+        .expect("the Throne district");
+    assert_eq!(throne.count, 0);
+    let first = NPC_ROSTER
+        .iter()
+        .position(|s| s.name == "The Shelfmark")
+        .expect("the first Act 9 NPC");
+    for (i, spec) in NPC_ROSTER.iter().enumerate().skip(first) {
+        assert_eq!(district_of(i), Some(library), "{}", spec.name);
+    }
+    let librarian = NPC_ROSTER.len() - 1;
+    assert_eq!(NPC_ROSTER[librarian].name, "The Librarian");
+    assert_eq!(NPC_ROSTER[librarian].native_px, 64.0);
+    let d = &DISTRICTS[library];
+    let p = district_slot(librarian);
+    assert_eq!(p.x, d.center.x, "centred in its row");
+    for (i, spec) in NPC_ROSTER.iter().enumerate().take(librarian).skip(first) {
+        assert!(
+            district_slot(i).y < p.y,
+            "{} stands in front of him",
+            spec.name
+        );
+    }
+}
+
 /// The placement gate for every roster NPC, so a new act cannot put a
 /// villager on a plaza wall again:
 /// 1. the sprite and a one-tile margin around it are ONE walkable ground kind

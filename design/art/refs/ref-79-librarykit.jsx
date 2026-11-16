@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-79 - Costume kit exemplar, Act 9 Forbidden Library, 32x32.
-// APPROVED by Matt 2026-11-15. Not wired yet.
+// APPROVED by Matt 2026-11-15 as a kit exemplar. NOT wired to any NPC: the Library cast (REF-80..85, REF-93) is drawn on it.
 //
 // Kit rule for the Library cast: a deep hood and a Crypt robe that falls
 // straight to the floor with no flare and no visible feet, an aged-paper

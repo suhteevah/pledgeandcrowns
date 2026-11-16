@@ -141,6 +141,9 @@ const WRONG_OUTPUT_JSON: &str = r#"{"ok":false,"stdout":"[real] 41","stderr":"Yo
 const UNVERIFIED_JSON: &str = r#"{"ok":true,"stdout":"[real] compiled\n-- not checked: behaviour not checked on this server: wasm32-wasip1 has no threads, so this program is compiled and statically checked but never run","stderr":"","grade":"compiled_not_checked","behaviour_checked":false,"note":"behaviour not checked on this server: wasm32-wasip1 has no threads, so this program is compiled and statically checked but never run"}"#;
 /// `/compile-real` verified pass.
 const VERIFIED_JSON: &str = r#"{"ok":true,"stdout":"[real] 42\n-- checked: does what the mission asks","stderr":"","grade":"passed","behaviour_checked":true,"note":"output checked against the mission"}"#;
+/// `/compile-real` pass of an Act 9 `UnsafeLateNonce` harness mission, the
+/// note exactly as the server words it (8 checks, like `librarian_index`).
+const UNSAFE_ALLOWED_JSON: &str = r#"{"ok":true,"stdout":"[real] 42\n-- checked: does what the mission asks","stderr":"","grade":"passed","behaviour_checked":true,"note":"checked by calling your code (8 checks; `unsafe` allowed, results keyed by the server only after your code finished)"}"#;
 /// `/compile` (pattern route) pass: no grade fields at all.
 const PATTERN_JSON: &str =
     r#"{"ok":true,"stdout":"Ferris clicks approvingly: `answer` is bound to 42.","stderr":""}"#;
@@ -446,7 +449,7 @@ fn trial_scenes(v: &mut Vec<Scene>) {
         0.4,
         boxed(reset_trial_scene),
     ));
-    // The Act 3-8 trials: each owner's offer of stage 1, the same way.
+    // The Act 3-9 trials: each owner's offer of stage 1, the same way.
     for (name, npc, stage1) in [
         ("trial-offer-wraith", "impl_method", "wraith_forms"),
         ("trial-offer-chimera", "trait_def", "chimera_heads"),
@@ -454,6 +457,14 @@ fn trial_scenes(v: &mut Vec<Scene>) {
         ("trial-offer-golem", "hashmap_basic", "golem_parts"),
         ("trial-offer-hydra", "thread_spawn", "hydra_senders"),
         ("trial-offer-warden", "box_basic", "warden_box"),
+        // Act 9: no prologue, the Librarian's roster mission is stage 1.
+        (
+            "trial-offer-librarian",
+            "librarian_index",
+            "librarian_index",
+        ),
+        // A Library villager's first offer (generic lines; no trial).
+        ("dialogue-library-offer", "raw_pointer", "raw_pointer"),
     ] {
         v.push(scene(
             name,
@@ -634,9 +645,11 @@ fn world_scenes(v: &mut Vec<Scene>) {
 
 // --- Act 3-8 villagers and animation frames ----------------------------------
 
-/// The ring districts that hold the Act 3-8 casts (roster order fills
-/// `DISTRICTS` in order; index 0 is the hub, 1-2 hold Act 2).
-const ACT_DISTRICTS: std::ops::RangeInclusive<usize> = 3..=8;
+/// The districts that hold the Act 3-9 casts (roster order fills
+/// `DISTRICTS` in order; index 0 is the hub, 1-2 hold Acts 1-2, 3-8 are
+/// the ring quarters, 9 is the Forbidden Library; 10, the Throne, is empty
+/// until Act 10).
+const ACT_DISTRICTS: std::ops::RangeInclusive<usize> = 3..=9;
 
 /// Lowercase, dash-separated file label for a district name.
 fn district_label(name: &str) -> String {
@@ -647,8 +660,11 @@ fn district_label(name: &str) -> String {
         .replace(' ', "-")
 }
 
-/// One capture per Act 3-8 district, camera on the plaza centre: all six of
-/// its villagers (3x2 grid) fit in the 280 px tall view.
+/// One capture per Act 3-9 district, camera on the plaza centre: all six of
+/// a ring quarter's villagers (3x2 grid) fit in the 280 px tall view. The
+/// Library's 3x3 grid (188 px rows) does not: its capture shows the middle
+/// row and the edges of the other two, and `npcs-the-forbidden-library-back`
+/// centres on the back row, where the Librarian stands.
 fn district_npc_scenes(v: &mut Vec<Scene>) {
     let mut first = 0usize;
     for (d, district) in crate::plugins::world::DISTRICTS.iter().enumerate() {
@@ -664,7 +680,18 @@ fn district_npc_scenes(v: &mut Vec<Scene>) {
             .map(|s| s.name)
             .collect();
         let label = district.name;
-        let center = district.center;
+        // A district taller than one view (the Library's three rows: the
+        // centre is a slot, the Courier's) is shot between its front two
+        // rows, then again just in front of its last slot (the Librarian).
+        let (center, back) = if district.count > 6 {
+            let front = district_slot(first - district.count);
+            let middle = district_slot(first - district.count + 3);
+            let mid_y = (front.y + middle.y) * 0.5;
+            let back = district_slot(first - 1);
+            (Vec2::new(district.center.x, mid_y), Some(back))
+        } else {
+            (district.center, None)
+        };
         v.push(scene(
             &format!("npcs-{}", district_label(label)),
             vec![
@@ -679,6 +706,17 @@ fn district_npc_scenes(v: &mut Vec<Scene>) {
             0.7,
             None,
         ));
+        if let Some(back) = back {
+            v.push(scene(
+                &format!("npcs-{}-back", district_label(label)),
+                vec![
+                    Action::EnterState(GameState::InGame, ENTER_GAME_SETTLE),
+                    teleport_to(Vec2::new(back.x, back.y - 60.0)),
+                ],
+                0.7,
+                None,
+            ));
+        }
     }
 }
 
@@ -1159,7 +1197,7 @@ fn editor_scenes(v: &mut Vec<Scene>) {
 /// on the first mission with a matching buffer and a canned server reply.
 fn editor_result_scenes(v: &mut Vec<Scene>) {
     let enter = || Action::EnterState(GameState::InGame, ENTER_GAME_SETTLE);
-    let cases: [(&str, &'static str, CompileMode, &'static str); 5] = [
+    let cases: [(&str, &'static str, CompileMode, &'static str); 6] = [
         (
             "editor-fail-long",
             LONG_SOURCE,
@@ -1183,6 +1221,12 @@ fn editor_result_scenes(v: &mut Vec<Scene>) {
             PASSING_SOURCE,
             CompileMode::Real,
             VERIFIED_JSON,
+        ),
+        (
+            "editor-unsafe-allowed-pass",
+            PASSING_SOURCE,
+            CompileMode::Real,
+            UNSAFE_ALLOWED_JSON,
         ),
         (
             "editor-pattern-pass",

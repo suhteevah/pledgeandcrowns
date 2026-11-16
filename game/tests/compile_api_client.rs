@@ -23,7 +23,7 @@ use pledge_and_crown::plugins::compile_client::outcome::{
 use pledge_and_crown::plugins::compile_client::transport::post_compile_blocking;
 use pledge_and_crown::plugins::stub_grader::stub_verdict;
 use pledge_compile_api::config::Secret;
-use pledge_compile_api::expectations::{GradeState, GradedRun};
+use pledge_compile_api::expectations::{GradeState, GradedRun, HarnessMode, harness_pass_note};
 use pledge_compile_api::wasm_builder::RealOutcome;
 use pledge_compile_api::{AppState, Config, build_router, serve};
 
@@ -275,6 +275,53 @@ fn real_route_grades_map_end_to_end() {
                 .is_some_and(|n| n.contains("note for")),
             "{state:?}: {:?}",
             v.detail.note
+        );
+    }
+}
+
+/// A pass whose server note is the real harness pass note for `mode`.
+fn harness_pass(mode: HarnessMode) -> pledge_compile_api::MissionGrader {
+    Arc::new(move |_enc, _src, _limits| {
+        Ok(GradedRun {
+            outcome: RealOutcome {
+                compiled: true,
+                ran_ok: true,
+                stdout: "42".to_string(),
+                stderr: String::new(),
+                build_time: Duration::from_millis(1),
+                run_time: None,
+            },
+            state: GradeState::Passed,
+            expected: None,
+            actual: None,
+            note: harness_pass_note(mode, 8),
+        })
+    })
+}
+
+/// An Act 9 pass graded with `unsafe` allowed (`UnsafeLateNonce`) reaches
+/// the player as a clear labelled NOT VERIFIED, keyed on the server's own
+/// note; the same pass from a `ForbidUnsafe` mission is verified.
+#[test]
+fn unsafe_allowed_harness_pass_is_saved_but_not_verified() {
+    for (mode, want) in [
+        (
+            HarnessMode::UnsafeLateNonce,
+            Grade::PassedUnverified(Unverified::UnsafeAllowed),
+        ),
+        (HarnessMode::ForbidUnsafe, Grade::Passed),
+    ] {
+        let addr = start_server(AppState::with_mission_grader(
+            authed_config(),
+            harness_pass(mode),
+        ));
+        let o = grade(&endpoint(addr, Some(TOKEN), CompileMode::Real), PASSING);
+        assert_eq!(o.grade(), Some(want), "{mode:?}: {o:?}");
+        let v = verdict_with_server(&o, MISSION, || panic!("no fallback"));
+        assert!(v.ok && v.persist_clear, "{mode:?}: a pass is a clear");
+        assert_eq!(
+            v.detail.note.as_deref(),
+            Some(harness_pass_note(mode, 8).as_str())
         );
     }
 }

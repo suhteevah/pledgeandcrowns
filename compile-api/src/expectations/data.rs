@@ -25,9 +25,13 @@ use super::Check::{CompileOnly, Harness as H, Stdout};
 use super::Matcher::*;
 use super::{Harness, HarnessMode, MissionCheck};
 
-// Every constructor below builds a `HarnessMode::ForbidUnsafe` entry: no
-// registered mission allows `unsafe` (Act 9 is not registered yet; its
-// `UnsafeLateNonce` fixtures live in tests/act9_unsafe_harness.rs).
+// Every constructor below except `late` builds a `HarnessMode::ForbidUnsafe`
+// entry. `late` is used by exactly the four Act 9 harness missions whose
+// lesson needs `unsafe` in code the checker calls (`extern_c`, `send_sync`,
+// `librarian_index`, `librarian_seal`); the unit test
+// `only_the_act9_allow_list_uses_unsafe_late_nonce` pins that list. Act 9
+// missions checked by their stdout alone build in the plain layout, which
+// has never carried the `forbid`, so they need no mode.
 
 const fn m(id: &'static str, check: super::Check) -> MissionCheck {
     MissionCheck {
@@ -69,6 +73,26 @@ const fn muf(
         id,
         check,
         harness_mode: HarnessMode::ForbidUnsafe,
+        uses,
+        forbids,
+    }
+}
+
+/// An Act 9 harness check whose lesson needs `unsafe` in the code the
+/// checker calls: [`HarnessMode::UnsafeLateNonce`] (HARNESS-NOTES.md,
+/// "Design 1 as built"). Raises the bar for forged results; does not
+/// guarantee them. `UNSAFE_HARNESS_FORBIDS` is added to `forbids` at
+/// grading time.
+const fn late(
+    id: &'static str,
+    harness: Harness,
+    uses: &'static [&'static [&'static str]],
+    forbids: &'static [&'static str],
+) -> MissionCheck {
+    MissionCheck {
+        id,
+        check: H(harness),
+        harness_mode: HarnessMode::UnsafeLateNonce,
         uses,
         forbids,
     }
@@ -1193,5 +1217,211 @@ pub(super) const CHECKS: &[MissionCheck] = &[
                 "circle: [\"warden\", \"you\", \"teller\"]\nwarden: strong 1, weak 1\nafter the ledger closes: None",
             )],
         }),
+    ),
+    // ── Act 9: The Forbidden Library ─────────────────────────────────
+    // Missions whose lesson lives in `main` (a raw-pointer write, a macro,
+    // a drop order, a `MaybeUninit` array) are pinned by their stdout,
+    // with the construct's tokens; that build has no `forbid`, so their
+    // `unsafe` compiles and no harness mode is involved. Those whose lesson
+    // is an item the checker can call with its own inputs (an FFI
+    // function, an `unsafe impl`'d type, and the Librarian's first and last
+    // stages below) are `late` harness checks: the `UnsafeLateNonce`
+    // fixtures of tests/act9_unsafe_harness.rs promoted to real entries.
+    // (That file's fifth fixture, `maybe_uninit`, checked `main` only; it
+    // is registered here as the stdout check it always amounted to.)
+    mu(
+        "raw_pointer",
+        Stdout {
+            matchers: &[Exact(
+                "pointer is null: false\ngold through the pointer: 15\ngold by name: 15",
+            )],
+        },
+        &[
+            &["unsafe {", "unsafe{"],
+            &["*mut", "&raw mut", "addr_of_mut!"],
+            &["*const", "&raw const", "addr_of!"],
+        ],
+    ),
+    // `offset_of!` pins the C layout (Rust's default layout gives no such
+    // promise); the checker seals runes `main` never uses. String contents
+    // are blanked before token checks, so `extern "C" fn` cannot be a
+    // token: `unsafe extern` (the foreign block) and `no_mangle` stand for
+    // the two halves of the lesson. `no_mangle` is the lesson, so it is not
+    // forbidden here (symbol interposition stays open, HARNESS-NOTES.md).
+    late(
+        "extern_c",
+        Harness {
+            contract: "`#[repr(C)] #[derive(Clone, Copy)] pub struct Rune { pub glyph: u8, pub power: u32, \
+                       pub tier: u8 }`, `pub extern \"C\" fn crown_seal(rune: Rune) -> u32`, and a `fn main`",
+            run_main: true,
+            body: "    let _sig: extern \"C\" fn(super::Rune) -> u32 = super::crown_seal;
+    emit(\"size_of::<Rune>()\", ::core::mem::size_of::<super::Rune>());
+    emit(\"align_of::<Rune>()\", ::core::mem::align_of::<super::Rune>());
+    emit(\"offset_of!(Rune, tier)\", ::core::mem::offset_of!(super::Rune, tier));
+    let r = super::Rune { glyph: 3, power: 20, tier: 1 };
+    emit(\"crown_seal(3, 20, 1)\", super::crown_seal(r));
+    emit(\"crown_seal(0, 0, 0)\", super::crown_seal(super::Rune { glyph: 0, power: 0, tier: 0 }));
+    emit(\"crown_seal(255, 1000, 9)\", super::crown_seal(super::Rune { glyph: 255, power: 1000, tier: 9 }));
+    let f: extern \"C\" fn(super::Rune) -> u32 = super::crown_seal;
+    emit(\"through an extern \\\"C\\\" fn pointer\", f(r));",
+            expected: &[
+                "size_of::<Rune>() = 12",
+                "align_of::<Rune>() = 4",
+                "offset_of!(Rune, tier) = 8",
+                "crown_seal(3, 20, 1) = 44",
+                "crown_seal(0, 0, 0) = 0",
+                "crown_seal(255, 1000, 9) = 2264",
+                "through an extern \"C\" fn pointer = 44",
+            ],
+            main_matchers: &[Exact(
+                "Rune: 12 bytes, align 4\ndirect call: 44\nthrough the extern block: 44\nthrough a fn pointer: 44",
+            )],
+        },
+        &[
+            &["repr(C)"],
+            &["no_mangle"],
+            &["unsafe extern"],
+            &["unsafe {", "unsafe{"],
+        ],
+        &[],
+    ),
+    mu(
+        "macro_rules",
+        Stdout {
+            matchers: &[Exact(
+                "  verse: 1\nfirst chant: 1\n  verse: 2\n  verse: 3\n  verse: 4\nsecond chant: 9\n  verse: 10\n  verse: 20\nthird chant: 30",
+            )],
+        },
+        &[&["macro_rules!"], &["$("]],
+    ),
+    mu(
+        "drop_trait",
+        Stdout {
+            matchers: &[Exact(
+                "early is released\nthe ritual begins\nunnamed is released\ninner scope ends\ninner is released\nmain ends\nsecond is released\nfirst is released",
+            )],
+        },
+        &[&["impl Drop for"], &["forget("]],
+    ),
+    // The checker asks the compiler (`T: Send`, `T: Sync` bounds of its
+    // own), then reads values `main` never stores.
+    late(
+        "send_sync",
+        Harness {
+            contract: "`struct Tome` that is `Send` and `Sync`, with `fn new(value: u32) -> Tome` and \
+                       `fn read(&self) -> u32`, and a `fn main`",
+            run_main: true,
+            body: "    fn is_send<T: ::core::marker::Send>() -> bool { true }
+    fn is_sync<T: ::core::marker::Sync>() -> bool { true }
+    let _new: fn(u32) -> super::Tome = super::Tome::new;
+    let _read: fn(&super::Tome) -> u32 = super::Tome::read;
+    emit(\"Tome: Send\", is_send::<super::Tome>());
+    emit(\"Tome: Sync\", is_sync::<super::Tome>());
+    let t = super::Tome::new(41);
+    emit(\"Tome::new(41).read()\", t.read());
+    let moved = ::std::boxed::Box::new(t);
+    emit(\"read after move\", moved.read());
+    emit(\"needs_drop::<Tome>()\", ::core::mem::needs_drop::<super::Tome>());",
+            expected: &[
+                "Tome: Send = true",
+                "Tome: Sync = true",
+                "Tome::new(41).read() = 41",
+                "read after move = 41",
+                "needs_drop::<Tome>() = true",
+            ],
+            main_matchers: &[Exact(
+                "the courier accepts the tome\npage reads 7\nthe page is returned to the shelf",
+            )],
+        },
+        &[&["unsafe impl Send"], &["unsafe impl Sync"]],
+        &["no_mangle"],
+    ),
+    mu(
+        "maybe_uninit",
+        Stdout {
+            matchers: &[Exact("bound pages: [10, 20, 30, 40]\ntotal ink: 100")],
+        },
+        &[&["MaybeUninit"], &["write("], &["assume_init", "transmute"]],
+    ),
+    // ── Act 9 boss: the Librarian's trial ────────────────────────────
+    // Stage 1 calls `fetch` on shelves of its own (index `usize::MAX`, a
+    // one-volume shelf, an empty one). Stage 2 is a macro: the checker
+    // cannot call it from its own module (`page`/`seal` resolve at the
+    // call site), so the stdout is pinned and its tokens required. Stage 3
+    // builds and drops codexes of its own.
+    late(
+        "librarian_index",
+        Harness {
+            contract: "`fn fetch(shelf: &[u32], index: usize) -> Option<u32>` and a `fn main`",
+            run_main: true,
+            body: "    let _sig: fn(&[u32], usize) -> ::core::option::Option<u32> = super::fetch;
+    let shelf = [11u32, 22, 33, 44];
+    emit(\"fetch(shelf, 0)\", super::fetch(&shelf, 0));
+    emit(\"fetch(shelf, 3)\", super::fetch(&shelf, 3));
+    emit(\"fetch(shelf, 4)\", super::fetch(&shelf, 4));
+    emit(\"fetch(shelf, 99)\", super::fetch(&shelf, 99));
+    emit(\"fetch(shelf, usize::MAX)\", super::fetch(&shelf, usize::MAX));
+    let one = [7u32];
+    emit(\"fetch([7], 0)\", super::fetch(&one, 0));
+    emit(\"fetch([7], 1)\", super::fetch(&one, 1));
+    emit(\"fetch([], 0)\", super::fetch(&[], 0));",
+            expected: &[
+                "fetch(shelf, 0) = Some(11)",
+                "fetch(shelf, 3) = Some(44)",
+                "fetch(shelf, 4) = None",
+                "fetch(shelf, 99) = None",
+                "fetch(shelf, usize::MAX) = None",
+                "fetch([7], 0) = Some(7)",
+                "fetch([7], 1) = None",
+                "fetch([], 0) = None",
+            ],
+            main_matchers: &[Exact(
+                "index 0: volume 11\nindex 3: volume 44\nindex 4: no such volume\nindex 99: no such volume",
+            )],
+        },
+        &[&["unsafe fn"], &[".len()"], &["unsafe {", "unsafe{"]],
+        &["no_mangle"],
+    ),
+    mu(
+        "librarian_demand",
+        Stdout {
+            matchers: &[Exact(
+                "the demand: 78\nincant!(1, 2, 3, 4): 78\nthe incantation matches: true\nincant!(7): 21\nincant!(2, 9): 39",
+            )],
+        },
+        &[&["macro_rules!"], &["$("]],
+    ),
+    late(
+        "librarian_seal",
+        Harness {
+            contract: "`struct Codex` with `fn from_pages(pages: Vec<u32>) -> Codex`, \
+                       `fn get(&self, index: usize) -> Option<u32>`, an `impl Drop`, and a `fn main`",
+            run_main: true,
+            body: "    let _new: fn(::std::vec::Vec<u32>) -> super::Codex = super::Codex::from_pages;
+    let _get: fn(&super::Codex, usize) -> ::core::option::Option<u32> = super::Codex::get;
+    let c = super::Codex::from_pages(::std::vec![2, 4, 6, 8]);
+    emit(\"get(0)\", c.get(0));
+    emit(\"get(3)\", c.get(3));
+    emit(\"get(4)\", c.get(4));
+    emit(\"get(usize::MAX)\", c.get(usize::MAX));
+    ::core::mem::drop(c);
+    let e = super::Codex::from_pages(::std::vec::Vec::new());
+    emit(\"empty get(0)\", e.get(0));
+    emit(\"needs_drop::<Codex>()\", ::core::mem::needs_drop::<super::Codex>());",
+            expected: &[
+                "get(0) = Some(2)",
+                "get(3) = Some(8)",
+                "get(4) = None",
+                "get(usize::MAX) = None",
+                "empty get(0) = None",
+                "needs_drop::<Codex>() = true",
+            ],
+            main_matchers: &[Exact(
+                "page 0: Some(5)\npage 2: Some(13)\npage 3: None\nthe Librarian closes the book\n\
+                 the codex is sealed (3 pages returned)",
+            )],
+        },
+        &[&["impl Drop for"], &["from_raw"], &["unsafe {", "unsafe{"]],
+        &["no_mangle"],
     ),
 ];

@@ -4,9 +4,10 @@ Covers all 57 missions in `MissionRegistry::default()` (Acts 1-8) as of
 `finish/integration` 83f5daf. Every claim here comes from a command that
 was run, listed under **Evidence**. Since then the Borrow Checker's trial
 added three missions (60 missions, 57 NPCs), the Act 3-5 boss trials
-nine more (69 missions, 57 NPCs), and the Act 6-8 boss trials nine more
-(78 missions, 57 NPCs); see **The Borrow Checker's trial**, **The Act 3-5
-trials** and **The Act 6-8 trials** at the end.
+nine more (69 missions, 57 NPCs), the Act 6-8 boss trials nine more
+(78 missions, 57 NPCs), and Act 9 nine more (87 missions, 64 NPCs); see
+**The Borrow Checker's trial**, **The Act 3-5 trials**, **The Act 6-8
+trials** and **Act 9: The Forbidden Library** at the end.
 
 Player-facing solutions live in
 `game/src/plugins/editor/solutions/data.rs`. The "Show solution" button
@@ -384,11 +385,13 @@ Task let the player choose the values, and 3 are compile-only. The 13
 Tasks now name the values and show every expected line in a code span,
 so one behaviour is specified.
 
-**Totals now: 74 of 78 behaviour-checked (29 output checks, 45 harness
+**Totals now: 83 of 87 behaviour-checked (34 output checks, 49 harness
 checks), 4 static-only, 0 unverified** (the Borrow Checker's trial,
 2026-11-14, added three harness-checked stages, the Act 3-5 trials,
-2026-11-15, nine more, and the Act 6-8 trials, 2026-11-15, eight harness
-checks and one static-only stage; see the sections below). Before the
+2026-11-15, nine more, the Act 6-8 trials, 2026-11-15, eight harness
+checks and one static-only stage, and Act 9, 2026-11-15, five output
+checks and four harness checks, those four in `UnsafeLateNonce` mode;
+see the sections below). Before the
 trials: 54 of 57 (25 harness checks). The 4 static-only missions cannot
 run on `wasm32-wasip1`: `thread_spawn`, `thread_scope` and
 `hydra_threads` trap (asserted by
@@ -621,3 +624,47 @@ Evidence (rustc 1.99.0, edition 2024):
   forbidden-token variants and one fold-less recursion (all
   `StaticCheckFailed`). 74 behaviour-checked missions proven.
 - Grader snapshots: 51 new cases per grader, 0 changed rows.
+
+## Act 9: The Forbidden Library (2026-11-15)
+
+Six missions and the Librarian's trial, after the Memory Warden:
+`raw_pointer` (the Shelfmark), `extern_c` (the Envoy), `macro_rules` (the
+Macro Monk), `drop_trait` (the Sexton), `send_sync` (the Courier),
+`maybe_uninit` (the Bookbinder), then `librarian_index`,
+`librarian_demand`, `librarian_seal` (the Librarian, no prologue: his
+roster mission is stage 1). 87 missions, 64 NPCs. The demo is unchanged:
+24 free missions, ending on `bridge_lantern`; 63 after.
+
+Server checks: `raw_pointer`, `macro_rules`, `drop_trait`, `maybe_uninit`
+and `librarian_demand` pin their stdout and need the construct's tokens
+(`uses`). `extern_c`, `send_sync`, `librarian_index` and `librarian_seal`
+are harness checks in `HarnessMode::UnsafeLateNonce` (unsafe allowed;
+result key delivered after the player's code finishes; forgery limit in
+`compile-api/HARNESS-NOTES.md`) that call the player's items with the
+checker's own inputs; all but `extern_c` forbid `no_mangle`. The game
+labels those four passes NOT VERIFIED. No Miri run backs the `unsafe`
+solutions.
+
+Evidence (rustc 1.99.0, edition 2024; editions 2021 and 2024 and
+`wasm32-wasip1` checked separately for every Act 9 program, see the
+spec's Implementation record):
+
+- `mission_text -- --include-ignored`: 13/13. Six new starters fail with
+  exactly their error (E0133 x3, E0040, E0277, E0381), two with exactly a
+  code-less macro error, `librarian_seal`'s compiles and misbehaves.
+  `trial_claims_are_what_rustc_emits`: 33 claims (5 new, the Librarian's);
+  `act9_villager_claims_are_what_rustc_emits`: 15 claims (compiler errors,
+  edition-2024 `unsafe extern` / `unsafe(no_mangle)`, macro behaviour,
+  `process::exit`, `Rc`'s missing `Send`/`Sync`, `MaybeUninit` not
+  dropping). Pinned outputs for all nine and two new hint claims.
+- `solutions -- --include-ignored`: 87/87 native `-D warnings`, 87/87
+  `wasm32-wasip1`, sandbox run as listed (the four thread programs trap;
+  every Act 9 solution runs cleanly).
+- `contract -- --include-ignored`: grader corpus 87/87 (a, b, c, f), 76/76
+  correct (5 new), 28/28 wrong (4 new), 163/163 corpus programs compile.
+- `expectations_proof -- --include-ignored`: 396 cases, 0 unexpected (55
+  Act 9); 83 behaviour-checked missions proven.
+- `act9_unsafe_harness -- --include-ignored`: 12/12 fast and slow, 47
+  attack/fixture cases graded as expected against the REGISTERED checks;
+  the two documented known-limit tests still behave as documented.
+- Grader snapshots: new rows only, 0 changed rows.

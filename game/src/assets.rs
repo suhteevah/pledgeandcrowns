@@ -78,8 +78,11 @@ pub const SPRITE_ALCHEMIST: &str = "sprites/npc/alchemist_idle_0.png";
 // rendered via `cargo run -p render-refs`.
 // Tranche 2 (approved by Matt 2026-11-15): every villager of Acts 3-8 except the
 // six kit holders (Guildmaster, Conjurer, Barkeep, Smelter, Dockmaster, Warden)
-// now ships its `ref-NN-<slug>-v2.jsx` redraw (`REFNNv2.png`) at the same path;
-// the kit holders keep their first-pass sprites. `tests/art_wiring.rs` pins it.
+// now ships its `ref-NN-<slug>-v2.jsx` redraw (`REFNNv2.png`) at the same path.
+// The six kit holders ship their act's approved costume-kit exemplar
+// (REF-69..74, approved 2026-11-13, confirmed as their sprites 2026-11-15):
+// Guildmaster REF-69, Conjurer REF-70, Barkeep REF-71, Smelter REF-72,
+// Dockmaster REF-73, Warden REF-74. `tests/art_wiring.rs` pins both.
 pub const SPRITE_GUILDMASTER: &str = "sprites/npc/guildmaster_idle_0.png";
 pub const SPRITE_RECRUITER: &str = "sprites/npc/recruiter_idle_0.png";
 pub const SPRITE_LOCKSMITH: &str = "sprites/npc/locksmith_idle_0.png";
@@ -140,6 +143,19 @@ pub const SPRITE_WARDEN: &str = "sprites/npc/warden_idle_0.png";
 pub const SPRITE_SWAPWARDEN: &str = "sprites/npc/swapwarden_idle_0.png";
 pub const SPRITE_STRONGBOX: &str = "sprites/npc/strongbox_idle_0.png";
 pub const SPRITE_GHOSTKEEPER: &str = "sprites/npc/ghostkeeper_idle_0.png";
+
+// NPC batch 11 (approved by Matt 2026-11-15) — Act 9 Forbidden Library:
+// Shelfmark, Envoy, Macro Monk, Sexton, Courier, Bookbinder (32x32, drawn on
+// the REF-79 Library kit exemplar) and the Librarian, the Act 9 boss, at
+// 64x64 like the Borrow Checker. Sources: design/art/refs/ref-80..85-*.jsx
+// and ref-93-librarian.jsx, rendered via `cargo run -p render-refs`.
+pub const SPRITE_SHELFMARK: &str = "sprites/npc/shelfmark_idle_0.png";
+pub const SPRITE_ENVOY: &str = "sprites/npc/envoy_idle_0.png";
+pub const SPRITE_MACRO_MONK: &str = "sprites/npc/macromonk_idle_0.png";
+pub const SPRITE_SEXTON: &str = "sprites/npc/sexton_idle_0.png";
+pub const SPRITE_COURIER: &str = "sprites/npc/courier_idle_0.png";
+pub const SPRITE_BOOKBINDER: &str = "sprites/npc/bookbinder_idle_0.png";
+pub const SPRITE_LIBRARIAN: &str = "sprites/npc/librarian_idle_0.png";
 
 // Audio (Stable Audio Open generated, baked via tools/synthwave-gen).
 // Generation is a Matt-action: `powershell -ExecutionPolicy Bypass
@@ -233,4 +249,11 @@ pub const ALL_SPRITE_PATHS: &[&str] = &[
     SPRITE_SWAPWARDEN,
     SPRITE_STRONGBOX,
     SPRITE_GHOSTKEEPER,
+    SPRITE_SHELFMARK,
+    SPRITE_ENVOY,
+    SPRITE_MACRO_MONK,
+    SPRITE_SEXTON,
+    SPRITE_COURIER,
+    SPRITE_BOOKBINDER,
+    SPRITE_LIBRARIAN,
 ];

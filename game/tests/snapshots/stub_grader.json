@@ -4670,6 +4670,536 @@
     }
   },
   {
+    "case": "canonical",
+    "id": "raw_pointer",
+    "input": "fn main() {\n    let mut gold: i32 = 10;\n\n    // Making a raw pointer is safe. Only dereferencing it needs `unsafe`.\n    let write_ptr: *mut i32 = &mut gold;\n    unsafe {\n        // SAFETY: write_ptr came from `&mut gold` on the line above, so it\n        // is non-null, aligned and points at a live i32. Nothing else\n        // touches `gold` until this write is done.\n        *write_ptr += 5;\n    }\n\n    let read_ptr: *const i32 = &gold;\n    // SAFETY: read_ptr came from `&gold` just above and `gold` is alive.\n    let seen = unsafe { *read_ptr };\n\n    println!(\"pointer is null: {}\", read_ptr.is_null());\n    println!(\"gold through the pointer: {seen}\");\n    println!(\"gold by name: {gold}\");\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Shelfmark files the card. \"an address is not a book — but you fetched the book.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "raw_pointer",
+    "input": "fn main() {\n    let mut gold: i32 = 10;\n    let write_ptr: *mut i32 = &mut gold;\n    // Add 5 to gold through write_ptr, then read gold back through a\n    // read-only raw pointer and print both lines.\n    *write_ptr += 5;\n    println!(\"gold by name: {gold}\");\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Shelfmark taps the card — dereference the pointer inside an `unsafe` block",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "raw_pointer",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Shelfmark taps the card — dereference the pointer inside an `unsafe` block",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_0",
+    "id": "raw_pointer",
+    "input": " main() {\n    let mut gold: i32 = 10;\n\n    // Making a raw pointer is safe. Only dereferencing it needs `unsafe`.\n    let write_ptr: *mut i32 = &mut gold;\n    unsafe {\n        // SAFETY: write_ptr came from `&mut gold` on the line above, so it\n        // is non-null, aligned and points at a live i32. Nothing else\n        // touches `gold` until this write is done.\n        *write_ptr += 5;\n    }\n\n    let read_ptr: *const i32 = &gold;\n    // SAFETY: read_ptr came from `&gold` just above and `gold` is alive.\n    let seen = unsafe { *read_ptr };\n\n    println!(\"pointer is null: {}\", read_ptr.is_null());\n    println!(\"gold through the pointer: {seen}\");\n    println!(\"gold by name: {gold}\");\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Shelfmark taps the card — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_23",
+    "id": "raw_pointer",
+    "input": "fn main() {\n    let mut gold: i32 = 10;\n\n    // Making a raw pointer is safe. Only dereferencing it needs `unsafe`.\n    let write_ptr:  i32 = &mut gold;\n    unsafe {\n        // SAFETY: write_ptr came from `&mut gold` on the line above, so it\n        // is non-null, aligned and points at a live i32. Nothing else\n        // touches `gold` until this write is done.\n        *write_ptr += 5;\n    }\n\n    let read_ptr: *const i32 = &gold;\n    // SAFETY: read_ptr came from `&gold` just above and `gold` is alive.\n    let seen = unsafe { *read_ptr };\n\n    println!(\"pointer is null: {}\", read_ptr.is_null());\n    println!(\"gold through the pointer: {seen}\");\n    println!(\"gold by name: {gold}\");\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Shelfmark taps the card — write through a `*mut` raw pointer",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_69",
+    "id": "raw_pointer",
+    "input": "fn main() {\n    let mut gold: i32 = 10;\n\n    // Making a raw pointer is safe. Only dereferencing it needs `unsafe`.\n    let write_ptr: *mut i32 = &mut gold;\n    unsafe {\n        // SAFETY: write_ptr came from `&mut gold` on the line above, so it\n        // is non-null, aligned and points at a live i32. Nothing else\n        // touches `gold` until this write is done.\n        *write_ptr += 5;\n    }\n\n    let read_ptr:  i32 = &gold;\n    // SAFETY: read_ptr came from `&gold` just above and `gold` is alive.\n    let seen = unsafe { *read_ptr };\n\n    println!(\"pointer is null: {}\", read_ptr.is_null());\n    println!(\"gold through the pointer: {seen}\");\n    println!(\"gold by name: {gold}\");\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Shelfmark taps the card — read back through a `*const` raw pointer",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "extern_c",
+    "input": "/// Laid out by C's rules: fields in declared order, C padding.\n#[repr(C)]\n#[derive(Clone, Copy)]\npub struct Rune {\n    pub glyph: u8,\n    pub power: u32,\n    pub tier: u8,\n}\n\n/// Exported under its plain, unmangled name with the C calling\n/// convention. A C program linked with this one could call it.\n/// `no_mangle` is an unsafe attribute: two items exporting the same\n/// symbol name would be undefined behaviour, and we promise there is one.\n#[unsafe(no_mangle)]\npub extern \"C\" fn crown_seal(rune: Rune) -> u32 {\n    rune.power * 2 + rune.tier as u32 + rune.glyph as u32\n}\n\nmod foreign {\n    // A foreign declaration: \"somewhere in the linked program there is a\n    // C-ABI function with this name and signature.\" The compiler cannot\n    // check that claim. Writing `unsafe extern` says we take\n    // responsibility for it, and each call is unsafe too.\n    unsafe extern \"C\" {\n        pub fn crown_seal(rune: super::Rune) -> u32;\n    }\n}\n\nfn main() {\n    let rune = Rune { glyph: 3, power: 20, tier: 1 };\n    println!(\n        \"Rune: {} bytes, align {}\",\n        std::mem::size_of::<Rune>(),\n        std::mem::align_of::<Rune>()\n    );\n\n    // Called by its Rust path it is an ordinary (safe) function call.\n    println!(\"direct call: {}\", crown_seal(rune));\n\n    // SAFETY: the declaration in `foreign` matches the definition above\n    // exactly (same name, same repr(C) argument, same return type).\n    let sealed = unsafe { foreign::crown_seal(rune) };\n    println!(\"through the extern block: {sealed}\");\n\n    // A C-ABI function pointer, the shape a C library takes for callbacks.\n    let callback: extern \"C\" fn(Rune) -> u32 = crown_seal;\n    println!(\"through a fn pointer: {}\", callback(rune));\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Envoy seals the treaty. \"two tongues, one calling convention.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "extern_c",
+    "input": "pub struct Rune {\n    pub glyph: u8,\n    pub power: u32,\n    pub tier: u8,\n}\n\n// Give Rune a C layout, and export this with the C calling convention\n// under its plain name so the foreign declaration below can find it.\npub fn crown_seal(rune: Rune) -> u32 {\n    rune.power * 2 + rune.tier as u32 + rune.glyph as u32\n}\n\nmod foreign {\n    unsafe extern \"C\" {\n        pub fn crown_seal(rune: super::Rune) -> u32;\n    }\n}\n\nfn main() {\n    let rune = Rune { glyph: 3, power: 20, tier: 1 };\n    let sealed = foreign::crown_seal(rune);\n    println!(\"through the extern block: {sealed}\");\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Envoy waits at the border — lay `Rune` out by C's rules with `#[repr(C)]`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "extern_c",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Envoy waits at the border — lay `Rune` out by C's rules with `#[repr(C)]`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_12",
+    "id": "extern_c",
+    "input": "/// Laid out by C's rules: fields in declared order, C padding.\n\n#[derive(Clone, Copy)]\npub struct Rune {\n    pub glyph: u8,\n    pub power: u32,\n    pub tier: u8,\n}\n\n/// Exported under its plain, unmangled name with the C calling\n/// convention. A C program linked with this one could call it.\n/// `no_mangle` is an unsafe attribute: two items exporting the same\n/// symbol name would be undefined behaviour, and we promise there is one.\n#[unsafe(no_mangle)]\npub extern \"C\" fn crown_seal(rune: Rune) -> u32 {\n    rune.power * 2 + rune.tier as u32 + rune.glyph as u32\n}\n\nmod foreign {\n    // A foreign declaration: \"somewhere in the linked program there is a\n    // C-ABI function with this name and signature.\" The compiler cannot\n    // check that claim. Writing `unsafe extern` says we take\n    // responsibility for it, and each call is unsafe too.\n    unsafe extern \"C\" {\n        pub fn crown_seal(rune: super::Rune) -> u32;\n    }\n}\n\nfn main() {\n    let rune = Rune { glyph: 3, power: 20, tier: 1 };\n    println!(\n        \"Rune: {} bytes, align {}\",\n        std::mem::size_of::<Rune>(),\n        std::mem::align_of::<Rune>()\n    );\n\n    // Called by its Rust path it is an ordinary (safe) function call.\n    println!(\"direct call: {}\", crown_seal(rune));\n\n    // SAFETY: the declaration in `foreign` matches the definition above\n    // exactly (same name, same repr(C) argument, same return type).\n    let sealed = unsafe { foreign::crown_seal(rune) };\n    println!(\"through the extern block: {sealed}\");\n\n    // A C-ABI function pointer, the shape a C library takes for callbacks.\n    let callback: extern \"C\" fn(Rune) -> u32 = crown_seal;\n    println!(\"through a fn pointer: {}\", callback(rune));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Envoy waits at the border — lay `Rune` out by C's rules with `#[repr(C)]`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_14",
+    "id": "extern_c",
+    "input": "/// Laid out by C's rules: fields in declared order, C padding.\n#[repr(C)]\n#[derive(Clone, \npub struct Rune {\n    pub glyph: u8,\n    pub power: u32,\n    pub tier: u8,\n}\n\n/// Exported under its plain, unmangled name with the C calling\n/// convention. A C program linked with this one could call it.\n/// `no_mangle` is an unsafe attribute: two items exporting the same\n/// symbol name would be undefined behaviour, and we promise there is one.\n#[unsafe(no_mangle)]\npub extern \"C\" fn crown_seal(rune: Rune) -> u32 {\n    rune.power * 2 + rune.tier as u32 + rune.glyph as u32\n}\n\nmod foreign {\n    // A foreign declaration: \"somewhere in the linked program there is a\n    // C-ABI function with this name and signature.\" The compiler cannot\n    // check that claim. Writing `unsafe extern` says we take\n    // responsibility for it, and each call is unsafe too.\n    unsafe extern \"C\" {\n        pub fn crown_seal(rune: super::Rune) -> u32;\n    }\n}\n\nfn main() {\n    let rune = Rune { glyph: 3, power: 20, tier: 1 };\n    println!(\n        \"Rune: {} bytes, align {}\",\n        std::mem::size_of::<Rune>(),\n        std::mem::align_of::<Rune>()\n    );\n\n    // Called by its Rust path it is an ordinary (safe) function call.\n    println!(\"direct call: {}\", crown_seal(rune));\n\n    // SAFETY: the declaration in `foreign` matches the definition above\n    // exactly (same name, same repr(C) argument, same return type).\n    let sealed = unsafe { foreign::crown_seal(rune) };\n    println!(\"through the extern block: {sealed}\");\n\n    // A C-ABI function pointer, the shape a C library takes for callbacks.\n    let callback: extern \"C\" fn(Rune) -> u32 = crown_seal;\n    println!(\"through a fn pointer: {}\", callback(rune));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Envoy waits at the border — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_76",
+    "id": "extern_c",
+    "input": "/// Laid out by C's rules: fields in declared order, C padding.\n#[repr(C)]\n#[derive(Clone, Copy)]\npub struct Rune {\n    pub glyph: u8,\n    pub power: u32,\n    pub tier: u8,\n}\n\n/// Exported under its plain, unmangled name with the C calling\n/// convention. A C program linked with this one could call it.\n/// `no_mangle` is an unsafe attribute: two items exporting the same\n/// symbol name would be undefined behaviour, and we promise there is one.\n\npub extern \"C\" fn crown_seal(rune: Rune) -> u32 {\n    rune.power * 2 + rune.tier as u32 + rune.glyph as u32\n}\n\nmod foreign {\n    // A foreign declaration: \"somewhere in the linked program there is a\n    // C-ABI function with this name and signature.\" The compiler cannot\n    // check that claim. Writing `unsafe extern` says we take\n    // responsibility for it, and each call is unsafe too.\n    unsafe extern \"C\" {\n        pub fn crown_seal(rune: super::Rune) -> u32;\n    }\n}\n\nfn main() {\n    let rune = Rune { glyph: 3, power: 20, tier: 1 };\n    println!(\n        \"Rune: {} bytes, align {}\",\n        std::mem::size_of::<Rune>(),\n        std::mem::align_of::<Rune>()\n    );\n\n    // Called by its Rust path it is an ordinary (safe) function call.\n    println!(\"direct call: {}\", crown_seal(rune));\n\n    // SAFETY: the declaration in `foreign` matches the definition above\n    // exactly (same name, same repr(C) argument, same return type).\n    let sealed = unsafe { foreign::crown_seal(rune) };\n    println!(\"through the extern block: {sealed}\");\n\n    // A C-ABI function pointer, the shape a C library takes for callbacks.\n    let callback: extern \"C\" fn(Rune) -> u32 = crown_seal;\n    println!(\"through a fn pointer: {}\", callback(rune));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Envoy waits at the border — export `crown_seal` under its plain name with `#[unsafe(no_mangle)]`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_113",
+    "id": "extern_c",
+    "input": "/// Laid out by C's rules: fields in declared order, C padding.\n#[repr(C)]\n#[derive(Clone, Copy)]\npub struct Rune {\n    pub glyph: u8,\n    pub power: u32,\n    pub tier: u8,\n}\n\n/// Exported under its plain, unmangled name with the C calling\n/// convention. A C program linked with this one could call it.\n/// `no_mangle` is an unsafe attribute: two items exporting the same\n/// symbol name would be undefined behaviour, and we promise there is one.\n#[unsafe(no_mangle)]\npub extern \"C\" fn crown_seal(rune: Rune) -> u32 {\n    rune.power * 2 + rune.tier as u32 + rune.glyph as u32\n}\n\nmod foreign {\n    // A foreign declaration: \"somewhere in the linked program there is a\n     C-ABI function with this name and signature.\" The compiler cannot\n    // check that claim. Writing `unsafe extern` says we take\n    // responsibility for it, and each call is unsafe too.\n    unsafe extern \"C\" {\n        pub fn crown_seal(rune: super::Rune) -> u32;\n    }\n}\n\nfn main() {\n    let rune = Rune { glyph: 3, power: 20, tier: 1 };\n    println!(\n        \"Rune: {} bytes, align {}\",\n        std::mem::size_of::<Rune>(),\n        std::mem::align_of::<Rune>()\n    );\n\n    // Called by its Rust path it is an ordinary (safe) function call.\n    println!(\"direct call: {}\", crown_seal(rune));\n\n    // SAFETY: the declaration in `foreign` matches the definition above\n    // exactly (same name, same repr(C) argument, same return type).\n    let sealed = unsafe { foreign::crown_seal(rune) };\n    println!(\"through the extern block: {sealed}\");\n\n    // A C-ABI function pointer, the shape a C library takes for callbacks.\n    let callback: extern \"C\" fn(Rune) -> u32 = crown_seal;\n    println!(\"through a fn pointer: {}\", callback(rune));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Envoy waits at the border — call through the foreign declaration inside `unsafe`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "macro_rules",
+    "input": "// `chant!` takes one or more expressions separated by commas, prints each\n// verse, and evaluates to their total.\nmacro_rules! chant {\n    ($($verse:expr),+ $(,)?) => {{\n        let mut total = 0;\n        $(\n            // Bind once: a macro pastes tokens, so writing `$verse` twice\n            // would evaluate the expression twice.\n            let verse = $verse;\n            println!(\"  verse: {verse}\");\n            total += verse;\n        )+\n        total\n    }};\n}\n\nfn main() {\n    let first = chant!(1);\n    println!(\"first chant: {first}\");\n    let second = chant!(2, 3, 4);\n    println!(\"second chant: {second}\");\n    let third = chant!(10, 20,);\n    println!(\"third chant: {third}\");\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Macro Monk lifts the woodblock. \"carve once, print as often as you like.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "macro_rules",
+    "input": "// Define a declarative macro named `chant` above main. It should accept\n// one or more comma-separated expressions, print each as \"  verse: N\",\n// and evaluate to their sum.\n\nfn main() {\n    let first = chant!(1);\n    println!(\"first chant: {first}\");\n    let second = chant!(2, 3, 4);\n    println!(\"second chant: {second}\");\n    let third = chant!(10, 20,);\n    println!(\"third chant: {third}\");\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Macro Monk keeps his silence — define the macro with `macro_rules!`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "macro_rules",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Macro Monk keeps his silence — define the macro with `macro_rules!`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_19",
+    "id": "macro_rules",
+    "input": "// `chant!` takes one or more expressions separated by commas, prints each\n// verse, and evaluates to their total.\n chant {\n    ($($verse:expr),+ $(,)?) => {{\n        let mut total = 0;\n        $(\n            // Bind once: a macro pastes tokens, so writing `$verse` twice\n            // would evaluate the expression twice.\n            let verse = $verse;\n            println!(\"  verse: {verse}\");\n            total += verse;\n        )+\n        total\n    }};\n}\n\nfn main() {\n    let first = chant!(1);\n    println!(\"first chant: {first}\");\n    let second = chant!(2, 3, 4);\n    println!(\"second chant: {second}\");\n    let third = chant!(10, 20,);\n    println!(\"third chant: {third}\");\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Macro Monk keeps his silence — define the macro with `macro_rules!`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_23",
+    "id": "macro_rules",
+    "input": "// `chant!` takes one or more expressions separated by commas, prints each\n// verse, and evaluates to their total.\nmacro_rules! chant {\n    ($($verse:expr),+  => {{\n        let mut total = 0;\n        $(\n            // Bind once: a macro pastes tokens, so writing `$verse` twice\n            // would evaluate the expression twice.\n            let verse = $verse;\n            println!(\"  verse: {verse}\");\n            total += verse;\n        )+\n        total\n    }};\n}\n\nfn main() {\n    let first = chant!(1);\n    println!(\"first chant: {first}\");\n    let second = chant!(2, 3, 4);\n    println!(\"second chant: {second}\");\n    let third = chant!(10, 20,);\n    println!(\"third chant: {third}\");\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Macro Monk keeps his silence — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "drop_trait",
+    "input": "use std::mem;\n\nstruct Soul {\n    name: &'static str,\n}\n\nimpl Drop for Soul {\n    // Runs automatically when a Soul goes out of scope. You never call it\n    // yourself; to drop early, hand the value to `drop(value)`.\n    fn drop(&mut self) {\n        println!(\"{} is released\", self.name);\n    }\n}\n\nfn main() {\n    let _first = Soul { name: \"first\" };\n    let _second = Soul { name: \"second\" };\n    let early = Soul { name: \"early\" };\n    let bound = Soul { name: \"bound\" };\n\n    drop(early); // std::mem::drop takes ownership, so `early` drops here\n    println!(\"the ritual begins\");\n\n    let _ = Soul { name: \"unnamed\" }; // `_` does not bind: dropped at once\n\n    {\n        let _inner = Soul { name: \"inner\" };\n        println!(\"inner scope ends\");\n    } // `_inner` drops here\n\n    mem::forget(bound); // safe, but its destructor will never run\n    println!(\"main ends\");\n} // remaining locals drop in reverse order: `_second`, then `_first`",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Sexton snuffs the candles in order. \"last lit, first out — and one left burning.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "drop_trait",
+    "input": "struct Soul {\n    name: &'static str,\n}\n\nimpl Drop for Soul {\n    fn drop(&mut self) {\n        println!(\"{} is released\", self.name);\n    }\n}\n\nfn main() {\n    let _first = Soul { name: \"first\" };\n    let _second = Soul { name: \"second\" };\n    let early = Soul { name: \"early\" };\n    let _bound = Soul { name: \"bound\" };\n\n    // Release `early` now, before the ritual begins.\n    early.drop();\n    println!(\"the ritual begins\");\n\n    // Then: an unnamed soul, an inner scope, keep `bound` from ever being\n    // released, and print \"main ends\".\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Sexton holds the snuffer — keep `bound` from ever being released with `std::mem::forget`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "drop_trait",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Sexton holds the snuffer — give `Soul` a destructor: `impl Drop for Soul`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_8",
+    "id": "drop_trait",
+    "input": "use std::mem;\n\nstruct Soul {\n    name: &'static str,\n\n\nimpl Drop for Soul {\n    // Runs automatically when a Soul goes out of scope. You never call it\n    // yourself; to drop early, hand the value to `drop(value)`.\n    fn drop(&mut self) {\n        println!(\"{} is released\", self.name);\n    }\n}\n\nfn main() {\n    let _first = Soul { name: \"first\" };\n    let _second = Soul { name: \"second\" };\n    let early = Soul { name: \"early\" };\n    let bound = Soul { name: \"bound\" };\n\n    drop(early); // std::mem::drop takes ownership, so `early` drops here\n    println!(\"the ritual begins\");\n\n    let _ = Soul { name: \"unnamed\" }; // `_` does not bind: dropped at once\n\n    {\n        let _inner = Soul { name: \"inner\" };\n        println!(\"inner scope ends\");\n    } // `_inner` drops here\n\n    mem::forget(bound); // safe, but its destructor will never run\n    println!(\"main ends\");\n} // remaining locals drop in reverse order: `_second`, then `_first`",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Sexton holds the snuffer — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_9",
+    "id": "drop_trait",
+    "input": "use std::mem;\n\nstruct Soul {\n    name: &'static str,\n}\n\n Drop for Soul {\n    // Runs automatically when a Soul goes out of scope. You never call it\n    // yourself; to drop early, hand the value to `drop(value)`.\n    fn drop(&mut self) {\n        println!(\"{} is released\", self.name);\n    }\n}\n\nfn main() {\n    let _first = Soul { name: \"first\" };\n    let _second = Soul { name: \"second\" };\n    let early = Soul { name: \"early\" };\n    let bound = Soul { name: \"bound\" };\n\n    drop(early); // std::mem::drop takes ownership, so `early` drops here\n    println!(\"the ritual begins\");\n\n    let _ = Soul { name: \"unnamed\" }; // `_` does not bind: dropped at once\n\n    {\n        let _inner = Soul { name: \"inner\" };\n        println!(\"inner scope ends\");\n    } // `_inner` drops here\n\n    mem::forget(bound); // safe, but its destructor will never run\n    println!(\"main ends\");\n} // remaining locals drop in reverse order: `_second`, then `_first`",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Sexton holds the snuffer — give `Soul` a destructor: `impl Drop for Soul`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_42",
+    "id": "drop_trait",
+    "input": "use std::mem;\n\nstruct Soul {\n    name: &'static str,\n}\n\nimpl Drop for Soul {\n    // Runs automatically when a Soul goes out of scope. You never call it\n    // yourself; to drop early, hand the value to `drop(value)`.\n    fn drop(&mut self) {\n         is released\", self.name);\n    }\n}\n\nfn main() {\n    let _first = Soul { name: \"first\" };\n    let _second = Soul { name: \"second\" };\n    let early = Soul { name: \"early\" };\n    let bound = Soul { name: \"bound\" };\n\n    drop(early); // std::mem::drop takes ownership, so `early` drops here\n    println!(\"the ritual begins\");\n\n    let _ = Soul { name: \"unnamed\" }; // `_` does not bind: dropped at once\n\n    {\n        let _inner = Soul { name: \"inner\" };\n        println!(\"inner scope ends\");\n    } // `_inner` drops here\n\n    mem::forget(bound); // safe, but its destructor will never run\n    println!(\"main ends\");\n} // remaining locals drop in reverse order: `_second`, then `_first`",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Sexton holds the snuffer — keep `bound` from ever being released with `std::mem::forget`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "send_sync",
+    "input": "/// A tome that owns one heap page through a raw pointer, the way `Box`\n/// does internally. Raw pointers are neither `Send` nor `Sync`, so the\n/// compiler does not derive either for `Tome`. We must decide.\nstruct Tome {\n    page: *mut u32,\n}\n\nimpl Tome {\n    fn new(value: u32) -> Self {\n        Tome {\n            page: Box::into_raw(Box::new(value)),\n        }\n    }\n\n    fn read(&self) -> u32 {\n        // SAFETY: `page` came from Box::into_raw in `new` and is freed only\n        // in Drop, so it is valid for as long as `self` exists.\n        unsafe { *self.page }\n    }\n}\n\nimpl Drop for Tome {\n    fn drop(&mut self) {\n        // SAFETY: we own the allocation and this is the only place it is\n        // freed, exactly once.\n        unsafe { drop(Box::from_raw(self.page)) };\n        println!(\"the page is returned to the shelf\");\n    }\n}\n\n// SAFETY (Send): a Tome is the only owner of its page, like Box<u32>.\n// Moving the Tome to another thread moves that sole ownership with it, and\n// u32 itself is Send.\nunsafe impl Send for Tome {}\n\n// SAFETY (Sync): through `&Tome` the only operation is `read`, which never\n// writes. Many threads reading the same u32 at once is not a data race.\nunsafe impl Sync for Tome {}\n\n/// Compiles only for types that may be moved to another thread.\nfn courier_accepts<T: Send>(item: T) -> T {\n    item\n}\n\n/// Compiles only for types that may be shared between threads by `&`.\nfn readers_accept<T: Sync>(item: &T) -> &T {\n    item\n}\n\nfn main() {\n    let tome = Tome::new(7);\n    let carried = courier_accepts(tome);\n    println!(\"the courier accepts the tome\");\n    let shared = readers_accept(&carried);\n    println!(\"page reads {}\", shared.read());\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Courier shoulders the satchel. \"you vouched for it, so I carry it.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "send_sync",
+    "input": "struct Tome {\n    page: *mut u32,\n}\n\nimpl Tome {\n    fn new(value: u32) -> Self {\n        Tome {\n            page: Box::into_raw(Box::new(value)),\n        }\n    }\n\n    fn read(&self) -> u32 {\n        unsafe { *self.page }\n    }\n}\n\nimpl Drop for Tome {\n    fn drop(&mut self) {\n        unsafe { drop(Box::from_raw(self.page)) };\n        println!(\"the page is returned to the shelf\");\n    }\n}\n\n// The courier and the readers refuse the tome. Decide whether it is sound\n// to promise that a Tome may move to, and be shared between, threads.\n\nfn courier_accepts<T: Send>(item: T) -> T {\n    item\n}\n\nfn readers_accept<T: Sync>(item: &T) -> &T {\n    item\n}\n\nfn main() {\n    let tome = Tome::new(7);\n    let carried = courier_accepts(tome);\n    println!(\"the courier accepts the tome\");\n    let shared = readers_accept(&carried);\n    println!(\"page reads {}\", shared.read());\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Courier will not carry it — promise the tome may move between threads: `unsafe impl Send for Tome {}`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "send_sync",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Courier will not carry it — promise the tome may move between threads: `unsafe impl Send for Tome {}`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_44",
+    "id": "send_sync",
+    "input": "/// A tome that owns one heap page through a raw pointer, the way `Box`\n/// does internally. Raw pointers are neither `Send` nor `Sync`, so the\n/// compiler does not derive either for `Tome`. We must decide.\nstruct Tome {\n    page: *mut u32,\n\n\nimpl Tome {\n    fn new(value: u32) -> Self {\n        Tome {\n            page: Box::into_raw(Box::new(value)),\n        }\n    }\n\n    fn read(&self) -> u32 {\n        // SAFETY: `page` came from Box::into_raw in `new` and is freed only\n        // in Drop, so it is valid for as long as `self` exists.\n        unsafe { *self.page }\n    }\n}\n\nimpl Drop for Tome {\n    fn drop(&mut self) {\n        // SAFETY: we own the allocation and this is the only place it is\n        // freed, exactly once.\n        unsafe { drop(Box::from_raw(self.page)) };\n        println!(\"the page is returned to the shelf\");\n    }\n}\n\n// SAFETY (Send): a Tome is the only owner of its page, like Box<u32>.\n// Moving the Tome to another thread moves that sole ownership with it, and\n// u32 itself is Send.\nunsafe impl Send for Tome {}\n\n// SAFETY (Sync): through `&Tome` the only operation is `read`, which never\n// writes. Many threads reading the same u32 at once is not a data race.\nunsafe impl Sync for Tome {}\n\n/// Compiles only for types that may be moved to another thread.\nfn courier_accepts<T: Send>(item: T) -> T {\n    item\n}\n\n/// Compiles only for types that may be shared between threads by `&`.\nfn readers_accept<T: Sync>(item: &T) -> &T {\n    item\n}\n\nfn main() {\n    let tome = Tome::new(7);\n    let carried = courier_accepts(tome);\n    println!(\"the courier accepts the tome\");\n    let shared = readers_accept(&carried);\n    println!(\"page reads {}\", shared.read());\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Courier will not carry it — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_127",
+    "id": "send_sync",
+    "input": "/// A tome that owns one heap page through a raw pointer, the way `Box`\n/// does internally. Raw pointers are neither `Send` nor `Sync`, so the\n/// compiler does not derive either for `Tome`. We must decide.\nstruct Tome {\n    page: *mut u32,\n}\n\nimpl Tome {\n    fn new(value: u32) -> Self {\n        Tome {\n            page: Box::into_raw(Box::new(value)),\n        }\n    }\n\n    fn read(&self) -> u32 {\n        // SAFETY: `page` came from Box::into_raw in `new` and is freed only\n        // in Drop, so it is valid for as long as `self` exists.\n        unsafe { *self.page }\n    }\n}\n\nimpl Drop for Tome {\n    fn drop(&mut self) {\n        // SAFETY: we own the allocation and this is the only place it is\n        // freed, exactly once.\n        unsafe { drop(Box::from_raw(self.page)) };\n         page is returned to the shelf\");\n    }\n}\n\n// SAFETY (Send): a Tome is the only owner of its page, like Box<u32>.\n// Moving the Tome to another thread moves that sole ownership with it, and\n// u32 itself is Send.\nunsafe impl Send for Tome {}\n\n// SAFETY (Sync): through `&Tome` the only operation is `read`, which never\n// writes. Many threads reading the same u32 at once is not a data race.\nunsafe impl Sync for Tome {}\n\n/// Compiles only for types that may be moved to another thread.\nfn courier_accepts<T: Send>(item: T) -> T {\n    item\n}\n\n/// Compiles only for types that may be shared between threads by `&`.\nfn readers_accept<T: Sync>(item: &T) -> &T {\n    item\n}\n\nfn main() {\n    let tome = Tome::new(7);\n    let carried = courier_accepts(tome);\n    println!(\"the courier accepts the tome\");\n    let shared = readers_accept(&carried);\n    println!(\"page reads {}\", shared.read());\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Courier will not carry it — promise the tome may move between threads: `unsafe impl Send for Tome {}`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_202",
+    "id": "send_sync",
+    "input": "/// A tome that owns one heap page through a raw pointer, the way `Box`\n/// does internally. Raw pointers are neither `Send` nor `Sync`, so the\n/// compiler does not derive either for `Tome`. We must decide.\nstruct Tome {\n    page: *mut u32,\n}\n\nimpl Tome {\n    fn new(value: u32) -> Self {\n        Tome {\n            page: Box::into_raw(Box::new(value)),\n        }\n    }\n\n    fn read(&self) -> u32 {\n        // SAFETY: `page` came from Box::into_raw in `new` and is freed only\n        // in Drop, so it is valid for as long as `self` exists.\n        unsafe { *self.page }\n    }\n}\n\nimpl Drop for Tome {\n    fn drop(&mut self) {\n        // SAFETY: we own the allocation and this is the only place it is\n        // freed, exactly once.\n        unsafe { drop(Box::from_raw(self.page)) };\n        println!(\"the page is returned to the shelf\");\n    }\n}\n\n// SAFETY (Send): a Tome is the only owner of its page, like Box<u32>.\n// Moving the Tome to another thread moves that sole ownership with it, and\n// u32 itself is Send.\nunsafe impl Send for Tome {}\n\n// SAFETY (Sync): through `&Tome` the only operation is `read`, which never\n// writes. Many threads reading the same u32 at once is not a data race.\n impl Sync for Tome {}\n\n/// Compiles only for types that may be moved to another thread.\nfn courier_accepts<T: Send>(item: T) -> T {\n    item\n}\n\n/// Compiles only for types that may be shared between threads by `&`.\nfn readers_accept<T: Sync>(item: &T) -> &T {\n    item\n}\n\nfn main() {\n    let tome = Tome::new(7);\n    let carried = courier_accepts(tome);\n    println!(\"the courier accepts the tome\");\n    let shared = readers_accept(&carried);\n    println!(\"page reads {}\", shared.read());\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Courier will not carry it — promise it may be shared by reference: `unsafe impl Sync for Tome {}`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "maybe_uninit",
+    "input": "use std::mem::MaybeUninit;\n\nconst PAGES: usize = 4;\n\nfn main() {\n    // Room for four u32s, deliberately not initialised yet.\n    let mut quire = MaybeUninit::<[u32; PAGES]>::uninit();\n    let first: *mut u32 = quire.as_mut_ptr().cast::<u32>();\n\n    for i in 0..PAGES {\n        // SAFETY: i < PAGES, so first.add(i) stays inside the array.\n        // `write` stores the value without reading or dropping whatever\n        // (uninitialised) bytes were there before.\n        unsafe { first.add(i).write((i as u32 + 1) * 10) };\n    }\n\n    // SAFETY: the loop above initialised every one of the PAGES elements.\n    let quire: [u32; PAGES] = unsafe { quire.assume_init() };\n\n    println!(\"bound pages: {quire:?}\");\n    println!(\"total ink: {}\", quire.iter().sum::<u32>());\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Bookbinder closes the quire. \"every page written before anyone read one.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "maybe_uninit",
+    "input": "const PAGES: usize = 4;\n\nfn main() {\n    // Declare the quire now, fill each page in the loop, read it after.\n    let quire: [u32; PAGES];\n    for i in 0..PAGES {\n        quire[i] = (i as u32 + 1) * 10;\n    }\n    println!(\"bound pages: {quire:?}\");\n    println!(\"total ink: {}\", quire.iter().sum::<u32>());\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Bookbinder holds up a blank page — bind the quire blank with `MaybeUninit`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "maybe_uninit",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Bookbinder holds up a blank page — bind the quire blank with `MaybeUninit`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_7",
+    "id": "maybe_uninit",
+    "input": "use std::mem::MaybeUninit;\n\nconst PAGES: usize = 4;\n\n main() {\n    // Room for four u32s, deliberately not initialised yet.\n    let mut quire = MaybeUninit::<[u32; PAGES]>::uninit();\n    let first: *mut u32 = quire.as_mut_ptr().cast::<u32>();\n\n    for i in 0..PAGES {\n        // SAFETY: i < PAGES, so first.add(i) stays inside the array.\n        // `write` stores the value without reading or dropping whatever\n        // (uninitialised) bytes were there before.\n        unsafe { first.add(i).write((i as u32 + 1) * 10) };\n    }\n\n    // SAFETY: the loop above initialised every one of the PAGES elements.\n    let quire: [u32; PAGES] = unsafe { quire.assume_init() };\n\n    println!(\"bound pages: {quire:?}\");\n    println!(\"total ink: {}\", quire.iter().sum::<u32>());\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Bookbinder holds up a blank page — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_65",
+    "id": "maybe_uninit",
+    "input": "use std::mem::MaybeUninit;\n\nconst PAGES: usize = 4;\n\nfn main() {\n    // Room for four u32s, deliberately not initialised yet.\n    let mut quire = MaybeUninit::<[u32; PAGES]>::uninit();\n    let first: *mut u32 = quire.as_mut_ptr().cast::<u32>();\n\n    for i in 0..PAGES {\n        // SAFETY: i < PAGES, so first.add(i) stays inside the array.\n        // `write` stores the value without reading or dropping whatever\n        // (uninitialised) bytes were there before.\n        unsafe {  as u32 + 1) * 10) };\n    }\n\n    // SAFETY: the loop above initialised every one of the PAGES elements.\n    let quire: [u32; PAGES] = unsafe { quire.assume_init() };\n\n    println!(\"bound pages: {quire:?}\");\n    println!(\"total ink: {}\", quire.iter().sum::<u32>());\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Bookbinder holds up a blank page — fill each page with `write`, which never reads or drops the old bytes",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_93",
+    "id": "maybe_uninit",
+    "input": "use std::mem::MaybeUninit;\n\nconst PAGES: usize = 4;\n\nfn main() {\n    // Room for four u32s, deliberately not initialised yet.\n    let mut quire = MaybeUninit::<[u32; PAGES]>::uninit();\n    let first: *mut u32 = quire.as_mut_ptr().cast::<u32>();\n\n    for i in 0..PAGES {\n        // SAFETY: i < PAGES, so first.add(i) stays inside the array.\n        // `write` stores the value without reading or dropping whatever\n        // (uninitialised) bytes were there before.\n        unsafe { first.add(i).write((i as u32 + 1) * 10) };\n    }\n\n    // SAFETY: the loop above initialised every one of the PAGES elements.\n    let quire: [u32; PAGES] = unsafe {  };\n\n    println!(\"bound pages: {quire:?}\");\n    println!(\"total ink: {}\", quire.iter().sum::<u32>());\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Bookbinder holds up a blank page — declare it filled with `assume_init` once every page is written",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "librarian_index",
+    "input": "/// Returns the volume `index` places past `shelf`.\n///\n/// # Safety\n///\n/// `shelf` must point into a live array of initialised `u32`s, and\n/// `shelf.add(index)` must still be inside that same array.\nunsafe fn volume_at(shelf: *const u32, index: usize) -> u32 {\n    // SAFETY: the caller upholds the contract above.\n    unsafe { *shelf.add(index) }\n}\n\n/// The safe door. No argument a caller can pass makes this read out\n/// of bounds, so it does not need to be `unsafe` itself.\nfn fetch(shelf: &[u32], index: usize) -> Option<u32> {\n    if index < shelf.len() {\n        // SAFETY: index < shelf.len(), and the slice is borrowed (so\n        // alive) for the whole call.\n        Some(unsafe { volume_at(shelf.as_ptr(), index) })\n    } else {\n        None\n    }\n}\n\nfn main() {\n    let shelf = [11, 22, 33, 44];\n    for index in [0, 3, 4, 99] {\n        match fetch(&shelf, index) {\n            Some(volume) => println!(\"index {index}: volume {volume}\"),\n            None => println!(\"index {index}: no such volume\"),\n        }\n    }\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Librarian steps aside. \"a door no index can break. first test passed.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "librarian_index",
+    "input": "/// Returns the volume `index` places past `shelf`.\n///\n/// # Safety\n///\n/// `shelf` must point into a live array of initialised `u32`s, and\n/// `shelf.add(index)` must still be inside that same array.\nunsafe fn volume_at(shelf: *const u32, index: usize) -> u32 {\n    unsafe { *shelf.add(index) }\n}\n\n// The Librarian wants a door that is safe to open with ANY index.\nfn fetch(shelf: &[u32], index: usize) -> Option<u32> {\n    Some(volume_at(shelf.as_ptr(), index))\n}\n\nfn main() {\n    let shelf = [11, 22, 33, 44];\n    for index in [0, 3, 4, 99] {\n        match fetch(&shelf, index) {\n            Some(volume) => println!(\"index {index}: volume {volume}\"),\n            None => println!(\"index {index}: no such volume\"),\n        }\n    }\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Librarian blocks the stacks — check the index against the shelf's `.len()` before the unsafe call",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "librarian_index",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Librarian blocks the stacks — keep `volume_at` an `unsafe fn` with its `# Safety` contract",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_34",
+    "id": "librarian_index",
+    "input": "/// Returns the volume `index` places past `shelf`.\n///\n/// # Safety\n///\n/// `shelf` must point into a live array of initialised `u32`s, and\n/// `shelf.add(index)` must still be inside that same array.\n fn volume_at(shelf: *const u32, index: usize) -> u32 {\n    // SAFETY: the caller upholds the contract above.\n    unsafe { *shelf.add(index) }\n}\n\n/// The safe door. No argument a caller can pass makes this read out\n/// of bounds, so it does not need to be `unsafe` itself.\nfn fetch(shelf: &[u32], index: usize) -> Option<u32> {\n    if index < shelf.len() {\n        // SAFETY: index < shelf.len(), and the slice is borrowed (so\n        // alive) for the whole call.\n        Some(unsafe { volume_at(shelf.as_ptr(), index) })\n    } else {\n        None\n    }\n}\n\nfn main() {\n    let shelf = [11, 22, 33, 44];\n    for index in [0, 3, 4, 99] {\n        match fetch(&shelf, index) {\n            Some(volume) => println!(\"index {index}: volume {volume}\"),\n            None => println!(\"index {index}: no such volume\"),\n        }\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Librarian blocks the stacks — keep `volume_at` an `unsafe fn` with its `# Safety` contract",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_40",
+    "id": "librarian_index",
+    "input": "/// Returns the volume `index` places past `shelf`.\n///\n/// # Safety\n///\n/// `shelf` must point into a live array of initialised `u32`s, and\n/// `shelf.add(index)` must still be inside that same array.\nunsafe fn volume_at(shelf: *const u32, index:  -> u32 {\n    // SAFETY: the caller upholds the contract above.\n    unsafe { *shelf.add(index) }\n}\n\n/// The safe door. No argument a caller can pass makes this read out\n/// of bounds, so it does not need to be `unsafe` itself.\nfn fetch(shelf: &[u32], index: usize) -> Option<u32> {\n    if index < shelf.len() {\n        // SAFETY: index < shelf.len(), and the slice is borrowed (so\n        // alive) for the whole call.\n        Some(unsafe { volume_at(shelf.as_ptr(), index) })\n    } else {\n        None\n    }\n}\n\nfn main() {\n    let shelf = [11, 22, 33, 44];\n    for index in [0, 3, 4, 99] {\n        match fetch(&shelf, index) {\n            Some(volume) => println!(\"index {index}: volume {volume}\"),\n            None => println!(\"index {index}: no such volume\"),\n        }\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Librarian blocks the stacks — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_94",
+    "id": "librarian_index",
+    "input": "/// Returns the volume `index` places past `shelf`.\n///\n/// # Safety\n///\n/// `shelf` must point into a live array of initialised `u32`s, and\n/// `shelf.add(index)` must still be inside that same array.\nunsafe fn volume_at(shelf: *const u32, index: usize) -> u32 {\n    // SAFETY: the caller upholds the contract above.\n    unsafe { *shelf.add(index) }\n}\n\n/// The safe door. No argument a caller can pass makes this read out\n/// of bounds, so it does not need to be `unsafe` itself.\nfn fetch(shelf: &[u32], index: usize) -> Option<u32> {\n    if index <  {\n        // SAFETY: index < shelf.len(), and the slice is borrowed (so\n        // alive) for the whole call.\n        Some(unsafe { volume_at(shelf.as_ptr(), index) })\n    } else {\n        None\n    }\n}\n\nfn main() {\n    let shelf = [11, 22, 33, 44];\n    for index in [0, 3, 4, 99] {\n        match fetch(&shelf, index) {\n            Some(volume) => println!(\"index {index}: volume {volume}\"),\n            None => println!(\"index {index}: no such volume\"),\n        }\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Librarian blocks the stacks — check the index against the shelf's `.len()` before the unsafe call",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "librarian_demand",
+    "input": "fn page(n: u32) -> u32 {\n    n * 3\n}\n\nfn seal(left: u32, right: u32) -> u32 {\n    left * 2 + right\n}\n\n// incant!(a, b, c, d) must expand to the Librarian's exact demand:\n//     seal(seal(seal(page(a), page(b)), page(c)), page(d))\n// The internal `@acc` rules carry the expression built so far. A\n// literal `@` can never start an expression, so the entry rule never\n// swallows an `@acc` call, and a caller's verses never match `@acc`.\nmacro_rules! incant {\n    (@acc $acc:expr) => { $acc };\n    (@acc $acc:expr, $next:expr $(, $rest:expr)*) => {\n        incant!(@acc seal($acc, page($next)) $(, $rest)*)\n    };\n    ($first:expr $(, $rest:expr)*) => {\n        incant!(@acc page($first) $(, $rest)*)\n    };\n}\n\nfn main() {\n    let demand = seal(seal(seal(page(1), page(2)), page(3)), page(4));\n    let answer = incant!(1, 2, 3, 4);\n    println!(\"the demand: {demand}\");\n    println!(\"incant!(1, 2, 3, 4): {answer}\");\n    println!(\"the incantation matches: {}\", demand == answer);\n    println!(\"incant!(7): {}\", incant!(7));\n    println!(\"incant!(2, 9): {}\", incant!(2, 9));\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Librarian hears his words returned. \"the incantation, exactly. second test passed.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "librarian_demand",
+    "input": "fn page(n: u32) -> u32 {\n    n * 3\n}\n\nfn seal(left: u32, right: u32) -> u32 {\n    left * 2 + right\n}\n\n// Grow this macro so incant!(a, b, c, d) expands to\n//     seal(seal(seal(page(a), page(b)), page(c)), page(d))\n// and works for any number of arguments, one or more.\nmacro_rules! incant {\n    ($first:expr) => {\n        page($first)\n    };\n}\n\nfn main() {\n    let demand = seal(seal(seal(page(1), page(2)), page(3)), page(4));\n    let answer = incant!(1, 2, 3, 4);\n    println!(\"the demand: {demand}\");\n    println!(\"incant!(1, 2, 3, 4): {answer}\");\n    println!(\"the incantation matches: {}\", demand == answer);\n    println!(\"incant!(7): {}\", incant!(7));\n    println!(\"incant!(2, 9): {}\", incant!(2, 9));\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Librarian repeats his demand — take any number of arguments with a repetition: `$( ... )*`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "librarian_demand",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Librarian repeats his demand — answer with a `macro_rules!` macro",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_2",
+    "id": "librarian_demand",
+    "input": "fn page(n:  -> u32 {\n    n * 3\n}\n\nfn seal(left: u32, right: u32) -> u32 {\n    left * 2 + right\n}\n\n// incant!(a, b, c, d) must expand to the Librarian's exact demand:\n//     seal(seal(seal(page(a), page(b)), page(c)), page(d))\n// The internal `@acc` rules carry the expression built so far. A\n// literal `@` can never start an expression, so the entry rule never\n// swallows an `@acc` call, and a caller's verses never match `@acc`.\nmacro_rules! incant {\n    (@acc $acc:expr) => { $acc };\n    (@acc $acc:expr, $next:expr $(, $rest:expr)*) => {\n        incant!(@acc seal($acc, page($next)) $(, $rest)*)\n    };\n    ($first:expr $(, $rest:expr)*) => {\n        incant!(@acc page($first) $(, $rest)*)\n    };\n}\n\nfn main() {\n    let demand = seal(seal(seal(page(1), page(2)), page(3)), page(4));\n    let answer = incant!(1, 2, 3, 4);\n    println!(\"the demand: {demand}\");\n    println!(\"incant!(1, 2, 3, 4): {answer}\");\n    println!(\"the incantation matches: {}\", demand == answer);\n    println!(\"incant!(7): {}\", incant!(7));\n    println!(\"incant!(2, 9): {}\", incant!(2, 9));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Librarian repeats his demand — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_78",
+    "id": "librarian_demand",
+    "input": "fn page(n: u32) -> u32 {\n    n * 3\n}\n\nfn seal(left: u32, right: u32) -> u32 {\n    left * 2 + right\n}\n\n// incant!(a, b, c, d) must expand to the Librarian's exact demand:\n//     seal(seal(seal(page(a), page(b)), page(c)), page(d))\n// The internal `@acc` rules carry the expression built so far. A\n// literal `@` can never start an expression, so the entry rule never\n// swallows an `@acc` call, and a caller's verses never match `@acc`.\n incant {\n    (@acc $acc:expr) => { $acc };\n    (@acc $acc:expr, $next:expr $(, $rest:expr)*) => {\n        incant!(@acc seal($acc, page($next)) $(, $rest)*)\n    };\n    ($first:expr $(, $rest:expr)*) => {\n        incant!(@acc page($first) $(, $rest)*)\n    };\n}\n\nfn main() {\n    let demand = seal(seal(seal(page(1), page(2)), page(3)), page(4));\n    let answer = incant!(1, 2, 3, 4);\n    println!(\"the demand: {demand}\");\n    println!(\"incant!(1, 2, 3, 4): {answer}\");\n    println!(\"the incantation matches: {}\", demand == answer);\n    println!(\"incant!(7): {}\", incant!(7));\n    println!(\"incant!(2, 9): {}\", incant!(2, 9));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Librarian repeats his demand — answer with a `macro_rules!` macro",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "librarian_seal",
+    "input": "/// Owns a run of `len` u32s through a raw pointer, the way `Vec` does\n/// underneath. The raw pointer itself owns nothing: Drop must free it.\nstruct Codex {\n    ptr: *mut u32,\n    len: usize,\n}\n\nimpl Codex {\n    fn from_pages(pages: Vec<u32>) -> Self {\n        let boxed: Box<[u32]> = pages.into_boxed_slice();\n        let len = boxed.len();\n        // Box::into_raw gives up ownership: nothing frees this until\n        // we rebuild the Box in Drop.\n        let ptr = Box::into_raw(boxed).cast::<u32>();\n        Codex { ptr, len }\n    }\n\n    fn get(&self, index: usize) -> Option<u32> {\n        if index < self.len {\n            // SAFETY: index < len, and ptr points at len initialised\n            // u32s that stay alive until Drop.\n            Some(unsafe { *self.ptr.add(index) })\n        } else {\n            None\n        }\n    }\n}\n\nimpl Drop for Codex {\n    fn drop(&mut self) {\n        let slice =\n            std::ptr::slice_from_raw_parts_mut(self.ptr, self.len);\n        // SAFETY: this is exactly the Box<[u32]> that from_pages turned\n        // into a raw pointer (same address, same length), and Drop runs\n        // once.\n        drop(unsafe { Box::from_raw(slice) });\n        println!(\"the codex is sealed ({} pages returned)\", self.len);\n    }\n}\n\nfn main() {\n    let codex = Codex::from_pages(vec![5, 8, 13]);\n    println!(\"page 0: {:?}\", codex.get(0));\n    println!(\"page 2: {:?}\", codex.get(2));\n    println!(\"page 3: {:?}\", codex.get(3));\n    println!(\"the Librarian closes the book\");\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Librarian closes the codex. \"borrowed from the heap, returned to it. the Library is yours.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "librarian_seal",
+    "input": "struct Codex {\n    ptr: *mut u32,\n    len: usize,\n}\n\nimpl Codex {\n    fn from_pages(pages: Vec<u32>) -> Self {\n        let boxed: Box<[u32]> = pages.into_boxed_slice();\n        let len = boxed.len();\n        let ptr = Box::into_raw(boxed).cast::<u32>();\n        Codex { ptr, len }\n    }\n\n    // Return the page at `index`, or None past the end, without ever\n    // reading outside the codex.\n    fn get(&self, _index: usize) -> Option<u32> {\n        None\n    }\n}\n\n// Box::into_raw handed the pages out. Nothing gives them back.\n\nfn main() {\n    let codex = Codex::from_pages(vec![5, 8, 13]);\n    println!(\"page 0: {:?}\", codex.get(0));\n    println!(\"page 2: {:?}\", codex.get(2));\n    println!(\"page 3: {:?}\", codex.get(3));\n    println!(\"the Librarian closes the book\");\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Librarian holds the codex open — seal the codex: `impl Drop for Codex`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "librarian_seal",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Librarian holds the codex open — seal the codex: `impl Drop for Codex`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_35",
+    "id": "librarian_seal",
+    "input": "/// Owns a run of `len` u32s through a raw pointer, the way `Vec` does\n/// underneath. The raw pointer itself owns nothing: Drop must free it.\nstruct Codex {\n    ptr: *mut u32,\n    len: usize,\n\n\nimpl Codex {\n    fn from_pages(pages: Vec<u32>) -> Self {\n        let boxed: Box<[u32]> = pages.into_boxed_slice();\n        let len = boxed.len();\n        // Box::into_raw gives up ownership: nothing frees this until\n        // we rebuild the Box in Drop.\n        let ptr = Box::into_raw(boxed).cast::<u32>();\n        Codex { ptr, len }\n    }\n\n    fn get(&self, index: usize) -> Option<u32> {\n        if index < self.len {\n            // SAFETY: index < len, and ptr points at len initialised\n            // u32s that stay alive until Drop.\n            Some(unsafe { *self.ptr.add(index) })\n        } else {\n            None\n        }\n    }\n}\n\nimpl Drop for Codex {\n    fn drop(&mut self) {\n        let slice =\n            std::ptr::slice_from_raw_parts_mut(self.ptr, self.len);\n        // SAFETY: this is exactly the Box<[u32]> that from_pages turned\n        // into a raw pointer (same address, same length), and Drop runs\n        // once.\n        drop(unsafe { Box::from_raw(slice) });\n        println!(\"the codex is sealed ({} pages returned)\", self.len);\n    }\n}\n\nfn main() {\n    let codex = Codex::from_pages(vec![5, 8, 13]);\n    println!(\"page 0: {:?}\", codex.get(0));\n    println!(\"page 2: {:?}\", codex.get(2));\n    println!(\"page 3: {:?}\", codex.get(3));\n    println!(\"the Librarian closes the book\");\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Librarian holds the codex open — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_121",
+    "id": "librarian_seal",
+    "input": "/// Owns a run of `len` u32s through a raw pointer, the way `Vec` does\n/// underneath. The raw pointer itself owns nothing: Drop must free it.\nstruct Codex {\n    ptr: *mut u32,\n    len: usize,\n}\n\nimpl Codex {\n    fn from_pages(pages: Vec<u32>) -> Self {\n        let boxed: Box<[u32]> = pages.into_boxed_slice();\n        let len = boxed.len();\n        // Box::into_raw gives up ownership: nothing frees this until\n        // we rebuild the Box in Drop.\n        let ptr = Box::into_raw(boxed).cast::<u32>();\n        Codex { ptr, len }\n    }\n\n    fn get(&self, index: usize) -> Option<u32> {\n        if index < self.len {\n            // SAFETY: index < len, and ptr points at len initialised\n            // u32s that stay alive until Drop.\n            Some(unsafe { *self.ptr.add(index) })\n        } else {\n            None\n        }\n    }\n}\n\n Drop for Codex {\n    fn drop(&mut self) {\n        let slice =\n            std::ptr::slice_from_raw_parts_mut(self.ptr, self.len);\n        // SAFETY: this is exactly the Box<[u32]> that from_pages turned\n        // into a raw pointer (same address, same length), and Drop runs\n        // once.\n        drop(unsafe { Box::from_raw(slice) });\n        println!(\"the codex is sealed ({} pages returned)\", self.len);\n    }\n}\n\nfn main() {\n    let codex = Codex::from_pages(vec![5, 8, 13]);\n    println!(\"page 0: {:?}\", codex.get(0));\n    println!(\"page 2: {:?}\", codex.get(2));\n    println!(\"page 3: {:?}\", codex.get(3));\n    println!(\"the Librarian closes the book\");\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Librarian holds the codex open — seal the codex: `impl Drop for Codex`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_161",
+    "id": "librarian_seal",
+    "input": "/// Owns a run of `len` u32s through a raw pointer, the way `Vec` does\n/// underneath. The raw pointer itself owns nothing: Drop must free it.\nstruct Codex {\n    ptr: *mut u32,\n    len: usize,\n}\n\nimpl Codex {\n    fn from_pages(pages: Vec<u32>) -> Self {\n        let boxed: Box<[u32]> = pages.into_boxed_slice();\n        let len = boxed.len();\n        // Box::into_raw gives up ownership: nothing frees this until\n        // we rebuild the Box in Drop.\n        let ptr = Box::into_raw(boxed).cast::<u32>();\n        Codex { ptr, len }\n    }\n\n    fn get(&self, index: usize) -> Option<u32> {\n        if index < self.len {\n            // SAFETY: index < len, and ptr points at len initialised\n            // u32s that stay alive until Drop.\n            Some(unsafe { *self.ptr.add(index) })\n        } else {\n            None\n        }\n    }\n}\n\nimpl Drop for Codex {\n    fn drop(&mut self) {\n        let slice =\n            std::ptr::slice_from_raw_parts_mut(self.ptr, self.len);\n        // SAFETY: this is exactly the Box<[u32]> that from_pages turned\n        // into a raw pointer (same address, same length), and Drop runs\n        // once.\n        drop(unsafe {  });\n        println!(\"the codex is sealed ({} pages returned)\", self.len);\n    }\n}\n\nfn main() {\n    let codex = Codex::from_pages(vec![5, 8, 13]);\n    println!(\"page 0: {:?}\", codex.get(0));\n    println!(\"page 2: {:?}\", codex.get(2));\n    println!(\"page 3: {:?}\", codex.get(3));\n    println!(\"the Librarian closes the book\");\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Librarian holds the codex open — give the pages back to the heap with `Box::from_raw`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "empty",
     "id": "not_a_real_mission",
     "input": "",

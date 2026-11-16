@@ -6,6 +6,11 @@
 //!   another NPC);
 //! - the 30 tranche-2 villagers (approved 2026-11-15) ship exactly their
 //!   `REFNNv2.png` render, and their ref headers say so;
+//! - the six kit holders (Guildmaster, Conjurer, Barkeep, Smelter,
+//!   Dockmaster, Warden) ship their act's approved costume-kit exemplar
+//!   (REF-69..74), and their first-pass refs are marked superseded;
+//! - the Act 9 cast (approved 2026-11-15) ships its REF-80..85 and REF-93
+//!   renders; the Library kit exemplar REF-79 is not any NPC's sprite;
 //! - the walk sheets (REF-77, REF-78) have the size and tile order
 //!   `plugins::animation` slices them by.
 
@@ -81,6 +86,125 @@ const TRANCHE2: &[(&str, &str, &str)] = &[
     ("The Strongbox", "64", "strongbox"),
     ("The Ghostkeeper", "65", "ghostkeeper"),
 ];
+
+/// The six kit holders: roster name -> kit exemplar ref (`ref-NN-<kit>.jsx`,
+/// approved 2026-11-13 as their act's costume kit and confirmed by Matt on
+/// 2026-11-15 as these NPCs' sprites), sprite slug, and the first-pass ref
+/// it replaces. Mapping from each kit ref's header ("Act 3 Guildhall
+/// Quarter (Guildmaster)", ...) and the act casts.
+const KIT_HOLDERS: &[(&str, &str, &str, &str, &str)] = &[
+    ("The Guildmaster", "69", "guildkit", "guildmaster", "30"),
+    ("The Conjurer", "70", "towerkit", "conjurer", "38"),
+    ("The Barkeep", "71", "tavernkit", "barkeep", "42"),
+    ("The Smelter", "72", "forgekit", "smelter", "50"),
+    ("The Dockmaster", "73", "coastkit", "dockmaster", "54"),
+    ("The Warden", "74", "vaultkit", "warden", "62"),
+];
+
+/// The Act 9 cast (approved by Matt 2026-11-15): roster name -> ref
+/// number, ref slug (= sprite slug) and native size.
+const ACT9_CAST: &[(&str, &str, &str, u32)] = &[
+    ("The Shelfmark", "80", "shelfmark", 32),
+    ("The Envoy", "81", "envoy", 32),
+    ("The Macro Monk", "82", "macromonk", 32),
+    ("The Sexton", "83", "sexton", 32),
+    ("The Courier", "84", "courier", 32),
+    ("The Bookbinder", "85", "bookbinder", 32),
+    ("The Librarian", "93", "librarian", 64),
+];
+
+#[test]
+fn kit_holders_ship_their_approved_kit_exemplar() {
+    let root = game_assets();
+    let refs = refs_dir();
+    for (name, num, kit, slug, old) in KIT_HOLDERS {
+        let spec = NPC_ROSTER
+            .iter()
+            .find(|s| s.name == *name)
+            .unwrap_or_else(|| panic!("{name} not in the roster"));
+        let expected_path = format!("sprites/npc/{slug}_idle_0.png");
+        assert_eq!(spec.sprite_path, expected_path, "{name}");
+        let game = read(&root.join(spec.sprite_path));
+        assert!(
+            game == read(&refs.join(format!("png/REF{num}.png"))),
+            "{name}: {} is not the REF{num}.png render",
+            spec.sprite_path
+        );
+        assert!(
+            game != read(&refs.join(format!("png/REF{old}.png"))),
+            "{name} still ships its first-pass sprite (REF{old})"
+        );
+        assert_eq!(png_size(&root.join(spec.sprite_path)), (32, 32), "{name}");
+
+        let src = std::fs::read_to_string(refs.join(format!("ref-{num}-{kit}.jsx")))
+            .unwrap_or_else(|e| panic!("ref-{num}-{kit}.jsx: {e}"));
+        let wired = format!("Wired as game/assets/{expected_path}");
+        assert!(
+            src.lines()
+                .any(|l| l.starts_with("// APPROVED by Matt 2026-11-13") && l.contains(&wired)),
+            "ref-{num}-{kit}.jsx header does not say it is wired as {expected_path}"
+        );
+        assert!(
+            !src.contains("NOT wired"),
+            "ref-{num}-{kit}.jsx still says NOT wired"
+        );
+        let first = std::fs::read_dir(&refs)
+            .expect("refs dir")
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .find(|f| f.starts_with(&format!("ref-{old}-")) && f.ends_with(".jsx"))
+            .unwrap_or_else(|| panic!("no first-pass ref-{old}"));
+        let first_src = std::fs::read_to_string(refs.join(&first)).expect("first-pass ref");
+        assert!(
+            first_src.contains(&format!("SUPERSEDED by ref-{num}-{kit}.jsx")),
+            "{first} is not marked superseded"
+        );
+    }
+}
+
+#[test]
+fn act9_cast_ships_its_approved_render() {
+    let root = game_assets();
+    let refs = refs_dir();
+    for (name, num, slug, px) in ACT9_CAST {
+        let spec = NPC_ROSTER
+            .iter()
+            .find(|s| s.name == *name)
+            .unwrap_or_else(|| panic!("{name} not in the roster"));
+        let expected_path = format!("sprites/npc/{slug}_idle_0.png");
+        assert_eq!(spec.sprite_path, expected_path, "{name}");
+        assert_eq!(spec.native_px as u32, *px, "{name}");
+        assert!(
+            read(&root.join(spec.sprite_path)) == read(&refs.join(format!("png/REF{num}.png"))),
+            "{name}: {} is not the REF{num}.png render",
+            spec.sprite_path
+        );
+        assert_eq!(png_size(&root.join(spec.sprite_path)), (*px, *px), "{name}");
+        let src = std::fs::read_to_string(refs.join(format!("ref-{num}-{slug}.jsx")))
+            .unwrap_or_else(|e| panic!("ref-{num}-{slug}.jsx: {e}"));
+        let header =
+            format!("// APPROVED by Matt 2026-11-15. Wired as game/assets/{expected_path}.");
+        assert!(
+            src.lines().any(|l| l.trim_end() == header),
+            "ref-{num} header"
+        );
+        assert!(
+            !src.contains("DRAFT") && !src.contains("Not wired yet"),
+            "ref-{num}"
+        );
+    }
+    // The Library kit exemplar is approved and rendered, but no NPC's sprite.
+    let kit = read(&refs.join("png/REF79.png"));
+    for s in NPC_ROSTER {
+        assert!(
+            read(&root.join(s.sprite_path)) != kit,
+            "{} ships REF-79",
+            s.name
+        );
+    }
+    let kit_src = std::fs::read_to_string(refs.join("ref-79-librarykit.jsx")).expect("REF-79");
+    assert!(kit_src.contains("as a kit exemplar. NOT wired to any NPC"));
+}
 
 #[test]
 fn every_roster_sprite_resolves_to_an_existing_file() {
