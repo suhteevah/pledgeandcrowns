@@ -242,34 +242,32 @@ pub const COTTAGE_SPOTS: &[(usize, Side, f32)] = &[
     (8, Side::West, -100.0),
     (8, Side::East, -100.0),
     // The Forbidden Library. North is the main street and south is the
-    // treeline, so cottages stand west and east; the north-west spot is
-    // kept for the landmark (`PENDING_LANDMARKS`).
+    // treeline, so cottages stand west and east. Its landmark stands on
+    // the plaza itself (`PENDING_LANDMARKS`).
     (9, Side::West, -100.0),
     (9, Side::East, -100.0),
     (9, Side::East, 100.0),
-    // The Throne (Act 10), the same way; its north-east spot holds the
-    // dais (`LANDMARKS`).
+    // The Throne (Act 10), the same way; the dais stands on the plaza
+    // (`LANDMARKS`).
     (10, Side::West, -100.0),
     (10, Side::West, 100.0),
     (10, Side::East, -100.0),
 ];
 
 /// District landmarks that are approved and spawned: `(district index,
-/// side, offset, kind)`, in [`COTTAGE_SPOTS`] terms (a landmark is a 64x64
-/// bottom-centre-anchored prop like REF-68, so [`cottage_base`] places it).
-/// The Throne Dais (REF-96, approved by Matt 2026-11-15) stands on the
-/// Throne plaza's north-east side, the spot Act 9 reserved for it.
-pub const LANDMARKS: &[(usize, Side, f32, PropKind)] =
-    &[(10, Side::East, 100.0, PropKind::ThroneDais)];
+/// kind)`. A landmark is a 64x64 bottom-centre-anchored prop standing ON
+/// its plaza at the back-centre (north edge), placed by
+/// [`world::back_landmark_base`](crate::plugins::world::back_landmark_base);
+/// the district's boss stands centred directly in front of it. The Throne
+/// Dais (REF-96, approved by Matt 2026-11-15) stands behind the Compiler.
+pub const LANDMARKS: &[(usize, PropKind)] = &[(10, PropKind::ThroneDais)];
 
-/// Where each remaining district landmark will stand once its art is
-/// approved: `(district index, side, offset, ref)`, in [`COTTAGE_SPOTS`]
-/// terms. NOT spawned: REF-95 (The Sealed Stacks) is a draft awaiting
-/// Matt's approval. Wiring it is a new `PropKind` moved to [`LANDMARKS`];
-/// `pending_landmark_spots_are_clear` keeps the spot on open grass, clear
-/// of every prop and NPC, so that is all it takes.
-pub const PENDING_LANDMARKS: &[(usize, Side, f32, &str)] =
-    &[(9, Side::West, 100.0, "REF-95 The Sealed Stacks")];
+/// Landmarks reserved but not spawned, `(district index, ref)`, at the same
+/// back-centre spot: REF-95 (The Sealed Stacks) is a draft awaiting Matt's
+/// approval, its spot behind the Librarian. Wiring it is a new `PropKind`
+/// moved to [`LANDMARKS`]; `pending_landmark_spots_are_clear` keeps the
+/// spot on flagstone, clear of every prop and NPC, so that is all it takes.
+pub const PENDING_LANDMARKS: &[(usize, &str)] = &[(9, "REF-95 The Sealed Stacks")];
 
 /// Free-standing oaks in open meadow, between the quarters.
 pub const MEADOW_OAKS: &[Vec2] = &[
@@ -356,8 +354,8 @@ pub fn all_props() -> Vec<(PropKind, Vec2)> {
             None => tracing::warn!("cottage spot references unknown district {d}; skipped"),
         }
     }
-    for &(d, side, offset, kind) in LANDMARKS {
-        match cottage_base(d, side, offset) {
+    for &(d, kind) in LANDMARKS {
+        match crate::plugins::world::back_landmark_base(d) {
             Some(base) => out.push((kind, base)),
             None => tracing::warn!(?kind, "landmark references unknown district {d}; skipped"),
         }
@@ -703,13 +701,13 @@ mod tests {
         }
     }
 
-    /// Sample every 4px across `r` and require grass under all of it.
-    fn rect_all_grass(r: &Aabb) -> bool {
+    /// Sample every 4px across `r` and require `want` under all of it.
+    fn rect_all(r: &Aabb, want: Ground) -> bool {
         let mut y = r.min.y;
         while y <= r.max.y {
             let mut x = r.min.x;
             while x <= r.max.x {
-                if ground_at(Vec2::new(x, y)) != Ground::Grass {
+                if ground_at(Vec2::new(x, y)) != want {
                     return false;
                 }
                 x += 4.0;
@@ -717,6 +715,68 @@ mod tests {
             y += 4.0;
         }
         true
+    }
+
+    /// Sample every 4px across `r` and require grass under all of it.
+    fn rect_all_grass(r: &Aabb) -> bool {
+        rect_all(r, Ground::Grass)
+    }
+
+    /// A landmark plot at `base` in district `d` (64x64, bottom-centre):
+    /// on flagstone with a clear tile to the cobble ring on every side
+    /// (the sprite grown by 16 px is still all flagstone), centred on the
+    /// plaza, at its back (north) half, clear of every prop but `skip`
+    /// and of every NPC sprite; the district's boss (its last roster slot,
+    /// 64 px) stands centred directly in front of it, his sprite top at
+    /// most 16 px below the plot and never overlapping it; and there is
+    /// room to walk round it (two tiles of flagstone either side of its
+    /// steps).
+    fn landmark_plot_is_sound(d: usize, base: Vec2, what: &str, skip: Option<Vec2>) {
+        let dist = &DISTRICTS[d];
+        let plot = PropKind::ThroneDais.sprite_rect_at(base);
+        let grown = Aabb {
+            min: plot.min - Vec2::splat(16.0),
+            max: plot.max + Vec2::splat(16.0),
+        };
+        assert!(
+            rect_all(&grown, Ground::Flagstone),
+            "{what}: not on clear flagstone"
+        );
+        assert_eq!(base.x, dist.center.x, "{what}: centred");
+        assert!(base.y > dist.center.y, "{what}: in the back (north) half");
+        for (k, b) in all_props() {
+            if Some(b) == skip {
+                continue;
+            }
+            assert!(
+                !k.sprite_rect_at(b).overlaps(&plot),
+                "{what} overlaps the {k:?} at {b:?}"
+            );
+        }
+        for (i, spec) in NPC_ROSTER.iter().enumerate() {
+            let s = district_slot(i);
+            let half = spec.native_px * 0.5;
+            let npc = Aabb::from_base(s.x, half, s.y - half, s.y + half);
+            assert!(!npc.overlaps(&plot), "{what} covers NPC slot {i}");
+        }
+        let first: usize = DISTRICTS[..d].iter().map(|x| x.count).sum();
+        let boss = first + dist.count - 1;
+        assert_eq!(NPC_ROSTER[boss].native_px, 64.0, "{what}: boss is 64 px");
+        let p = district_slot(boss);
+        assert_eq!(p.x, base.x, "{what}: boss centred in front");
+        let top = p.y + 32.0;
+        assert!(
+            top <= plot.min.y && plot.min.y - top <= 16.0,
+            "{what}: boss top {top} vs plot bottom {}",
+            plot.min.y
+        );
+        let solid = PropKind::ThroneDais.solid_at(base);
+        for side in [
+            Aabb::from_base(solid.min.x - 16.0, 16.0, solid.min.y, solid.max.y),
+            Aabb::from_base(solid.max.x + 16.0, 16.0, solid.min.y, solid.max.y),
+        ] {
+            assert!(rect_all(&side, Ground::Flagstone), "{what}: no way round");
+        }
     }
 
     #[test]
@@ -730,10 +790,19 @@ mod tests {
                     && r.max.y <= WORLD_HALF_H,
                 "{kind:?} at {base:?} leaves the map"
             );
-            assert!(
-                rect_all_grass(&r),
-                "{kind:?} at {base:?} overlaps cobble or road"
-            );
+            if kind == PropKind::ThroneDais {
+                // Landmarks stand ON their plaza (flagstone, clear of the
+                // cobble ring); see `landmark_plot_is_sound`.
+                assert!(
+                    rect_all(&r, Ground::Flagstone),
+                    "{kind:?} at {base:?} leaves the flagstone"
+                );
+            } else {
+                assert!(
+                    rect_all_grass(&r),
+                    "{kind:?} at {base:?} overlaps cobble or road"
+                );
+            }
         }
     }
 
@@ -780,43 +849,29 @@ mod tests {
         }
     }
 
-    /// Each pending landmark spot (art not approved yet, nothing spawned)
-    /// is a real, free 64x64 plot: on grass inside the map, clear of every
-    /// prop and every NPC slot, in a district that exists.
+    /// The pending landmark spot (REF-95, art not approved, nothing
+    /// spawned) is the Library plaza's back-centre, with the Librarian
+    /// centred in front of it, so the approved art lands where the Throne
+    /// Dais does in its district.
     #[test]
     fn pending_landmark_spots_are_clear() {
-        let props = all_props();
         assert_eq!(PENDING_LANDMARKS.len(), 1, "only REF-95 waits");
-        for &(d, side, offset, art) in PENDING_LANDMARKS {
-            let base =
-                cottage_base(d, side, offset).unwrap_or_else(|| panic!("{art}: no district {d}"));
-            let plot = PropKind::Cottage.sprite_rect_at(base);
-            assert!(
-                plot.min.x >= -WORLD_HALF_W
-                    && plot.max.x <= WORLD_HALF_W
-                    && plot.min.y >= -WORLD_HALF_H
-                    && plot.max.y <= WORLD_HALF_H,
-                "{art} leaves the map"
-            );
-            assert!(rect_all_grass(&plot), "{art} is not on open grass");
-            for (k, b) in &props {
-                assert!(
-                    !k.sprite_rect_at(*b).overlaps(&plot),
-                    "{art} overlaps the {k:?} at {b:?}"
-                );
-            }
-            for i in 0..NPC_ROSTER.len() {
-                let s = district_slot(i);
-                let npc = Aabb::from_base(s.x, 32.0, s.y - 32.0, s.y + 32.0);
-                assert!(!npc.overlaps(&plot), "{art} covers NPC slot {i}");
-            }
+        let library = DISTRICTS
+            .iter()
+            .position(|d| d.name == "The Forbidden Library")
+            .expect("the Library district");
+        for &(d, art) in PENDING_LANDMARKS {
+            assert_eq!(d, library, "{art}");
+            let base = crate::plugins::world::back_landmark_base(d)
+                .unwrap_or_else(|| panic!("{art}: no back landmark in district {d}"));
+            landmark_plot_is_sound(d, base, art, None);
         }
     }
 
-    /// The Throne Dais (REF-96) is spawned exactly once, at the spot Act 9
-    /// reserved for it on the Throne plaza's north-east side, as a solid,
-    /// y-sorted 64x64 prop; the player can stand just in front of its
-    /// bottom step (drawn in front) and behind the throne (it fades).
+    /// The Throne Dais (REF-96) is spawned exactly once, ON the Throne
+    /// plaza at its back-centre with the Compiler centred in front of it,
+    /// as a solid, y-sorted 64x64 prop; the player can stand just in front
+    /// of its bottom step (drawn in front) and behind the throne (it fades).
     #[test]
     fn the_throne_dais_stands_at_its_reserved_spot() {
         let dais: Vec<Vec2> = all_props()
@@ -828,12 +883,10 @@ mod tests {
             .iter()
             .position(|d| d.name == "The Throne")
             .expect("the Throne district");
-        assert_eq!(LANDMARKS.len(), 1);
-        let (d, side, offset, kind) = LANDMARKS[0];
-        assert_eq!((d, offset, kind), (throne, 100.0, PropKind::ThroneDais));
-        assert!(matches!(side, Side::East));
-        let base = cottage_base(throne, Side::East, 100.0).expect("spot");
-        assert_eq!(dais, vec![base], "one dais, at the reserved spot");
+        assert_eq!(LANDMARKS, &[(throne, PropKind::ThroneDais)]);
+        let base = crate::plugins::world::back_landmark_base(throne).expect("spot");
+        assert_eq!(dais, vec![base], "one dais, at the back-centre");
+        landmark_plot_is_sound(throne, base, "the Throne Dais", Some(base));
         assert!(
             PENDING_LANDMARKS.iter().all(|(d, ..)| *d != throne),
             "the Throne's spot is no longer pending"

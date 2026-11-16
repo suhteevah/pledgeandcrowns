@@ -159,8 +159,11 @@ runs `scripts/ci.ps1` on the merged result as the sign-off gate.
   the Rust trademark non-affiliation line; `mission::epilogue_due`). The
   Throne holds its seven NPCs (the 64 px Compiler alone, centred, in the
   back row); the Throne Dais (REF-96, approved 2026-11-15) is wired as a
-  solid, y-sorted 64x64 prop at its reserved north-east spot
-  (`prop::LANDMARKS`); REF-95 stays a draft, its spot still reserved.
+  solid, y-sorted 64x64 prop ON the plaza at its back-centre, the Compiler
+  centred just in front of it (`prop::LANDMARKS`,
+  `world::back_landmark_base`; the rows moved south, 152 px apart; second
+  commit, after review). The Library's REF-95 reservation moved to the
+  same back-centre spot behind the Librarian; REF-95 stays a draft.
   Server: all nine are stdout checks with construct tokens in the plain
   build; the two allocator missions (`prealloc`, `compiler_alloc`) carry
   the player's own counting `#[global_allocator]`, which the plain build

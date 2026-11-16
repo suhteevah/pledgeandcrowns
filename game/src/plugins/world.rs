@@ -205,8 +205,11 @@ const NPC_GRID_SPACING: f32 = 240.0;
 /// roster's `native_px`, which `tests/art_wiring.rs` pins to the PNG. With
 /// 240 px spacing the outer columns of the 260-half ring plazas stood ON
 /// the cobble ring; the grid compresses to fit (ring plazas: 204 px, the
-/// Library with its 64 px Librarian: 188 px, the hub with the Borrow
-/// Checker: 228 px). `tests/npc_placement.rs` checks the real tiles under
+/// Library and the Throne with their 64 px bosses: 188 px across, the hub
+/// with the Borrow Checker: 228 px). The Library and the Throne also keep
+/// their plaza's back-centre for a 64x64 landmark
+/// ([`BACK_LANDMARK_DISTRICTS`]), so their three rows are 152 px apart,
+/// shifted south. `tests/npc_placement.rs` checks the real tiles under
 /// every NPC.
 const NPC_EDGE_MARGIN: f32 = 40.0;
 
@@ -246,6 +249,41 @@ fn largest_sprite_px(first: usize, count: usize) -> f32 {
 /// Librarian, stands alone in the middle of its back row).
 const NPC_GRID_COLS: usize = 3;
 
+/// Districts with a 64x64 landmark at the back-centre of their plaza (the
+/// north edge): the Forbidden Library (REF-95, reserved, not yet approved)
+/// and the Throne (REF-96, the Throne Dais). Each district's boss stands
+/// in the back row, centred, directly in front of it.
+pub const BACK_LANDMARK_DISTRICTS: &[&str] = &["The Forbidden Library", "The Throne"];
+
+/// Size of a back landmark sprite (REF-95/96 are 64x64).
+pub const BACK_LANDMARK_PX: f32 = 64.0;
+
+/// How far a back landmark's sprite stays inside the plaza edge: one clear
+/// flagstone tile (16) + the cobble ring (16) + up to half a tile (8),
+/// the same margin an NPC sprite keeps ([`NPC_EDGE_MARGIN`]).
+const BACK_LANDMARK_EDGE_MARGIN: f32 = 40.0;
+
+/// Gap between the top of the back-row boss's sprite and the bottom of the
+/// landmark's sprite, so the two never overlap.
+pub const BACK_LANDMARK_GAP: f32 = 8.0;
+
+fn back_landmark_base_of(d: &District) -> Option<Vec2> {
+    if !BACK_LANDMARK_DISTRICTS.contains(&d.name) {
+        return None;
+    }
+    Some(Vec2::new(
+        d.center.x,
+        d.center.y + d.plaza_half - BACK_LANDMARK_EDGE_MARGIN - BACK_LANDMARK_PX,
+    ))
+}
+
+/// Bottom-centre anchor of district `district`'s back landmark, if it has
+/// one: centred on the plaza, its top edge [`BACK_LANDMARK_EDGE_MARGIN`]
+/// inside the plaza's north edge, on flagstone.
+pub fn back_landmark_base(district: usize) -> Option<Vec2> {
+    DISTRICTS.get(district).and_then(back_landmark_base_of)
+}
+
 /// World-space position for the NPC at `index` in the roster: a centered grid
 /// slot inside that NPC's district. Replaces the old hand-typed scatter.
 pub fn district_slot(index: usize) -> Vec2 {
@@ -261,9 +299,23 @@ pub fn district_slot(index: usize) -> Vec2 {
             let in_row = (d.count - row * cols).min(cols);
             let px = largest_sprite_px(acc, d.count);
             let sx = axis_spacing(cols, d.plaza_half, px);
-            let sy = axis_spacing(rows, d.plaza_half, px);
             let x = d.center.x + (col as f32 - (in_row as f32 - 1.0) * 0.5) * sx;
-            let y = d.center.y + (row as f32 - (rows as f32 - 1.0) * 0.5) * sy;
+            let y = match back_landmark_base_of(d) {
+                // A landmark stands at the back-centre: the rows fill the
+                // span from the front edge clearance up to just in front of
+                // its steps, so the back-row boss stands centred before it.
+                Some(base) if rows > 1 => {
+                    let half_px = px * 0.5;
+                    let lo = d.center.y - d.plaza_half + half_px + NPC_EDGE_MARGIN;
+                    let hi = base.y - BACK_LANDMARK_GAP - half_px;
+                    let sy = NPC_GRID_SPACING.min((hi - lo).max(0.0) / (rows as f32 - 1.0));
+                    hi - (rows - 1 - row) as f32 * sy
+                }
+                _ => {
+                    let sy = axis_spacing(rows, d.plaza_half, px);
+                    d.center.y + (row as f32 - (rows as f32 - 1.0) * 0.5) * sy
+                }
+            };
             let mut slot = Vec2::new(x, y);
             if slot.distance(PLAYER_SPAWN) < NPC_SPAWN_CLEARANCE {
                 slot.y = PLAYER_SPAWN.y + NPC_SPAWN_CLEARANCE;

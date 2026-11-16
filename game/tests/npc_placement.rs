@@ -171,6 +171,55 @@ fn assert_cast_with_boss_at_the_back(district: &str, first: &str, boss: &str) {
     }
 }
 
+/// No NPC stands under a back landmark (the Throne Dais, spawned, and the
+/// Library's reserved REF-95 spot, not spawned): no NPC sprite or talk
+/// spot overlaps either 64x64 plot, and each district's 64 px boss stands
+/// centred directly in front of (south of) its plot, his sprite ending at
+/// most 16 px below it.
+#[test]
+fn no_npc_stands_under_a_landmark() {
+    use pledge_and_crown::plugins::world::{
+        BACK_LANDMARK_DISTRICTS, BACK_LANDMARK_PX, back_landmark_base,
+    };
+    assert_eq!(
+        BACK_LANDMARK_DISTRICTS,
+        &["The Forbidden Library", "The Throne"]
+    );
+    for name in BACK_LANDMARK_DISTRICTS {
+        let d = DISTRICTS
+            .iter()
+            .position(|x| x.name == *name)
+            .unwrap_or_else(|| panic!("no district {name}"));
+        let base = back_landmark_base(d).expect("back landmark");
+        let half = BACK_LANDMARK_PX * 0.5;
+        let plot = Aabb::from_base(base.x, half, base.y, base.y + BACK_LANDMARK_PX);
+        for (i, spec) in NPC_ROSTER.iter().enumerate() {
+            let p = district_slot(i);
+            let h = spec.native_px * 0.5;
+            let sprite = Aabb::from_base(p.x, h, p.y - h, p.y + h);
+            assert!(
+                !sprite.overlaps(&plot),
+                "{} under the {name} landmark",
+                spec.name
+            );
+            let talk = p + TALK_SPOT_OFFSET;
+            let foot = PLAYER_FOOT.translated(talk);
+            assert!(!foot.overlaps(&plot), "{}'s talk spot under it", spec.name);
+        }
+        let first: usize = DISTRICTS[..d].iter().map(|x| x.count).sum();
+        let boss = first + DISTRICTS[d].count - 1;
+        let p = district_slot(boss);
+        assert_eq!(p.x, base.x, "{name}: boss centred on the landmark");
+        let top = p.y + NPC_ROSTER[boss].native_px * 0.5;
+        assert!(
+            top <= base.y && base.y - top <= 16.0,
+            "{name}: {} stands just in front (top {top}, landmark base {})",
+            NPC_ROSTER[boss].name,
+            base.y
+        );
+    }
+}
+
 /// Every roster slot belongs to a district (none falls to the south-edge
 /// safety net); the Act 9 cast stands in the Forbidden Library with the
 /// 64 px Librarian alone and centred in its back (north) row; the Act 10

@@ -661,16 +661,17 @@ fn world_scenes(v: &mut Vec<Scene>) {
         0.8,
         None,
     ));
-    // The Throne Dais (REF-96): the player just south of its bottom step,
-    // the dais filling the upper half of the view, the Throne plaza's
-    // east edge to the left. Logs the spot so the capture can be checked.
-    for &(d, side, offset, kind) in crate::plugins::prop::LANDMARKS {
-        let Some(base) = crate::plugins::prop::cottage_base(d, side, offset) else {
+    // The Throne Dais (REF-96) at the Throne plaza's back-centre: the
+    // player stands beside it (east of the steps, clear of every NPC), the
+    // dais and the Compiler in front of it in view. Logs the spot so the
+    // capture can be checked.
+    for &(d, kind) in crate::plugins::prop::LANDMARKS {
+        let Some(base) = crate::plugins::world::back_landmark_base(d) else {
             tracing::warn!(?kind, "landmark scene: no district {d}");
             continue;
         };
         let solid = kind.solid_at(base);
-        let feet = Vec2::new(base.x, solid.min.y - 40.0);
+        let feet = Vec2::new(solid.max.x + 48.0, solid.min.y);
         v.push(scene(
             "landmark-throne-dais",
             vec![
@@ -708,11 +709,12 @@ fn district_label(name: &str) -> String {
         .replace(' ', "-")
 }
 
-/// One capture per Act 3-9 district, camera on the plaza centre: all six of
-/// a ring quarter's villagers (3x2 grid) fit in the 280 px tall view. The
-/// Library's 3x3 grid (188 px rows) does not: its capture shows the middle
-/// row and the edges of the other two, and `npcs-the-forbidden-library-back`
-/// centres on the back row, where the Librarian stands.
+/// One capture per Act 3-10 district, camera on the plaza centre: all six
+/// of a ring quarter's villagers (3x2 grid) fit in the 280 px tall view.
+/// The Library's and the Throne's 3x3 grids (152 px rows, shifted south of
+/// the back-centre landmark) do not: their front capture centres between
+/// the two villager rows, and `npcs-<district>-back` centres just in front
+/// of the boss, the landmark spot behind him.
 fn district_npc_scenes(v: &mut Vec<Scene>) {
     let mut first = 0usize;
     for (d, district) in crate::plugins::world::DISTRICTS.iter().enumerate() {
@@ -763,7 +765,9 @@ fn district_npc_scenes(v: &mut Vec<Scene>) {
                 vec![
                     Action::EnterState(GameState::InGame, ENTER_GAME_SETTLE),
                     act(hide_next_pin),
-                    teleport_to(Vec2::new(back.x, back.y - 60.0)),
+                    // Beside the boss, so the landmark spot behind him
+                    // is in view and the player hides nobody.
+                    teleport_to(Vec2::new(back.x + 64.0, back.y - 20.0)),
                 ],
                 0.7,
                 boxed(show_next_pin),
