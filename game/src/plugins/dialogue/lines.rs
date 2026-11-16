@@ -431,7 +431,7 @@ pub const TRIAL_STAGES: &[NpcLines] = &[
                 "The stacks are sealed to you. See {next} first, and come back when the quire is bound.",
             ],
             offer: &[
-                "Everything in here is real. The compiler stopped protecting you at the door. Three tests, all mine.",
+                "Past this door, every promise you write is entered against your name. Three tests, all mine.",
                 "First, the safe door. `volume_at` is an `unsafe fn`: call it outside `unsafe` and the compiler says E0133.",
                 "But `unsafe` alone opens nothing safely. Index 99 must never be read. Check the shelf's length first.",
             ],
@@ -469,8 +469,8 @@ pub const TRIAL_STAGES: &[NpcLines] = &[
                 "`std::ptr::slice_from_raw_parts_mut(self.ptr, self.len)`, then `Box::from_raw` on that, in `Drop`.",
             ],
             cleared: &[
-                "Borrowed from the heap and returned to it. Every door you opened, you closed again.",
-                "A safe door, an exact incantation, a page returned once. The Library is yours.",
+                "Every door you opened, you closed again. I have entered that against your name.",
+                "Check the index before the read. Say the words exactly. Return each page once. That is the whole catalogue.",
             ],
         },
     },
@@ -488,9 +488,9 @@ pub const TRIAL_STAGES: &[NpcLines] = &[
                 "The Throne is not yours to climb yet. See {next} first, and come back with the register stamped.",
             ],
             offer: &[
-                "You have read my words since the bridge. Every error you met was mine, and every one was true.",
+                "You have read my words since your first `let`. Every error you met was mine.",
                 "Three proofs. The first is a measure: build my proclamation, and the scale counts each request for memory.",
-                "One allocation. The count your own program prints is the only judge I accept.",
+                "One allocation. I take the count your own program prints, and nothing else.",
             ],
             in_progress: &[
                 "Work out the length before you write the first byte. Then ask for it once.",
@@ -504,7 +504,7 @@ pub const TRIAL_STAGES: &[NpcLines] = &[
             not_yet: &[],
             offer: &[
                 "Second proof. My herald borrows a name, or copies a title into something new.",
-                "Its signature does not say which. Read what I tell you in the result pane, every line of it.",
+                "Its signature does not say which. Read my output, every line of it.",
                 "My help mends the signature. It does not know your callers.",
             ],
             in_progress: &["Name the lifetime the result really borrows from. Only that one."],
@@ -523,8 +523,8 @@ pub const TRIAL_STAGES: &[NpcLines] = &[
                 "A float has an order, but not a total one. Choose the bound that allows for that.",
             ],
             cleared: &[
-                "It compiles. It always would have, once you said what you meant.",
-                "Every error I gave you was a sentence about your program, and you learned to read them. The Throne is yours.",
+                "Nothing to report. From me, there is no higher word.",
+                "Every error I gave you was a sentence about your program, and you learned to read them.",
             ],
         },
     },

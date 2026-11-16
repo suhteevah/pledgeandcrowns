@@ -2273,6 +2273,7 @@ Add 5 to `gold` through `write_ptr`, then read it back through a \
 `*const i32` and print three lines: `pointer is null: false`, \
 `gold through the pointer: 15`, then `gold by name: 15`.\n\n\
 ## Hint\n\
+The Shelfmark's card says where a book stands, never what is there. \
 E0133, \"dereference of raw pointer is unsafe and requires unsafe \
 block\": the write must sit inside `unsafe { ... }`. Make \
 `let read_ptr: *const i32 = &gold;` after the write, and put a \
@@ -2313,7 +2314,8 @@ seal three ways: directly, through the extern block, and through an \
 `direct call: 44`, `through the extern block: 44`, then \
 `through a fn pointer: 44`.\n\n\
 ## Hint\n\
-E0133: anything declared in an extern block is unsafe to call, \
+The Envoy carries one treaty under two seals, and both sides must read \
+it alike. E0133: anything declared in an extern block is unsafe to call, \
 because only you know the declaration is true. With `repr(C)`, \
 `u8, u32, u8` takes 12 bytes: 1, 3 of padding, 4, 1, 3 of tail \
 padding, aligned to 4. Without it Rust may reorder the fields, so the \
@@ -2347,7 +2349,8 @@ program prints `  verse: 1`, `first chant: 1`, `  verse: 2`, \
 `  verse: 3`, `  verse: 4`, `second chant: 9`, `  verse: 10`, \
 `  verse: 20`, then `third chant: 30`.\n\n\
 ## Hint\n\
-\"cannot find macro `chant` in this scope\": define it with \
+The Macro Monk says nothing. He carves the block once and presses it \
+for every verse. \"cannot find macro `chant` in this scope\": define it with \
 `macro_rules!` above `main`. Match the list with \
 `($($verse:expr),+ $(,)?)`: the `$(,)?` accepts the trailing comma in \
 `chant!(10, 20,)`. Wrap the template in `{{ ... }}` so the expansion is \
@@ -2380,7 +2383,8 @@ and print \"main ends\". The program prints `early is released`, \
 `inner is released`, `main ends`, `second is released`, then \
 `first is released`.\n\n\
 ## Hint\n\
-E0040: destructors are called for you. `drop(early);` moves the value \
+The Sexton puts each candle out in its turn, and leaves one burning on \
+purpose. E0040: destructors are called for you. `drop(early);` moves the value \
 into `std::mem::drop`, which ends it there. `std::mem::forget(bound);` \
 takes ownership and never runs `drop`. A leading underscore on a name \
 only silences the unused-variable warning: `let _inner = ...` still \
@@ -2444,6 +2448,8 @@ Fill all four pages of a `MaybeUninit<[u32; PAGES]>` through a raw \
 pointer, page `i` holding `(i + 1) * 10`, then `assume_init` and print \
 `bound pages: [10, 20, 30, 40]` and `total ink: 100`.\n\n\
 ## Hint\n\
+The Bookbinder sews the blank leaves first, and lets no one read until \
+every page is written. \
 E0381, \"used binding `quire` isn't initialized\": rustc points at the \
 read on the `println!` line, because safe Rust cannot prove the loop \
 set every element. Take `let first = quire.as_mut_ptr().cast::<u32>();`, \
@@ -2614,6 +2620,8 @@ spaces, and print each name with `(borrowed)` or `(copied)`. The \
 program prints `Grimoire (borrowed)`, `Book_of_Crowns (copied)`, then \
 `Ledger (borrowed)`.\n\n\
 ## Hint\n\
+The Copyist reads from the page in front of him, and lifts the quill \
+only when a title must change. \
 `replace` always builds a new `String`, even when there is nothing to \
 replace. Return `Cow::Owned(title.replace(' ', \"_\"))` only when \
 `title.contains(' ')`, and `Cow::Borrowed(title)` otherwise. In `main`, \
@@ -2646,6 +2654,8 @@ and add a compile-time check that the last star is 50. The program \
 prints `star chart: [1, 2, 5, 10, 17, 26, 37, 50]`, then \
 `brightest: 50`.\n\n\
 ## Hint\n\
+The Astronomer draws the chart before dark, so no one works it out at \
+night. \
 E0015, \"cannot call non-const function `star_table` in constants\": a \
 `const` can only call `const fn`s. Adding `const` alone is not enough: \
 the `for` loop is a second E0015, \"cannot use `for` loop on \
@@ -2672,7 +2682,7 @@ over are not yielded: they wait in `.remainder()`, and forgetting them \
 is the classic bug. Portable SIMD (`std::simd`) is unstable: on stable \
 Rust, `use std::simd` is E0658, \"use of unstable library feature \
 `portable_simd`\". A grader cannot check speed, so the Choirmaster \
-checks the answer.\n\n\
+listens for the right sum.\n\n\
 ## Syntax\n\
 ```\nlet mut chunks = data.chunks_exact(4);\nfor chunk in &mut chunks { /* 4 elements */ }\nlet rest = chunks.remainder(); // 0..=3 elements\n```\n\n\
 ## Task\n\
@@ -2755,6 +2765,7 @@ The program prints `^1.2.3 accepts 1.9.0: true`, \
 `^0.0.3 accepts 0.0.3: true`, `^0.0.3 accepts 0.0.4: false`, then \
 `^1.2.3 vs 1.x.0: not a version`.\n\n\
 ## Hint\n\
+The Registrar's seal says which versions may stand in for which. \
 The rule is right for `^1.2.3` and wrong for `^0.2.3`: it lets 0.3.0 \
 through. After rejecting `candidate < required`, find the leftmost \
 non-zero part of `required`: the candidate must match `required` up to \
@@ -3552,7 +3563,7 @@ pub const EPILOGUE_LINES: EpilogueLines = EpilogueLines {
     heading: "The realm pledges its crown.",
     body: "You have answered every sworn question, from the first `let` in \
            Hearthstone Square to the Compiler's last proof on the Throne. \
-           The Compiler rises. The banners come in.",
+           The Compiler rises and stands aside.",
     after: "That is the whole road. Revisit any NPC with [F] to re-read a \
             lesson, or wander the realm.",
     credits: &[

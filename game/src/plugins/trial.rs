@@ -142,7 +142,7 @@ pub const TRIALS: &[Trial] = &[
         name: "The Librarian",
         npc: "librarian_index",
         stages: &["librarian_index", "librarian_demand", "librarian_seal"],
-        complete_line: "\"A safe door, an exact incantation, every page returned. The Library is yours.\"",
+        complete_line: "\"Three tests, each entered under your name. The stacks are open to you.\"",
     },
     // Act 10 boss, the last missions in the registry. The Compiler has no
     // prologue either (his roster key is stage 1). Clearing his last
@@ -152,7 +152,7 @@ pub const TRIALS: &[Trial] = &[
         name: "The Compiler",
         npc: "compiler_alloc",
         stages: &["compiler_alloc", "compiler_lifetime", "compiler_bound"],
-        complete_line: "\"Measured, borrowed honestly, bounded exactly. It compiles. The Throne is yours.\"",
+        complete_line: "\"Measured, borrowed honestly, bounded exactly. I have no more to say.\"",
     },
 ];
 
