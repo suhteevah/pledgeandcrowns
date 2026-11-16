@@ -1367,6 +1367,94 @@ pub static MISSION_RULES: &[MissionRule] = &[
         ],
         pass: "the Vaultwright closes the vault. \"walked once, nothing left behind. the Warden is unmade.\"",
     },
+    // ── Act 9 (Forbidden Library). `unsafe` appears only inside these
+    // string literals: grader patterns, never code.
+    MissionRule {
+        id: "raw_pointer",
+        npc: "the Shelfmark taps the card",
+        checks: &[
+            check(&["unsafe {", "unsafe{"], "dereference the pointer inside an `unsafe` block"),
+            check(&["*mut", "&raw mut", "addr_of_mut!"], "write through a `*mut` raw pointer"),
+            check(&["*const", "&raw const", "addr_of!"], "read back through a `*const` raw pointer"),
+        ],
+        pass: "the Shelfmark files the card. \"an address is not a book — but you fetched the book.\"",
+    },
+    MissionRule {
+        id: "extern_c",
+        npc: "the Envoy waits at the border",
+        checks: &[
+            check(&["repr(C)"], "lay `Rune` out by C's rules with `#[repr(C)]`"),
+            check(&["no_mangle"], "export `crown_seal` under its plain name with `#[unsafe(no_mangle)]`"),
+            check(&["extern \"C\" fn"], "give `crown_seal` the C calling convention: `pub extern \"C\" fn`"),
+            check(&["unsafe {", "unsafe{"], "call through the foreign declaration inside `unsafe`"),
+        ],
+        pass: "the Envoy seals the treaty. \"two tongues, one calling convention.\"",
+    },
+    MissionRule {
+        id: "macro_rules",
+        npc: "the Macro Monk keeps his silence",
+        checks: &[
+            check(&["macro_rules!"], "define the macro with `macro_rules!`"),
+            check(&["$("], "accept a list of verses with a repetition: `$( ... ),+`"),
+        ],
+        pass: "the Macro Monk lifts the woodblock. \"carve once, print as often as you like.\"",
+    },
+    MissionRule {
+        id: "drop_trait",
+        npc: "the Sexton holds the snuffer",
+        checks: &[
+            check(&["impl Drop for"], "give `Soul` a destructor: `impl Drop for Soul`"),
+            check(&["forget("], "keep `bound` from ever being released with `std::mem::forget`"),
+        ],
+        pass: "the Sexton snuffs the candles in order. \"last lit, first out — and one left burning.\"",
+    },
+    MissionRule {
+        id: "send_sync",
+        npc: "the Courier will not carry it",
+        checks: &[
+            check(&["unsafe impl Send"], "promise the tome may move between threads: `unsafe impl Send for Tome {}`"),
+            check(&["unsafe impl Sync"], "promise it may be shared by reference: `unsafe impl Sync for Tome {}`"),
+        ],
+        pass: "the Courier shoulders the satchel. \"you vouched for it, so I carry it.\"",
+    },
+    MissionRule {
+        id: "maybe_uninit",
+        npc: "the Bookbinder holds up a blank page",
+        checks: &[
+            check(&["MaybeUninit"], "bind the quire blank with `MaybeUninit`"),
+            check(&["write("], "fill each page with `write`, which never reads or drops the old bytes"),
+            check(&["assume_init", "transmute"], "declare it filled with `assume_init` once every page is written"),
+        ],
+        pass: "the Bookbinder closes the quire. \"every page written before anyone read one.\"",
+    },
+    // ── Act 9 boss: the Librarian's trial (stages 1-3).
+    MissionRule {
+        id: "librarian_index",
+        npc: "the Librarian blocks the stacks",
+        checks: &[
+            check(&["unsafe fn"], "keep `volume_at` an `unsafe fn` with its `# Safety` contract"),
+            check(&[".len()"], "check the index against the shelf's `.len()` before the unsafe call"),
+        ],
+        pass: "the Librarian steps aside. \"a door no index can break. first test passed.\"",
+    },
+    MissionRule {
+        id: "librarian_demand",
+        npc: "the Librarian repeats his demand",
+        checks: &[
+            check(&["macro_rules!"], "answer with a `macro_rules!` macro"),
+            check(&["$("], "take any number of arguments with a repetition: `$( ... )*`"),
+        ],
+        pass: "the Librarian hears his words returned. \"the incantation, exactly. second test passed.\"",
+    },
+    MissionRule {
+        id: "librarian_seal",
+        npc: "the Librarian holds the codex open",
+        checks: &[
+            check(&["impl Drop for"], "seal the codex: `impl Drop for Codex`"),
+            check(&["from_raw"], "give the pages back to the heap with `Box::from_raw`"),
+        ],
+        pass: "the Librarian closes the codex. \"borrowed from the heap, returned to it. the Library is yours.\"",
+    },
 ];
 // END MISSION TABLE
 

@@ -86,7 +86,23 @@ pub enum Unverified {
     /// `ok: true` but the server did not say how it graded (old server,
     /// unknown `grade` value, or contradictory fields).
     Unknown,
+    /// `passed` with `behaviour_checked: true`, from an Act 9 mission the
+    /// server grades with `unsafe` allowed (`HarnessMode::UnsafeLateNonce`,
+    /// recognised by [`UNSAFE_ALLOWED_NOTE_MARKER`] in its note). The
+    /// checker did call the player's code and every result matched, but in
+    /// that mode `unsafe` player code can rewrite the checker's stored
+    /// results (compile-api/HARNESS-NOTES.md, the documented known limit),
+    /// so the pass is not shown as VERIFIED.
+    UnsafeAllowed,
 }
+
+/// Words the server's pass note carries for a harness mission graded with
+/// `unsafe` allowed: `"checked by calling your code (N checks; `unsafe`
+/// allowed, results keyed by the server only after your code finished)"`
+/// (`compile-api` `expectations::harness_pass_note`). A cross-crate test
+/// (`tests/compile_api_client.rs`) feeds the server's real note through
+/// [`Grade::from_server`].
+pub const UNSAFE_ALLOWED_NOTE_MARKER: &str = "`unsafe` allowed";
 
 /// How the server graded one submission.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -117,6 +133,7 @@ impl Grade {
         match self {
             Self::Passed => "[ok]",
             Self::PassedUnverified(Unverified::PatternOnly) => "[ok:pattern]",
+            Self::PassedUnverified(Unverified::UnsafeAllowed) => "[ok:unsafe]",
             Self::PassedUnverified(_) => "[ok:unverified]",
             Self::WrongOutput => "[fail:output]",
             Self::CompileError => "[fail:compile]",
@@ -127,15 +144,23 @@ impl Grade {
     }
 
     /// Map the server's fields. `ok` is already `ok && status == 200`.
-    /// Only `passed` + `behaviour_checked: true` is verified.
+    /// Only `passed` + `behaviour_checked: true` is verified, and not even
+    /// that when the note says `unsafe` was allowed
+    /// ([`Unverified::UnsafeAllowed`]).
     pub fn from_server(
         mode: CompileMode,
         ok: bool,
         grade: Option<&str>,
         behaviour_checked: Option<bool>,
+        note: Option<&str>,
     ) -> Self {
         if ok {
             return match (grade, behaviour_checked) {
+                (Some("passed"), Some(true))
+                    if note.is_some_and(|n| n.contains(UNSAFE_ALLOWED_NOTE_MARKER)) =>
+                {
+                    Self::PassedUnverified(Unverified::UnsafeAllowed)
+                }
                 (Some("passed"), Some(true)) => Self::Passed,
                 (Some("compiled_not_checked"), _) => {
                     Self::PassedUnverified(Unverified::CompiledNotChecked)
@@ -268,7 +293,13 @@ pub fn classify(mode: CompileMode, result: Result<HttpReply, TransportError>) ->
             // 400 carries a real verdict body ("empty source").
             Some(p) => {
                 let ok = p.ok && reply.status == 200;
-                let grade = Grade::from_server(mode, ok, p.grade.as_deref(), p.behaviour_checked);
+                let grade = Grade::from_server(
+                    mode,
+                    ok,
+                    p.grade.as_deref(),
+                    p.behaviour_checked,
+                    p.note.as_deref(),
+                );
                 tracing::debug!(
                     status = reply.status,
                     ok,
@@ -551,6 +582,30 @@ mod tests {
             assert_eq!(p.kind == ResultKind::Pass, ok, "{name}");
             assert_eq!(v.detail.for_result, v.formatted);
         }
+    }
+
+    /// A late-nonce pass (Act 9, `unsafe` allowed) is a clear but not
+    /// VERIFIED: the server's own note names the mode.
+    #[test]
+    fn unsafe_allowed_pass_is_a_clear_but_not_verified() {
+        let body = r#"{"ok":true,"stdout":"[real] 42\n-- checked: does what the mission asks","stderr":"","grade":"passed","behaviour_checked":true,"note":"checked by calling your code (8 checks; `unsafe` allowed, results keyed by the server only after your code finished)"}"#;
+        let g = graded(REAL, body);
+        assert_eq!(g.grade, Grade::PassedUnverified(Unverified::UnsafeAllowed));
+        assert_eq!(g.grade.tag(), "[ok:unsafe]");
+        let v = verdict_with_server(&ApiOutcome::Graded(g), "m", || panic!("no stub"));
+        assert!(v.ok && v.persist_clear, "still a clear");
+        assert_eq!(parse_result(&v.formatted).tag, ResultTag::UnsafeAllowed);
+        // The same pass from a ForbidUnsafe mission is verified.
+        let plain = body.replace(
+            "8 checks; `unsafe` allowed, results keyed by the server only after your code finished",
+            "8 checks",
+        );
+        assert_eq!(graded(REAL, &plain).grade, Grade::Passed);
+        // The marker only matters on a checked pass.
+        let failed = body
+            .replace(r#""ok":true"#, r#""ok":false"#)
+            .replace(r#""grade":"passed""#, r#""grade":"wrong_output""#);
+        assert_eq!(graded(REAL, &failed).grade, Grade::WrongOutput);
     }
 
     #[test]

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-93 - The Librarian, Act 9 boss, 64x64, idle.
-// APPROVED by Matt 2026-11-15. Not wired yet.
+// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/npc/librarian_idle_0.png.
 //
 // The Library kit (REF-79) at boss scale: a hooded column so tall the hood
 // touches the top of the frame. Two cream eyes in the hood, a large violet

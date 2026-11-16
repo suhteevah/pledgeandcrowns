@@ -33,7 +33,11 @@ use bevy_ecs_tilemap::prelude::*;
 
 const TILE_PX: f32 = 16.0;
 const MAP_W: u32 = 180;
-const MAP_H: u32 = 140;
+/// 220 tiles (was 140): the north-south main street runs on to two more
+/// districts, the Forbidden Library (Act 9) at its south end and the
+/// Throne (Act 10) at its north end. Even, like 140, so every tile centre
+/// keeps the same world coordinates relative to the origin.
+const MAP_H: u32 = 220;
 
 /// World bounds in world-space (centered on origin). `player` clamps movement
 /// to these so the avatar can't walk off the tilemap.
@@ -83,10 +87,15 @@ pub struct District {
     pub count: usize,
 }
 
-/// Hub + a ring of eight quarters, well separated on a big map. `count`s sum to
-/// the 57-NPC roster (9 + 8*6). Roster order fills them, so the earliest
-/// (Act 1-2) NPCs gather in the central square and later acts spread to the ring.
+/// Hub + a ring of eight quarters + two districts at the ends of the
+/// north-south main street. `count`s sum to the 64-NPC roster
+/// (9 + 8*6 + 7 + 0). Roster order fills them, so the earliest (Act 1-2)
+/// NPCs gather in the central square, Acts 3-8 spread round the ring (one
+/// act per quarter, each named for its act), Act 9 stands in the
+/// Forbidden Library, and the Throne waits, empty, for Act 10.
 pub const DISTRICTS: &[District] = &[
+    // Acts 1-2 (the village prelude, the Borrow Checker among them) fill
+    // the hub and the two quarters on the east-west street.
     District {
         name: "Hearthstone Square",
         center: Vec2::new(0.0, 0.0),
@@ -105,49 +114,74 @@ pub const DISTRICTS: &[District] = &[
         plaza_half: 260.0,
         count: 6,
     },
+    // Act 3: the Guildhall Quarter.
     District {
         name: "Guildhall Quarter",
         center: Vec2::new(-720.0, 700.0),
         plaza_half: 260.0,
         count: 6,
     },
+    // Act 4: the Trait Mage's Tower (Vexis the Archmage's cast).
     District {
-        name: "Tradesmen's End",
+        name: "The Mage's Tower",
         center: Vec2::new(720.0, 700.0),
         plaza_half: 260.0,
         count: 6,
     },
+    // Act 5: the Tavern of Tribulations.
     District {
         name: "Tavern Row",
         center: Vec2::new(0.0, 800.0),
         plaza_half: 260.0,
         count: 6,
     },
+    // Act 6: the Iterator Forge.
     District {
-        name: "The Wharf",
+        name: "The Forge",
         center: Vec2::new(-720.0, -700.0),
         plaza_half: 260.0,
         count: 6,
     },
+    // Act 7: the Concurrent Coast (Dockmaster, Harbormaster, ...).
     District {
-        name: "Stonebridge",
+        name: "The Wharf",
         center: Vec2::new(720.0, -700.0),
         plaza_half: 260.0,
         count: 6,
     },
+    // Act 8: the Vault of Pointers.
     District {
-        name: "The Old Gate",
+        name: "The Vault",
         center: Vec2::new(0.0, -800.0),
         plaza_half: 260.0,
         count: 6,
     },
+    // Act 9: past the Vault, at the south end of the main street. Six
+    // villagers and the Librarian (64 px), who stands alone in the
+    // centre of the back (north) row.
+    District {
+        name: "The Forbidden Library",
+        center: Vec2::new(0.0, -1400.0),
+        plaza_half: 260.0,
+        count: 7,
+    },
+    // Act 10: past Tavern Row, at the north end of the main street. Built
+    // now so Act 10 needs no map change; nobody stands here yet.
+    District {
+        name: "The Throne",
+        center: Vec2::new(0.0, 1400.0),
+        plaza_half: 260.0,
+        count: 0,
+    },
 ];
 
 /// The street grid: a main cross through the hub plus two cross-streets that
-/// pick up the corner quarters. Every segment is axis-aligned.
+/// pick up the corner quarters. Every segment is axis-aligned. The
+/// north-south street runs through Tavern Row and the Vault on to the
+/// Throne and the Forbidden Library.
 const ROADS: &[(Vec2, Vec2)] = &[
     (Vec2::new(-960.0, 0.0), Vec2::new(960.0, 0.0)), // main street, E-W
-    (Vec2::new(0.0, -800.0), Vec2::new(0.0, 800.0)), // main street, N-S
+    (Vec2::new(0.0, -1400.0), Vec2::new(0.0, 1400.0)), // main street, N-S
     (Vec2::new(-720.0, 700.0), Vec2::new(720.0, 700.0)), // upper cross-street
     (Vec2::new(-720.0, -700.0), Vec2::new(720.0, -700.0)), // lower cross-street
 ];
@@ -160,14 +194,19 @@ const ROAD_HALF_TILES: u32 = 1;
 // neighbours — they read as individuals scattered across a plaza, not a huddle.
 const NPC_GRID_SPACING: f32 = 240.0;
 
-/// How far an NPC's centre must stay inside its plaza's `plaza_half`: half a
-/// 32 px sprite (16) + one clear flagstone tile (16) + the cobble ring (16) +
-/// up to half a tile (8) because the paved edge lands on the tile grid, not
-/// exactly on `plaza_half`. With 240 px spacing the outer columns of the
-/// 260-half ring plazas stood ON the cobble ring; the grid now compresses to
-/// fit (ring plazas: 204 px), the 300-half hub keeps its 240.
-/// `tests/npc_placement.rs` checks the real tiles under every NPC.
-const NPC_EDGE_CLEARANCE: f32 = 56.0;
+/// Paving an NPC sprite's edge must keep inside its plaza's `plaza_half`:
+/// one clear flagstone tile (16) + the cobble ring (16) + up to half a
+/// tile (8) because the paved edge lands on the tile grid, not exactly on
+/// `plaza_half`. An NPC's centre therefore stays half its sprite plus this
+/// inside the plaza edge: 56 px for a 32 px villager, 72 px for a 64 px
+/// boss (the Borrow Checker, the Librarian). The size comes from the
+/// roster's `native_px`, which `tests/art_wiring.rs` pins to the PNG. With
+/// 240 px spacing the outer columns of the 260-half ring plazas stood ON
+/// the cobble ring; the grid compresses to fit (ring plazas: 204 px, the
+/// Library with its 64 px Librarian: 188 px, the hub with the Borrow
+/// Checker: 228 px). `tests/npc_placement.rs` checks the real tiles under
+/// every NPC.
+const NPC_EDGE_MARGIN: f32 = 40.0;
 
 /// Where the player spawns on a new game (`player::spawn_player`): the hub
 /// crossroads. The hub's centre grid slot falls exactly here, so its NPC
@@ -176,16 +215,34 @@ pub const PLAYER_SPAWN: Vec2 = Vec2::ZERO;
 /// A 32 px sprite plus two clear tiles between the NPC and a spawned player.
 const NPC_SPAWN_CLEARANCE: f32 = 64.0;
 
-/// Grid spacing along one axis for `n` slots in a plaza of half-size `half`:
-/// [`NPC_GRID_SPACING`], compressed so the outermost slots keep
-/// [`NPC_EDGE_CLEARANCE`] from the plaza edge.
-fn axis_spacing(n: usize, half: f32) -> f32 {
+/// Grid spacing along one axis for `n` slots in a plaza of half-size `half`
+/// whose largest sprite is `sprite_px`: [`NPC_GRID_SPACING`], compressed so
+/// the outermost slots keep half that sprite plus [`NPC_EDGE_MARGIN`] from
+/// the plaza edge.
+fn axis_spacing(n: usize, half: f32, sprite_px: f32) -> f32 {
     let reach = (n as f32 - 1.0) * 0.5;
     if reach <= 0.0 {
         return NPC_GRID_SPACING;
     }
-    NPC_GRID_SPACING.min((half - NPC_EDGE_CLEARANCE).max(0.0) / reach)
+    let clearance = sprite_px * 0.5 + NPC_EDGE_MARGIN;
+    NPC_GRID_SPACING.min((half - clearance).max(0.0) / reach)
 }
+
+/// Native size of the largest sprite among roster slots
+/// `first..first + count` (32 px if none, e.g. an empty district).
+fn largest_sprite_px(first: usize, count: usize) -> f32 {
+    crate::plugins::npc::NPC_ROSTER
+        .iter()
+        .skip(first)
+        .take(count)
+        .map(|s| s.native_px)
+        .fold(32.0, f32::max)
+}
+
+/// Columns of every district grid. Rows grow with the district's `count`;
+/// a short last row is centred (the Library's seventh slot, the
+/// Librarian, stands alone in the middle of its back row).
+const NPC_GRID_COLS: usize = 3;
 
 /// World-space position for the NPC at `index` in the roster: a centered grid
 /// slot inside that NPC's district. Replaces the old hand-typed scatter.
@@ -194,13 +251,16 @@ pub fn district_slot(index: usize) -> Vec2 {
     for d in DISTRICTS {
         if index < acc + d.count {
             let local = index - acc;
-            let cols = 3usize;
+            let cols = NPC_GRID_COLS;
             let rows = d.count.div_ceil(cols);
             let col = local % cols;
             let row = local / cols;
-            let sx = axis_spacing(cols, d.plaza_half);
-            let sy = axis_spacing(rows, d.plaza_half);
-            let x = d.center.x + (col as f32 - (cols as f32 - 1.0) * 0.5) * sx;
+            // Slots in this slot's row: a full row, or what is left over.
+            let in_row = (d.count - row * cols).min(cols);
+            let px = largest_sprite_px(acc, d.count);
+            let sx = axis_spacing(cols, d.plaza_half, px);
+            let sy = axis_spacing(rows, d.plaza_half, px);
+            let x = d.center.x + (col as f32 - (in_row as f32 - 1.0) * 0.5) * sx;
             let y = d.center.y + (row as f32 - (rows as f32 - 1.0) * 0.5) * sy;
             let mut slot = Vec2::new(x, y);
             if slot.distance(PLAYER_SPAWN) < NPC_SPAWN_CLEARANCE {

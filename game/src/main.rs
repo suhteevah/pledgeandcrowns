@@ -5,6 +5,7 @@
 //! We configure it via `LogPlugin::filter` in `lib.rs` rather than calling
 //! `tracing_subscriber::fmt().init()` here — two subscribers fight over
 //! the global default and emit a `set_global_default` warning at boot.
+#![forbid(unsafe_code)]
 
 fn main() -> anyhow::Result<()> {
     pledge_and_crown::run()

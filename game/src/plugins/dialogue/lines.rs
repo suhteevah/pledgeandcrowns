@@ -4,7 +4,7 @@
 //! boss-trial stage in [`TRIAL_STAGES`], keyed by the stage's mission id.
 //!
 //! Every status falls back to [`GENERIC`] when an NPC has no authored lines
-//! for it, so all 57 roster NPCs can talk today. Authored lines exist only
+//! for it, so all 64 roster NPCs can talk today. Authored lines exist only
 //! for the nine Hearthstone Square NPCs (roster order, Ferris through the
 //! Cooper). Every other NPC is awaiting the voice-editor pass: add an entry
 //! to [`AUTHORED`] in that NPC's craft metaphor (see
@@ -71,12 +71,13 @@ pub const NOT_YET_NOTHING: &str = "I'm not ready for you yet. Come back another 
 /// - `cleared`: only the final stage (a trial NPC is Cleared only once
 ///   every stage is); its lines close the trial.
 /// - `not_yet`: only stage 1 of a trial whose owner has no prologue
-///   mission. Every trial owner so far has one (the Borrow Checker's
+///   mission. The Acts 2-8 owners all have one (the Borrow Checker's
 ///   `borrow_preview`, the Guildmaster's `impl_method`, Vexis's
 ///   `trait_def`, the Barkeep's `result_match`, the Keymaster's
 ///   `hashmap_basic`, the Dockmaster's `thread_spawn`, the Vaultwright's
-///   `box_basic`) and talks as a cleared villager until the trial opens,
-///   so their stages leave `not_yet` empty.
+///   `box_basic`) and talk as cleared villagers until the trial opens, so
+///   their stages leave `not_yet` empty. The Librarian (Act 9) has none:
+///   `librarian_index` carries his `not_yet` line.
 ///
 /// Every compiler error named here is compiled in
 /// `tests/mission_text.rs` (`trial_claims`), hard rule 3.
@@ -417,6 +418,58 @@ pub const TRIAL_STAGES: &[NpcLines] = &[
             cleared: &[
                 "The ring walked once, and when the handles dropped, the debts went with them. The Warden steps aside.",
                 "Box to hold, Rc to share, RefCell to change, Weak to let go. That is the whole of my craft.",
+            ],
+        },
+    },
+    // ── The Librarian: his trial (Act 9). No prologue, so stage 1 has a
+    // `not_yet` line ({next} is the Bookbinder, the mission before it).
+    NpcLines {
+        npc_id: "librarian_index",
+        lines: StatusLines {
+            not_yet: &[
+                "The stacks are sealed to you. See {next} first, and come back when the quire is bound.",
+            ],
+            offer: &[
+                "Everything in here is real. The compiler stopped protecting you at the door. Three tests, all mine.",
+                "First, the safe door. `volume_at` is an `unsafe fn`: call it outside `unsafe` and the compiler says E0133.",
+                "But `unsafe` alone opens nothing safely. Index 99 must never be read. Check the shelf's length first.",
+            ],
+            in_progress: &[
+                "`if index < shelf.len()`, and only then call `volume_at` inside `unsafe`. Every other index is `None`.",
+            ],
+            cleared: &[],
+        },
+    },
+    NpcLines {
+        npc_id: "librarian_demand",
+        lines: StatusLines {
+            not_yet: &[],
+            offer: &[
+                "Second test. My demand, written out in full: seal, seal, seal, page, page, page, page.",
+                "Your `incant!` takes one verse. Give it four and the compiler says no rules expected `,`.",
+                "Teach it to carry what it has built so far, and to call itself with the rest.",
+            ],
+            in_progress: &[
+                "An `@acc` rule folds one verse in with `seal` and calls `incant!` again with the rest. Left to right.",
+            ],
+            cleared: &[],
+        },
+    },
+    NpcLines {
+        npc_id: "librarian_seal",
+        lines: StatusLines {
+            not_yet: &[],
+            offer: &[
+                "Last test: the codex. `Box::into_raw` handed you its pages, and nothing gives them back.",
+                "Your `get` reads nothing, and when the codex closes the pages stay out on loan for ever.",
+                "Bound every read by the length, and in `Drop` rebuild the exact `Box` with `Box::from_raw`. Once.",
+            ],
+            in_progress: &[
+                "`std::ptr::slice_from_raw_parts_mut(self.ptr, self.len)`, then `Box::from_raw` on that, in `Drop`.",
+            ],
+            cleared: &[
+                "Borrowed from the heap and returned to it. Every door you opened, you closed again.",
+                "A safe door, an exact incantation, a page returned once. The Library is yours.",
             ],
         },
     },

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-80 - The Shelfmark on the Library kit (REF-79), 32x32, idle.
-// APPROVED by Matt 2026-11-15. Not wired yet.
+// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/npc/shelfmark_idle_0.png.
 //
 // Catalogue keeper. Lesson prop (raw_pointer): a long pointer rod ending in
 // a blank call-number card. The rod is the address, not the book - the card

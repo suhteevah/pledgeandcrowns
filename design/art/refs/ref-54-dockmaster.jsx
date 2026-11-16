@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-54 - The Dockmaster, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-73-coastkit.jsx (approved by Matt 2026-11-13, wired 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REF54.png).
 // Stands at the head of the pier and DISPATCHES dock crews to work in
 // parallel: one arm flung out POINTING down the quay, the other holding
 // a Bronze whistle to his lips, a clipboard manifest tucked at his hip.

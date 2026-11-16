@@ -196,7 +196,7 @@ pub fn ferris_frame(cycle: Option<usize>) -> Frame {
 }
 
 /// Bob phase (0..1) for the NPC at roster `index`: golden-ratio spacing, so
-/// neighbours never share a phase and no two of the 57 line up exactly.
+/// neighbours never share a phase and no two roster NPCs line up exactly.
 pub fn bob_phase(index: usize) -> f32 {
     const GOLDEN: f32 = 0.618_034;
     (index as f32 * GOLDEN).fract()
@@ -674,7 +674,9 @@ mod tests {
         // Slow: a half period is far longer than an idle frame.
         const { assert!(BOB_PERIOD_SECS * 0.5 >= 1.0) };
         // Neighbours in the roster do not share a phase.
-        let phases: Vec<f32> = (0..57).map(bob_phase).collect();
+        let phases: Vec<f32> = (0..crate::plugins::npc::NPC_ROSTER.len())
+            .map(bob_phase)
+            .collect();
         for w in phases.windows(2) {
             assert!((w[0] - w[1]).abs() > 0.1, "{w:?}");
         }

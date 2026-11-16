@@ -2242,6 +2242,315 @@ own.",
                 available: true,
                 starter_code: "use std::cell::RefCell;\nuse std::rc::Rc;\n\nstruct Debtor {\n    name: &'static str,\n    // this runs, but a strong link keeps its creditor alive\n    owes: RefCell<Option<Rc<Debtor>>>,\n}\n\nfn debtor(name: &'static str) -> Rc<Debtor> {\n    let owes = RefCell::new(None);\n    Rc::new(Debtor { name, owes })\n}\n\n// Follow the debts from `start` until they come back round, or end.\nfn circle(start: &Rc<Debtor>) -> Vec<&'static str> {\n    let mut names = vec![start.name];\n    let mut at = Rc::clone(start);\n    loop {\n        let next = at.owes.borrow().clone();\n        match next {\n            Some(d) if !Rc::ptr_eq(&d, start) => {\n                names.push(d.name);\n                at = d;\n            }\n            _ => return names,\n        }\n    }\n}\n\nfn main() {\n    let warden = debtor(\"warden\");\n    let you = debtor(\"you\");\n    let teller = debtor(\"teller\");\n    // The Warden owes you, you owe the teller, the teller owes him.\n    *warden.owes.borrow_mut() = Some(Rc::clone(&you));\n    *you.owes.borrow_mut() = Some(Rc::clone(&teller));\n    *teller.owes.borrow_mut() = Some(Rc::clone(&warden));\n    println!(\"circle: {:?}\", circle(&warden));\n    let strong = Rc::strong_count(&warden);\n    let weak = Rc::weak_count(&warden);\n    println!(\"warden: strong {strong}, weak {weak}\");\n    let probe = Rc::downgrade(&warden);\n    drop((warden, you, teller));\n    let left = probe.upgrade().map(|d| d.name);\n    println!(\"after the ledger closes: {left:?}\");\n}\n",
             },
+            // ── Act 9: The Forbidden Library ──────────────────────────
+            // `unsafe`, FFI, `macro_rules!`, `Drop`, `Send`/`Sync` and
+            // `MaybeUninit`, then the Librarian's trial. Design:
+            // docs/superpowers/specs/2026-11-14-act9-forbidden-library.md.
+            // Hard rule 1: `unsafe` appears here only inside string
+            // literals (player-facing text). The player's program runs in
+            // the wasm sandbox, never in the game. Every compiler error and
+            // runtime behaviour this act names is compiled or run in
+            // `tests/mission_text.rs` (hard rule 3).
+            Mission {
+                id: "raw_pointer",
+                npc_name: "The Shelfmark",
+                prompt: "Make a raw pointer from a reference and dereference it inside `unsafe`.",
+                tutorial: "## Concept\n\
+A raw pointer (`*const T`, `*mut T`) is an address with no promises: it \
+may be null, dangling, unaligned, or alias a `&mut`. Making one is safe. \
+Reading or writing through one is not, so it goes inside an `unsafe` \
+block. `unsafe` turns nothing off: types and the borrow checker still \
+apply inside it (two `&mut` to one value is still E0499). It unlocks \
+five extra operations (dereference a raw pointer, call an `unsafe` fn, \
+access a `static mut`, implement an `unsafe` trait, read a union field) \
+and makes you responsible for the rules the compiler can no longer \
+check. Break them and the program has undefined behaviour: no defined \
+meaning at all, not merely a wrong answer.\n\n\
+## Syntax\n\
+```\nlet p: *mut i32 = &mut x;   // safe: just an address\nunsafe { *p += 1; }          // you promise p is valid\nlet r = &raw const x;        // a *const i32, no reference made\n```\n\n\
+## Task\n\
+Add 5 to `gold` through `write_ptr`, then read it back through a \
+`*const i32` and print three lines: `pointer is null: false`, \
+`gold through the pointer: 15`, then `gold by name: 15`.\n\n\
+## Hint\n\
+E0133, \"dereference of raw pointer is unsafe and requires unsafe \
+block\": the write must sit inside `unsafe { ... }`. Make \
+`let read_ptr: *const i32 = &gold;` after the write, and put a \
+`// SAFETY:` comment above each `unsafe` block saying why the pointer \
+is valid.",
+                prereq: None,
+                available: true,
+                starter_code: "fn main() {\n    let mut gold: i32 = 10;\n    let write_ptr: *mut i32 = &mut gold;\n    // Add 5 to gold through write_ptr, then read gold back through a\n    // read-only raw pointer and print both lines.\n    *write_ptr += 5;\n    println!(\"gold by name: {gold}\");\n}\n",
+            },
+            Mission {
+                id: "extern_c",
+                npc_name: "The Envoy",
+                prompt: "Export a function with the C ABI and call it back through an `unsafe extern \"C\"` declaration.",
+                tutorial: "## Concept\n\
+FFI is how Rust calls, and is called by, code in other languages. \
+`extern \"C\"` picks the C calling convention: where arguments and the \
+return value travel. `#[unsafe(no_mangle)]` exports a function under \
+its plain name so a C linker can find it. `#[repr(C)]` lays a struct \
+out by C's rules (declared field order, C padding); Rust's default \
+layout is unspecified. An `unsafe extern \"C\" { ... }` block declares a \
+foreign function. The compiler cannot check that declaration against \
+the real code, so each call is unsafe. Real C needs a C compiler, a \
+`build.rs` and `#[link]` (`bindgen` writes the declarations for you); \
+this sandbox has none of them, so you play both sides in one program: \
+export `crown_seal` as a C library would, then call it back through a \
+foreign declaration.\n\n\
+## Syntax\n\
+```\n#[repr(C)]\nstruct Rune { glyph: u8, power: u32, tier: u8 }\n#[unsafe(no_mangle)]\npub extern \"C\" fn crown_seal(r: Rune) -> u32 { /* ... */ }\nunsafe extern \"C\" { fn crown_seal(r: Rune) -> u32; }\nlet v = unsafe { crown_seal(r) };\n```\n\
+Edition 2024 wants both `unsafe`s: a plain `extern \"C\" {` block is \
+\"extern blocks must be unsafe\", and a plain `#[no_mangle]` is \
+\"unsafe attribute used without unsafe\".\n\n\
+## Task\n\
+Give `Rune` a C layout and `#[derive(Clone, Copy)]`, export \
+`crown_seal` with the C ABI under its plain name, and call it through \
+`foreign::crown_seal` inside `unsafe`. Print the size line, then the \
+seal three ways: directly, through the extern block, and through an \
+`extern \"C\" fn(Rune) -> u32` pointer: `Rune: 12 bytes, align 4`, \
+`direct call: 44`, `through the extern block: 44`, then \
+`through a fn pointer: 44`.\n\n\
+## Hint\n\
+E0133: anything declared in an extern block is unsafe to call, \
+because only you know the declaration is true. With `repr(C)`, \
+`u8, u32, u8` takes 12 bytes: 1, 3 of padding, 4, 1, 3 of tail \
+padding, aligned to 4. Without it Rust may reorder the fields, so the \
+size line can come out different.",
+                prereq: None,
+                available: true,
+                starter_code: "pub struct Rune {\n    pub glyph: u8,\n    pub power: u32,\n    pub tier: u8,\n}\n\n// Give Rune a C layout, and export this with the C calling convention\n// under its plain name so the foreign declaration below can find it.\npub fn crown_seal(rune: Rune) -> u32 {\n    rune.power * 2 + rune.tier as u32 + rune.glyph as u32\n}\n\nmod foreign {\n    unsafe extern \"C\" {\n        pub fn crown_seal(rune: super::Rune) -> u32;\n    }\n}\n\nfn main() {\n    let rune = Rune { glyph: 3, power: 20, tier: 1 };\n    let sealed = foreign::crown_seal(rune);\n    println!(\"through the extern block: {sealed}\");\n}\n",
+            },
+            Mission {
+                id: "macro_rules",
+                npc_name: "The Macro Monk",
+                prompt: "Define a `macro_rules!` macro that takes one or more expressions.",
+                tutorial: "## Concept\n\
+`macro_rules!` defines a macro by example: each rule is a pattern over \
+tokens and a template pasted in its place. Macros expand before type \
+checking, so unlike functions they can take any number of arguments. \
+`$x:expr` captures an expression; `$( ... ),+` repeats a sub-pattern \
+one or more times, separated by commas (`*` for zero or more). Pasting \
+is literal: write `$x` twice and the expression runs twice, so bind it \
+to a local once. Locals made inside the template cannot clash with the \
+caller's names (macro hygiene). A macro must be defined above its first \
+use in the file. Procedural macros, such as `#[derive]`, are Rust \
+programs that run at compile time; they need a crate of their own, so \
+they cannot be written here.\n\n\
+## Syntax\n\
+```\nmacro_rules! shout {\n    ($($x:expr),+ $(,)?) => {{\n        $( println!(\"{}!\", $x); )+\n    }};\n}\n```\n\n\
+## Task\n\
+Define `chant!` above `main` so the three calls compile. Each verse \
+prints as an indented line, and the call evaluates to the sum. The \
+program prints `  verse: 1`, `first chant: 1`, `  verse: 2`, \
+`  verse: 3`, `  verse: 4`, `second chant: 9`, `  verse: 10`, \
+`  verse: 20`, then `third chant: 30`.\n\n\
+## Hint\n\
+\"cannot find macro `chant` in this scope\": define it with \
+`macro_rules!` above `main`. Match the list with \
+`($($verse:expr),+ $(,)?)`: the `$(,)?` accepts the trailing comma in \
+`chant!(10, 20,)`. Wrap the template in `{{ ... }}` so the expansion is \
+one block that ends with `total`.",
+                prereq: None,
+                available: true,
+                starter_code: "// Define a declarative macro named `chant` above main. It should accept\n// one or more comma-separated expressions, print each as \"  verse: N\",\n// and evaluate to their sum.\n\nfn main() {\n    let first = chant!(1);\n    println!(\"first chant: {first}\");\n    let second = chant!(2, 3, 4);\n    println!(\"second chant: {second}\");\n    let third = chant!(10, 20,);\n    println!(\"third chant: {third}\");\n}\n",
+            },
+            Mission {
+                id: "drop_trait",
+                npc_name: "The Sexton",
+                prompt: "Implement `Drop`, drop one value early, and keep another from ever dropping.",
+                tutorial: "## Concept\n\
+`Drop::drop` runs automatically when a value's owner goes out of scope. \
+Locals drop in reverse order of declaration. You may not call \
+`x.drop()` yourself: E0040, \"explicit use of destructor method\". To end \
+a value early, move it into `drop(x)`: `std::mem::drop` is an ordinary \
+function that takes ownership. `let _ = Soul { .. };` binds nothing, so \
+that new value is dropped at the end of the statement. Drop is not \
+guaranteed to run: `std::mem::forget` skips it (this is safe; a leak is \
+not undefined behaviour), and `std::process::exit` ends the program \
+without running any destructor.\n\n\
+## Syntax\n\
+```\nimpl Drop for Soul {\n    fn drop(&mut self) {\n        println!(\"{} is released\", self.name);\n    }\n}\ndrop(early);            // ends `early` now\nstd::mem::forget(kept); // its drop never runs\n```\n\n\
+## Task\n\
+Release `early` before \"the ritual begins\", drop an unnamed soul, let \
+`_inner` end with its own scope, keep `bound` from ever being released, \
+and print \"main ends\". The program prints `early is released`, \
+`the ritual begins`, `unnamed is released`, `inner scope ends`, \
+`inner is released`, `main ends`, `second is released`, then \
+`first is released`.\n\n\
+## Hint\n\
+E0040: destructors are called for you. `drop(early);` moves the value \
+into `std::mem::drop`, which ends it there. `std::mem::forget(bound);` \
+takes ownership and never runs `drop`. A leading underscore on a name \
+only silences the unused-variable warning: `let _inner = ...` still \
+lives to the end of its block.",
+                prereq: None,
+                available: true,
+                starter_code: "struct Soul {\n    name: &'static str,\n}\n\nimpl Drop for Soul {\n    fn drop(&mut self) {\n        println!(\"{} is released\", self.name);\n    }\n}\n\nfn main() {\n    let _first = Soul { name: \"first\" };\n    let _second = Soul { name: \"second\" };\n    let early = Soul { name: \"early\" };\n    let _bound = Soul { name: \"bound\" };\n\n    // Release `early` now, before the ritual begins.\n    early.drop();\n    println!(\"the ritual begins\");\n\n    // Then: an unnamed soul, an inner scope, keep `bound` from ever being\n    // released, and print \"main ends\".\n}\n",
+            },
+            Mission {
+                id: "send_sync",
+                npc_name: "The Courier",
+                prompt: "Promise, with `unsafe impl`, that `Tome` is `Send` and `Sync`, and justify both.",
+                tutorial: "## Concept\n\
+`Send` means a value can be moved to another thread. `Sync` means a \
+`&T` can be shared between threads; exactly, `T` is `Sync` when `&T` is \
+`Send`. Both are auto traits: a struct has them when all its fields do. \
+Raw pointers have neither, so `Tome` has neither; `Rc` has neither \
+either (its count is not atomic). When you know more than the \
+compiler, `unsafe impl Send for T {}` is a promise. If it is false, \
+safe code can cause a data race, which is undefined behaviour. This \
+sandbox has no threads (`thread::spawn` panics on wasm32-wasip1), so the \
+Courier checks the promise where Rust always checks it: at compile \
+time, through `T: Send` and `T: Sync` bounds.\n\n\
+## Syntax\n\
+```\n// SAFETY: why this is true\nunsafe impl Send for Tome {}\nunsafe impl Sync for Tome {}\nfn needs_send<T: Send>(x: T) -> T { x }\n```\n\n\
+## Task\n\
+Make `Tome` acceptable to `courier_accepts` and `readers_accept`, with \
+a `// SAFETY:` comment for each promise. The program prints \
+`the courier accepts the tome`, `page reads 7`, then \
+`the page is returned to the shelf`.\n\n\
+## Hint\n\
+E0277, \"`*mut u32` cannot be sent between threads safely\": the raw \
+pointer inside `Tome` is the culprit. A `Tome` owns its page alone \
+(made by `Box::into_raw`, freed once in `Drop`), like a `Box<u32>`, so \
+handing it to another thread is fine. `Sync` holds because nothing can \
+change the page through a `&Tome`.",
+                prereq: None,
+                available: true,
+                starter_code: "struct Tome {\n    page: *mut u32,\n}\n\nimpl Tome {\n    fn new(value: u32) -> Self {\n        Tome {\n            page: Box::into_raw(Box::new(value)),\n        }\n    }\n\n    fn read(&self) -> u32 {\n        unsafe { *self.page }\n    }\n}\n\nimpl Drop for Tome {\n    fn drop(&mut self) {\n        unsafe { drop(Box::from_raw(self.page)) };\n        println!(\"the page is returned to the shelf\");\n    }\n}\n\n// The courier and the readers refuse the tome. Decide whether it is sound\n// to promise that a Tome may move to, and be shared between, threads.\n\nfn courier_accepts<T: Send>(item: T) -> T {\n    item\n}\n\nfn readers_accept<T: Sync>(item: &T) -> &T {\n    item\n}\n\nfn main() {\n    let tome = Tome::new(7);\n    let carried = courier_accepts(tome);\n    println!(\"the courier accepts the tome\");\n    let shared = readers_accept(&carried);\n    println!(\"page reads {}\", shared.read());\n}\n",
+            },
+            Mission {
+                id: "maybe_uninit",
+                npc_name: "The Bookbinder",
+                prompt: "Fill a `MaybeUninit<[u32; 4]>` through a raw pointer, then `assume_init`.",
+                tutorial: "## Concept\n\
+Safe Rust never lets you read memory that has not been initialised \
+(E0381). `MaybeUninit<T>` is the opt-out: storage for a `T` that may \
+not hold a valid `T` yet, about which the compiler assumes nothing. \
+You fill it through a raw pointer (or the safe `MaybeUninit::write`), \
+then call `assume_init()`, which is `unsafe`: you promise every byte is \
+initialised and forms a valid `T`. Calling it early is undefined \
+behaviour even for plain integers; an uninitialised `u32` is not \"some \
+random number\". Fill with `ptr.write(v)`, not `*ptr = v`: assignment \
+first drops the old value, and dropping uninitialised memory is \
+undefined behaviour for any type with a destructor. A `MaybeUninit` \
+never drops what it holds.\n\n\
+## Syntax\n\
+```\nlet mut slot = MaybeUninit::<[u32; 4]>::uninit();\nlet p: *mut u32 = slot.as_mut_ptr().cast::<u32>();\nunsafe { p.add(i).write(v) };            // i < 4\nlet arr = unsafe { slot.assume_init() };  // after every write\n```\n\n\
+## Task\n\
+Fill all four pages of a `MaybeUninit<[u32; PAGES]>` through a raw \
+pointer, page `i` holding `(i + 1) * 10`, then `assume_init` and print \
+`bound pages: [10, 20, 30, 40]` and `total ink: 100`.\n\n\
+## Hint\n\
+E0381, \"used binding `quire` isn't initialized\": rustc points at the \
+read on the `println!` line, because safe Rust cannot prove the loop \
+set every element. Take `let first = quire.as_mut_ptr().cast::<u32>();`, \
+write each page with `unsafe { first.add(i).write(..) }`, and call \
+`assume_init` once, after the loop, never before.",
+                prereq: None,
+                available: true,
+                starter_code: "const PAGES: usize = 4;\n\nfn main() {\n    // Declare the quire now, fill each page in the loop, read it after.\n    let quire: [u32; PAGES];\n    for i in 0..PAGES {\n        quire[i] = (i as u32 + 1) * 10;\n    }\n    println!(\"bound pages: {quire:?}\");\n    println!(\"total ink: {}\", quire.iter().sum::<u32>());\n}\n",
+            },
+            // ── Act 9 boss: the Librarian's trial ──────────────────────
+            // Three stages owned by the Librarian (`trial::TRIALS`). He
+            // has no prologue: his roster mission is stage 1. A safe door
+            // over an `unsafe fn`, a recursive `macro_rules!` with an
+            // accumulator, then a type that owns a raw pointer and frees
+            // it in `Drop`. The Librarian ends the registry.
+            Mission {
+                id: "librarian_index",
+                npc_name: "The Librarian",
+                prompt: "Make `fetch` safe for every index: check bounds, then call the `unsafe fn`.",
+                tutorial: "## Concept\n\
+An `unsafe fn` has a contract the compiler cannot check, written in a \
+`# Safety` doc section. Calling it is `unsafe`: the caller promises to \
+keep the contract. The art of unsafe Rust is to wrap such a function \
+in a safe one whose own checks keep the contract for every possible \
+input. That wrapper is sound if no caller, using only safe code, can \
+cause undefined behaviour through it. Pointer arithmetic is where this \
+matters: `ptr.add(i)` is only defined while the result stays inside \
+the same allocation.\n\n\
+## Syntax\n\
+```\n/// # Safety\n/// `p` must point at a live `u32`.\nunsafe fn read(p: *const u32) -> u32 {\n    unsafe { *p }\n}\nlet x = 5;\nlet v = unsafe { read(&x) };\n```\n\n\
+## Task\n\
+Make `fetch` safe to call with any index: check it against the shelf's \
+length, and only then call `volume_at` inside `unsafe`. The program \
+prints `index 0: volume 11`, `index 3: volume 44`, \
+`index 4: no such volume`, then `index 99: no such volume`.\n\n\
+## Hint\n\
+E0133, \"call to unsafe function `volume_at` is unsafe and requires \
+unsafe block\". Wrapping the call in `unsafe` alone compiles, but then \
+index 99 reads past the shelf: undefined behaviour. Write \
+`if index < shelf.len() { ... } else { None }`, with a `// SAFETY:` \
+comment that names the check.",
+                prereq: None,
+                available: true,
+                starter_code: "/// Returns the volume `index` places past `shelf`.\n///\n/// # Safety\n///\n/// `shelf` must point into a live array of initialised `u32`s, and\n/// `shelf.add(index)` must still be inside that same array.\nunsafe fn volume_at(shelf: *const u32, index: usize) -> u32 {\n    unsafe { *shelf.add(index) }\n}\n\n// The Librarian wants a door that is safe to open with ANY index.\nfn fetch(shelf: &[u32], index: usize) -> Option<u32> {\n    Some(volume_at(shelf.as_ptr(), index))\n}\n\nfn main() {\n    let shelf = [11, 22, 33, 44];\n    for index in [0, 3, 4, 99] {\n        match fetch(&shelf, index) {\n            Some(volume) => println!(\"index {index}: volume {volume}\"),\n            None => println!(\"index {index}: no such volume\"),\n        }\n    }\n}\n",
+            },
+            Mission {
+                id: "librarian_demand",
+                npc_name: "The Librarian",
+                prompt: "Grow `incant!` so `incant!(1, 2, 3, 4)` expands to the Librarian's exact demand.",
+                tutorial: "## Concept\n\
+A macro can call itself. To build a left-nested expression such as \
+`seal(seal(seal(a, b), c), d)`, carry the part built so far in an \
+accumulator: an internal rule that starts with a literal token like \
+`@acc`, which callers never write. A literal `@` can never start an \
+expression, so a caller's `incant!(1, 2)` never matches an `@acc` rule, \
+and an `@acc` call never matches the entry rule, whichever order the \
+rules are written in.\n\n\
+## Syntax\n\
+```\nmacro_rules! count {\n    (@acc $n:expr) => { $n };\n    (@acc $n:expr, $x:expr $(, $rest:expr)*) => {\n        count!(@acc $n + 1 $(, $rest)*)\n    };\n    ($($x:expr),*) => { count!(@acc 0 $(, $x)*) };\n}\n```\n\
+`count!(5, 6, 7)` is `3`.\n\n\
+## Task\n\
+Make `incant!(a, b, c, d)` expand to \
+`seal(seal(seal(page(a), page(b)), page(c)), page(d))`, for any number \
+of arguments, one or more. The program prints `the demand: 78`, \
+`incant!(1, 2, 3, 4): 78`, `the incantation matches: true`, \
+`incant!(7): 21`, then `incant!(2, 9): 39`.\n\n\
+## Hint\n\
+\"no rules expected `,`\": your only rule takes exactly one expression. \
+The entry rule is \
+`($first:expr $(, $rest:expr)*) => { incant!(@acc page($first) $(, $rest)*) }`. \
+`seal` is neither commutative nor associative, so folding from the \
+right gives `48`, not `78`.",
+                prereq: None,
+                available: true,
+                starter_code: "fn page(n: u32) -> u32 {\n    n * 3\n}\n\nfn seal(left: u32, right: u32) -> u32 {\n    left * 2 + right\n}\n\n// Grow this macro so incant!(a, b, c, d) expands to\n//     seal(seal(seal(page(a), page(b)), page(c)), page(d))\n// and works for any number of arguments, one or more.\nmacro_rules! incant {\n    ($first:expr) => {\n        page($first)\n    };\n}\n\nfn main() {\n    let demand = seal(seal(seal(page(1), page(2)), page(3)), page(4));\n    let answer = incant!(1, 2, 3, 4);\n    println!(\"the demand: {demand}\");\n    println!(\"incant!(1, 2, 3, 4): {answer}\");\n    println!(\"the incantation matches: {}\", demand == answer);\n    println!(\"incant!(7): {}\", incant!(7));\n    println!(\"incant!(2, 9): {}\", incant!(2, 9));\n}\n",
+            },
+            Mission {
+                id: "librarian_seal",
+                npc_name: "The Librarian",
+                prompt: "Give `Codex` a bounds-checked `get` and a `Drop` that returns its pages.",
+                tutorial: "## Concept\n\
+`Box::into_raw` turns a box into a raw pointer and gives up ownership: \
+nothing frees that memory unless you rebuild the same box with \
+`Box::from_raw` (same address, same type, same length for a slice) and \
+let it drop. Do it twice and you free memory twice; never, and it \
+leaks. A raw pointer owns nothing; the struct that holds it must. That \
+is what `Vec` and `Box` do inside the standard library.\n\n\
+## Syntax\n\
+```\nlet b: Box<[u32]> = vec![1, 2].into_boxed_slice();\nlet n = b.len();\nlet p: *mut u32 = Box::into_raw(b).cast::<u32>();\nlet whole = std::ptr::slice_from_raw_parts_mut(p, n);\ndrop(unsafe { Box::from_raw(whole) }); // freed, once\n```\n\n\
+## Task\n\
+Write `get` so it returns `Some(page)` for valid indexes and `None` \
+otherwise without reading outside the codex, and implement `Drop` so \
+the pages go back to the heap and the codex prints its seal line. The \
+program prints `page 0: Some(5)`, `page 2: Some(13)`, `page 3: None`, \
+`the Librarian closes the book`, then \
+`the codex is sealed (3 pages returned)`.\n\n\
+## Hint\n\
+As written, the starter compiles and prints `None` three times and the \
+closing line, nothing more: `get` reads nothing and nothing frees the \
+pages. In `get`, read `*self.ptr.add(index)` only when \
+`index < self.len`. In `impl Drop for Codex`, rebuild the slice \
+pointer with `std::ptr::slice_from_raw_parts_mut(self.ptr, self.len)`, \
+then `Box::from_raw` it inside `unsafe`.",
+                prereq: None,
+                available: true,
+                starter_code: "struct Codex {\n    ptr: *mut u32,\n    len: usize,\n}\n\nimpl Codex {\n    fn from_pages(pages: Vec<u32>) -> Self {\n        let boxed: Box<[u32]> = pages.into_boxed_slice();\n        let len = boxed.len();\n        let ptr = Box::into_raw(boxed).cast::<u32>();\n        Codex { ptr, len }\n    }\n\n    // Return the page at `index`, or None past the end, without ever\n    // reading outside the codex.\n    fn get(&self, _index: usize) -> Option<u32> {\n        None\n    }\n}\n\n// Box::into_raw handed the pages out. Nothing gives them back.\n\nfn main() {\n    let codex = Codex::from_pages(vec![5, 8, 13]);\n    println!(\"page 0: {:?}\", codex.get(0));\n    println!(\"page 2: {:?}\", codex.get(2));\n    println!(\"page 3: {:?}\", codex.get(3));\n    println!(\"the Librarian closes the book\");\n}\n",
+            },
         ];
         // Strict-linear progression: each mission's prereq is the one
         // listed immediately before it. Shape decision logged in HANDOFF
@@ -2904,7 +3213,7 @@ fn draw_epilogue_panel(
 }
 
 /// What the full game adds after the demo, one line per act. Only acts
-/// that are built and in the registry belong here (Acts 3-8); do not
+/// that are built and in the registry belong here (Acts 3-9); do not
 /// list planned acts or features that do not exist yet.
 #[cfg(feature = "demo")]
 const FULL_GAME_ACTS: &[(&str, &str)] = &[
@@ -2931,6 +3240,10 @@ const FULL_GAME_ACTS: &[(&str, &str)] = &[
     (
         "Act 8 - The Vault of Pointers",
         "Box, Rc, RefCell, Cell, Rc<RefCell<T>>, Weak",
+    ),
+    (
+        "Act 9 - The Forbidden Library",
+        "unsafe and raw pointers, extern \"C\", macro_rules!, Drop, Send and Sync, MaybeUninit",
     ),
 ];
 
@@ -3014,7 +3327,7 @@ fn draw_demo_end_panel(
         ));
         ui.add_space(6.0);
         ui.label(format!(
-            "The full game has {more} more missions across Acts 3 to 8:"
+            "The full game has {more} more missions across Acts 3 to 9:"
         ));
         ui.add_space(2.0);
         for (act, topics) in FULL_GAME_ACTS {

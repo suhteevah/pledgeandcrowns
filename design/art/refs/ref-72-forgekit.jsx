@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-72 - Costume kit exemplar, Act 6 Iterator Forge (Smelter), 32x32.
-// APPROVED by Matt 2026-11-13 (tranche 1) as a kit exemplar. NOT wired to any NPC; tranche 2 redraws this Act's cast on it.
+// APPROVED by Matt 2026-11-13 (tranche 1) as a kit exemplar. Wired as game/assets/sprites/npc/smelter_idle_0.png (the Smelter's sprite, confirmed by Matt 2026-11-15).
 //
 // Kit rule for the Forge cast: basalt leather cap and apron, brass goggles,
 // bare arms, heavy gloves. Silhouette = the broadest shoulders in the game.

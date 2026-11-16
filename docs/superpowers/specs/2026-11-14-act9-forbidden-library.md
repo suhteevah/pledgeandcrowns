@@ -1,7 +1,11 @@
 # Act 9 — Forbidden Library mission batch (design spec)
 
 **Date:** 2026-11-14
-**Status:** draft for Matt's approval (finish plan track C1)
+**Status:** IMPLEMENTED 2026-11-15 (wave 14). The registry grew 78 → 87,
+not 57 → 66: the Acts 2-8 trials landed first, so these are missions
+79-87. What changed from this draft is recorded in **Implementation
+record (2026-11-15)** at the end; the game text and the tests are the
+source of truth where they differ from the drafts below.
 **Topic:** 6 missions plus a 3-stage boss trial covering Act 9's unsafe /
 FFI / macro / drop / marker-trait tier, in the existing mission-tutorial
 architecture (same shape as Acts 3–8). Registry 57 → 66.
@@ -2217,3 +2221,91 @@ Everything in the Act 3 spec's contract, plus:
    then the soundness notes above are reasoning, not proof.
 6. **`static mut` and unions.** Two of the five unsafe superpowers are named
    but not exercised. Acceptable for v1.0?
+
+## Implementation record (2026-11-15)
+
+The open questions were decided by the orchestrator: the Librarian is a
+trial on the existing mechanism (no prologue, his roster mission is stage
+1); edition 2024 everywhere (`game/tests/common` pins it); the map grew
+north-south as proposed, with the Throne built empty (`count: 0`); the
+palette question was settled by the approved art (REF-79..85, REF-93, not
+the REF-75..82 numbers above); Miri is still not installed, so **no Miri
+run backs any `unsafe` solution here**: the "why this is sound" notes
+stand in for it; `static mut` and unions stay named, not exercised.
+
+### Re-verification
+
+Every program (9 solutions, 9 starters, every wrong variant,
+alternative and claim program the game and server tests use) was rebuilt
+with `rustc 1.99.0 (b940084d7 2026-09-28)`, editions 2021 and 2024,
+native and `--target wasm32-wasip1` (solutions, alternatives and wrong
+variants with `-D warnings`), and run natively; stdout identical across
+editions. Results matched this draft except as listed below. The server
+path is `compile-api/tests/expectations_proof.rs` (real cargo build for
+wasip1 + wasmtime) and `act9_unsafe_harness.rs`.
+
+### Corrections to this draft
+
+1. **Macro rule order (librarian_demand).** The draft's tutorial and
+   solution comment said the `@acc` rules must come first because "a rule
+   that starts parsing `$x:expr` and fails is an error, not a
+   fallthrough". False for this macro: a literal `@` can never start an
+   expression, so `macro_rules!` does not try to parse `@acc ...` as
+   `$first:expr`; it moves on to the next rule. With the entry rule
+   written FIRST, `incant!(1, 2)` compiles and prints `12`
+   (`game/tests/act9_programs`, `CLAIM_LIBRARIAN_DEMAND_ORDER`, asserted
+   in `mission_text.rs`). The tutorial now says the order does not matter
+   here and why; the solution comment says the same.
+2. **Tutorial sections.** The game requires `## Syntax` in every tutorial
+   (the recap shows Concept + Syntax); the three trial drafts had none.
+   Added: an `unsafe fn` with a `# Safety` doc, a `count!` macro with an
+   `@acc` rule (`count!(5, 6, 7)` is `3`, asserted), and the
+   `into_raw` / `slice_from_raw_parts_mut` / `from_raw` round trip.
+3. **Claims cut rather than left unproven (hard rule 3).** `drop_trait`
+   no longer says a struct's fields drop after its own `drop`, that `Rc`
+   cycles leak, or that the sandbox's `panic = "abort"` runs no
+   destructors; `send_sync` no longer says `Cell`/`RefCell` are `Send`
+   but not `Sync`; `extern_c`'s hint no longer says "if you see 8,
+   `repr(C)` is missing" (Rust's default layout is unspecified; it now
+   says the size line can come out different). Every claim that remains
+   is compiled or run in `game/tests/mission_text.rs`
+   (`act9_villager_claims`, `trial_claims("librarian")`, pinned outputs,
+   trial hint claims), including ones the draft did not have: two `&mut`
+   inside `unsafe` is still E0499; a plain `extern "C" {` block is
+   "extern blocks must be unsafe" and a plain `#[no_mangle]` is "unsafe
+   attribute used without unsafe" in 2024; a macro used above its
+   definition is "cannot find macro"; `$x` written twice runs twice;
+   macro hygiene; `process::exit` runs no destructor; `Rc` is neither
+   `Send` nor `Sync`; a `MaybeUninit` never drops its value; the
+   `unsafe`-only `fetch` compiles; the right fold gives `48`. Statements
+   that something is undefined behaviour cannot be run; they follow the
+   std/Reference docs.
+4. **Server grading.** Not "expected stdout first" for all nine.
+   `raw_pointer`, `macro_rules`, `drop_trait`, `maybe_uninit` and
+   `librarian_demand` are `Stdout` checks plus construct tokens (`uses`).
+   `extern_c`, `send_sync`, `librarian_index` and `librarian_seal` are
+   harness checks in `HarnessMode::UnsafeLateNonce` that call the
+   player's items with inputs the player never saw (the fixtures of
+   `act9_unsafe_harness.rs`, promoted to real entries); all but
+   `extern_c` forbid `no_mangle`. `librarian_demand` cannot be a harness
+   check: `page`/`seal` inside the player's macro resolve at the call
+   site, which would be the checker's module. The server's `uses` cannot
+   name `extern "C" fn` (string contents are blanked), so it uses
+   `unsafe extern`; the pattern grader's `extern "C" fn` works (string
+   literals compare by contents). The game labels late-nonce passes
+   NOT VERIFIED.
+5. **Hints.** Folded into each `## Hint` (hint 1 and the gist of 2-3;
+   there is no hints-after-failures feature). Every quoted error is the
+   edition-2024 wording, asserted.
+6. **Formatting only.** Solution comments rewrapped to fit the 72-column
+   code pane (`librarian_index`, `librarian_demand`, `librarian_seal`'s
+   `let slice =` split over two lines). Behaviour unchanged.
+7. **Map.** As proposed, plus: the NPC grid compresses to keep a sprite
+   one clear tile inside the cobble ring, and the clearance now comes from
+   the largest sprite in the district (`native_px`): the Library's rows
+   are 188 px apart (not 240), and the 64 px Librarian stands alone,
+   centred, in the back (north) row. The hub, with the 64 px Borrow
+   Checker, compressed from 240 to 228 px by the same rule. Cottages
+   stand west and east of both new plazas (north is the street, south the
+   treeline); the landmark spots are reserved, not built
+   (`prop::PENDING_LANDMARKS`).

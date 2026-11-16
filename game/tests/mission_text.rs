@@ -9,7 +9,12 @@
 //! - Hard rule 3 for the boss trials: every error code a trial owner
 //!   names, and every compiler message they quote, is a claim compiled
 //!   against real rustc (`trial_claims`; the fast test fails on a named
-//!   but unclaimed code, the `--ignored` one runs rustc).
+//!   but unclaimed code, the `--ignored` one runs rustc). The same for the
+//!   six Act 9 villagers (`act9_villager_claims`), whose claims also
+//!   include run-time behaviour (`Claimed::Prints`).
+//! - Act 9 starters that fail with a code-less macro error
+//!   (`STARTERS_THAT_MUST_FAIL_WITHOUT_A_CODE`) fail with exactly that
+//!   message.
 //! - Progression is strict-linear: mission N+1 is locked until mission N
 //!   is cleared.
 //! - With the `demo` feature, nothing past the demo boundary is playable.
@@ -19,8 +24,10 @@
 //! - Outputs claimed for common mistakes in those missions' Hints
 //!   (`HINT_CLAIMS`) are what those programs really print (`--ignored`).
 
+mod act9_programs;
 mod common;
 
+use act9_programs as a9;
 use common::PLAYER_EDITION;
 use pledge_and_crown::plugins::editor::solutions::canonical_solution;
 use pledge_and_crown::plugins::mission::{DEMO_LAST_MISSION_ID, MissionRegistry};
@@ -48,6 +55,20 @@ const STARTERS_THAT_MUST_FAIL: &[(&str, &str)] = &[
     ("hydra_threads", "E0373"),
     ("warden_box", "E0072"),
     ("warden_shared", "E0594"),
+    ("raw_pointer", "E0133"),
+    ("extern_c", "E0133"),
+    ("drop_trait", "E0040"),
+    ("send_sync", "E0277"),
+    ("maybe_uninit", "E0381"),
+    ("librarian_index", "E0133"),
+];
+
+/// Starters meant to fail with an error that has no code (macro errors),
+/// with the message they must fail with. Every error in the output must
+/// be code-less.
+const STARTERS_THAT_MUST_FAIL_WITHOUT_A_CODE: &[(&str, &str)] = &[
+    ("macro_rules", "cannot find macro `chant` in this scope"),
+    ("librarian_demand", "no rules expected `,`"),
 ];
 
 /// Fresh per-test, per-process scratch dir (the slow tests run in
@@ -90,6 +111,19 @@ fn every_starter_compiles_or_fails_for_its_intended_reason() {
             .iter()
             .find(|(id, _)| *id == m.id)
             .map(|(_, code)| *code);
+        if let Some((_, message)) = STARTERS_THAT_MUST_FAIL_WITHOUT_A_CODE
+            .iter()
+            .find(|(id, _)| *id == m.id)
+        {
+            let coded = stderr.contains("error[E");
+            if out.status.success() || coded || !stderr.contains(message) {
+                problems.push(format!(
+                    "{}: expected only `error: {message}`, got\n{stderr}",
+                    m.id
+                ));
+            }
+            continue;
+        }
         match (expected_error, out.status.success()) {
             (None, true) => {}
             (None, false) => problems.push(format!("{}: starter does not compile\n{stderr}", m.id)),
@@ -210,6 +244,42 @@ const PINNED_OUTPUT: &[(&str, &str)] = &[
         "warden_weak",
         "circle: [\"warden\", \"you\", \"teller\"]\nwarden: strong 1, weak 1\nafter the ledger closes: None",
     ),
+    (
+        "raw_pointer",
+        "pointer is null: false\ngold through the pointer: 15\ngold by name: 15",
+    ),
+    (
+        "extern_c",
+        "Rune: 12 bytes, align 4\ndirect call: 44\nthrough the extern block: 44\nthrough a fn pointer: 44",
+    ),
+    (
+        "macro_rules",
+        "  verse: 1\nfirst chant: 1\n  verse: 2\n  verse: 3\n  verse: 4\nsecond chant: 9\n  verse: 10\n  verse: 20\nthird chant: 30",
+    ),
+    (
+        "drop_trait",
+        "early is released\nthe ritual begins\nunnamed is released\ninner scope ends\ninner is released\nmain ends\nsecond is released\nfirst is released",
+    ),
+    (
+        "send_sync",
+        "the courier accepts the tome\npage reads 7\nthe page is returned to the shelf",
+    ),
+    (
+        "maybe_uninit",
+        "bound pages: [10, 20, 30, 40]\ntotal ink: 100",
+    ),
+    (
+        "librarian_index",
+        "index 0: volume 11\nindex 3: volume 44\nindex 4: no such volume\nindex 99: no such volume",
+    ),
+    (
+        "librarian_demand",
+        "the demand: 78\nincant!(1, 2, 3, 4): 78\nthe incantation matches: true\nincant!(7): 21\nincant!(2, 9): 39",
+    ),
+    (
+        "librarian_seal",
+        "page 0: Some(5)\npage 2: Some(13)\npage 3: None\nthe Librarian closes the book\nthe codex is sealed (3 pages returned)",
+    ),
 ];
 
 /// `(mission, program, stdout)`: the mistakes the Hint text of a pinned
@@ -318,6 +388,19 @@ fn edited_solution(id: &str, edits: &[(&str, &str)]) -> String {
 /// way the text says.
 fn trial_hint_claims() -> Vec<(&'static str, String, &'static str)> {
     vec![
+        (
+            // "As written, the starter compiles and prints `None` three
+            // times and the closing line, nothing more."
+            "librarian_seal",
+            edited_starter("librarian_seal", &[]),
+            "page 0: None\npage 2: None\npage 3: None\nthe Librarian closes the book",
+        ),
+        (
+            // "folding from the right gives `48`, not `78`."
+            "librarian_demand",
+            a9::WRONG_LIBRARIAN_DEMAND_0.to_string(),
+            "the demand: 78\nincant!(1, 2, 3, 4): 48\nthe incantation matches: false\nincant!(7): 21\nincant!(2, 9): 39",
+        ),
         (
             // "Dropping the chest and the head by name would print the
             // same line here."
@@ -582,10 +665,10 @@ fn demo_boundary_is_the_last_act_2_mission() {
     assert_eq!(reg.missions[idx + 1].id, "impl_method");
     assert_eq!(
         reg.missions.len() - (idx + 1),
-        54,
+        63,
         "missions after the demo"
     );
-    assert_eq!(reg.missions.len(), 78, "missions in the full game");
+    assert_eq!(reg.missions.len(), 87, "missions in the full game");
 }
 
 #[test]
@@ -638,8 +721,13 @@ enum Claimed {
     /// Fails with only this error code, and stderr contains every piece
     /// (the first piece is the wording the owner quotes).
     Error(&'static str, &'static [&'static str]),
+    /// Fails with errors that carry no code (macro and syntax errors), and
+    /// stderr contains every piece (the first is the wording quoted).
+    ErrorNoCode(&'static [&'static str]),
     /// Compiles (the claim is "this also compiles").
     Compiles,
+    /// Compiles, runs to a clean exit and prints exactly this.
+    Prints(&'static str),
     /// Compiles, prints exactly `stdout`, then panics: exits unsuccessfully
     /// with `stderr` in its standard error.
     Panics {
@@ -960,6 +1048,43 @@ fn trial_claims(trial: &str) -> Vec<(&'static str, String, Claimed)> {
                 },
             ),
         ],
+        "librarian" => vec![
+            (
+                "librarian_index starter: E0133, the call to the `unsafe fn`",
+                s("librarian_index"),
+                Claimed::Error(
+                    "E0133",
+                    &["call to unsafe function `volume_at` is unsafe and requires unsafe block"],
+                ),
+            ),
+            (
+                "librarian_index hint: wrapping the call in `unsafe` alone compiles",
+                edited_starter(
+                    "librarian_index",
+                    &[(
+                        "Some(volume_at(shelf.as_ptr(), index))",
+                        "Some(unsafe { volume_at(shelf.as_ptr(), index) })",
+                    )],
+                ),
+                Claimed::Compiles,
+            ),
+            (
+                "librarian_demand starter: no rules expected `,`",
+                s("librarian_demand"),
+                Claimed::ErrorNoCode(&["no rules expected `,`"]),
+            ),
+            (
+                "librarian_demand: `@` never starts an expression, so the entry \
+                 rule written first still works",
+                a9::CLAIM_LIBRARIAN_DEMAND_ORDER.to_string(),
+                Claimed::Prints("12"),
+            ),
+            (
+                "librarian_demand syntax: `count!(5, 6, 7)` is `3`",
+                a9::CLAIM_COUNT_SYNTAX.to_string(),
+                Claimed::Prints("3"),
+            ),
+        ],
         other => panic!("no claims table for trial `{other}`: add one"),
     }
 }
@@ -975,6 +1100,7 @@ const NAMED_CODES: &[(&str, &[&str])] = &[
     ("forge_golem", &["E0283", "E0609"]),
     ("tide_hydra", &["E0373", "E0382"]),
     ("memory_warden", &["E0072", "E0594"]),
+    ("librarian", &["E0133"]),
 ];
 
 /// Error codes in `text` (`E` followed by exactly four digits).
@@ -987,16 +1113,17 @@ fn error_codes(text: &str) -> Vec<String> {
         .collect()
 }
 
-/// Everything the owner of `trial` says: their prologue and stage
-/// missions' prompts and tutorials, their dialogue rows, their grader
-/// messages, the trial-complete line.
-fn owner_texts(trial: &pledge_and_crown::plugins::trial::Trial) -> Vec<String> {
+/// Everything said in missions `ids` (each once): prompts and tutorials,
+/// authored dialogue rows, grader messages.
+fn mission_texts(ids: &[&str]) -> Vec<String> {
     let reg = MissionRegistry::default();
-    let ids: Vec<&str> = std::iter::once(trial.npc)
-        .chain(trial.stages.iter().copied())
-        .collect();
+    let mut seen: Vec<&str> = Vec::new();
     let mut out = Vec::new();
-    for id in &ids {
+    for id in ids {
+        if seen.contains(id) {
+            continue;
+        }
+        seen.push(id);
         let m = reg.find(id).expect("mission");
         out.push(m.prompt.to_string());
         out.push(m.tutorial.to_string());
@@ -1020,8 +1147,78 @@ fn owner_texts(trial: &pledge_and_crown::plugins::trial::Trial) -> Vec<String> {
             out.extend(rule.checks.iter().map(|c| c.hint.to_string()));
         }
     }
+    out
+}
+
+/// Everything the owner of `trial` says: their prologue and stage
+/// missions' prompts and tutorials, their dialogue rows, their grader
+/// messages, the trial-complete line.
+fn owner_texts(trial: &pledge_and_crown::plugins::trial::Trial) -> Vec<String> {
+    let ids: Vec<&str> = std::iter::once(trial.npc)
+        .chain(trial.stages.iter().copied())
+        .collect();
+    let mut out = mission_texts(&ids);
     out.push(trial.complete_line.to_string());
     out
+}
+
+/// Every error code named in `texts` has a compiled claim, every claim's
+/// code and quoted wording is actually said, and the codes named are
+/// exactly `want` (so a newly named code fails until it is claimed).
+fn assert_claims_cover_texts(
+    subject: &str,
+    claims: &[(&'static str, String, Claimed)],
+    texts: &[String],
+    want: &[&str],
+) {
+    let claimed: Vec<&str> = claims
+        .iter()
+        .filter_map(|(_, _, c)| match c {
+            Claimed::Error(code, _) => Some(*code),
+            Claimed::ErrorNoCode(_)
+            | Claimed::Compiles
+            | Claimed::Prints(_)
+            | Claimed::Panics { .. } => None,
+        })
+        .collect();
+    let mut named = std::collections::BTreeSet::new();
+    for t in texts {
+        for code in error_codes(t) {
+            assert!(
+                claimed.contains(&code.as_str()),
+                "{subject}: names {code} with no compiled claim:\n{t}"
+            );
+            named.insert(code);
+        }
+    }
+    // No stale claims: every claimed code and quoted wording is said.
+    for (label, _, c) in claims {
+        match c {
+            Claimed::Error(code, pieces) => {
+                assert!(named.contains(*code), "{label}: {code} is never said");
+                assert!(
+                    texts.iter().any(|t| t.contains(pieces[0])),
+                    "{label}: wording {:?} is never said",
+                    pieces[0]
+                );
+            }
+            Claimed::ErrorNoCode(pieces) => assert!(
+                texts.iter().any(|t| t.contains(pieces[0])),
+                "{label}: wording {:?} is never said",
+                pieces[0]
+            ),
+            Claimed::Panics { stderr, .. } => assert!(
+                texts.iter().any(|t| t.contains("panic")),
+                "{label}: a panic ({stderr}) is claimed but never said"
+            ),
+            Claimed::Compiles | Claimed::Prints(_) => {}
+        }
+    }
+    assert_eq!(
+        named.into_iter().collect::<Vec<_>>(),
+        want,
+        "codes `{subject}` names"
+    );
 }
 
 #[test]
@@ -1032,55 +1229,196 @@ fn every_error_a_trial_owner_names_is_a_compiled_claim() {
         "every trial has a claims table"
     );
     for trial in TRIALS {
-        let claims = trial_claims(trial.id);
-        let claimed: Vec<&str> = claims
-            .iter()
-            .filter_map(|(_, _, c)| match c {
-                Claimed::Error(code, _) => Some(*code),
-                Claimed::Compiles | Claimed::Panics { .. } => None,
-            })
-            .collect();
-        let texts = owner_texts(trial);
-        let mut named = std::collections::BTreeSet::new();
-        for t in &texts {
-            for code in error_codes(t) {
-                assert!(
-                    claimed.contains(&code.as_str()),
-                    "{}: the owner names {code} with no compiled claim:\n{t}",
-                    trial.id
-                );
-                named.insert(code);
-            }
-        }
-        // No stale claims: every claimed code and quoted wording is said.
-        for (label, _, c) in &claims {
-            match c {
-                Claimed::Error(code, pieces) => {
-                    assert!(named.contains(*code), "{label}: {code} is never said");
-                    assert!(
-                        texts.iter().any(|t| t.contains(pieces[0])),
-                        "{label}: wording {:?} is never said",
-                        pieces[0]
-                    );
-                }
-                Claimed::Panics { stderr, .. } => assert!(
-                    texts.iter().any(|t| t.contains("panic")),
-                    "{label}: a panic ({stderr}) is claimed but never said"
-                ),
-                Claimed::Compiles => {}
-            }
-        }
         let want = NAMED_CODES
             .iter()
             .find(|(t, _)| *t == trial.id)
             .map(|(_, codes)| *codes)
             .unwrap_or_default();
-        assert_eq!(
-            named.into_iter().collect::<Vec<_>>(),
-            want,
-            "codes the owner of `{}` names",
-            trial.id
-        );
+        assert_claims_cover_texts(trial.id, &trial_claims(trial.id), &owner_texts(trial), want);
+    }
+}
+
+// ── Hard rule 3 for the Act 9 villagers ──────────────────────────────
+//
+// The six Act 9 villagers teach `unsafe`, FFI, macros, `Drop`, `Send` /
+// `Sync` and `MaybeUninit`; their tutorials and hints name compiler errors
+// and describe what programs do. Each claim is compiled (and, where it is
+// about behaviour, run) here, like the trial owners' above. Statements
+// that something is undefined behaviour cannot be run; they follow the
+// std and Reference documentation and the spec's soundness notes (no Miri
+// run backs them).
+
+/// The Act 9 villager missions, with the error codes their text names.
+const ACT9_VILLAGER_CODES: &[(&str, &[&str])] = &[
+    ("raw_pointer", &["E0133", "E0499"]),
+    ("extern_c", &["E0133"]),
+    ("macro_rules", &[]),
+    ("drop_trait", &["E0040"]),
+    ("send_sync", &["E0277"]),
+    ("maybe_uninit", &["E0381"]),
+];
+
+/// The solution of `macro_rules` with the macro moved below `main`.
+fn macro_defined_after_use() -> String {
+    let sol = canonical_solution("macro_rules").expect("macro_rules solution");
+    let at = sol.find("fn main()").expect("solution has fn main");
+    let (mac, main) = sol.split_at(at);
+    format!("{main}\n{mac}")
+}
+
+/// Every claim the Act 9 villager of mission `id` makes.
+fn act9_villager_claims(id: &str) -> Vec<(&'static str, String, Claimed)> {
+    let s = |id: &str| edited_starter(id, &[]);
+    match id {
+        "raw_pointer" => vec![
+            (
+                "raw_pointer starter: E0133, deref outside `unsafe`",
+                s("raw_pointer"),
+                Claimed::Error(
+                    "E0133",
+                    &["dereference of raw pointer is unsafe and requires unsafe block"],
+                ),
+            ),
+            (
+                "raw_pointer: the borrow checker still applies inside `unsafe`",
+                a9::CLAIM_RAW_POINTER_BORROWCK.to_string(),
+                // The text names the code only; rustc's wording follows.
+                Claimed::Error(
+                    "E0499",
+                    &[
+                        "E0499",
+                        "cannot borrow `gold` as mutable more than once at a time",
+                    ],
+                ),
+            ),
+        ],
+        "extern_c" => vec![
+            (
+                "extern_c starter: E0133, calling the foreign declaration",
+                s("extern_c"),
+                Claimed::Error(
+                    "E0133",
+                    &[
+                        "E0133",
+                        "call to unsafe function `foreign::crown_seal` is unsafe and requires unsafe block",
+                    ],
+                ),
+            ),
+            (
+                "extern_c: a plain `extern \"C\" {` block fails in edition 2024",
+                a9::CLAIM_EXTERN_C_PLAIN_BLOCK.to_string(),
+                Claimed::ErrorNoCode(&["extern blocks must be unsafe"]),
+            ),
+            (
+                "extern_c: a plain `#[no_mangle]` fails in edition 2024",
+                a9::CLAIM_EXTERN_C_PLAIN_NO_MANGLE.to_string(),
+                Claimed::ErrorNoCode(&["unsafe attribute used without unsafe"]),
+            ),
+        ],
+        "macro_rules" => vec![
+            (
+                "macro_rules starter: the macro does not exist",
+                s("macro_rules"),
+                Claimed::ErrorNoCode(&["cannot find macro `chant` in this scope"]),
+            ),
+            (
+                "macro_rules: defined below its first use, it is not found",
+                macro_defined_after_use(),
+                Claimed::ErrorNoCode(&["cannot find macro `chant` in this scope"]),
+            ),
+            (
+                "macro_rules: `$x` written twice runs the expression twice",
+                a9::CLAIM_MACRO_RULES_TWICE.to_string(),
+                Claimed::Prints("3"),
+            ),
+            (
+                "macro_rules: the template's `total` does not touch the caller's",
+                a9::CLAIM_MACRO_RULES_HYGIENE.to_string(),
+                Claimed::Prints("100 3"),
+            ),
+        ],
+        "drop_trait" => vec![
+            (
+                "drop_trait starter: E0040, and rustc's help is `drop(early)`",
+                s("drop_trait"),
+                Claimed::Error(
+                    "E0040",
+                    &["explicit use of destructor method", "drop(early);"],
+                ),
+            ),
+            (
+                "drop_trait: `std::process::exit` runs no destructor",
+                a9::CLAIM_DROP_EXIT.to_string(),
+                Claimed::Prints("leaving"),
+            ),
+        ],
+        "send_sync" => vec![
+            (
+                "send_sync starter: E0277 for `Send` and for `Sync`",
+                s("send_sync"),
+                Claimed::Error(
+                    "E0277",
+                    &[
+                        "`*mut u32` cannot be sent between threads safely",
+                        "`*mut u32` cannot be shared between threads safely",
+                    ],
+                ),
+            ),
+            (
+                "send_sync: `Rc` is neither `Send` nor `Sync`",
+                a9::CLAIM_SEND_SYNC_RC.to_string(),
+                Claimed::Error(
+                    "E0277",
+                    &[
+                        "cannot be sent between threads safely",
+                        "`Rc<u32>` cannot be sent between threads safely",
+                        "`Rc<u32>` cannot be shared between threads safely",
+                    ],
+                ),
+            ),
+        ],
+        "maybe_uninit" => vec![
+            (
+                "maybe_uninit starter: E0381, reported at the read in `println!`",
+                s("maybe_uninit"),
+                Claimed::Error(
+                    "E0381",
+                    &[
+                        "used binding `quire` isn't initialized",
+                        "println!(\"bound pages: {quire:?}\");",
+                    ],
+                ),
+            ),
+            (
+                "maybe_uninit: a `MaybeUninit` never drops what it holds",
+                a9::CLAIM_MAYBE_UNINIT_NO_DROP.to_string(),
+                Claimed::Prints("slot goes out of scope"),
+            ),
+        ],
+        other => panic!("no claims table for Act 9 mission `{other}`: add one"),
+    }
+}
+
+#[test]
+fn every_error_an_act9_villager_names_is_a_compiled_claim() {
+    let reg = MissionRegistry::default();
+    let act9: Vec<&str> = reg
+        .missions
+        .iter()
+        .map(|m| m.id)
+        .skip_while(|id| *id != "raw_pointer")
+        .take_while(|id| *id != "librarian_index")
+        .collect();
+    assert_eq!(
+        act9,
+        ACT9_VILLAGER_CODES
+            .iter()
+            .map(|(id, _)| *id)
+            .collect::<Vec<_>>(),
+        "every Act 9 villager mission has a claims table"
+    );
+    for (id, want) in ACT9_VILLAGER_CODES {
+        assert_claims_cover_texts(id, &act9_villager_claims(id), &mission_texts(&[id]), want);
     }
 }
 
@@ -1130,73 +1468,133 @@ fn trial_code_lines_fit_the_code_pane() {
     );
 }
 
-#[test]
-#[ignore = "slow: runs rustc once per claim"]
-fn trial_claims_are_what_rustc_emits() {
-    let dir = scratch_dir("trial-claims");
+/// Build and (where the claim is about behaviour) run one claim; push a
+/// line to `problems` if rustc or the program disagrees with it.
+fn check_claim(
+    dir: &std::path::Path,
+    tag: &str,
+    label: &str,
+    src: &str,
+    claim: &Claimed,
+    problems: &mut Vec<String>,
+) {
+    let path = dir.join(format!("{tag}.rs"));
+    let exe = dir.join(format!("{tag}.exe"));
+    std::fs::write(&path, src).expect("write claim");
+    let out = Command::new("rustc")
+        .args(["--edition", PLAYER_EDITION, "--crate-type", "bin", "-o"])
+        .arg(&exe)
+        .arg(&path)
+        .output()
+        .expect("spawn rustc");
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    let codes: Vec<&str> = stderr
+        .match_indices("error[")
+        .map(|(i, _)| &stderr[i + 6..i + 11])
+        .collect();
+    match claim {
+        Claimed::Compiles if out.status.success() => println!("ok  {label}: compiles"),
+        Claimed::Compiles => problems.push(format!("{label}: does not compile\n{stderr}")),
+        Claimed::Error(code, pieces) => {
+            let wording = pieces.iter().all(|p| stderr.contains(p));
+            let only = !codes.is_empty() && codes.iter().all(|c| c == code);
+            if !out.status.success() && only && wording {
+                println!("ok  {label}: {codes:?}");
+            } else {
+                problems.push(format!(
+                    "{label}: expected only {code} with {pieces:?}, got {codes:?}\n{stderr}"
+                ));
+            }
+        }
+        Claimed::ErrorNoCode(pieces) => {
+            let wording = pieces.iter().all(|p| stderr.contains(p));
+            if !out.status.success() && codes.is_empty() && wording {
+                println!("ok  {label}: fails without a code");
+            } else {
+                problems.push(format!(
+                    "{label}: expected a code-less error with {pieces:?}, got {codes:?}\n{stderr}"
+                ));
+            }
+        }
+        Claimed::Prints(want) => {
+            if !out.status.success() {
+                problems.push(format!("{label}: does not compile\n{stderr}"));
+                return;
+            }
+            let run = Command::new(&exe).output().expect("run claim");
+            let got = normalise_stdout(&run.stdout);
+            if run.status.success() && got == *want {
+                println!("ok  {label}: prints {want:?}");
+            } else {
+                problems.push(format!(
+                    "{label}: expected {want:?} and a clean exit; exit {:?}, stdout {got:?}",
+                    run.status.code()
+                ));
+            }
+        }
+        Claimed::Panics {
+            stdout,
+            stderr: piece,
+        } => {
+            if !out.status.success() {
+                problems.push(format!("{label}: does not compile\n{stderr}"));
+                return;
+            }
+            let run = Command::new(&exe).output().expect("run claim");
+            let run_out = String::from_utf8_lossy(&run.stdout).replace("\r\n", "\n");
+            let run_err = String::from_utf8_lossy(&run.stderr).into_owned();
+            if !run.status.success() && run_out.trim_end() == *stdout && run_err.contains(piece) {
+                println!("ok  {label}: panics after {stdout:?}");
+            } else {
+                problems.push(format!(
+                    "{label}: expected {stdout:?} then a panic with {piece:?}; \
+                     exit {:?}, stdout {run_out:?}, stderr {run_err}",
+                    run.status.code()
+                ));
+            }
+        }
+    }
+}
+
+fn print_rustc_version() {
     let version = Command::new("rustc")
         .arg("--version")
         .output()
         .expect("rustc --version");
     println!("{}", String::from_utf8_lossy(&version.stdout).trim());
+}
+
+#[test]
+#[ignore = "slow: runs rustc once per claim"]
+fn trial_claims_are_what_rustc_emits() {
+    let dir = scratch_dir("trial-claims");
+    print_rustc_version();
     let mut problems = Vec::new();
     let mut checked = 0usize;
     for trial in TRIALS {
         for (n, (label, src, claim)) in trial_claims(trial.id).into_iter().enumerate() {
             checked += 1;
-            let path = dir.join(format!("{}_{n}.rs", trial.id));
-            let exe = dir.join(format!("{}_{n}.exe", trial.id));
-            std::fs::write(&path, &src).expect("write claim");
-            let out = Command::new("rustc")
-                .args(["--edition", PLAYER_EDITION, "--crate-type", "bin", "-o"])
-                .arg(&exe)
-                .arg(&path)
-                .output()
-                .expect("spawn rustc");
-            let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
-            let codes: Vec<&str> = stderr
-                .match_indices("error[")
-                .map(|(i, _)| &stderr[i + 6..i + 11])
-                .collect();
-            match claim {
-                Claimed::Compiles if out.status.success() => println!("ok  {label}: compiles"),
-                Claimed::Compiles => problems.push(format!("{label}: does not compile\n{stderr}")),
-                Claimed::Error(code, pieces) => {
-                    let wording = pieces.iter().all(|p| stderr.contains(p));
-                    let only = !codes.is_empty() && codes.iter().all(|c| *c == code);
-                    if !out.status.success() && only && wording {
-                        println!("ok  {label}: {codes:?}");
-                    } else {
-                        problems.push(format!(
-                            "{label}: expected only {code} with {pieces:?}, got {codes:?}\n{stderr}"
-                        ));
-                    }
-                }
-                Claimed::Panics {
-                    stdout,
-                    stderr: piece,
-                } => {
-                    if !out.status.success() {
-                        problems.push(format!("{label}: does not compile\n{stderr}"));
-                        continue;
-                    }
-                    let run = Command::new(&exe).output().expect("run claim");
-                    let run_out = String::from_utf8_lossy(&run.stdout).replace("\r\n", "\n");
-                    let run_err = String::from_utf8_lossy(&run.stderr).into_owned();
-                    if !run.status.success()
-                        && run_out.trim_end() == stdout
-                        && run_err.contains(piece)
-                    {
-                        println!("ok  {label}: panics after {stdout:?}");
-                    } else {
-                        problems.push(format!(
-                            "{label}: expected {stdout:?} then a panic with {piece:?}; \
-                             exit {:?}, stdout {run_out:?}, stderr {run_err}",
-                            run.status.code()
-                        ));
-                    }
-                }
-            }
+            let tag = format!("{}_{n}", trial.id);
+            check_claim(&dir, &tag, label, &src, &claim, &mut problems);
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    println!("{checked} claims checked");
+    assert!(problems.is_empty(), "{}", problems.join("\n\n"));
+}
+
+#[test]
+#[ignore = "slow: runs rustc once per claim"]
+fn act9_villager_claims_are_what_rustc_emits() {
+    let dir = scratch_dir("act9-claims");
+    print_rustc_version();
+    let mut problems = Vec::new();
+    let mut checked = 0usize;
+    for (id, _) in ACT9_VILLAGER_CODES {
+        for (n, (label, src, claim)) in act9_villager_claims(id).into_iter().enumerate() {
+            checked += 1;
+            let tag = format!("{id}_{n}");
+            check_claim(&dir, &tag, label, &src, &claim, &mut problems);
         }
     }
     let _ = std::fs::remove_dir_all(&dir);

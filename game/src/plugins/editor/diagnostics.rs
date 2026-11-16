@@ -44,6 +44,10 @@ pub enum ResultTag {
     Unverified,
     /// `[ok:pattern]`: pattern grader (server `/compile` or offline stub).
     PatternOnly,
+    /// `[ok:unsafe]`: the server called the player's code and every check
+    /// matched, but with `unsafe` allowed (Act 9), where player code can
+    /// rewrite the checker's results. Shown as NOT VERIFIED.
+    UnsafeAllowed,
     /// `[fail]` (or any unknown `[fail:...]`): rejected, no detail.
     Failed,
     /// `[fail:compile]`
@@ -65,6 +69,7 @@ impl ResultTag {
         Some(match tag {
             "ok" => Self::Verified,
             "ok:pattern" => Self::PatternOnly,
+            "ok:unsafe" => Self::UnsafeAllowed,
             "fail" => Self::Failed,
             "fail:compile" => Self::CompileError,
             "fail:runtime" => Self::RuntimeError,
@@ -79,7 +84,9 @@ impl ResultTag {
 
     pub fn kind(self) -> ResultKind {
         match self {
-            Self::Verified | Self::Unverified | Self::PatternOnly => ResultKind::Pass,
+            Self::Verified | Self::Unverified | Self::PatternOnly | Self::UnsafeAllowed => {
+                ResultKind::Pass
+            }
             Self::Failed
             | Self::CompileError
             | Self::RuntimeError
@@ -335,6 +342,18 @@ pub fn banner(p: &ParsedResult<'_>, note: Option<&str>) -> Banner {
             note.unwrap_or_else(|| {
                 "It was accepted, but nothing checked what your code does.".to_string()
             }),
+        ),
+        // Checked, but in a mode with a documented forgery limit: the same
+        // NOT VERIFIED label, with the server's note saying what WAS
+        // checked and one sentence saying why that is not a verification.
+        (ResultTag::UnsafeAllowed, false) => (
+            "PASS · NOT VERIFIED",
+            BannerStyle::Unverified,
+            format!(
+                "{} With `unsafe` allowed, code can rewrite the checker's results, so this pass \
+                 is not verified. It still counts.",
+                note.unwrap_or_else(|| "Your code was run and its results matched.".to_string())
+            ),
         ),
         (_, true) => (
             "FAIL · OFFLINE PATTERN CHECK",
@@ -791,6 +810,22 @@ error: could not compile `player` (bin \"player\") due to 1 previous error; 1 wa
             (b.title, b.style),
             ("PASS · PATTERN CHECK ONLY", BannerStyle::Unverified)
         );
+
+        // Act 9 `unsafe`-allowed pass: checked, never labelled VERIFIED.
+        let b = banner(
+            &parse_result("[ok:unsafe] 42"),
+            Some("checked by calling your code (8 checks; `unsafe` allowed)"),
+        );
+        assert_eq!(
+            (b.title, b.style),
+            ("PASS · NOT VERIFIED", BannerStyle::Unverified)
+        );
+        assert!(
+            b.reason
+                .starts_with("Checked by calling your code (8 checks; `unsafe` allowed).")
+        );
+        assert!(b.reason.contains("not verified"), "{}", b.reason);
+        assert_eq!(parse_result("[ok:unsafe] 42").kind, ResultKind::Pass);
 
         let b = banner(
             &parse_result("[offline mode — server unreachable]\n[ok:pattern] x"),

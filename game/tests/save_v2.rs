@@ -413,10 +413,12 @@ fn save_cleared_past_act_8_offers_each_new_trial() {
     const NEW_TRIALS: [&str; 3] = ["forge_golem", "tide_hydra", "memory_warden"];
     let reg = MissionRegistry::default();
     let new_stage = |id: &str| trial::trial_of(id).is_some_and(|(t, _)| NEW_TRIALS.contains(&t.id));
-    // The old registry: every current mission except the new stages.
+    // The old registry: every mission of Acts 1-8 except the new stages
+    // (Act 9, added later, starts at `raw_pointer`).
     let cleared: Vec<String> = reg
         .missions
         .iter()
+        .take_while(|m| m.id != "raw_pointer")
         .filter(|m| !new_stage(m.id))
         .map(|m| m.id.to_string())
         .collect();
@@ -467,6 +469,91 @@ fn save_cleared_past_act_8_offers_each_new_trial() {
         assert_eq!(reg.next_locked(p).map(|m| m.id), Some("golem_parts"));
     }
     // Not everything is cleared any more: no epilogue for this save.
+    assert!(p.cleared_count() < reg.missions.len());
+}
+
+/// A v2 save written before Act 9 existed, cleared through the end of Act
+/// 8 (every mission of the 78-mission registry, ending on the Memory
+/// Warden's `warden_weak`), loads unchanged. No format change: the first
+/// Act 9 NPC, the Shelfmark, offers `raw_pointer`; the next Act 9 mission
+/// stays locked; the Librarian (no prologue) is still on his locked stage
+/// 1; the earliest unfinished mission is `raw_pointer`.
+#[test]
+fn save_cleared_through_act_8_offers_the_first_act_9_mission() {
+    use pledge_and_crown::plugins::mission::MissionRegistry;
+    use pledge_and_crown::plugins::npc::NPC_ROSTER;
+    use pledge_and_crown::plugins::trial;
+
+    #[derive(Serialize)]
+    struct S {
+        a: u8,
+        b: u8,
+        c: u8,
+    }
+    #[derive(Serialize)]
+    struct V2 {
+        version: u32,
+        cleared: Vec<String>,
+        settings: S,
+        player_position: Option<[f32; 2]>,
+    }
+    let reg = MissionRegistry::default();
+    // The old registry: everything up to and including `warden_weak`.
+    let cleared: Vec<String> = reg
+        .missions
+        .iter()
+        .map(|m| m.id)
+        .take_while(|id| *id != "raw_pointer")
+        .map(str::to_string)
+        .collect();
+    assert_eq!(cleared.len(), 78, "the whole 78-mission registry");
+    assert_eq!(cleared.last().map(String::as_str), Some("warden_weak"));
+    let bytes = bincode::serde::encode_to_vec(
+        &V2 {
+            version: 2,
+            cleared: cleared.clone(),
+            settings: S {
+                a: 70,
+                b: 50,
+                c: 30,
+            },
+            player_position: Some([0.0, -1200.0]),
+        },
+        bincode::config::standard(),
+    )
+    .unwrap();
+
+    let data = SaveData::decode(&bytes).expect("pre-Act-9 v2 save must load");
+    let p = &data.progress;
+    assert_eq!(p.cleared_count(), cleared.len());
+    for id in &cleared {
+        assert!(p.is_cleared(id), "lost {id}");
+    }
+    assert_eq!(data.player_position, Some(Vec2::new(0.0, -1200.0)));
+    assert_eq!(SaveData::decode(&data.encode().unwrap()).unwrap(), data);
+
+    let full = !cfg!(feature = "demo");
+    let unlocked = |id: &str| reg.find(id).is_some_and(|m| m.is_unlocked(p));
+    let shelfmark = NPC_ROSTER
+        .iter()
+        .find(|n| n.name == "The Shelfmark")
+        .expect("the first Act 9 NPC");
+    assert_eq!(shelfmark.mission_id, "raw_pointer");
+    assert_eq!(
+        trial::current_mission(&reg, p, shelfmark.mission_id).map(|m| m.id),
+        Some("raw_pointer")
+    );
+    assert_eq!(unlocked("raw_pointer"), full, "raw_pointer offered");
+    assert!(!unlocked("extern_c"), "extern_c waits for raw_pointer");
+    // The Librarian has no prologue: he stays on stage 1, locked.
+    assert_eq!(
+        trial::current_mission(&reg, p, "librarian_index").map(|m| m.id),
+        Some("librarian_index")
+    );
+    assert!(!unlocked("librarian_index"));
+    if full {
+        assert_eq!(reg.next_locked(p).map(|m| m.id), Some("raw_pointer"));
+    }
     assert!(p.cleared_count() < reg.missions.len());
 }
 

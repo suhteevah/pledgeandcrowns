@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-30 - The Guildmaster, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-69-guildkit.jsx (approved by Matt 2026-11-13, wired 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REF30.png).
 // Tall authority figure in a Crypt robe of office. A gold guild medallion
 // (seal) hangs on the chest; a gold-topped staff of office stands at his
 // right. He is a member with duties - methods bound to the type via impl.

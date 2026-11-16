@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-70 - Costume kit exemplar, Act 4 Trait Mage Tower (Conjurer), 32x32.
-// APPROVED by Matt 2026-11-13 (tranche 1) as a kit exemplar. NOT wired to any NPC; tranche 2 redraws this Act's cast on it.
+// APPROVED by Matt 2026-11-13 (tranche 1) as a kit exemplar. Wired as game/assets/sprites/npc/conjurer_idle_0.png (the Conjurer's sprite, confirmed by Matt 2026-11-15).
 //
 // Kit rule for the Tower cast: tall pointed hat, floor-length cobalt-deep robe
 // with a gold hem, aged-paper beard, one small violet accent (hat band + orb).

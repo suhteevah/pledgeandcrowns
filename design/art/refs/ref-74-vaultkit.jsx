@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-74 - Costume kit exemplar, Act 8 Vault of Pointers (Warden), 32x32.
-// APPROVED by Matt 2026-11-13 (tranche 1) as a kit exemplar. NOT wired to any NPC; tranche 2 redraws this Act's cast on it.
+// APPROVED by Matt 2026-11-13 (tranche 1) as a kit exemplar. Wired as game/assets/sprites/npc/warden_idle_0.png (the Warden's sprite, confirmed by Matt 2026-11-15).
 //
 // Kit rule for the Vault cast: stone-grey plate with old-gold trim, a crested
 // helm with a visor slit, gold pauldrons, a ring-key at the hip. Silhouette =

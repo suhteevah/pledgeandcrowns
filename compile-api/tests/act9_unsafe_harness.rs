@@ -1,27 +1,33 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! `HarnessMode::UnsafeLateNonce` (HARNESS-NOTES.md design 1): the grading
-//! mode for Act 9's `unsafe` lessons, proven on test-only fixtures (no Act 9
-//! mission is registered yet; the game roster waits on art).
+//! mode for Act 9's `unsafe` lessons. Its four users are registered
+//! missions (`extern_c`, `send_sync`, `librarian_index`, `librarian_seal`;
+//! `compile-api/src/expectations/data.rs`); the fixtures below grade the
+//! REGISTERED checks, looked up by id, so what is proven here is what the
+//! server runs.
 //!
-//! Fast tests (always run): the one-shot late-nonce host import, through
-//! `wasm_runner` in-process and through the real `run-wasm` child, on
-//! hand-written WAT modules.
+//! Fast tests (always run): the registered checks are the expected ones;
+//! the one-shot late-nonce host import, through `wasm_runner` in-process
+//! and through the real `run-wasm` child, on hand-written WAT modules,
+//! including a module with no `memory` export and an all-ones pointer
+//! (security review P2-2).
 //!
 //! Slow tests (`#[ignore]`d: each case is a real `cargo build` for
 //! `wasm32-wasip1` plus a run):
 //!
-//! - `act9_fixtures_discriminate_and_resist_attacks`: five Act 9 spec
-//!   missions as `UnsafeLateNonce` harness checks (`librarian_index`:
-//!   `unsafe fn` call + raw-pointer deref; `extern_c`: FFI; `librarian_seal`:
-//!   `Box::into_raw`/`from_raw` + raw deref; `send_sync`: `unsafe impl`;
-//!   `maybe_uninit`: `MaybeUninit`/`transmute`). For each: the spec's
-//!   solution passes, three or more wrong variants fail, and (for the four
-//!   whose checker calls player items) a memory-scan attack finds no key, a
+//! - `act9_fixtures_discriminate_and_resist_attacks`: the four
+//!   `UnsafeLateNonce` missions (`librarian_index`: `unsafe fn` call +
+//!   raw-pointer deref; `extern_c`: FFI; `librarian_seal`:
+//!   `Box::into_raw`/`from_raw` + raw deref; `send_sync`: `unsafe impl`)
+//!   and `maybe_uninit` (`MaybeUninit`/`transmute`, registered as a stdout
+//!   check: its lesson is all in `main`). For each: the spec's solution
+//!   passes, three or more wrong variants fail, and (for the four whose
+//!   checker calls player items) a memory-scan attack finds no key, a
 //!   guessed-key forgery fails, and an early exit / a panic are graded as
 //!   such. Also: timeout, memory cap and output cap still grade as runtime
 //!   errors; a late destructor cannot add results after the done mark; a
-//!   registered (`ForbidUnsafe`) mission cannot be opted into `unsafe` by
-//!   the player's file.
+//!   `ForbidUnsafe` mission cannot be opted into `unsafe` by the player's
+//!   file.
 //! - `known_limit_heap_patch_forges_a_pass` and
 //!   `known_limit_global_allocator_forges_but_is_caught_statically`: the
 //!   strongest attacks found against design 1, kept as documentation of
@@ -37,7 +43,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use pledge_compile_api::expectations::{
-    self, Check, GradeState, GradedRun, Harness, HarnessMode, Matcher, MissionCheck,
+    self, Check, GradeState, GradedRun, HarnessMode, MissionCheck,
 };
 use pledge_compile_api::run_sandbox::{self, RunChildReply};
 use pledge_compile_api::wasm_builder::{BuildSettings, RunLimits};
@@ -118,6 +124,55 @@ fn an_out_of_bounds_target_is_refused_without_writing() {
     assert!(v.ok, "{}", v.stderr);
     // -3 ('-') for the out-of-bounds call, then -1 twice.
     assert_eq!(v.stdout, format!("{DOTS}{DOTS}-//\n"));
+}
+
+/// Review P2-2: a target at `0xFFFFFFFF` (an all-ones wasm32 address,
+/// written `-1` as an `i32`) is far past the 1-page memory: `-3`, nothing
+/// written, and the nonce is still consumed.
+#[test]
+fn an_all_ones_pointer_is_refused_without_writing() {
+    let late = LateNonce::generate();
+    let wat = caller_wat(late.import(), 35, 400).replacen(
+        "(call $key (i32.const 100) (i32.const 35))",
+        "(call $key (i32.const -1) (i32.const 35))",
+        1,
+    );
+    assert!(wat.contains("(i32.const -1)"));
+    let v = run_late(&wat, Some(&late));
+    assert!(v.ok, "{}", v.stderr);
+    assert_eq!(v.stdout, format!("{DOTS}{DOTS}-//\n"));
+    assert!(!v.stdout.contains(late.nonce()));
+}
+
+/// Review P2-2: a module that exports no `memory` gets `-3` from the first
+/// call (nothing to write into) and `-1` from the second (the nonce is
+/// gone). The module cannot print without an exported memory, so it traps
+/// (`unreachable`) unless both return codes are the expected ones: a
+/// clean exit is the assertion.
+#[test]
+fn a_module_without_memory_is_refused_and_the_nonce_consumed() {
+    let late = LateNonce::generate();
+    let import = late.import();
+    let wat = format!(
+        r#"(module
+  (import "pnc_harness" "{import}" (func $key (param i32 i32) (result i32)))
+  (memory 1)
+  (func (export "_start")
+    (if (i32.ne (call $key (i32.const 0) (i32.const 35)) (i32.const -3))
+      (then unreachable))
+    (if (i32.ne (call $key (i32.const 0) (i32.const 35)) (i32.const -1))
+      (then unreachable))))
+"#
+    );
+    let v = run_late(&wat, Some(&late));
+    assert!(v.ok, "a return code was not -3 then -1: {}", v.stderr);
+    assert!(v.stdout.is_empty());
+    // Control: the same module with the checks inverted traps, so a clean
+    // exit above really means both codes matched.
+    let inverted = wat.replace("i32.ne", "i32.eq");
+    let other = LateNonce::generate();
+    let v = run_late(&inverted.replace(import, other.import()), Some(&other));
+    assert!(!v.ok, "inverted checks must trap");
 }
 
 #[test]
@@ -285,19 +340,56 @@ struct Fixture {
     attack_base: Option<(&'static str, usize)>,
 }
 
-const fn late_check(
-    id: &'static str,
-    harness: Harness,
-    uses: &'static [&'static [&'static str]],
-    forbids: &'static [&'static str],
-) -> MissionCheck {
-    MissionCheck {
-        id,
-        check: Check::Harness(harness),
-        harness_mode: HarnessMode::UnsafeLateNonce,
-        uses,
-        forbids,
+/// The server's registered check for `id`.
+fn registered(id: &str) -> MissionCheck {
+    *expectations::lookup(id).unwrap_or_else(|| panic!("{id} is not a registered mission"))
+}
+
+/// The expected checker lines of a registered harness mission.
+fn expected_lines(id: &str) -> &'static [&'static str] {
+    match expectations::lookup(id).map(|m| m.check) {
+        Some(Check::Harness(h)) => h.expected,
+        other => panic!("{id} is not a harness check: {other:?}"),
     }
+}
+
+/// The four `UnsafeLateNonce` missions are registered as harness checks
+/// with the inputs the fixtures below were built against (the expected
+/// lines are what the attack variants forge), and `maybe_uninit` is a
+/// plain stdout check with its construct tokens.
+#[test]
+fn registered_act9_checks_are_the_proven_shapes() {
+    for (id, checks) in [
+        ("librarian_index", 8),
+        ("extern_c", 7),
+        ("librarian_seal", 6),
+        ("send_sync", 5),
+    ] {
+        let m = registered(id);
+        assert_eq!(m.harness_mode, HarnessMode::UnsafeLateNonce, "{id}");
+        let Check::Harness(h) = m.check else {
+            panic!("{id}: not a harness check");
+        };
+        assert!(h.run_main, "{id}: the checker also runs main");
+        assert_eq!(h.expected.len(), checks, "{id}");
+        assert!(!m.uses.is_empty(), "{id}: construct tokens");
+        // Every one but the FFI lesson forbids `no_mangle` interposition.
+        assert_eq!(m.forbids.contains(&"no_mangle"), id != "extern_c", "{id}");
+    }
+    assert_eq!(
+        expected_lines("librarian_index")[5],
+        "fetch([7], 0) = Some(7)"
+    );
+    let uninit = registered("maybe_uninit");
+    assert!(matches!(uninit.check, Check::Stdout { .. }));
+    assert_eq!(
+        uninit.uses,
+        &[
+            &["MaybeUninit"][..],
+            &["write("],
+            &["assume_init", "transmute"]
+        ]
+    );
 }
 
 // -- 64 librarian_index: `unsafe fn` + raw-pointer deref behind a safe door --
@@ -360,42 +452,6 @@ fn main() {
     }
 }
 "##;
-
-const INDEX_EXPECTED: &[&str] = &[
-    "fetch(shelf, 0) = Some(11)",
-    "fetch(shelf, 3) = Some(44)",
-    "fetch(shelf, 4) = None",
-    "fetch(shelf, 99) = None",
-    "fetch(shelf, usize::MAX) = None",
-    "fetch([7], 0) = Some(7)",
-    "fetch([7], 1) = None",
-    "fetch([], 0) = None",
-];
-
-const INDEX_CHECK: MissionCheck = late_check(
-    "act9_fixture_librarian_index",
-    Harness {
-        contract: "`fn fetch(shelf: &[u32], index: usize) -> Option<u32>` and a `fn main`",
-        run_main: true,
-        body: "    let _sig: fn(&[u32], usize) -> ::core::option::Option<u32> = super::fetch;
-    let shelf = [11u32, 22, 33, 44];
-    emit(\"fetch(shelf, 0)\", super::fetch(&shelf, 0));
-    emit(\"fetch(shelf, 3)\", super::fetch(&shelf, 3));
-    emit(\"fetch(shelf, 4)\", super::fetch(&shelf, 4));
-    emit(\"fetch(shelf, 99)\", super::fetch(&shelf, 99));
-    emit(\"fetch(shelf, usize::MAX)\", super::fetch(&shelf, usize::MAX));
-    let one = [7u32];
-    emit(\"fetch([7], 0)\", super::fetch(&one, 0));
-    emit(\"fetch([7], 1)\", super::fetch(&one, 1));
-    emit(\"fetch([], 0)\", super::fetch(&[], 0));",
-        expected: INDEX_EXPECTED,
-        main_matchers: &[Matcher::Exact(
-            "index 0: volume 11\nindex 3: volume 44\nindex 4: no such volume\nindex 99: no such volume",
-        )],
-    },
-    &[&["unsafe fn"], &[".len()"], &["unsafe {", "unsafe{"]],
-    &["no_mangle"],
-);
 
 // -- 59 extern_c: FFI in one program --
 
@@ -485,51 +541,6 @@ fn main() {
 }
 "##;
 
-const EXTERN_EXPECTED: &[&str] = &[
-    "size_of::<Rune>() = 12",
-    "align_of::<Rune>() = 4",
-    "offset_of!(Rune, tier) = 8",
-    "crown_seal(3, 20, 1) = 44",
-    "crown_seal(0, 0, 0) = 0",
-    "crown_seal(255, 1000, 9) = 2264",
-    "through an extern \"C\" fn pointer = 44",
-];
-
-const EXTERN_CHECK: MissionCheck = late_check(
-    "act9_fixture_extern_c",
-    Harness {
-        contract: "`#[repr(C)] #[derive(Clone, Copy)] pub struct Rune { pub glyph: u8, pub power: u32, \
-                   pub tier: u8 }`, `pub extern \"C\" fn crown_seal(rune: Rune) -> u32`, and a `fn main`",
-        run_main: true,
-        body: "    let _sig: extern \"C\" fn(super::Rune) -> u32 = super::crown_seal;
-    emit(\"size_of::<Rune>()\", ::core::mem::size_of::<super::Rune>());
-    emit(\"align_of::<Rune>()\", ::core::mem::align_of::<super::Rune>());
-    emit(\"offset_of!(Rune, tier)\", ::core::mem::offset_of!(super::Rune, tier));
-    let r = super::Rune { glyph: 3, power: 20, tier: 1 };
-    emit(\"crown_seal(3, 20, 1)\", super::crown_seal(r));
-    emit(\"crown_seal(0, 0, 0)\", super::crown_seal(super::Rune { glyph: 0, power: 0, tier: 0 }));
-    emit(\"crown_seal(255, 1000, 9)\", super::crown_seal(super::Rune { glyph: 255, power: 1000, tier: 9 }));
-    let f: extern \"C\" fn(super::Rune) -> u32 = super::crown_seal;
-    emit(\"through an extern \\\"C\\\" fn pointer\", f(r));",
-        expected: EXTERN_EXPECTED,
-        main_matchers: &[Matcher::Exact(
-            "Rune: 12 bytes, align 4\ndirect call: 44\nthrough the extern block: 44\nthrough a fn pointer: 44",
-        )],
-    },
-    // String literal contents are blanked before token checks, so
-    // `extern "C" fn` cannot be a token; `unsafe extern` (the foreign
-    // block) and `no_mangle` stand for the two halves of the lesson.
-    &[
-        &["repr(C)"],
-        &["no_mangle"],
-        &["unsafe extern"],
-        &["unsafe {", "unsafe{"],
-    ],
-    // `no_mangle` is the lesson here, so it cannot be forbidden: symbol
-    // interposition stays open for this mission (HARNESS-NOTES.md).
-    &[],
-);
-
 // -- 66 librarian_seal: an owning raw pointer --
 
 const SEAL_SOLUTION: &str = r##"/// Owns a run of `len` u32s through a raw pointer, the way `Vec` does
@@ -578,42 +589,6 @@ fn main() {
     println!("the Librarian closes the book");
 }
 "##;
-
-const SEAL_EXPECTED: &[&str] = &[
-    "get(0) = Some(2)",
-    "get(3) = Some(8)",
-    "get(4) = None",
-    "get(usize::MAX) = None",
-    "empty get(0) = None",
-    "needs_drop::<Codex>() = true",
-];
-
-const SEAL_CHECK: MissionCheck = late_check(
-    "act9_fixture_librarian_seal",
-    Harness {
-        contract: "`struct Codex` with `fn from_pages(pages: Vec<u32>) -> Codex`, \
-                   `fn get(&self, index: usize) -> Option<u32>`, an `impl Drop`, and a `fn main`",
-        run_main: true,
-        body: "    let _new: fn(::std::vec::Vec<u32>) -> super::Codex = super::Codex::from_pages;
-    let _get: fn(&super::Codex, usize) -> ::core::option::Option<u32> = super::Codex::get;
-    let c = super::Codex::from_pages(::std::vec![2, 4, 6, 8]);
-    emit(\"get(0)\", c.get(0));
-    emit(\"get(3)\", c.get(3));
-    emit(\"get(4)\", c.get(4));
-    emit(\"get(usize::MAX)\", c.get(usize::MAX));
-    ::core::mem::drop(c);
-    let e = super::Codex::from_pages(::std::vec::Vec::new());
-    emit(\"empty get(0)\", e.get(0));
-    emit(\"needs_drop::<Codex>()\", ::core::mem::needs_drop::<super::Codex>());",
-        expected: SEAL_EXPECTED,
-        main_matchers: &[Matcher::Exact(
-            "page 0: Some(5)\npage 2: Some(13)\npage 3: None\nthe Librarian closes the book\n\
-             the codex is sealed (3 pages returned)",
-        )],
-    },
-    &[&["impl Drop for"], &["from_raw"], &["unsafe {", "unsafe{"]],
-    &["no_mangle"],
-);
 
 // -- 62 send_sync: `unsafe impl` --
 
@@ -675,40 +650,6 @@ fn main() {
 }
 "##;
 
-const SYNC_EXPECTED: &[&str] = &[
-    "Tome: Send = true",
-    "Tome: Sync = true",
-    "Tome::new(41).read() = 41",
-    "read after move = 41",
-    "needs_drop::<Tome>() = true",
-];
-
-const SYNC_CHECK: MissionCheck = late_check(
-    "act9_fixture_send_sync",
-    Harness {
-        contract: "`struct Tome` that is `Send` and `Sync`, with `fn new(value: u32) -> Tome` and \
-                   `fn read(&self) -> u32`, and a `fn main`",
-        run_main: true,
-        body: "    fn is_send<T: ::core::marker::Send>() -> bool { true }
-    fn is_sync<T: ::core::marker::Sync>() -> bool { true }
-    let _new: fn(u32) -> super::Tome = super::Tome::new;
-    let _read: fn(&super::Tome) -> u32 = super::Tome::read;
-    emit(\"Tome: Send\", is_send::<super::Tome>());
-    emit(\"Tome: Sync\", is_sync::<super::Tome>());
-    let t = super::Tome::new(41);
-    emit(\"Tome::new(41).read()\", t.read());
-    let moved = ::std::boxed::Box::new(t);
-    emit(\"read after move\", moved.read());
-    emit(\"needs_drop::<Tome>()\", ::core::mem::needs_drop::<super::Tome>());",
-        expected: SYNC_EXPECTED,
-        main_matchers: &[Matcher::Exact(
-            "the courier accepts the tome\npage reads 7\nthe page is returned to the shelf",
-        )],
-    },
-    &[&["unsafe impl Send"], &["unsafe impl Sync"]],
-    &["no_mangle"],
-);
-
 // -- 63 maybe_uninit: main-only lesson (MaybeUninit, ptr write, transmute) --
 
 const UNINIT_SOLUTION: &str = r##"use std::mem::MaybeUninit;
@@ -754,25 +695,10 @@ fn main() {
 }
 "##;
 
-const UNINIT_CHECK: MissionCheck = late_check(
-    "act9_fixture_maybe_uninit",
-    Harness {
-        contract: "a `fn main`",
-        run_main: true,
-        body: "    // Main-only lesson: the checker runs main and checks what it prints.",
-        expected: &[],
-        main_matchers: &[Matcher::Exact(
-            "bound pages: [10, 20, 30, 40]\ntotal ink: 100",
-        )],
-    },
-    &[&["MaybeUninit"], &["write("], &["assume_init", "transmute"]],
-    &["no_mangle"],
-);
-
 fn fixtures() -> Vec<Fixture> {
     vec![
         Fixture {
-            check: INDEX_CHECK,
+            check: registered("librarian_index"),
             solution: INDEX_SOLUTION,
             alternatives: &[],
             wrong: &[
@@ -823,7 +749,7 @@ fn fixtures() -> Vec<Fixture> {
             attack_base: Some((INDEX_ATTACK_BASE, 12)),
         },
         Fixture {
-            check: EXTERN_CHECK,
+            check: registered("extern_c"),
             solution: EXTERN_SOLUTION,
             alternatives: &[],
             wrong: &[
@@ -837,7 +763,7 @@ fn fixtures() -> Vec<Fixture> {
             attack_base: Some((EXTERN_ATTACK_BASE, 7)),
         },
         Fixture {
-            check: SEAL_CHECK,
+            check: registered("librarian_seal"),
             solution: SEAL_SOLUTION,
             alternatives: &[],
             wrong: &[
@@ -854,7 +780,7 @@ fn fixtures() -> Vec<Fixture> {
             attack_base: Some((SEAL_ATTACK_BASE, 8)),
         },
         Fixture {
-            check: SYNC_CHECK,
+            check: registered("send_sync"),
             solution: SYNC_SOLUTION,
             alternatives: &[],
             wrong: &[
@@ -868,7 +794,7 @@ fn fixtures() -> Vec<Fixture> {
             attack_base: Some((SYNC_ATTACK_BASE, 3)),
         },
         Fixture {
-            check: UNINIT_CHECK,
+            check: registered("maybe_uninit"),
             solution: UNINIT_SOLUTION,
             alternatives: &[UNINIT_TRANSMUTE_ALT],
             wrong: &[
@@ -1695,7 +1621,7 @@ fn act9_fixtures_discriminate_and_resist_attacks() {
             src(Attack::Panic),
             Want::State(GradeState::RuntimeError),
         ));
-        if id == INDEX_CHECK.id {
+        if id == "librarian_index" {
             // Limits behave as in ForbidUnsafe mode.
             cases.push(case(
                 format!("{id} limit: spin forever"),
@@ -1795,8 +1721,13 @@ fn mischief() {
 "##;
     let mut c = case(
         "librarian_index KNOWN LIMIT: rewrite a stored result on a later call".to_string(),
-        INDEX_CHECK,
-        attack_source(INDEX_ATTACK_BASE, 12, INDEX_EXPECTED, patch),
+        registered("librarian_index"),
+        attack_source(
+            INDEX_ATTACK_BASE,
+            12,
+            expected_lines("librarian_index"),
+            patch,
+        ),
         Want::Pass,
     );
     c.must_show = vec!["heap patch: rewrote 1 stored result(s)"];
@@ -1888,8 +1819,13 @@ fn mischief() {
 "##;
     let mut c = case(
         "librarian_index KNOWN LIMIT: global allocator reads the late key".to_string(),
-        INDEX_CHECK,
-        attack_source(INDEX_ATTACK_BASE, 12, INDEX_EXPECTED, spy),
+        registered("librarian_index"),
+        attack_source(
+            INDEX_ATTACK_BASE,
+            12,
+            expected_lines("librarian_index"),
+            spy,
+        ),
         Want::State(GradeState::StaticCheckFailed),
     );
     c.must_show = vec!["global_allocator"];

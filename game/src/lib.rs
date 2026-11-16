@@ -4,6 +4,13 @@
 //! `main.rs` initialises tracing and calls `run()` here. All Bevy
 //! plugin assembly lives below this line so that integration tests
 //! can construct a headless `App` without going through `main`.
+//!
+//! Hard rule 1 (CLAUDE.md): no `unsafe` in shipped game code. `forbid`
+//! makes it a compile error anywhere in this crate, and no inner `allow`
+//! can relax it. Act 9's lessons put `unsafe` in the *player's* programs:
+//! starters, solutions and grader patterns are string literals here, and
+//! those programs only ever run in the server's wasm sandbox.
+#![forbid(unsafe_code)]
 
 use bevy::asset::{AssetMetaCheck, AssetMode, AssetPlugin};
 use bevy::log::LogPlugin;

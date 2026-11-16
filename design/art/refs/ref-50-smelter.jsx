@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-50 - The Smelter, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-72-forgekit.jsx (approved by Matt 2026-11-13, wired 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REF50.png).
 // At a Bronze crucible he tips a stream of molten metal (Old-gold/amber
 // glow, one warm Teal spark of heat-shimmer) down into a single ingot mold
 // below. Many scraps went into the crucible; ONE ingot comes out. He

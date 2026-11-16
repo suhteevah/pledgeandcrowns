@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-62 - The Warden, 32x32, idle, transparent bg.
+// SUPERSEDED by ref-74-vaultkit.jsx (approved by Matt 2026-11-13, wired 2026-11-15). First-pass grid kept for history; NOT wired (still renders to its old REF62.png).
 // Guards a Bronze lockbox latched in one arm, an Old-gold key turned in
 // the lock with the other hand, the lid lifting so he can change what is
 // inside - even though the box itself was handed to him sealed, "shared,

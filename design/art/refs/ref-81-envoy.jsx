@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-81 - The Envoy on the Library kit (REF-79), 32x32, idle.
-// APPROVED by Matt 2026-11-15. Not wired yet.
+// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/npc/envoy_idle_0.png.
 //
 // Treaty-bearer. The scapular is a broad squared tabard. Lesson prop
 // (extern_c): one scroll held in both hands, with two different seals

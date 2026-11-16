@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-85 - The Bookbinder on the Library kit (REF-79), 32x32, idle.
-// APPROVED by Matt 2026-11-15. Not wired yet.
+// APPROVED by Matt 2026-11-15. Wired as game/assets/sprites/npc/bookbinder_idle_0.png.
 //
 // Binder. Sleeves rolled so the forearms show, and a wide aged-paper apron
 // from the waist over the scapular. Lesson prop (maybe_uninit): an open
