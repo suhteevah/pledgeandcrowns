@@ -255,6 +255,7 @@ fn rustc_build_all(tag: &str, extra: &[&str]) -> Vec<(&'static str, String)> {
 #[test]
 #[ignore = "slow: runs rustc once per mission"]
 fn every_solution_compiles_natively_without_warnings() {
+    common::assert_pinned_rustc();
     let failures = rustc_build_all("native", &[]);
     assert!(
         failures.is_empty(),
@@ -277,6 +278,7 @@ fn wasip1_installed() -> bool {
 #[test]
 #[ignore = "slow: runs rustc once per mission for wasm32-wasip1"]
 fn every_solution_builds_for_wasm32_wasip1() {
+    common::assert_pinned_rustc();
     assert!(
         wasip1_installed(),
         "wasm32-wasip1 is not installed: rustup target add wasm32-wasip1"
@@ -291,6 +293,7 @@ fn every_solution_builds_for_wasm32_wasip1() {
 #[test]
 #[ignore = "slow: one real cargo build + sandboxed wasm run per mission"]
 fn solutions_build_and_run_in_the_real_server_sandbox() {
+    common::assert_pinned_rustc();
     let solutions = covered();
     let mut unexpected = Vec::new();
     let mut ran_ok = 0usize;

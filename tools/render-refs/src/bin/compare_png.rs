@@ -3,6 +3,7 @@
 // report whether every pixel matches. Used for the legacy-pipeline
 // parity check; not part of the main render binary. Exits non-zero when
 // dimensions or any pixel differ, so it can gate a script.
+#![forbid(unsafe_code)]
 
 use anyhow::{Context, Result, bail};
 use image::GenericImageView;

@@ -5,6 +5,7 @@
 //!
 //! Replaces the previous `python -m http.server -d web` hint per the
 //! no-Python rule. Pure Rust, axum, ~50 LOC.
+#![forbid(unsafe_code)]
 
 use std::net::SocketAddr;
 use std::path::PathBuf;

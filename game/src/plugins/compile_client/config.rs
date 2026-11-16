@@ -9,10 +9,23 @@
 //!
 //! | Variable                  | Meaning                                              |
 //! |---------------------------|------------------------------------------------------|
-//! | `PLEDGE_API_URL`          | Base URL, `http://` or `https://`. Default `http://127.0.0.1:7878`. `off` / `offline` / `none` = offline demo mode. |
+//! | `PLEDGE_API_URL`          | Base URL, `http://` or `https://`. `off` / `offline` / `none` = offline demo mode. Default: see below. |
 //! | `PLEDGE_API_TOKEN`        | Optional bearer token sent as `Authorization: Bearer`. |
 //! | `PLEDGE_REAL_COMPILE`     | `1`/`true`/`yes`/`on` routes to `/compile-real`.      |
 //! | `PLEDGE_API_TIMEOUT_SECS` | Optional request timeout, 1..=300 seconds.           |
+//!
+//! When `PLEDGE_API_URL` is unset, a native build resolves its default
+//! with [`native_default_url`], in this order:
+//!
+//! 1. a URL baked in at build time from the **build** environment variable
+//!    `PLEDGE_BAKED_API_URL` (`option_env!`; release packaging sets it once
+//!    the compile API is deployed);
+//! 2. a debug build (`debug_assertions`): the local dev server,
+//!    [`DEFAULT_API_URL`];
+//! 3. a release build with nothing baked: offline mode, the same as the
+//!    web build. A shipped exe must never default to `127.0.0.1`: nothing
+//!    listens there on a player's machine, and unreachable-server passes
+//!    are never saved, so mission 1 could never be cleared.
 //!
 //! **Web** (wasm32): the page may define
 //! `window.PLEDGE_CONFIG = { apiUrl, apiToken, realCompile }` before the
@@ -51,8 +64,16 @@ pub mod vars {
     pub const TIMEOUT_SECS: &str = "PLEDGE_API_TIMEOUT_SECS";
 }
 
-/// Native default: the local dev server.
+/// Debug-build default: the local dev server. Release builds never use it
+/// (see [`native_default_url`]).
 pub const DEFAULT_API_URL: &str = "http://127.0.0.1:7878";
+/// Build-time environment variable whose value (read with `option_env!`)
+/// becomes a native release build's default server URL.
+pub const BAKED_API_URL_VAR: &str = "PLEDGE_BAKED_API_URL";
+/// The URL baked in at build time, if any. `option_env!` takes only a
+/// literal, so keep it spelled the same as [`BAKED_API_URL_VAR`].
+#[cfg(not(target_arch = "wasm32"))]
+const BAKED_API_URL: Option<&str> = option_env!("PLEDGE_BAKED_API_URL");
 /// Pattern grader answers in ~100 ms; 10 s covers a slow link.
 pub const DEFAULT_PATTERN_TIMEOUT: Duration = Duration::from_secs(10);
 /// Real builds take 1-3 s warm but may wait in the server's build queue.
@@ -196,7 +217,7 @@ impl CompileApiConfig {
     }
 
     /// Build from raw string inputs. `default_url` applies when no URL is
-    /// given (native: localhost; web: `None` = offline).
+    /// given (native: [`native_default_url`]; web: `None` = offline).
     pub fn from_raw(raw: &RawConfig, default_url: Option<&str>) -> Self {
         let target = match parse_target(raw, default_url) {
             Ok(t) => t,
@@ -262,7 +283,27 @@ impl RawConfig {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn platform_default_url() -> Option<&'static str> {
-    Some(DEFAULT_API_URL)
+    let url = native_default_url(BAKED_API_URL, cfg!(debug_assertions));
+    tracing::debug!(
+        baked = BAKED_API_URL.is_some_and(|u| !u.trim().is_empty()),
+        debug_build = cfg!(debug_assertions),
+        default = ?url,
+        "compile-api client: native default URL resolved"
+    );
+    url
+}
+
+/// The default server URL for a native build when `PLEDGE_API_URL` is not
+/// set at run time: the URL baked in at build time (`baked`), else the
+/// local dev server in a debug build, else `None` (offline mode). Pure so
+/// the resolution order is testable; the run-time variable itself wins
+/// over all of this in [`CompileApiConfig::from_raw`].
+pub fn native_default_url(baked: Option<&'static str>, debug_build: bool) -> Option<&'static str> {
+    match baked.map(str::trim).filter(|u| !u.is_empty()) {
+        Some(url) => Some(url),
+        None if debug_build => Some(DEFAULT_API_URL),
+        None => None,
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -419,6 +460,60 @@ mod tests {
         assert_eq!(ep.token, None);
         assert_eq!(ep.timeout, DEFAULT_PATTERN_TIMEOUT);
         assert!(!cfg.stub_is_canonical());
+    }
+
+    /// Resolution order: run-time `PLEDGE_API_URL` > URL baked at build
+    /// time > localhost (debug builds only) > offline (release builds).
+    #[test]
+    fn native_default_resolution_order() {
+        const BAKED: &str = "https://api.example.com";
+        // Baked URL wins in both build kinds.
+        assert_eq!(native_default_url(Some(BAKED), false), Some(BAKED));
+        assert_eq!(native_default_url(Some(BAKED), true), Some(BAKED));
+        // A blank baked value counts as unset.
+        assert_eq!(native_default_url(Some("  "), false), None);
+        assert_eq!(native_default_url(Some(""), true), Some(DEFAULT_API_URL));
+        // Nothing baked: localhost only in a debug build.
+        assert_eq!(native_default_url(None, true), Some(DEFAULT_API_URL));
+        assert_eq!(native_default_url(None, false), None);
+    }
+
+    #[test]
+    fn release_build_with_nothing_baked_is_offline_and_passes_count() {
+        let cfg = CompileApiConfig::from_raw(&raw(&[]), native_default_url(None, false));
+        assert_eq!(cfg.target, ApiTarget::Offline);
+        assert!(cfg.stub_is_canonical(), "a shipped exe must be clearable");
+    }
+
+    #[test]
+    fn release_build_uses_the_baked_url() {
+        let baked = native_default_url(Some("https://api.example.com/"), false);
+        let cfg = CompileApiConfig::from_raw(&raw(&[]), baked);
+        assert_eq!(
+            remote(&cfg).compile_url(),
+            "https://api.example.com/compile"
+        );
+        assert!(!cfg.stub_is_canonical());
+    }
+
+    #[test]
+    fn run_time_env_var_beats_baked_and_debug_defaults() {
+        let env = raw(&[(vars::API_URL, "http://10.0.0.5:9000")]);
+        for default in [
+            native_default_url(Some("https://baked.example.com"), false),
+            native_default_url(None, true),
+            native_default_url(None, false),
+        ] {
+            let cfg = CompileApiConfig::from_raw(&env, default);
+            assert_eq!(remote(&cfg).base_url, "http://10.0.0.5:9000", "{default:?}");
+        }
+        // And `off` turns a baked server off.
+        let off = raw(&[(vars::API_URL, "off")]);
+        let cfg = CompileApiConfig::from_raw(
+            &off,
+            native_default_url(Some("https://baked.example.com"), false),
+        );
+        assert_eq!(cfg.target, ApiTarget::Offline);
     }
 
     #[test]

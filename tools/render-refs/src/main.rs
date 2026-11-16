@@ -23,6 +23,7 @@
 //!
 //! Run from the workspace root, or set `RENDER_REFS_OUT=<dir>` to
 //! redirect PNG output. By default writes to `<workspace>/design/art/refs/png/`.
+#![forbid(unsafe_code)]
 
 use std::collections::HashMap;
 use std::path::PathBuf;

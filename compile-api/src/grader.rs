@@ -1397,7 +1397,7 @@ pub static MISSION_RULES: &[MissionRule] = &[
             check(&["macro_rules!"], "define the macro with `macro_rules!`"),
             check(&["$("], "accept a list of verses with a repetition: `$( ... ),+`"),
         ],
-        pass: "the Macro Monk lifts the woodblock. \"carve once, print as often as you like.\"",
+        pass: "the Macro Monk lifts the woodblock and presses it again, without a word.",
     },
     MissionRule {
         id: "drop_trait",

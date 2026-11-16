@@ -1,6 +1,8 @@
 # Pledge and Crown - Local CI
 # Runs: cargo fmt --check, cargo check, clippy (warnings as errors), tests,
-# and a wasm32 `cargo check` of the game crate (if the target is installed).
+# the demo-feature tests, the rustc claim checks (hard rule 3), and a
+# wasm32 `cargo check` of the game crate (if the target is installed).
+# The remaining #[ignore]d suites run in scripts/ci-slow.ps1 (release gate).
 # GitHub Actions is BANNED per global rule. This is the only CI.
 # Invoke: powershell -ExecutionPolicy Bypass -File scripts/ci.ps1
 
@@ -53,6 +55,16 @@ Run-Step "clippy" "cargo clippy --workspace --all-targets -- -D warnings"
 Run-Step "test"   "cargo test --workspace"
 # The demo build (Acts 1-2 only) is a shipping configuration; keep it compiling.
 Run-Step "check-demo" "cargo check -p pledge_and_crown --features demo --all-targets"
+# ...and run its tests: the demo branches of the gating tests only execute
+# under the feature. Warm: seconds; after a game-crate change it rebuilds
+# the game once more with `demo` (~2.5 min at CARGO_BUILD_JOBS=3).
+Run-Step "test-demo" "cargo test -p pledge_and_crown --features demo --test mission_text --test registry"
+# Hard rule 3: compile and run every NPC compiler claim, starter and
+# pinned output against rustc (~1 min). The tests first assert rustc is
+# the server's pinned release (game/tests/common/mod.rs) and fail with the
+# fix if not. The rest of the slow suites (solutions, contract,
+# compile-api) are in scripts/ci-slow.ps1, which a release tag requires.
+Run-Step "rustc-claims" "cargo test --workspace --test mission_text -- --ignored --test-threads=4"
 
 # Web-only cfg(target_arch = "wasm32") code is never compiled by the
 # native steps above, so it rots silently. Check the game crate for the

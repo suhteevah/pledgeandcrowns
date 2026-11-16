@@ -11,7 +11,13 @@
 //!   against real rustc (`trial_claims`; the fast test fails on a named
 //!   but unclaimed code, the `--ignored` one runs rustc). The same for the
 //!   six Act 9 villagers (`act9_villager_claims`), whose claims also
-//!   include run-time behaviour (`Claimed::Prints`).
+//!   include run-time behaviour (`Claimed::Prints`). The same for the Act
+//!   10 villagers, and for every other mission and authored dialogue row
+//!   (`other_mission_claims`: one table, so a code named anywhere fails
+//!   until claimed).
+//! - Every test that runs rustc first asserts it is the server's pinned
+//!   release (`common::assert_pinned_rustc`); a claim checked on another
+//!   compiler proves nothing.
 //! - Act 9 starters that fail with a code-less macro error
 //!   (`STARTERS_THAT_MUST_FAIL_WITHOUT_A_CODE`) fail with exactly that
 //!   message.
@@ -93,6 +99,7 @@ fn scratch_dir(tag: &str) -> PathBuf {
 #[test]
 #[ignore = "slow: runs rustc once per mission"]
 fn every_starter_compiles_or_fails_for_its_intended_reason() {
+    print_rustc_version();
     let dir = scratch_dir("starters");
     let reg = MissionRegistry::default();
     let mut problems = Vec::new();
@@ -603,6 +610,7 @@ fn run_native(dir: &std::path::Path, name: &str, src: &str) -> String {
 #[test]
 #[ignore = "slow: runs rustc once per pinned mission and hint claim"]
 fn pinned_outputs_and_hint_claims_are_true() {
+    print_rustc_version();
     let dir = scratch_dir("pinned");
     let mut problems = Vec::new();
     for (id, want) in PINNED_OUTPUT {
@@ -1689,12 +1697,10 @@ fn check_claim(
     }
 }
 
+/// Fails unless `rustc` is the server's pinned release (hard rule 3: a
+/// claim checked on another compiler proves nothing), and logs it.
 fn print_rustc_version() {
-    let version = Command::new("rustc")
-        .arg("--version")
-        .output()
-        .expect("rustc --version");
-    println!("{}", String::from_utf8_lossy(&version.stdout).trim());
+    common::assert_pinned_rustc();
 }
 
 #[test]
@@ -1926,6 +1932,107 @@ fn act10_villager_claims_are_what_rustc_emits() {
     }
     let _ = std::fs::remove_dir_all(&dir);
     println!("{checked} claims checked");
+    assert!(problems.is_empty(), "{}", problems.join("\n\n"));
+}
+
+// ── Hard rule 3 for every other mission ──────────────────────────────
+//
+// The tables above cover the trial owners and the Act 9 / Act 10
+// villagers. Everything else (every other registered mission's prompt,
+// tutorial, dialogue and grader messages, plus any authored dialogue row
+// that belongs to no mission) is held to the same rule here, with one
+// claims table, so an error code newly named anywhere fails CI until it
+// is claimed and compiled.
+
+/// Error codes named by the missions no other table covers.
+const OTHER_MISSION_CODES: &[&str] = &["E0308"];
+
+/// Every compiler claim made by the missions no other table covers.
+fn other_mission_claims() -> Vec<(&'static str, String, Claimed)> {
+    vec![(
+        // The tutorial's own `set_to` snippet with the `*` dropped.
+        "borrow_mut tutorial: assigning to `x` without `*x` is E0308",
+        "fn set_to(x: &mut i32, v: i32) {\n    x = v;\n}\n\n\
+         fn main() {\n    let mut n = 0;\n    set_to(&mut n, 7);\n    println!(\"{n}\");\n}\n"
+            .to_string(),
+        // The text: "`x` is a `&mut i32`, not an `i32`".
+        Claimed::Error(
+            "E0308",
+            &[
+                "`&mut i32`",
+                "mismatched types",
+                "expected `&mut i32`, found `i32`",
+            ],
+        ),
+    )]
+}
+
+/// Texts of every registered mission outside the trial, Act 9 and Act 10
+/// claims tables, plus authored rows whose NPC is not a mission.
+fn other_mission_texts() -> Vec<String> {
+    let reg = MissionRegistry::default();
+    let mut covered: Vec<&str> = ACT9_VILLAGER_CODES
+        .iter()
+        .chain(ACT10_VILLAGER_CODES)
+        .map(|(id, _)| *id)
+        .collect();
+    for t in TRIALS {
+        covered.push(t.npc);
+        covered.extend(t.stages.iter().copied());
+    }
+    let others: Vec<&str> = reg
+        .missions
+        .iter()
+        .map(|m| m.id)
+        .filter(|id| !covered.contains(id))
+        .collect();
+    let mut texts = mission_texts(&others);
+    for row in AUTHORED
+        .iter()
+        .chain(TRIAL_STAGES)
+        .filter(|r| reg.find(r.npc_id).is_none())
+    {
+        for set in [
+            row.lines.not_yet,
+            row.lines.offer,
+            row.lines.in_progress,
+            row.lines.cleared,
+        ] {
+            texts.extend(set.iter().map(|l| l.to_string()));
+        }
+    }
+    texts
+}
+
+#[test]
+fn every_error_any_other_mission_names_is_a_compiled_claim() {
+    assert_claims_cover_texts(
+        "missions outside the trial / Act 9 / Act 10 tables",
+        &other_mission_claims(),
+        &other_mission_texts(),
+        OTHER_MISSION_CODES,
+    );
+}
+
+#[test]
+#[ignore = "slow: runs rustc once per claim"]
+fn other_mission_claims_are_what_rustc_emits() {
+    let dir = scratch_dir("other-claims");
+    print_rustc_version();
+    let mut problems = Vec::new();
+    let claims = other_mission_claims();
+    for (n, (label, src, claim)) in claims.iter().enumerate() {
+        check_claim(
+            &dir,
+            &format!("other_{n}"),
+            label,
+            src,
+            claim,
+            &mut problems,
+        );
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    println!("{} claims checked", claims.len());
     assert!(problems.is_empty(), "{}", problems.join("\n\n"));
 }
 
