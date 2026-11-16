@@ -5200,6 +5200,436 @@
     }
   },
   {
+    "case": "canonical",
+    "id": "prealloc",
+    "input": "use std::alloc::{GlobalAlloc, Layout, System};\nuse std::sync::atomic::{AtomicUsize, Ordering};\n\n/// The Assayer's scale: wraps the system allocator and counts every\n/// allocation and reallocation.\nstruct CountingAlloc;\n\nstatic ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);\n\n// SAFETY: every method passes its arguments unchanged to `System`,\n// which keeps the GlobalAlloc contract. Adding to an atomic does not\n// allocate.\nunsafe impl GlobalAlloc for CountingAlloc {\n    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {\n        ALLOCATIONS.fetch_add(1, Ordering::Relaxed);\n        unsafe { System.alloc(layout) }\n    }\n\n    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {\n        unsafe { System.dealloc(ptr, layout) }\n    }\n\n    unsafe fn realloc(\n        &self,\n        ptr: *mut u8,\n        layout: Layout,\n        new_size: usize,\n    ) -> *mut u8 {\n        ALLOCATIONS.fetch_add(1, Ordering::Relaxed);\n        unsafe { System.realloc(ptr, layout, new_size) }\n    }\n}\n\n#[global_allocator]\nstatic GLOBAL: CountingAlloc = CountingAlloc;\n\nfn main() {\n    let before = ALLOCATIONS.load(Ordering::Relaxed);\n\n    // Ask for room for every coin up front: one allocation, and `push`\n    // never reallocates while the length is below the capacity.\n    let mut ledger = Vec::with_capacity(1000);\n    for coin in 0..1000u32 {\n        ledger.push(coin);\n    }\n\n    let after = ALLOCATIONS.load(Ordering::Relaxed);\n    // Measure first, print after: printing is not part of the ledger.\n    println!(\"coins: {}\", ledger.len());\n    println!(\"allocations: {}\", after - before);\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Assayer sets down the weights. \"one allocation. an honest measure.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "prealloc",
+    "input": "use std::alloc::{GlobalAlloc, Layout, System};\nuse std::sync::atomic::{AtomicUsize, Ordering};\n\n/// The Assayer's scale: wraps the system allocator and counts every\n/// allocation and reallocation.\nstruct CountingAlloc;\n\nstatic ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);\n\nunsafe impl GlobalAlloc for CountingAlloc {\n    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {\n        ALLOCATIONS.fetch_add(1, Ordering::Relaxed);\n        unsafe { System.alloc(layout) }\n    }\n\n    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {\n        unsafe { System.dealloc(ptr, layout) }\n    }\n\n    unsafe fn realloc(\n        &self,\n        ptr: *mut u8,\n        layout: Layout,\n        new_size: usize,\n    ) -> *mut u8 {\n        ALLOCATIONS.fetch_add(1, Ordering::Relaxed);\n        unsafe { System.realloc(ptr, layout, new_size) }\n    }\n}\n\n#[global_allocator]\nstatic GLOBAL: CountingAlloc = CountingAlloc;\n\nfn main() {\n    let before = ALLOCATIONS.load(Ordering::Relaxed);\n\n    // The Assayer wants this ledger built with a single allocation.\n    let mut ledger = Vec::new();\n    for coin in 0..1000u32 {\n        ledger.push(coin);\n    }\n\n    let after = ALLOCATIONS.load(Ordering::Relaxed);\n    println!(\"coins: {}\", ledger.len());\n    println!(\"allocations: {}\", after - before);\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Assayer reads the scale — size the ledger before the loop: `Vec::with_capacity(1000)`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "prealloc",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Assayer reads the scale — size the ledger before the loop: `Vec::with_capacity(1000)`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_3",
+    "id": "prealloc",
+    "input": "use std::alloc::{GlobalAlloc, Layout, \nuse std::sync::atomic::{AtomicUsize, Ordering};\n\n/// The Assayer's scale: wraps the system allocator and counts every\n/// allocation and reallocation.\nstruct CountingAlloc;\n\nstatic ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);\n\n// SAFETY: every method passes its arguments unchanged to `System`,\n// which keeps the GlobalAlloc contract. Adding to an atomic does not\n// allocate.\nunsafe impl GlobalAlloc for CountingAlloc {\n    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {\n        ALLOCATIONS.fetch_add(1, Ordering::Relaxed);\n        unsafe { System.alloc(layout) }\n    }\n\n    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {\n        unsafe { System.dealloc(ptr, layout) }\n    }\n\n    unsafe fn realloc(\n        &self,\n        ptr: *mut u8,\n        layout: Layout,\n        new_size: usize,\n    ) -> *mut u8 {\n        ALLOCATIONS.fetch_add(1, Ordering::Relaxed);\n        unsafe { System.realloc(ptr, layout, new_size) }\n    }\n}\n\n#[global_allocator]\nstatic GLOBAL: CountingAlloc = CountingAlloc;\n\nfn main() {\n    let before = ALLOCATIONS.load(Ordering::Relaxed);\n\n    // Ask for room for every coin up front: one allocation, and `push`\n    // never reallocates while the length is below the capacity.\n    let mut ledger = Vec::with_capacity(1000);\n    for coin in 0..1000u32 {\n        ledger.push(coin);\n    }\n\n    let after = ALLOCATIONS.load(Ordering::Relaxed);\n    // Measure first, print after: printing is not part of the ledger.\n    println!(\"coins: {}\", ledger.len());\n    println!(\"allocations: {}\", after - before);\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Assayer reads the scale — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_156",
+    "id": "prealloc",
+    "input": "use std::alloc::{GlobalAlloc, Layout, System};\nuse std::sync::atomic::{AtomicUsize, Ordering};\n\n/// The Assayer's scale: wraps the system allocator and counts every\n/// allocation and reallocation.\nstruct CountingAlloc;\n\nstatic ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);\n\n// SAFETY: every method passes its arguments unchanged to `System`,\n// which keeps the GlobalAlloc contract. Adding to an atomic does not\n// allocate.\nunsafe impl GlobalAlloc for CountingAlloc {\n    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {\n        ALLOCATIONS.fetch_add(1, Ordering::Relaxed);\n        unsafe { System.alloc(layout) }\n    }\n\n    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {\n        unsafe { System.dealloc(ptr, layout) }\n    }\n\n    unsafe fn realloc(\n        &self,\n        ptr: *mut u8,\n        layout: Layout,\n        new_size: usize,\n    ) -> *mut u8 {\n        ALLOCATIONS.fetch_add(1, Ordering::Relaxed);\n        unsafe { System.realloc(ptr, layout, new_size) }\n    }\n}\n\n#[global_allocator]\nstatic GLOBAL: CountingAlloc = CountingAlloc;\n\nfn main() {\n    let before = ALLOCATIONS.load(Ordering::Relaxed);\n\n    // Ask for room for every coin up front: one allocation, and `push`\n    // never reallocates while the length is below the capacity.\n    let mut ledger = \n    for coin in 0..1000u32 {\n        ledger.push(coin);\n    }\n\n    let after = ALLOCATIONS.load(Ordering::Relaxed);\n    // Measure first, print after: printing is not part of the ledger.\n    println!(\"coins: {}\", ledger.len());\n    println!(\"allocations: {}\", after - before);\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Assayer reads the scale — size the ledger before the loop: `Vec::with_capacity(1000)`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "cow_borrow",
+    "input": "use std::borrow::Cow;\n\n/// Shelf names use underscores instead of spaces. Most titles have no\n/// spaces, so borrow those as they are and copy only when something\n/// must change.\nfn shelf_name(title: &str) -> Cow<'_, str> {\n    if title.contains(' ') {\n        Cow::Owned(title.replace(' ', \"_\"))\n    } else {\n        Cow::Borrowed(title)\n    }\n}\n\nfn main() {\n    for title in [\"Grimoire\", \"Book of Crowns\", \"Ledger\"] {\n        let name = shelf_name(title);\n        let how = match &name {\n            Cow::Borrowed(_) => \"borrowed\",\n            Cow::Owned(_) => \"copied\",\n        };\n        println!(\"{name} ({how})\");\n    }\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Copyist lays down his quill. \"copy only what must change.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "cow_borrow",
+    "input": "/// Shelf names use underscores instead of spaces. This version builds a\n/// brand-new String for every title, even ones with nothing to change.\nfn shelf_name(title: &str) -> String {\n    title.replace(' ', \"_\")\n}\n\nfn main() {\n    for title in [\"Grimoire\", \"Book of Crowns\", \"Ledger\"] {\n        let name = shelf_name(title);\n        // The Copyist wants each line to end with (borrowed) or\n        // (copied).\n        println!(\"{name}\");\n    }\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Copyist lifts his quill — return a `Cow<'_, str>` instead of a fresh `String`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "cow_borrow",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Copyist lifts his quill — return a `Cow<'_, str>` instead of a fresh `String`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_32",
+    "id": "cow_borrow",
+    "input": "use std::borrow::Cow;\n\n/// Shelf names use underscores instead of spaces. Most titles have no\n/// spaces, so borrow those as they are and copy only when something\n/// must change.\nfn shelf_name(title:  -> Cow<'_, str> {\n    if title.contains(' ') {\n        Cow::Owned(title.replace(' ', \"_\"))\n    } else {\n        Cow::Borrowed(title)\n    }\n}\n\nfn main() {\n    for title in [\"Grimoire\", \"Book of Crowns\", \"Ledger\"] {\n        let name = shelf_name(title);\n        let how = match &name {\n            Cow::Borrowed(_) => \"borrowed\",\n            Cow::Owned(_) => \"copied\",\n        };\n        println!(\"{name} ({how})\");\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Copyist lifts his quill — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "const_eval",
+    "input": "/// A `const fn` can run inside the compiler when it is used to compute\n/// a constant. `for` loops are not allowed in const fns (they call\n/// `Iterator::next`, which is not const), so this uses `while`.\nconst fn star_table() -> [u32; 8] {\n    let mut table = [0u32; 8];\n    let mut i = 0;\n    while i < 8 {\n        table[i] = (i as u32) * (i as u32) + 1;\n        i += 1;\n    }\n    table\n}\n\n/// Computed once, during compilation. The finished array is baked into\n/// the program; no work happens at run time to build it.\nconst STARS: [u32; 8] = star_table();\n\n// Checked during compilation: if this were false, the program would not\n// build at all.\nconst _: () = assert!(STARS[7] == 50, \"the last star is misplaced\");\n\nfn main() {\n    println!(\"star chart: {STARS:?}\");\n    println!(\"brightest: {}\", STARS[7]);\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Astronomer unrolls the chart. \"drawn before the night began.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "const_eval",
+    "input": "fn star_table() -> [u32; 8] {\n    let mut table = [0u32; 8];\n    for i in 0..8 {\n        table[i] = (i as u32) * (i as u32) + 1;\n    }\n    table\n}\n\n// The Astronomer wants the chart drawn before the night begins:\n// computed by the compiler, and checked by it too.\nconst STARS: [u32; 8] = star_table();\n\nfn main() {\n    println!(\"star chart: {STARS:?}\");\n    println!(\"brightest: {}\", STARS[7]);\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Astronomer squints at an empty sky — let the compiler run `star_table`: make it a `const fn`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "const_eval",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Astronomer squints at an empty sky — let the compiler run `star_table`: make it a `const fn`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_15",
+    "id": "const_eval",
+    "input": "/// A `const fn` can run inside the compiler when it is used to compute\n a constant. `for` loops are not allowed in const fns (they call\n/// `Iterator::next`, which is not const), so this uses `while`.\nconst fn star_table() -> [u32; 8] {\n    let mut table = [0u32; 8];\n    let mut i = 0;\n    while i < 8 {\n        table[i] = (i as u32) * (i as u32) + 1;\n        i += 1;\n    }\n    table\n}\n\n/// Computed once, during compilation. The finished array is baked into\n/// the program; no work happens at run time to build it.\nconst STARS: [u32; 8] = star_table();\n\n// Checked during compilation: if this were false, the program would not\n// build at all.\nconst _: () = assert!(STARS[7] == 50, \"the last star is misplaced\");\n\nfn main() {\n    println!(\"star chart: {STARS:?}\");\n    println!(\"brightest: {}\", STARS[7]);\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Astronomer squints at an empty sky — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_38",
+    "id": "const_eval",
+    "input": "/// A `const fn` can run inside the compiler when it is used to compute\n/// a constant. `for` loops are not allowed in const fns (they call\n/// `Iterator::next`, which is not const), so this uses `while`.\n fn star_table() -> [u32; 8] {\n    let mut table = [0u32; 8];\n    let mut i = 0;\n    while i < 8 {\n        table[i] = (i as u32) * (i as u32) + 1;\n        i += 1;\n    }\n    table\n}\n\n/// Computed once, during compilation. The finished array is baked into\n/// the program; no work happens at run time to build it.\nconst STARS: [u32; 8] = star_table();\n\n// Checked during compilation: if this were false, the program would not\n// build at all.\nconst _: () = assert!(STARS[7] == 50, \"the last star is misplaced\");\n\nfn main() {\n    println!(\"star chart: {STARS:?}\");\n    println!(\"brightest: {}\", STARS[7]);\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Astronomer squints at an empty sky — let the compiler run `star_table`: make it a `const fn`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_124",
+    "id": "const_eval",
+    "input": "/// A `const fn` can run inside the compiler when it is used to compute\n/// a constant. `for` loops are not allowed in const fns (they call\n/// `Iterator::next`, which is not const), so this uses `while`.\nconst fn star_table() -> [u32; 8] {\n    let mut table = [0u32; 8];\n    let mut i = 0;\n    while i < 8 {\n        table[i] = (i as u32) * (i as u32) + 1;\n        i += 1;\n    }\n    table\n}\n\n/// Computed once, during compilation. The finished array is baked into\n/// the program; no work happens at run time to build it.\nconst STARS: [u32; 8] = star_table();\n\n// Checked during compilation: if this were false, the program would not\n// build at all.\nconst  () = assert!(STARS[7] == 50, \"the last star is misplaced\");\n\nfn main() {\n    println!(\"star chart: {STARS:?}\");\n    println!(\"brightest: {}\", STARS[7]);\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Astronomer squints at an empty sky — check the chart at compile time: `const _: () = assert!(...)`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "chunks_exact",
+    "input": "/// Sums in four independent lanes: the data-parallel shape that SIMD\n/// hardware (and the compiler's auto-vectoriser) is built for.\nfn choir_sum(voices: &[u32]) -> u32 {\n    let mut lanes = [0u32; 4];\n    let mut chunks = voices.chunks_exact(4);\n    for chunk in &mut chunks {\n        for (lane, voice) in lanes.iter_mut().zip(chunk) {\n            *lane += voice;\n        }\n    }\n    // chunks_exact only yields full chunks of 4. Whatever is left over\n    // (0 to 3 voices) waits in the remainder and must be added by hand.\n    let soloists: u32 = chunks.remainder().iter().sum();\n    lanes.iter().sum::<u32>() + soloists\n}\n\nfn main() {\n    let voices: Vec<u32> = (1..=10).collect();\n    println!(\"choir sum: {}\", choir_sum(&voices));\n    println!(\"plain sum: {}\", voices.iter().sum::<u32>());\n    println!(\"empty choir: {}\", choir_sum(&[]));\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Choirmaster lowers the pipes. \"four lanes, and every soloist heard.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "chunks_exact",
+    "input": "/// Sums in four independent lanes. The Choirmaster says some voices are\n/// never heard.\nfn choir_sum(voices: &[u32]) -> u32 {\n    let mut lanes = [0u32; 4];\n    for chunk in voices.chunks_exact(4) {\n        for (lane, voice) in lanes.iter_mut().zip(chunk) {\n            *lane += voice;\n        }\n    }\n    lanes.iter().sum::<u32>()\n}\n\nfn main() {\n    let voices: Vec<u32> = (1..=10).collect();\n    println!(\"choir sum: {}\", choir_sum(&voices));\n    println!(\"plain sum: {}\", voices.iter().sum::<u32>());\n    println!(\"empty choir: {}\", choir_sum(&[]));\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Choirmaster cups an ear — the last voices fill no whole chunk: add `chunks.remainder()`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "chunks_exact",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Choirmaster cups an ear — the last voices fill no whole chunk: add `chunks.remainder()`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_22",
+    "id": "chunks_exact",
+    "input": "/// Sums in four independent lanes: the data-parallel shape that SIMD\n/// hardware (and the compiler's auto-vectoriser) is built for.\nfn choir_sum(voices:  -> u32 {\n    let mut lanes = [0u32; 4];\n    let mut chunks = voices.chunks_exact(4);\n    for chunk in &mut chunks {\n        for (lane, voice) in lanes.iter_mut().zip(chunk) {\n            *lane += voice;\n        }\n    }\n    // chunks_exact only yields full chunks of 4. Whatever is left over\n    // (0 to 3 voices) waits in the remainder and must be added by hand.\n    let soloists: u32 = chunks.remainder().iter().sum();\n    lanes.iter().sum::<u32>() + soloists\n}\n\nfn main() {\n    let voices: Vec<u32> = (1..=10).collect();\n    println!(\"choir sum: {}\", choir_sum(&voices));\n    println!(\"plain sum: {}\", voices.iter().sum::<u32>());\n    println!(\"empty choir: {}\", choir_sum(&[]));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Choirmaster cups an ear — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_85",
+    "id": "chunks_exact",
+    "input": "/// Sums in four independent lanes: the data-parallel shape that SIMD\n/// hardware (and the compiler's auto-vectoriser) is built for.\nfn choir_sum(voices: &[u32]) -> u32 {\n    let mut lanes = [0u32; 4];\n    let mut chunks = voices.chunks_exact(4);\n    for chunk in &mut chunks {\n        for (lane, voice) in lanes.iter_mut().zip(chunk) {\n            *lane += voice;\n        }\n    }\n    // chunks_exact only yields full chunks of 4. Whatever is left over\n    // (0 to 3 voices) waits in the remainder and must be added by hand.\n    let soloists: u32 = \n    lanes.iter().sum::<u32>() + soloists\n}\n\nfn main() {\n    let voices: Vec<u32> = (1..=10).collect();\n    println!(\"choir sum: {}\", choir_sum(&voices));\n    println!(\"plain sum: {}\", voices.iter().sum::<u32>());\n    println!(\"empty choir: {}\", choir_sum(&[]));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Choirmaster cups an ear — the last voices fill no whole chunk: add `chunks.remainder()`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "no_std",
+    "input": "#![no_std]\n\n// The sandbox still needs std to print, so this program links it under\n// another name for `main`. A real firmware crate has no such line.\nextern crate std as host;\n\nmod firmware {\n    use core::fmt::{self, Write};\n\n    /// A 32-byte text buffer on the stack: no heap, no allocator.\n    pub struct Beacon {\n        bytes: [u8; 32],\n        len: usize,\n    }\n\n    impl Beacon {\n        pub const fn new() -> Self {\n            Beacon { bytes: [0; 32], len: 0 }\n        }\n\n        pub fn as_str(&self) -> &str {\n            // Only whole &str values are ever copied in, so this is UTF-8.\n            core::str::from_utf8(&self.bytes[..self.len]).unwrap_or(\"<garbled>\")\n        }\n    }\n\n    impl Write for Beacon {\n        fn write_str(&mut self, s: &str) -> fmt::Result {\n            let end = self.len + s.len();\n            if end > self.bytes.len() {\n                return Err(fmt::Error); // refuse, never truncate silently\n            }\n            self.bytes[self.len..end].copy_from_slice(s.as_bytes());\n            self.len = end;\n            Ok(())\n        }\n    }\n\n    /// Formats a status line into the beacon. `write!` works without std:\n    /// it only needs a type that implements core::fmt::Write.\n    pub fn signal(beacon: &mut Beacon, tower: u8, lit: bool) -> fmt::Result {\n        write!(beacon, \"tower {tower}: {}\", if lit { \"lit\" } else { \"dark\" })\n    }\n}\n\nfn main() {\n    use core::fmt::Write;\n    use firmware::{signal, Beacon};\n\n    let mut beacon = Beacon::new();\n    let sent = signal(&mut beacon, 7, true).is_ok();\n    host::println!(\"{} (sent: {sent})\", beacon.as_str());\n\n    let mut small = Beacon::new();\n    let refused = write!(small, \"{}\", \"a message far longer than thirty-two bytes\").is_err();\n    host::println!(\"overflow refused: {refused}\");\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Hermit trims the lantern. \"no heap, no harbour, and still it shines.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "no_std",
+    "input": "#![no_std]\n\nextern crate std as host;\n\nmod firmware {\n    // The Hermit's outpost has no heap. Rewrite `signal` so it formats\n    // into a fixed-size buffer instead of a String.\n    pub fn signal(tower: u8, lit: bool) -> String {\n        format!(\"tower {tower}: {}\", if lit { \"lit\" } else { \"dark\" })\n    }\n}\n\nfn main() {\n    let line = firmware::signal(7, true);\n    host::println!(\"{line} (sent: true)\");\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Hermit shakes his head — build the line with `core::fmt::Write` into a fixed buffer, not a `String`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "no_std",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Hermit shakes his head — the outpost has no standard library: keep `#![no_std]`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_0",
+    "id": "no_std",
+    "input": "\n\n// The sandbox still needs std to print, so this program links it under\n// another name for `main`. A real firmware crate has no such line.\nextern crate std as host;\n\nmod firmware {\n    use core::fmt::{self, Write};\n\n    /// A 32-byte text buffer on the stack: no heap, no allocator.\n    pub struct Beacon {\n        bytes: [u8; 32],\n        len: usize,\n    }\n\n    impl Beacon {\n        pub const fn new() -> Self {\n            Beacon { bytes: [0; 32], len: 0 }\n        }\n\n        pub fn as_str(&self) -> &str {\n            // Only whole &str values are ever copied in, so this is UTF-8.\n            core::str::from_utf8(&self.bytes[..self.len]).unwrap_or(\"<garbled>\")\n        }\n    }\n\n    impl Write for Beacon {\n        fn write_str(&mut self, s: &str) -> fmt::Result {\n            let end = self.len + s.len();\n            if end > self.bytes.len() {\n                return Err(fmt::Error); // refuse, never truncate silently\n            }\n            self.bytes[self.len..end].copy_from_slice(s.as_bytes());\n            self.len = end;\n            Ok(())\n        }\n    }\n\n    /// Formats a status line into the beacon. `write!` works without std:\n    /// it only needs a type that implements core::fmt::Write.\n    pub fn signal(beacon: &mut Beacon, tower: u8, lit: bool) -> fmt::Result {\n        write!(beacon, \"tower {tower}: {}\", if lit { \"lit\" } else { \"dark\" })\n    }\n}\n\nfn main() {\n    use core::fmt::Write;\n    use firmware::{signal, Beacon};\n\n    let mut beacon = Beacon::new();\n    let sent = signal(&mut beacon, 7, true).is_ok();\n    host::println!(\"{} (sent: {sent})\", beacon.as_str());\n\n    let mut small = Beacon::new();\n    let refused = write!(small, \"{}\", \"a message far longer than thirty-two bytes\").is_err();\n    host::println!(\"overflow refused: {refused}\");\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Hermit shakes his head — the outpost has no standard library: keep `#![no_std]`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_38",
+    "id": "no_std",
+    "input": "#![no_std]\n\n// The sandbox still needs std to print, so this program links it under\n// another name for `main`. A real firmware crate has no such line.\nextern crate std as host;\n\nmod firmware {\n    use core::fmt::{self, \n\n    /// A 32-byte text buffer on the stack: no heap, no allocator.\n    pub struct Beacon {\n        bytes: [u8; 32],\n        len: usize,\n    }\n\n    impl Beacon {\n        pub const fn new() -> Self {\n            Beacon { bytes: [0; 32], len: 0 }\n        }\n\n        pub fn as_str(&self) -> &str {\n            // Only whole &str values are ever copied in, so this is UTF-8.\n            core::str::from_utf8(&self.bytes[..self.len]).unwrap_or(\"<garbled>\")\n        }\n    }\n\n    impl Write for Beacon {\n        fn write_str(&mut self, s: &str) -> fmt::Result {\n            let end = self.len + s.len();\n            if end > self.bytes.len() {\n                return Err(fmt::Error); // refuse, never truncate silently\n            }\n            self.bytes[self.len..end].copy_from_slice(s.as_bytes());\n            self.len = end;\n            Ok(())\n        }\n    }\n\n    /// Formats a status line into the beacon. `write!` works without std:\n    /// it only needs a type that implements core::fmt::Write.\n    pub fn signal(beacon: &mut Beacon, tower: u8, lit: bool) -> fmt::Result {\n        write!(beacon, \"tower {tower}: {}\", if lit { \"lit\" } else { \"dark\" })\n    }\n}\n\nfn main() {\n    use core::fmt::Write;\n    use firmware::{signal, Beacon};\n\n    let mut beacon = Beacon::new();\n    let sent = signal(&mut beacon, 7, true).is_ok();\n    host::println!(\"{} (sent: {sent})\", beacon.as_str());\n\n    let mut small = Beacon::new();\n    let refused = write!(small, \"{}\", \"a message far longer than thirty-two bytes\").is_err();\n    host::println!(\"overflow refused: {refused}\");\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Hermit shakes his head — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "semver_caret",
+    "input": "/// A plain MAJOR.MINOR.PATCH version (no pre-release or build tags).\n/// Deriving Ord compares fields in declaration order, which is exactly\n/// semver precedence for plain versions.\n#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]\nstruct Version {\n    major: u64,\n    minor: u64,\n    patch: u64,\n}\n\nfn parse(text: &str) -> Option<Version> {\n    let mut parts = text.split('.');\n    let major = parts.next()?.parse().ok()?;\n    let minor = parts.next()?.parse().ok()?;\n    let patch = parts.next()?.parse().ok()?;\n    if parts.next().is_some() {\n        return None;\n    }\n    Some(Version { major, minor, patch })\n}\n\n/// Cargo's default requirement: `serde = \"1.2.3\"` means `^1.2.3`.\n/// The leftmost non-zero part may never change; everything after it\n/// may rise.\nfn caret_allows(required: Version, candidate: Version) -> bool {\n    if candidate < required {\n        return false;\n    }\n    if required.major > 0 {\n        candidate.major == required.major\n    } else if required.minor > 0 {\n        candidate.major == 0 && candidate.minor == required.minor\n    } else {\n        candidate.major == 0 && candidate.minor == 0 && candidate.patch == required.patch\n    }\n}\n\nfn main() {\n    let checks = [\n        (\"1.2.3\", \"1.9.0\"),\n        (\"1.2.3\", \"2.0.0\"),\n        (\"1.2.3\", \"1.2.2\"),\n        (\"0.2.3\", \"0.2.9\"),\n        (\"0.2.3\", \"0.3.0\"),\n        (\"0.0.3\", \"0.0.3\"),\n        (\"0.0.3\", \"0.0.4\"),\n        (\"1.2.3\", \"1.x.0\"),\n    ];\n    for (req, cand) in checks {\n        match (parse(req), parse(cand)) {\n            (Some(r), Some(c)) => println!(\"^{req} accepts {cand}: {}\", caret_allows(r, c)),\n            _ => println!(\"^{req} vs {cand}: not a version\"),\n        }\n    }\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Registrar stamps the entry. \"compatible, by the caret's rule.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "semver_caret",
+    "input": "#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]\nstruct Version {\n    major: u64,\n    minor: u64,\n    patch: u64,\n}\n\nfn parse(text: &str) -> Option<Version> {\n    let mut parts = text.split('.');\n    let major = parts.next()?.parse().ok()?;\n    let minor = parts.next()?.parse().ok()?;\n    let patch = parts.next()?.parse().ok()?;\n    if parts.next().is_some() {\n        return None;\n    }\n    Some(Version { major, minor, patch })\n}\n\n/// The Registrar says this rule is right for 1.x and wrong below it.\nfn caret_allows(required: Version, candidate: Version) -> bool {\n    candidate >= required && candidate.major == required.major\n}\n\nfn main() {\n    let checks = [\n        (\"1.2.3\", \"1.9.0\"),\n        (\"1.2.3\", \"2.0.0\"),\n        (\"1.2.3\", \"1.2.2\"),\n        (\"0.2.3\", \"0.2.9\"),\n        (\"0.2.3\", \"0.3.0\"),\n        (\"0.0.3\", \"0.0.3\"),\n        (\"0.0.3\", \"0.0.4\"),\n        (\"1.2.3\", \"1.x.0\"),\n    ];\n    for (req, cand) in checks {\n        match (parse(req), parse(cand)) {\n            (Some(r), Some(c)) => println!(\"^{req} accepts {cand}: {}\", caret_allows(r, c)),\n            _ => println!(\"^{req} vs {cand}: not a version\"),\n        }\n    }\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Registrar checks the register — below 1.0 the caret pins the first non-zero part: handle a zero major",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "semver_caret",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Registrar checks the register — below 1.0 the caret pins the first non-zero part: handle a zero major",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_33",
+    "id": "semver_caret",
+    "input": "/// A plain MAJOR.MINOR.PATCH version (no pre-release or build tags).\n/// Deriving Ord compares fields in declaration order, which is exactly\n/// semver precedence for plain versions.\n#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, \nstruct Version {\n    major: u64,\n    minor: u64,\n    patch: u64,\n}\n\nfn parse(text: &str) -> Option<Version> {\n    let mut parts = text.split('.');\n    let major = parts.next()?.parse().ok()?;\n    let minor = parts.next()?.parse().ok()?;\n    let patch = parts.next()?.parse().ok()?;\n    if parts.next().is_some() {\n        return None;\n    }\n    Some(Version { major, minor, patch })\n}\n\n/// Cargo's default requirement: `serde = \"1.2.3\"` means `^1.2.3`.\n/// The leftmost non-zero part may never change; everything after it\n/// may rise.\nfn caret_allows(required: Version, candidate: Version) -> bool {\n    if candidate < required {\n        return false;\n    }\n    if required.major > 0 {\n        candidate.major == required.major\n    } else if required.minor > 0 {\n        candidate.major == 0 && candidate.minor == required.minor\n    } else {\n        candidate.major == 0 && candidate.minor == 0 && candidate.patch == required.patch\n    }\n}\n\nfn main() {\n    let checks = [\n        (\"1.2.3\", \"1.9.0\"),\n        (\"1.2.3\", \"2.0.0\"),\n        (\"1.2.3\", \"1.2.2\"),\n        (\"0.2.3\", \"0.2.9\"),\n        (\"0.2.3\", \"0.3.0\"),\n        (\"0.0.3\", \"0.0.3\"),\n        (\"0.0.3\", \"0.0.4\"),\n        (\"1.2.3\", \"1.x.0\"),\n    ];\n    for (req, cand) in checks {\n        match (parse(req), parse(cand)) {\n            (Some(r), Some(c)) => println!(\"^{req} accepts {cand}: {}\", caret_allows(r, c)),\n            _ => println!(\"^{req} vs {cand}: not a version\"),\n        }\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Registrar checks the register — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "compiler_alloc",
+    "input": "use std::alloc::{GlobalAlloc, Layout, System};\nuse std::sync::atomic::{AtomicUsize, Ordering};\n\n/// The Assayer's scale: wraps the system allocator and counts every\n/// allocation and reallocation.\nstruct CountingAlloc;\n\nstatic ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);\n\n// SAFETY: every method passes its arguments unchanged to `System`,\n// which keeps the GlobalAlloc contract. Adding to an atomic does not\n// allocate.\nunsafe impl GlobalAlloc for CountingAlloc {\n    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {\n        ALLOCATIONS.fetch_add(1, Ordering::Relaxed);\n        unsafe { System.alloc(layout) }\n    }\n\n    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {\n        unsafe { System.dealloc(ptr, layout) }\n    }\n\n    unsafe fn realloc(\n        &self,\n        ptr: *mut u8,\n        layout: Layout,\n        new_size: usize,\n    ) -> *mut u8 {\n        ALLOCATIONS.fetch_add(1, Ordering::Relaxed);\n        unsafe { System.realloc(ptr, layout, new_size) }\n    }\n}\n\n#[global_allocator]\nstatic GLOBAL: CountingAlloc = CountingAlloc;\n\n/// Joins the court's names with \", \" in exactly one allocation: the\n/// final length is known before the first byte is written.\nfn proclaim(names: &[&str]) -> String {\n    let letters: usize = names.iter().map(|name| name.len()).sum();\n    let separators = names.len().saturating_sub(1) * \", \".len();\n    // `len()` counts bytes, so this is the exact size of the result.\n    let mut line = String::with_capacity(letters + separators);\n    for (i, name) in names.iter().enumerate() {\n        if i > 0 {\n            line.push_str(\", \");\n        }\n        // Still within the capacity: `push_str` never reallocates here.\n        line.push_str(name);\n    }\n    line\n}\n\nfn main() {\n    let court = [\n        \"Ferris\",\n        \"the Borrow Checker\",\n        \"Vexis\",\n        \"the Librarian\",\n    ];\n    let before = ALLOCATIONS.load(Ordering::Relaxed);\n    let line = proclaim(&court);\n    let after = ALLOCATIONS.load(Ordering::Relaxed);\n    println!(\"{line}\");\n    println!(\"allocations: {}\", after - before);\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Compiler inclines its head. \"one allocation. proceed.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "compiler_alloc",
+    "input": "use std::alloc::{GlobalAlloc, Layout, System};\nuse std::sync::atomic::{AtomicUsize, Ordering};\n\n/// The Assayer's scale: wraps the system allocator and counts every\n/// allocation and reallocation.\nstruct CountingAlloc;\n\nstatic ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);\n\nunsafe impl GlobalAlloc for CountingAlloc {\n    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {\n        ALLOCATIONS.fetch_add(1, Ordering::Relaxed);\n        unsafe { System.alloc(layout) }\n    }\n\n    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {\n        unsafe { System.dealloc(ptr, layout) }\n    }\n\n    unsafe fn realloc(\n        &self,\n        ptr: *mut u8,\n        layout: Layout,\n        new_size: usize,\n    ) -> *mut u8 {\n        ALLOCATIONS.fetch_add(1, Ordering::Relaxed);\n        unsafe { System.realloc(ptr, layout, new_size) }\n    }\n}\n\n#[global_allocator]\nstatic GLOBAL: CountingAlloc = CountingAlloc;\n\n/// The Compiler demands this proclamation cost exactly one allocation.\nfn proclaim(names: &[&str]) -> String {\n    let mut line = String::new();\n    for (i, name) in names.iter().enumerate() {\n        if i > 0 {\n            line = format!(\"{line}, \");\n        }\n        line = format!(\"{line}{name}\");\n    }\n    line\n}\n\nfn main() {\n    let court = [\n        \"Ferris\",\n        \"the Borrow Checker\",\n        \"Vexis\",\n        \"the Librarian\",\n    ];\n    let before = ALLOCATIONS.load(Ordering::Relaxed);\n    let line = proclaim(&court);\n    let after = ALLOCATIONS.load(Ordering::Relaxed);\n    println!(\"{line}\");\n    println!(\"allocations: {}\", after - before);\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Compiler weighs the proclamation — know the length first: `String::with_capacity`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "compiler_alloc",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Compiler weighs the proclamation — know the length first: `String::with_capacity`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_3",
+    "id": "compiler_alloc",
+    "input": "use std::alloc::{GlobalAlloc, Layout, \nuse std::sync::atomic::{AtomicUsize, Ordering};\n\n/// The Assayer's scale: wraps the system allocator and counts every\n/// allocation and reallocation.\nstruct CountingAlloc;\n\nstatic ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);\n\n// SAFETY: every method passes its arguments unchanged to `System`,\n// which keeps the GlobalAlloc contract. Adding to an atomic does not\n// allocate.\nunsafe impl GlobalAlloc for CountingAlloc {\n    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {\n        ALLOCATIONS.fetch_add(1, Ordering::Relaxed);\n        unsafe { System.alloc(layout) }\n    }\n\n    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {\n        unsafe { System.dealloc(ptr, layout) }\n    }\n\n    unsafe fn realloc(\n        &self,\n        ptr: *mut u8,\n        layout: Layout,\n        new_size: usize,\n    ) -> *mut u8 {\n        ALLOCATIONS.fetch_add(1, Ordering::Relaxed);\n        unsafe { System.realloc(ptr, layout, new_size) }\n    }\n}\n\n#[global_allocator]\nstatic GLOBAL: CountingAlloc = CountingAlloc;\n\n/// Joins the court's names with \", \" in exactly one allocation: the\n/// final length is known before the first byte is written.\nfn proclaim(names: &[&str]) -> String {\n    let letters: usize = names.iter().map(|name| name.len()).sum();\n    let separators = names.len().saturating_sub(1) * \", \".len();\n    // `len()` counts bytes, so this is the exact size of the result.\n    let mut line = String::with_capacity(letters + separators);\n    for (i, name) in names.iter().enumerate() {\n        if i > 0 {\n            line.push_str(\", \");\n        }\n        // Still within the capacity: `push_str` never reallocates here.\n        line.push_str(name);\n    }\n    line\n}\n\nfn main() {\n    let court = [\n        \"Ferris\",\n        \"the Borrow Checker\",\n        \"Vexis\",\n        \"the Librarian\",\n    ];\n    let before = ALLOCATIONS.load(Ordering::Relaxed);\n    let line = proclaim(&court);\n    let after = ALLOCATIONS.load(Ordering::Relaxed);\n    println!(\"{line}\");\n    println!(\"allocations: {}\", after - before);\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Compiler weighs the proclamation — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_163",
+    "id": "compiler_alloc",
+    "input": "use std::alloc::{GlobalAlloc, Layout, System};\nuse std::sync::atomic::{AtomicUsize, Ordering};\n\n/// The Assayer's scale: wraps the system allocator and counts every\n/// allocation and reallocation.\nstruct CountingAlloc;\n\nstatic ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);\n\n// SAFETY: every method passes its arguments unchanged to `System`,\n// which keeps the GlobalAlloc contract. Adding to an atomic does not\n// allocate.\nunsafe impl GlobalAlloc for CountingAlloc {\n    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {\n        ALLOCATIONS.fetch_add(1, Ordering::Relaxed);\n        unsafe { System.alloc(layout) }\n    }\n\n    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {\n        unsafe { System.dealloc(ptr, layout) }\n    }\n\n    unsafe fn realloc(\n        &self,\n        ptr: *mut u8,\n        layout: Layout,\n        new_size: usize,\n    ) -> *mut u8 {\n        ALLOCATIONS.fetch_add(1, Ordering::Relaxed);\n        unsafe { System.realloc(ptr, layout, new_size) }\n    }\n}\n\n#[global_allocator]\nstatic GLOBAL: CountingAlloc = CountingAlloc;\n\n/// Joins the court's names with \", \" in exactly one allocation: the\n/// final length is known before the first byte is written.\nfn proclaim(names: &[&str]) -> String {\n    let letters: usize = names.iter().map(|name| name.len()).sum();\n    let separators = names.len().saturating_sub(1) *  \".len();\n    // `len()` counts bytes, so this is the exact size of the result.\n    let mut line = String::with_capacity(letters + separators);\n    for (i, name) in names.iter().enumerate() {\n        if i > 0 {\n            line.push_str(\", \");\n        }\n        // Still within the capacity: `push_str` never reallocates here.\n        line.push_str(name);\n    }\n    line\n}\n\nfn main() {\n    let court = [\n        \"Ferris\",\n        \"the Borrow Checker\",\n        \"Vexis\",\n        \"the Librarian\",\n    ];\n    let before = ALLOCATIONS.load(Ordering::Relaxed);\n    let line = proclaim(&court);\n    let after = ALLOCATIONS.load(Ordering::Relaxed);\n    println!(\"{line}\");\n    println!(\"allocations: {}\", after - before);\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Compiler weighs the proclamation — know the length first: `String::with_capacity`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "compiler_lifetime",
+    "input": "use std::borrow::Cow;\n\n/// Only `name` can end up inside the result (when it is borrowed), so\n/// only `name` shares the lifetime of the result. `title` is read and\n/// let go.\nfn herald<'a>(name: &'a str, title: &str) -> Cow<'a, str> {\n    if title.is_empty() {\n        Cow::Borrowed(name)\n    } else {\n        Cow::Owned(format!(\"{title} {name}\"))\n    }\n}\n\nfn main() {\n    let name = String::from(\"Ferris\");\n    let plain = herald(&name, \"\");\n    let titled = {\n        let title = String::from(\"Sir\");\n        herald(&name, &title)\n    }; // `title` is dropped here, but `titled` does not borrow from it\n    for line in [&plain, &titled] {\n        let how = match line {\n            Cow::Borrowed(_) => \"borrowed\",\n            Cow::Owned(_) => \"owned\",\n        };\n        println!(\"{line} ({how})\");\n    }\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Compiler is silent, which is its highest praise."
+    }
+  },
+  {
+    "case": "starter",
+    "id": "compiler_lifetime",
+    "input": "use std::borrow::Cow;\n\nfn herald(name: &str, title: &str) -> Cow<str> {\n    if title.is_empty() {\n        Cow::Borrowed(name)\n    } else {\n        Cow::Owned(format!(\"{title} {name}\"))\n    }\n}\n\nfn main() {\n    let name = String::from(\"Ferris\");\n    let plain = herald(&name, \"\");\n    let titled = {\n        let title = String::from(\"Sir\");\n        herald(&name, &title)\n    };\n    for line in [&plain, &titled] {\n        let how = match line {\n            Cow::Borrowed(_) => \"borrowed\",\n            Cow::Owned(_) => \"owned\",\n        };\n        println!(\"{line} ({how})\");\n    }\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Compiler waits for an honest signature — name the lifetime the result borrows from: `fn herald<'a>(name: &'a str, ...)`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "compiler_lifetime",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Compiler waits for an honest signature — name the lifetime the result borrows from: `fn herald<'a>(name: &'a str, ...)`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_37",
+    "id": "compiler_lifetime",
+    "input": "use std::borrow::Cow;\n\n/// Only `name` can end up inside the result (when it is borrowed), so\n/// only `name` shares the lifetime of the result. `title` is read and\n/// let go.\nfn herald<'a>(name: &'a str, title:  -> Cow<'a, str> {\n    if title.is_empty() {\n        Cow::Borrowed(name)\n    } else {\n        Cow::Owned(format!(\"{title} {name}\"))\n    }\n}\n\nfn main() {\n    let name = String::from(\"Ferris\");\n    let plain = herald(&name, \"\");\n    let titled = {\n        let title = String::from(\"Sir\");\n        herald(&name, &title)\n    }; // `title` is dropped here, but `titled` does not borrow from it\n    for line in [&plain, &titled] {\n        let how = match line {\n            Cow::Borrowed(_) => \"borrowed\",\n            Cow::Owned(_) => \"owned\",\n        };\n        println!(\"{line} ({how})\");\n    }\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Compiler waits for an honest signature — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "canonical",
+    "id": "compiler_bound",
+    "input": "/// Works for any T that can be compared with `>`. PartialOrd, not Ord:\n/// floats have a partial order (NaN compares false with everything), so\n/// they implement PartialOrd but not Ord.\nfn strongest<T: PartialOrd>(champions: &[T]) -> Option<&T> {\n    let mut best = champions.first()?;\n    for champion in champions {\n        if champion > best {\n            best = champion;\n        }\n    }\n    Some(best)\n}\n\nfn main() {\n    println!(\"{:?}\", strongest(&[3, 9, 4]));\n    println!(\"{:?}\", strongest(&[0.5, 2.5, 1.0]));\n    println!(\"{:?}\", strongest(&[\"ferris\", \"vexis\", \"borrow\"]));\n    println!(\"{:?}\", strongest::<i32>(&[]));\n}",
+    "verdict": {
+      "ok": true,
+      "stderr": "",
+      "stdout": "[stub] the Compiler rises from the Throne. \"it compiles. it was always yours.\""
+    }
+  },
+  {
+    "case": "starter",
+    "id": "compiler_bound",
+    "input": "fn strongest<T>(champions: &[T]) -> Option<&T> {\n    let mut best = champions.first()?;\n    for champion in champions {\n        if champion > best {\n            best = champion;\n        }\n    }\n    Some(best)\n}\n\nfn main() {\n    println!(\"{:?}\", strongest(&[3, 9, 4]));\n    println!(\"{:?}\", strongest(&[0.5, 2.5, 1.0]));\n    println!(\"{:?}\", strongest(&[\"ferris\", \"vexis\", \"borrow\"]));\n    println!(\"{:?}\", strongest::<i32>(&[]));\n}\n",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Compiler waits on the Throne — bound `T` by what `>` needs: `PartialOrd`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "empty",
+    "id": "compiler_bound",
+    "input": "",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Compiler waits on the Throne — bound `T` by what `>` needs: `PartialOrd`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_35",
+    "id": "compiler_bound",
+    "input": "/// Works for any T that can be compared with `>`. PartialOrd, not Ord:\n/// floats have a partial order (NaN compares false with everything), so\n/// they implement PartialOrd but not Ord.\nfn strongest<T:  &[T]) -> Option<&T> {\n    let mut best = champions.first()?;\n    for champion in champions {\n        if champion > best {\n            best = champion;\n        }\n    }\n    Some(best)\n}\n\nfn main() {\n    println!(\"{:?}\", strongest(&[3, 9, 4]));\n    println!(\"{:?}\", strongest(&[0.5, 2.5, 1.0]));\n    println!(\"{:?}\", strongest(&[\"ferris\", \"vexis\", \"borrow\"]));\n    println!(\"{:?}\", strongest::<i32>(&[]));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Compiler waits on the Throne — bound `T` by what `>` needs: `PartialOrd`",
+      "stdout": ""
+    }
+  },
+  {
+    "case": "near_miss_36",
+    "id": "compiler_bound",
+    "input": "/// Works for any T that can be compared with `>`. PartialOrd, not Ord:\n/// floats have a partial order (NaN compares false with everything), so\n/// they implement PartialOrd but not Ord.\nfn strongest<T: PartialOrd>(champions:  -> Option<&T> {\n    let mut best = champions.first()?;\n    for champion in champions {\n        if champion > best {\n            best = champion;\n        }\n    }\n    Some(best)\n}\n\nfn main() {\n    println!(\"{:?}\", strongest(&[3, 9, 4]));\n    println!(\"{:?}\", strongest(&[0.5, 2.5, 1.0]));\n    println!(\"{:?}\", strongest(&[\"ferris\", \"vexis\", \"borrow\"]));\n    println!(\"{:?}\", strongest::<i32>(&[]));\n}",
+    "verdict": {
+      "ok": false,
+      "stderr": "[stub] the Compiler waits on the Throne — every Rust program starts at `fn main()`: add one at the top level, outside any `impl` or `mod`",
+      "stdout": ""
+    }
+  },
+  {
     "case": "empty",
     "id": "not_a_real_mission",
     "input": "",

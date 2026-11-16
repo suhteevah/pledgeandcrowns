@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 // REF-92 - The Registrar on the Throne kit (REF-86), 32x32, idle.
 // APPROVED by Matt 2026-11-15, with the designer's note applied (narrowed
-// kit). Not wired yet.
+// kit).
+// Wired as game/assets/sprites/npc/registrar_idle_0.png.
 //
 // Archivist. Lesson prop (semver_caret): a tall oxblood register held in
 // both hands in front of the tabard, a brass seal set in its cover. Every

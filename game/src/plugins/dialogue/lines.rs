@@ -4,7 +4,7 @@
 //! boss-trial stage in [`TRIAL_STAGES`], keyed by the stage's mission id.
 //!
 //! Every status falls back to [`GENERIC`] when an NPC has no authored lines
-//! for it, so all 64 roster NPCs can talk today. Authored lines exist only
+//! for it, so all 71 roster NPCs can talk today. Authored lines exist only
 //! for the nine Hearthstone Square NPCs (roster order, Ferris through the
 //! Cooper). Every other NPC is awaiting the voice-editor pass: add an entry
 //! to [`AUTHORED`] in that NPC's craft metaphor (see
@@ -76,8 +76,9 @@ pub const NOT_YET_NOTHING: &str = "I'm not ready for you yet. Come back another 
 ///   `trait_def`, the Barkeep's `result_match`, the Keymaster's
 ///   `hashmap_basic`, the Dockmaster's `thread_spawn`, the Vaultwright's
 ///   `box_basic`) and talk as cleared villagers until the trial opens, so
-///   their stages leave `not_yet` empty. The Librarian (Act 9) has none:
-///   `librarian_index` carries his `not_yet` line.
+///   their stages leave `not_yet` empty. The Librarian (Act 9) and the
+///   Compiler (Act 10) have none: `librarian_index` and `compiler_alloc`
+///   carry their `not_yet` lines.
 ///
 /// Every compiler error named here is compiled in
 /// `tests/mission_text.rs` (`trial_claims`), hard rule 3.
@@ -470,6 +471,60 @@ pub const TRIAL_STAGES: &[NpcLines] = &[
             cleared: &[
                 "Borrowed from the heap and returned to it. Every door you opened, you closed again.",
                 "A safe door, an exact incantation, a page returned once. The Library is yours.",
+            ],
+        },
+    },
+    // ── The Compiler: his trial (Act 10), the last in the game. No
+    // prologue, so stage 1 has a `not_yet` line ({next} is the Registrar).
+    // His authored lines quote no compiler output and name no error code:
+    // what rustc says about the player's own program is shown, live, in
+    // the editor's result pane. What he does say is framing, and the one
+    // claim in it (his help mends `herald`'s signature but not its
+    // callers) is compiled in `tests/mission_text.rs`.
+    NpcLines {
+        npc_id: "compiler_alloc",
+        lines: StatusLines {
+            not_yet: &[
+                "The Throne is not yours to climb yet. See {next} first, and come back with the register stamped.",
+            ],
+            offer: &[
+                "You have read my words since the bridge. Every error you met was mine, and every one was true.",
+                "Three proofs. The first is a measure: build my proclamation, and the scale counts each request for memory.",
+                "One allocation. The count your own program prints is the only judge I accept.",
+            ],
+            in_progress: &[
+                "Work out the length before you write the first byte. Then ask for it once.",
+            ],
+            cleared: &[],
+        },
+    },
+    NpcLines {
+        npc_id: "compiler_lifetime",
+        lines: StatusLines {
+            not_yet: &[],
+            offer: &[
+                "Second proof. My herald borrows a name, or copies a title into something new.",
+                "Its signature does not say which. Read what I tell you in the result pane, every line of it.",
+                "My help mends the signature. It does not know your callers.",
+            ],
+            in_progress: &["Name the lifetime the result really borrows from. Only that one."],
+            cleared: &[],
+        },
+    },
+    NpcLines {
+        npc_id: "compiler_bound",
+        lines: StatusLines {
+            not_yet: &[],
+            offer: &[
+                "The last proof. `strongest` compares its champions, and you have not said they can be compared.",
+                "Ask for the weakest promise that does the job, and it will serve integers, floats and strings alike.",
+            ],
+            in_progress: &[
+                "A float has an order, but not a total one. Choose the bound that allows for that.",
+            ],
+            cleared: &[
+                "It compiles. It always would have, once you said what you meant.",
+                "Every error I gave you was a sentence about your program, and you learned to read them. The Throne is yours.",
             ],
         },
     },

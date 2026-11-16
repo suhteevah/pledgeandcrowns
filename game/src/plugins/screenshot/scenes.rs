@@ -25,7 +25,9 @@ use crate::plugins::compile_client::outcome::{HttpReply, classify, verdict_with_
 use crate::plugins::dialogue::Dialogue;
 use crate::plugins::editor::{EditorSession, EditorState};
 use crate::plugins::menu::{MenuScreen, MenuUi};
-use crate::plugins::mission::{ActiveMission, CompletionView, MissionRegistry};
+use crate::plugins::mission::{
+    ActiveMission, CompletionView, HideNextPinForCapture, MissionRegistry,
+};
 use crate::plugins::npc::{NPC_ROSTER, Npc, TALK_SPOT_OFFSET};
 use crate::plugins::player::Player;
 use crate::plugins::progress::{MissionProgress, SavedPlayerPosition, Settings};
@@ -41,6 +43,11 @@ const FIRST_MISSION: &str = "intro_let_binding";
 const SECOND_MISSION: &str = "double_function";
 /// Missions marked cleared for the "Continue available" title scene.
 const CONTINUE_CLEARED: &[&str] = &["intro_let_binding", "double_function", "borrow_preview"];
+/// The late-game villager the "notyet" dialogue scenes talk to: the
+/// Ghostkeeper (`weak_ref`, Act 8), named outright so adding a roster entry
+/// cannot change who these scenes show. Not a trial owner, so its locked
+/// line is the generic "come back later" pointer.
+const NOTYET_NPC: &str = "weak_ref";
 /// Texture-bind settle after the first Title -> InGame transition.
 const ENTER_GAME_SETTLE: f32 = 2.5;
 
@@ -302,6 +309,16 @@ fn close_dialogue(world: &mut World) {
     world.resource_mut::<Dialogue>().active = None;
 }
 
+/// Hide the "next mission" HUD pin for one capture (it covers the
+/// top-left of the view). Undone by [`show_next_pin`] in the teardown.
+fn hide_next_pin(world: &mut World) {
+    world.insert_resource(HideNextPinForCapture);
+}
+
+fn show_next_pin(world: &mut World) {
+    world.remove_resource::<HideNextPinForCapture>();
+}
+
 /// Open the editor on `mission_id` with `source`, as the mission F-press does.
 fn open_editor(world: &mut World, mission_id: &str, source: &str) {
     let mission = world
@@ -449,7 +466,7 @@ fn trial_scenes(v: &mut Vec<Scene>) {
         0.4,
         boxed(reset_trial_scene),
     ));
-    // The Act 3-9 trials: each owner's offer of stage 1, the same way.
+    // The Act 3-10 trials: each owner's offer of stage 1, the same way.
     for (name, npc, stage1) in [
         ("trial-offer-wraith", "impl_method", "wraith_forms"),
         ("trial-offer-chimera", "trait_def", "chimera_heads"),
@@ -465,6 +482,9 @@ fn trial_scenes(v: &mut Vec<Scene>) {
         ),
         // A Library villager's first offer (generic lines; no trial).
         ("dialogue-library-offer", "raw_pointer", "raw_pointer"),
+        // Act 10: the Compiler, no prologue either; and a Throne villager.
+        ("trial-offer-compiler", "compiler_alloc", "compiler_alloc"),
+        ("dialogue-throne-offer", "prealloc", "prealloc"),
     ] {
         v.push(scene(
             name,
@@ -641,15 +661,44 @@ fn world_scenes(v: &mut Vec<Scene>) {
         0.8,
         None,
     ));
+    // The Throne Dais (REF-96) at the Throne plaza's back-centre: the
+    // player stands beside it (east of the steps, clear of every NPC), the
+    // dais and the Compiler in front of it in view. Logs the spot so the
+    // capture can be checked.
+    for &(d, kind) in crate::plugins::prop::LANDMARKS {
+        let Some(base) = crate::plugins::world::back_landmark_base(d) else {
+            tracing::warn!(?kind, "landmark scene: no district {d}");
+            continue;
+        };
+        let solid = kind.solid_at(base);
+        let feet = Vec2::new(solid.max.x + 48.0, solid.min.y);
+        v.push(scene(
+            "landmark-throne-dais",
+            vec![
+                Action::EnterState(GameState::InGame, ENTER_GAME_SETTLE),
+                act(hide_next_pin),
+                teleport_to(feet),
+                act(move |w| {
+                    let line = format!(
+                        "landmark {kind:?}: base=({:.0},{:.0}) solid=({:.0},{:.0})..({:.0},{:.0})",
+                        base.x, base.y, solid.min.x, solid.min.y, solid.max.x, solid.max.y
+                    );
+                    tracing::info!("{line}");
+                    w.resource_mut::<ShotLog>().0.push(line);
+                }),
+            ],
+            0.7,
+            boxed(show_next_pin),
+        ));
+    }
 }
 
 // --- Act 3-8 villagers and animation frames ----------------------------------
 
-/// The districts that hold the Act 3-9 casts (roster order fills
+/// The districts that hold the Act 3-10 casts (roster order fills
 /// `DISTRICTS` in order; index 0 is the hub, 1-2 hold Acts 1-2, 3-8 are
-/// the ring quarters, 9 is the Forbidden Library; 10, the Throne, is empty
-/// until Act 10).
-const ACT_DISTRICTS: std::ops::RangeInclusive<usize> = 3..=9;
+/// the ring quarters, 9 is the Forbidden Library, 10 the Throne).
+const ACT_DISTRICTS: std::ops::RangeInclusive<usize> = 3..=10;
 
 /// Lowercase, dash-separated file label for a district name.
 fn district_label(name: &str) -> String {
@@ -660,11 +709,12 @@ fn district_label(name: &str) -> String {
         .replace(' ', "-")
 }
 
-/// One capture per Act 3-9 district, camera on the plaza centre: all six of
-/// a ring quarter's villagers (3x2 grid) fit in the 280 px tall view. The
-/// Library's 3x3 grid (188 px rows) does not: its capture shows the middle
-/// row and the edges of the other two, and `npcs-the-forbidden-library-back`
-/// centres on the back row, where the Librarian stands.
+/// One capture per Act 3-10 district, camera on the plaza centre: all six
+/// of a ring quarter's villagers (3x2 grid) fit in the 280 px tall view.
+/// The Library's and the Throne's 3x3 grids (152 px rows, shifted south of
+/// the back-centre landmark) do not: their front capture centres between
+/// the two villager rows, and `npcs-<district>-back` centres just in front
+/// of the boss, the landmark spot behind him.
 fn district_npc_scenes(v: &mut Vec<Scene>) {
     let mut first = 0usize;
     for (d, district) in crate::plugins::world::DISTRICTS.iter().enumerate() {
@@ -692,10 +742,13 @@ fn district_npc_scenes(v: &mut Vec<Scene>) {
         } else {
             (district.center, None)
         };
+        // The "next mission" pin sits top-left and would cover the
+        // top-left villager, so these line-ups hide it for the capture.
         v.push(scene(
             &format!("npcs-{}", district_label(label)),
             vec![
                 Action::EnterState(GameState::InGame, ENTER_GAME_SETTLE),
+                act(hide_next_pin),
                 teleport_to(center),
                 act(move |w| {
                     let line = format!("npcs {label}: {}", names.join(", "));
@@ -704,17 +757,20 @@ fn district_npc_scenes(v: &mut Vec<Scene>) {
                 }),
             ],
             0.7,
-            None,
+            boxed(show_next_pin),
         ));
         if let Some(back) = back {
             v.push(scene(
                 &format!("npcs-{}-back", district_label(label)),
                 vec![
                     Action::EnterState(GameState::InGame, ENTER_GAME_SETTLE),
-                    teleport_to(Vec2::new(back.x, back.y - 60.0)),
+                    act(hide_next_pin),
+                    // Beside the boss, so the landmark spot behind him
+                    // is in view and the player hides nobody.
+                    teleport_to(Vec2::new(back.x + 64.0, back.y - 20.0)),
                 ],
                 0.7,
-                None,
+                boxed(show_next_pin),
             ));
         }
     }
@@ -920,7 +976,7 @@ fn collision_scenes(v: &mut Vec<Scene>) {
 
 fn dialogue_scenes(v: &mut Vec<Scene>) {
     let enter = || Action::EnterState(GameState::InGame, ENTER_GAME_SETTLE);
-    let late_npc = NPC_ROSTER.last().map_or(FIRST_MISSION, |s| s.mission_id);
+    let late_npc = NOTYET_NPC;
 
     // Offer, captured mid-typewriter (45 chars/s; ~15 chars after 0.35 s).
     v.push(scene(
@@ -1040,7 +1096,7 @@ fn fade_scenes(v: &mut Vec<Scene>) {
 /// NotYetAvailable pointer for a mid-game save and a direct-prereq save.
 fn dialogue_fix_scenes(v: &mut Vec<Scene>) {
     let enter = || Action::EnterState(GameState::InGame, ENTER_GAME_SETTLE);
-    let late_npc = NPC_ROSTER.last().map_or(FIRST_MISSION, |s| s.mission_id);
+    let late_npc = NOTYET_NPC;
     // Ferris's second offer line has `let` around visible char 38-41
     // (45 chars/s): open, complete line 1, advance, then capture ~0.9 s
     // into line 2 (code chip half typed) and again once it is complete.
@@ -1073,7 +1129,7 @@ fn dialogue_fix_scenes(v: &mut Vec<Scene>) {
         boxed(close_dialogue),
     ));
 
-    // Mid-game: the first six missions cleared; the last NPC points at the
+    // Mid-game: the first six missions cleared; the Ghostkeeper points at the
     // seventh mission's NPC, not at Ferris and not at "themselves next".
     let prep_mid: WorldFn = Box::new(|w: &mut World| {
         let seventh = w

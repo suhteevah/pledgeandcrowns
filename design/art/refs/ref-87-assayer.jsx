@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 // REF-87 - The Assayer on the Throne kit (REF-86), 32x32, idle.
 // APPROVED by Matt 2026-11-15, with the designer's notes applied (narrowed
-// kit; the scale enlarged to span the whole chest). Not wired yet.
+// kit; the scale enlarged to span the whole chest).
+// Wired as game/assets/sprites/npc/assayer_idle_0.png.
 //
 // Measurer. Lesson prop (prealloc): a brass balance scale whose beam runs
 // shoulder to shoulder, with the left pan hanging three rows lower than the

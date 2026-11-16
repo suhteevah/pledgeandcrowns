@@ -557,6 +557,105 @@ fn save_cleared_through_act_8_offers_the_first_act_9_mission() {
     assert!(p.cleared_count() < reg.missions.len());
 }
 
+/// A v2 save written before Act 10 existed, cleared through the end of Act
+/// 9 (every mission of the 87-mission registry, ending on the Librarian's
+/// `librarian_seal`), loads unchanged. No format change: the first Act 10
+/// NPC, the Assayer, offers `prealloc`; the next Act 10 mission stays
+/// locked; the Compiler (no prologue) is still on his locked stage 1; no
+/// epilogue yet. The same save with every Act 10 mission added is fully
+/// cleared and earns the epilogue.
+#[test]
+fn save_cleared_through_act_9_offers_the_first_act_10_mission() {
+    use pledge_and_crown::plugins::mission::{MissionRegistry, epilogue_due};
+    use pledge_and_crown::plugins::npc::NPC_ROSTER;
+    use pledge_and_crown::plugins::trial;
+
+    #[derive(Serialize)]
+    struct S {
+        a: u8,
+        b: u8,
+        c: u8,
+    }
+    #[derive(Serialize)]
+    struct V2 {
+        version: u32,
+        cleared: Vec<String>,
+        settings: S,
+        player_position: Option<[f32; 2]>,
+    }
+    let encode = |cleared: &[String]| {
+        bincode::serde::encode_to_vec(
+            &V2 {
+                version: 2,
+                cleared: cleared.to_vec(),
+                settings: S {
+                    a: 70,
+                    b: 50,
+                    c: 30,
+                },
+                player_position: Some([0.0, 1200.0]),
+            },
+            bincode::config::standard(),
+        )
+        .unwrap()
+    };
+    let reg = MissionRegistry::default();
+    // The old registry: everything up to and including `librarian_seal`.
+    let cleared: Vec<String> = reg
+        .missions
+        .iter()
+        .map(|m| m.id)
+        .take_while(|id| *id != "prealloc")
+        .map(str::to_string)
+        .collect();
+    assert_eq!(cleared.len(), 87, "the whole 87-mission registry");
+    assert_eq!(cleared.last().map(String::as_str), Some("librarian_seal"));
+
+    let data = SaveData::decode(&encode(&cleared)).expect("pre-Act-10 v2 save must load");
+    let p = &data.progress;
+    assert_eq!(p.cleared_count(), cleared.len());
+    for id in &cleared {
+        assert!(p.is_cleared(id), "lost {id}");
+    }
+    assert_eq!(data.player_position, Some(Vec2::new(0.0, 1200.0)));
+    assert_eq!(SaveData::decode(&data.encode().unwrap()).unwrap(), data);
+
+    let full = !cfg!(feature = "demo");
+    let unlocked = |id: &str| reg.find(id).is_some_and(|m| m.is_unlocked(p));
+    let assayer = NPC_ROSTER
+        .iter()
+        .find(|n| n.name == "The Assayer")
+        .expect("the first Act 10 NPC");
+    assert_eq!(assayer.mission_id, "prealloc");
+    assert_eq!(
+        trial::current_mission(&reg, p, assayer.mission_id).map(|m| m.id),
+        Some("prealloc")
+    );
+    assert_eq!(unlocked("prealloc"), full, "prealloc offered");
+    assert!(!unlocked("cow_borrow"), "cow_borrow waits for prealloc");
+    // The Compiler has no prologue: he stays on stage 1, locked.
+    assert_eq!(
+        trial::current_mission(&reg, p, "compiler_alloc").map(|m| m.id),
+        Some("compiler_alloc")
+    );
+    assert!(!unlocked("compiler_alloc"));
+    if full {
+        assert_eq!(reg.next_locked(p).map(|m| m.id), Some("prealloc"));
+    }
+    assert!(!epilogue_due(p, &reg), "Act 10 is still to play");
+
+    // Every mission cleared, Act 10 included: the epilogue is due (never in
+    // the demo, which ends with its own panel).
+    let all: Vec<String> = reg.missions.iter().map(|m| m.id.to_string()).collect();
+    assert_eq!(all.len(), 96);
+    let done = SaveData::decode(&encode(&all)).expect("a fully cleared save loads");
+    assert_eq!(done.progress.cleared_count(), 96);
+    assert_eq!(epilogue_due(&done.progress, &reg), full);
+    if full {
+        assert_eq!(reg.next_locked(&done.progress).map(|m| m.id), None);
+    }
+}
+
 #[test]
 fn has_progress_reflects_clears_or_position() {
     let mut d = SaveData::default();

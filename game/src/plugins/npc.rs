@@ -22,6 +22,10 @@ use crate::assets::{
     SPRITE_TIDEWATCH, SPRITE_TINKER, SPRITE_TRAIT_MAGE, SPRITE_TWIN, SPRITE_VAULTWRIGHT,
     SPRITE_VEXIS, SPRITE_WANDWRIGHT, SPRITE_WARDEN,
 };
+use crate::assets::{
+    SPRITE_ASSAYER, SPRITE_ASTRONOMER, SPRITE_CHOIRMASTER, SPRITE_COMPILER, SPRITE_COPYIST,
+    SPRITE_HERMIT, SPRITE_REGISTRAR,
+};
 use crate::plugins::animation::{IdleBob, Scuttle, SpriteLift};
 use crate::plugins::player::Player;
 use crate::plugins::state::GameState;
@@ -535,6 +539,58 @@ pub const NPC_ROSTER: &[NpcSpec] = &[
         name: "The Librarian",
         mission_id: "librarian_index",
         sprite_path: SPRITE_LIBRARIAN,
+        pos: (0.0, 0.0),
+        native_px: 64.0,
+    },
+    // ── Act 10: The Throne (batch 12). The Compiler is the final boss:
+    // 64x64, and his roster mission is the first stage of his trial (no
+    // prologue, like the Librarian). He ends the roster.
+    NpcSpec {
+        name: "The Assayer",
+        mission_id: "prealloc",
+        sprite_path: SPRITE_ASSAYER,
+        pos: (0.0, 0.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Copyist",
+        mission_id: "cow_borrow",
+        sprite_path: SPRITE_COPYIST,
+        pos: (0.0, 0.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Astronomer",
+        mission_id: "const_eval",
+        sprite_path: SPRITE_ASTRONOMER,
+        pos: (0.0, 0.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Choirmaster",
+        mission_id: "chunks_exact",
+        sprite_path: SPRITE_CHOIRMASTER,
+        pos: (0.0, 0.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Hermit",
+        mission_id: "no_std",
+        sprite_path: SPRITE_HERMIT,
+        pos: (0.0, 0.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Registrar",
+        mission_id: "semver_caret",
+        sprite_path: SPRITE_REGISTRAR,
+        pos: (0.0, 0.0),
+        native_px: 32.0,
+    },
+    NpcSpec {
+        name: "The Compiler",
+        mission_id: "compiler_alloc",
+        sprite_path: SPRITE_COMPILER,
         pos: (0.0, 0.0),
         native_px: 64.0,
     },

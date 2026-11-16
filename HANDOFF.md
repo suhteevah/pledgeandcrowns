@@ -1,7 +1,7 @@
 # HANDOFF.md
 
 ## Last Updated
-2026-11-15 — **Orchestrated build-out: waves 1-13 merged and signed off; wave 14 (kit holders, district names, Act 9) on its branch for review.**
+2026-11-15 — **Orchestrated build-out: waves 1-14 merged; wave 15 (Act 10, the last act: the game now has all ten acts) on its branch for review.**
 
 Branch **`finish/integration`** (not pushed, `main` untouched). Fable
 orchestrates Opus agents in git worktrees, reviews each branch, merges, and
@@ -115,7 +115,7 @@ runs `scripts/ci.ps1` on the merged result as the sign-off gate.
   talk range are untouched); `game/tests/art_wiring.rs`; style bible is v2.2
   (ink code surface default). The six kit holders and the district names
   were left open here; wave 14 closed both.
-- **Wave 14** (this branch, one commit): (1) the six kit holders
+- **Wave 14** (`51e1745`, merged at `bff5188`): (1) the six kit holders
   (Guildmaster, Conjurer, Barkeep, Smelter, Dockmaster, Warden) now ship
   their act's approved kit exemplar REF-69..74 (first-pass refs marked
   SUPERSEDED, `tests/art_wiring.rs` pins it); districts renamed to their
@@ -142,17 +142,50 @@ runs `scripts/ci.ps1` on the merged result as the sign-off gate.
   corrections in its "Implementation record". **No Miri run backs the
   `unsafe` solutions** (Miri not installed). Art for Act 9 wired
   (REF-80..85, REF-93; REF-79 kit catalogued).
+- **Wave 15** (this branch, one commit): (1) Act 9 follow-ups: the
+  `PASS · NOT VERIFIED` banner (and every banner line) renders inline
+  `code` as chips, not raw backticks (`widgets::draw_banner` uses
+  `ui_theme::markdown`); district line-up captures hide the "Next" pin
+  (`mission::HideNextPinForCapture`, capture-only); the "notyet" dialogue
+  captures name the Ghostkeeper instead of "the last roster NPC".
+  (2) **Act 10, the Throne, the last act**: six missions (`prealloc`
+  Assayer, `cow_borrow` Copyist, `const_eval` Astronomer, `chunks_exact`
+  Choirmaster, `no_std` Hermit, `semver_caret` Registrar) and the
+  Compiler's trial (`compiler_alloc`, `compiler_lifetime`,
+  `compiler_bound`; no prologue, his roster mission is stage 1). **96
+  missions, 71 NPCs; demo unchanged (24 free, ends on `bridge_lantern`),
+  72 after.** Clearing `compiler_bound` clears everything and shows the
+  rewritten epilogue (credits block: Chico Cell Repair LLC, the libraries,
+  the Rust trademark non-affiliation line; `mission::epilogue_due`). The
+  Throne holds its seven NPCs (the 64 px Compiler alone, centred, in the
+  back row); the Throne Dais (REF-96, approved 2026-11-15) is wired as a
+  solid, y-sorted 64x64 prop ON the plaza at its back-centre, the Compiler
+  centred just in front of it (`prop::LANDMARKS`,
+  `world::back_landmark_base`; the rows moved south, 152 px apart; second
+  commit, after review). The Library's REF-95 reservation moved to the
+  same back-centre spot behind the Librarian; REF-95 stays a draft.
+  Server: all nine are stdout checks with construct tokens in the plain
+  build; the two allocator missions (`prealloc`, `compiler_alloc`) carry
+  the player's own counting `#[global_allocator]`, which the plain build
+  has always allowed (no harness, no mode change, late-nonce allow-list
+  unchanged; HARNESS-NOTES "Act 10"). Nothing grades speed. The
+  Compiler's dialogue quotes no compiler output (the result pane shows
+  real stderr). Every Act 10 compiler/runtime claim is compiled or run in
+  `mission_text.rs`; spec corrections in its "Implementation record".
+  Art REF-87..92 and the Compiler REF-94 wired, REF-86 kit catalogued.
 
 ### Art status (Matt is the sole approver; design canvas)
 - **Wired 2026-11-15 (wave 14):** the kit exemplars REF-69..74 as the six
   kit holders; Act 9 cast REF-80..85 and the Librarian REF-93 (REF-79, the
   Library kit, catalogued, not an NPC).
-- **Approved 2026-11-15, not wired:** Act 10 Throne kit and cast
-  (REF-86..92), the Compiler (REF-94): waiting on Act 10.
-- **Awaiting approval:** landmarks REF-95 Sealed Stacks, REF-96 Throne Dais
-  (spots reserved in `prop::PENDING_LANDMARKS`).
-- **Not drawn:** boss intro/defeat frames, the Librarian's lectern, pixel
-  font pick, title redraw, a renderable Borrow Checker.
+- **Wired 2026-11-15 (wave 15):** Act 10 cast REF-87..92, the Compiler
+  REF-94 (REF-86, the Throne kit, catalogued, not an NPC), the Throne Dais
+  REF-96 (landmark prop).
+- **Awaiting approval:** landmark REF-95 Sealed Stacks (spot reserved in
+  `prop::PENDING_LANDMARKS`).
+- **Not drawn:** boss intro/defeat frames (Librarian, Compiler), the
+  Librarian's lectern, pixel font pick, title redraw, a renderable Borrow
+  Checker.
 
 
 ### Known-open, in priority order
@@ -162,24 +195,30 @@ runs `scripts/ci.ps1` on the merged result as the sign-off gate.
 2. **Nobody has played the build.** UI is checked only through capture scenes.
    No human has confirmed audio is audible (wav never decoded; now ogg).
 3. **4 missions are static-only on the server** (`thread_spawn`,
-   `thread_scope`, `hydra_threads`, `async_fn`); the other 83 are
+   `thread_scope`, `hydra_threads`, `async_fn`); the other 92 are
    behaviour-checked (`hydra_body` without running its threaded `main`;
    four Act 9 harness checks in `UnsafeLateNonce`, labelled NOT VERIFIED
-   because a player's `unsafe` code can forge them).
+   because a player's `unsafe` code can forge them; the nine Act 10
+   missions are stdout checks).
 4. **Art still owed by the designer (see Art status above):** pixel font,
-   approval of the two landmarks, Borrow Checker and Librarian intro/defeat
-   frames, the Librarian's lectern, title redraw.
-5. **Act 10 is specified, not implemented** (art approved, Throne district
-   built and empty). Act 9 shipped in wave 14. **Before any deploy that
-   serves Act 9**, run the security review's Linux list
-   (`.claude/reviews/security-2026-11-15-cf9bc47.md`, "Must run on Linux"):
-   the bwrap late-nonce test, end-to-end grades of the registered
-   `librarian_index` and `extern_c`, the journal nonce grep,
-   `verify-sandbox.sh`. Miri has never checked the Act 9 solutions.
-6. **Bosses of Acts 2-9 all have trials** (wave 14 added the Librarian's).
-   Left for the endgame: the Act 10 trial; the design doc's combat
-   flavour (Hydra regrowth, Cliphy the imp, a fourth Warden phase, the
-   Sanity meter) is not built, by decision D1.
+   approval of the Sealed Stacks landmark (REF-95), Borrow Checker,
+   Librarian and Compiler intro/defeat frames, the Librarian's lectern,
+   title redraw.
+5. **All ten acts are implemented** (Act 9 in wave 14, Act 10 in wave
+   15). **Before any deploy that serves Act 9**, run the security review's
+   Linux list (`.claude/reviews/security-2026-11-15-cf9bc47.md`, "Must run
+   on Linux"): the bwrap late-nonce test, end-to-end grades of the
+   registered `librarian_index` and `extern_c`, the journal nonce grep,
+   `verify-sandbox.sh`. Miri has never checked the Act 9 solutions or the
+   Act 10 counting allocators. Act 10's allocation counts were proven in
+   the sandbox only on Windows (`expectations_proof`); re-run that suite
+   on Linux before a deploy.
+6. **Bosses of Acts 2-10 all have trials** (wave 15 added the
+   Compiler's, the last). Not built, by decision D1: the design doc's
+   combat flavour (Hydra regrowth, Cliphy the imp, a fourth Warden phase,
+   the Sanity meter, the Compiler's HP and timed optimisation battle), the
+   watching cast on the Throne plaza, credits over a `cargo doc`
+   rendering. No voice-editor pass on the Act 9-10 lines yet.
 7. Owner actions: TESS + RF check; domain; Android keystore;
    export the old claude.ai/design artboard before 2026-12-14; install
    `wasm-opt`, `butler`, Miri; decide the `repository` URL.

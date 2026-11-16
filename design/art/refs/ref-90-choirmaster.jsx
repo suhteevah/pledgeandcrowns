@@ -2,7 +2,8 @@
 // REF-90 - The Choirmaster on the Throne kit (REF-86), 32x32, idle.
 // APPROVED by Matt 2026-11-15, with the designer's notes applied (narrowed
 // kit; the four-tined fork, which read as a pitchfork, replaced by a set of
-// four brass pipes). Not wired yet.
+// four brass pipes).
+// Wired as game/assets/sprites/npc/choirmaster_idle_0.png.
 //
 // Conductor. One arm raised. Lesson prop (chunks_exact): a set of four
 // brass pipes held up beside the head, each a step shorter than the last

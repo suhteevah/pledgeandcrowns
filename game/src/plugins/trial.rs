@@ -21,10 +21,10 @@
 //!   3 to 8 bosses have the same shape: the act's lead NPC (the
 //!   Guildmaster, Vexis, the Barkeep, the Keymaster, the Dockmaster, the
 //!   Vaultwright) keeps the act's first mission as a prologue and holds a
-//!   trial after the act's sixth mission. The Act 9 boss, the Librarian,
-//!   is the one owner with no prologue: his roster mission is stage 1,
-//!   placed after the act's six villagers, and his trial is the last thing
-//!   in the registry.
+//!   trial after the act's sixth mission. The Act 9 and 10 bosses, the
+//!   Librarian and the Compiler, have no prologue: each roster mission is
+//!   stage 1, placed after the act's six villagers. The Compiler's trial
+//!   is the last thing in the registry.
 //!
 //! # The NPC's current mission
 //!
@@ -134,16 +134,25 @@ pub const TRIALS: &[Trial] = &[
         stages: &["warden_box", "warden_shared", "warden_weak"],
         complete_line: "\"Every phase held with the right grip. The Vault is open to you.\"",
     },
-    // Act 9 boss, the last missions in the registry. The Librarian has no
-    // prologue: his roster key IS stage 1, so `owned_missions` lists the
-    // three stages once each and he says his stage-1 `not_yet` line while
-    // it is locked.
+    // Act 9 boss. The Librarian has no prologue: his roster key IS stage
+    // 1, so `owned_missions` lists the three stages once each and he says
+    // his stage-1 `not_yet` line while it is locked.
     Trial {
         id: "librarian",
         name: "The Librarian",
         npc: "librarian_index",
         stages: &["librarian_index", "librarian_demand", "librarian_seal"],
         complete_line: "\"A safe door, an exact incantation, every page returned. The Library is yours.\"",
+    },
+    // Act 10 boss, the last missions in the registry. The Compiler has no
+    // prologue either (his roster key is stage 1). Clearing his last
+    // stage clears every mission, which shows the epilogue.
+    Trial {
+        id: "compiler",
+        name: "The Compiler",
+        npc: "compiler_alloc",
+        stages: &["compiler_alloc", "compiler_lifetime", "compiler_bound"],
+        complete_line: "\"Measured, borrowed honestly, bounded exactly. It compiles. The Throne is yours.\"",
     },
 ];
 
@@ -474,13 +483,18 @@ mod tests {
             owned_missions("librarian_index"),
             vec!["librarian_index", "librarian_demand", "librarian_seal"]
         );
+        assert_eq!(
+            owned_missions("compiler_alloc"),
+            vec!["compiler_alloc", "compiler_lifetime", "compiler_bound"]
+        );
     }
 
-    /// The Act 9 trial: the Librarian's three stages come straight after
-    /// the act's six villagers (Shelfmark .. Bookbinder) and end the
-    /// registry. He owns no other mission.
+    /// The Act 9 and 10 trials: each boss's three stages come straight
+    /// after the act's six villagers. The Librarian's end before the
+    /// Assayer (Act 10's first mission); the Compiler's end the registry.
+    /// Neither owns another mission.
     #[test]
-    fn act_9_trial_follows_the_six_villagers_and_ends_the_registry() {
+    fn act_9_and_10_trials_follow_their_six_villagers() {
         let reg = MissionRegistry::default();
         let idx = |id: &str| {
             reg.missions
@@ -488,59 +502,72 @@ mod tests {
                 .position(|m| m.id == id)
                 .unwrap_or_else(|| panic!("{id} not in registry"))
         };
-        let t = TRIALS
-            .iter()
-            .find(|t| t.id == "librarian")
-            .expect("librarian trial");
-        assert_eq!(t.npc, t.stages[0], "no prologue: the owner is stage 1");
-        assert_eq!(t.stages.len(), 3);
-        assert_eq!(idx("raw_pointer") + 6, idx(t.stages[0]));
-        assert_eq!(idx("maybe_uninit") + 1, idx(t.stages[0]));
-        assert_eq!(idx(t.stages[2]) + 1, reg.missions.len());
-        assert_eq!(
-            trial_for_npc("librarian_index").map(|t| t.id),
-            Some("librarian")
-        );
-        assert_eq!(
-            trial_of("librarian_index").map(|(t, i)| (t.id, i)),
-            Some(("librarian", 0))
-        );
+        for (trial, first, sixth, next_act) in [
+            ("librarian", "raw_pointer", "maybe_uninit", Some("prealloc")),
+            ("compiler", "prealloc", "semver_caret", None),
+        ] {
+            let t = TRIALS
+                .iter()
+                .find(|t| t.id == trial)
+                .unwrap_or_else(|| panic!("{trial} missing"));
+            assert_eq!(t.npc, t.stages[0], "{trial}: no prologue, owner is stage 1");
+            assert_eq!(t.stages.len(), 3, "{trial}");
+            assert_eq!(idx(first) + 6, idx(t.stages[0]), "{trial}");
+            assert_eq!(idx(sixth) + 1, idx(t.stages[0]), "{trial}");
+            let last = idx(t.stages[2]);
+            match next_act {
+                Some(next) => assert_eq!(last + 1, idx(next), "{trial}: before {next}"),
+                None => assert_eq!(last + 1, reg.missions.len(), "{trial}: ends the registry"),
+            }
+            assert_eq!(trial_for_npc(t.npc).map(|t| t.id), Some(trial));
+            assert_eq!(trial_of(t.npc).map(|(t, i)| (t.id, i)), Some((trial, 0)));
+        }
+        assert_eq!(TRIALS[TRIALS.len() - 1].id, "compiler", "the last trial");
     }
 
-    /// A trial whose owner has no prologue (the Librarian): while stage 1
-    /// is locked his current mission is stage 1 itself (so he talks as a
-    /// locked NPC), then each stage in turn, then the final stage once all
-    /// are cleared.
+    /// A trial whose owner has no prologue (the Librarian, the Compiler):
+    /// while stage 1 is locked his current mission is stage 1 itself (so
+    /// he talks as a locked NPC), then each stage in turn, then the final
+    /// stage once all are cleared.
     #[test]
     fn no_prologue_owner_walks_locked_stage_one_then_the_stages() {
         let reg = MissionRegistry::default();
-        let npc = "librarian_index";
-        let cur = |p: &MissionProgress| current_mission(&reg, p, npc).map(|m| m.id);
-        let unlocked =
-            |p: &MissionProgress| reg.find(npc).expect("stage 1 in registry").is_unlocked(p);
-        // Fresh save and a save one mission short: stage 1, locked.
-        assert_eq!(cur(&MissionProgress::default()), Some(npc));
-        assert!(!unlocked(&MissionProgress::default()));
-        let p = cleared_through(&reg, "send_sync");
-        assert_eq!(cur(&p), Some(npc));
-        assert!(!unlocked(&p));
-        if cfg!(feature = "demo") {
-            // Act 9 is not in the demo: nothing unlocks.
-            let p = cleared_through(&reg, "maybe_uninit");
+        for (trial, before_last, last_villager) in [
+            ("librarian", "send_sync", "maybe_uninit"),
+            ("compiler", "no_std", "semver_caret"),
+        ] {
+            let t = TRIALS
+                .iter()
+                .find(|t| t.id == trial)
+                .unwrap_or_else(|| panic!("{trial} missing"));
+            let npc = t.npc;
+            let cur = |p: &MissionProgress| current_mission(&reg, p, npc).map(|m| m.id);
+            let unlocked =
+                |p: &MissionProgress| reg.find(npc).expect("stage 1 in registry").is_unlocked(p);
+            // Fresh save and a save one mission short: stage 1, locked.
+            assert_eq!(cur(&MissionProgress::default()), Some(npc));
+            assert!(!unlocked(&MissionProgress::default()));
+            let p = cleared_through(&reg, before_last);
+            assert_eq!(cur(&p), Some(npc));
             assert!(!unlocked(&p));
-            return;
+            if cfg!(feature = "demo") {
+                // Acts 9 and 10 are not in the demo: nothing unlocks.
+                let p = cleared_through(&reg, last_villager);
+                assert!(!unlocked(&p));
+                continue;
+            }
+            // The act's last villager done: stage 1 is open.
+            let p = cleared_through(&reg, last_villager);
+            assert_eq!(cur(&p), Some(npc));
+            assert!(unlocked(&p));
+            let p = cleared_through(&reg, t.stages[0]);
+            assert_eq!(cur(&p), Some(t.stages[1]));
+            let p = cleared_through(&reg, t.stages[1]);
+            assert_eq!(cur(&p), Some(t.stages[2]));
+            let p = cleared_through(&reg, t.stages[2]);
+            assert_eq!(cur(&p), Some(t.stages[2]));
+            assert!(is_complete(t, &p));
         }
-        // The Bookbinder done: stage 1 is open.
-        let p = cleared_through(&reg, "maybe_uninit");
-        assert_eq!(cur(&p), Some(npc));
-        assert!(unlocked(&p));
-        let p = cleared_through(&reg, "librarian_index");
-        assert_eq!(cur(&p), Some("librarian_demand"));
-        let p = cleared_through(&reg, "librarian_demand");
-        assert_eq!(cur(&p), Some("librarian_seal"));
-        let p = cleared_through(&reg, "librarian_seal");
-        assert_eq!(cur(&p), Some("librarian_seal"));
-        assert!(is_complete(&TRIALS[TRIALS.len() - 1], &p));
     }
 
     /// Each Act 3-5 trial sits after its act's sixth mission and before

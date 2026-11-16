@@ -2551,6 +2551,314 @@ then `Box::from_raw` it inside `unsafe`.",
                 available: true,
                 starter_code: "struct Codex {\n    ptr: *mut u32,\n    len: usize,\n}\n\nimpl Codex {\n    fn from_pages(pages: Vec<u32>) -> Self {\n        let boxed: Box<[u32]> = pages.into_boxed_slice();\n        let len = boxed.len();\n        let ptr = Box::into_raw(boxed).cast::<u32>();\n        Codex { ptr, len }\n    }\n\n    // Return the page at `index`, or None past the end, without ever\n    // reading outside the codex.\n    fn get(&self, _index: usize) -> Option<u32> {\n        None\n    }\n}\n\n// Box::into_raw handed the pages out. Nothing gives them back.\n\nfn main() {\n    let codex = Codex::from_pages(vec![5, 8, 13]);\n    println!(\"page 0: {:?}\", codex.get(0));\n    println!(\"page 2: {:?}\", codex.get(2));\n    println!(\"page 3: {:?}\", codex.get(3));\n    println!(\"the Librarian closes the book\");\n}\n",
             },
+            // ── Act 10: The Throne ─────────────────────────────────────
+            // Measuring allocations, `Cow`, compile-time evaluation, the
+            // lane shape SIMD wants, `no_std`, Cargo's caret rule, then the
+            // Compiler's trial. Design:
+            // docs/superpowers/specs/2026-11-14-act10-throne.md. Nothing
+            // here grades speed: every lesson is a deterministic output (an
+            // allocation count, borrowed or copied, a value computed at
+            // compile time). `unsafe` and `#[global_allocator]` appear here
+            // only inside string literals (the player's program). Every
+            // compiler error and run-time behaviour this act names is
+            // compiled or run in `tests/mission_text.rs` (hard rule 3).
+            Mission {
+                id: "prealloc",
+                npc_name: "The Assayer",
+                prompt: "Build the 1000-coin ledger with exactly one allocation.",
+                tutorial: "## Concept\n\
+Before you optimise, measure. Here the instrument is a counting \
+allocator: a `#[global_allocator]` that wraps `std::alloc::System` and \
+adds one to an atomic counter on every allocation and reallocation. \
+(Writing one takes `unsafe impl GlobalAlloc`: you promise to keep the \
+allocator's contract, which passing every call on to `System` does.) A \
+`Vec` that starts empty has to reallocate as it grows, and std does not \
+promise how often. Give it the final size up front with \
+`Vec::with_capacity(n)` and std does promise that `push` never \
+reallocates while the length is below the capacity. On a real machine \
+you would reach for a profiler (`cargo flamegraph`, `perf`, DHAT), and \
+crates such as `smallvec` keep small collections off the heap.\n\n\
+## Syntax\n\
+```\nlet before = ALLOCATIONS.load(Ordering::Relaxed);\nlet mut v = Vec::with_capacity(1000);\n// ... push 1000 times ...\nlet after = ALLOCATIONS.load(Ordering::Relaxed);\n```\n\n\
+## Task\n\
+Change how the ledger is created so building it costs exactly one \
+allocation. The allocator and the measurement are already written. The \
+program prints `coins: 1000`, then `allocations: 1`.\n\n\
+## Hint\n\
+The scale reads more than 1: every count above 1 is the `Vec` \
+outgrowing its buffer and asking for a bigger one. You know the final \
+length before the loop starts, so ask for it once: \
+`Vec::with_capacity(1000)`. (`(0..1000u32).collect::<Vec<_>>()` \
+measures 1 here too.)",
+                prereq: None,
+                available: true,
+                starter_code: "use std::alloc::{GlobalAlloc, Layout, System};\nuse std::sync::atomic::{AtomicUsize, Ordering};\n\n/// The Assayer's scale: wraps the system allocator and counts every\n/// allocation and reallocation.\nstruct CountingAlloc;\n\nstatic ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);\n\nunsafe impl GlobalAlloc for CountingAlloc {\n    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {\n        ALLOCATIONS.fetch_add(1, Ordering::Relaxed);\n        unsafe { System.alloc(layout) }\n    }\n\n    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {\n        unsafe { System.dealloc(ptr, layout) }\n    }\n\n    unsafe fn realloc(\n        &self,\n        ptr: *mut u8,\n        layout: Layout,\n        new_size: usize,\n    ) -> *mut u8 {\n        ALLOCATIONS.fetch_add(1, Ordering::Relaxed);\n        unsafe { System.realloc(ptr, layout, new_size) }\n    }\n}\n\n#[global_allocator]\nstatic GLOBAL: CountingAlloc = CountingAlloc;\n\nfn main() {\n    let before = ALLOCATIONS.load(Ordering::Relaxed);\n\n    // The Assayer wants this ledger built with a single allocation.\n    let mut ledger = Vec::new();\n    for coin in 0..1000u32 {\n        ledger.push(coin);\n    }\n\n    let after = ALLOCATIONS.load(Ordering::Relaxed);\n    println!(\"coins: {}\", ledger.len());\n    println!(\"allocations: {}\", after - before);\n}\n",
+            },
+            Mission {
+                id: "cow_borrow",
+                npc_name: "The Copyist",
+                prompt: "Return `Cow<'_, str>`: borrow titles that need no change, copy only the rest.",
+                tutorial: "## Concept\n\
+`Cow<'a, str>` (\"clone on write\") is either `Cow::Borrowed(&'a str)` or \
+`Cow::Owned(String)`. It dereferences to `&str`, so callers use it like \
+any string. A function that only sometimes changes its input can hand \
+back the input itself, borrowed, when nothing changes, and build a new \
+`String` only when something does. The common case then copies \
+nothing. Call `.into_owned()` if you later need a `String`: it copies \
+only if the value was borrowed.\n\n\
+## Syntax\n\
+```\nfn tidy(s: &str) -> Cow<'_, str> {\n    if needs_change(s) {\n        Cow::Owned(fix(s))\n    } else {\n        Cow::Borrowed(s)\n    }\n}\n```\n\n\
+## Task\n\
+Make `shelf_name` return `Cow<'_, str>`, borrowing titles without \
+spaces, and print each name with `(borrowed)` or `(copied)`. The \
+program prints `Grimoire (borrowed)`, `Book_of_Crowns (copied)`, then \
+`Ledger (borrowed)`.\n\n\
+## Hint\n\
+`replace` always builds a new `String`, even when there is nothing to \
+replace. Return `Cow::Owned(title.replace(' ', \"_\"))` only when \
+`title.contains(' ')`, and `Cow::Borrowed(title)` otherwise. In `main`, \
+`match &name { Cow::Borrowed(_) => \"borrowed\", Cow::Owned(_) => \"copied\" }`.",
+                prereq: None,
+                available: true,
+                starter_code: "/// Shelf names use underscores instead of spaces. This version builds a\n/// brand-new String for every title, even ones with nothing to change.\nfn shelf_name(title: &str) -> String {\n    title.replace(' ', \"_\")\n}\n\nfn main() {\n    for title in [\"Grimoire\", \"Book of Crowns\", \"Ledger\"] {\n        let name = shelf_name(title);\n        // The Copyist wants each line to end with (borrowed) or\n        // (copied).\n        println!(\"{name}\");\n    }\n}\n",
+            },
+            Mission {
+                id: "const_eval",
+                npc_name: "The Astronomer",
+                prompt: "Make `star_table` a `const fn`, compute `STARS` at compile time, and check it with a compile-time `assert!`.",
+                tutorial: "## Concept\n\
+A `const` item's value is computed by the compiler and built into the \
+program; no work at run time builds it. Only `const fn`s may be called \
+there. A `const fn` is an ordinary function that can also run inside \
+the compiler, so its body is limited: no `for` loops (they call \
+`Iterator::next`, which is not a `const fn`), but `while`, `if`, \
+`match`, arithmetic and array indexing are fine. \
+`const _: () = assert!(cond, \"msg\");` checks `cond` while compiling: \
+if it is false the build fails with E0080, \"evaluation panicked: \
+msg\". A test that runs before the program exists. (`#[inline]` is \
+another way to ask the compiler for speed; this lesson sticks to what \
+you can see in the output.)\n\n\
+## Syntax\n\
+```\nconst fn square(n: u32) -> u32 {\n    n * n\n}\nconst NINE: u32 = square(3);\nconst _: () = assert!(NINE == 9, \"bad square\");\n```\n\n\
+## Task\n\
+Make `star_table` a `const fn` so `STARS` is computed at compile time, \
+and add a compile-time check that the last star is 50. The program \
+prints `star chart: [1, 2, 5, 10, 17, 26, 37, 50]`, then \
+`brightest: 50`.\n\n\
+## Hint\n\
+E0015, \"cannot call non-const function `star_table` in constants\": a \
+`const` can only call `const fn`s. Adding `const` alone is not enough: \
+the `for` loop is a second E0015, \"cannot use `for` loop on \
+`std::ops::Range<usize>` in constant functions\". Count with \
+`let mut i = 0; while i < 8 { ...; i += 1; }`, then add \
+`const _: () = assert!(STARS[7] == 50, \"the last star is misplaced\");` \
+at the top level.",
+                prereq: None,
+                available: true,
+                starter_code: "fn star_table() -> [u32; 8] {\n    let mut table = [0u32; 8];\n    for i in 0..8 {\n        table[i] = (i as u32) * (i as u32) + 1;\n    }\n    table\n}\n\n// The Astronomer wants the chart drawn before the night begins:\n// computed by the compiler, and checked by it too.\nconst STARS: [u32; 8] = star_table();\n\nfn main() {\n    println!(\"star chart: {STARS:?}\");\n    println!(\"brightest: {}\", STARS[7]);\n}\n",
+            },
+            Mission {
+                id: "chunks_exact",
+                npc_name: "The Choirmaster",
+                prompt: "Sum in four lanes with `chunks_exact(4)` and don't drop the remainder.",
+                tutorial: "## Concept\n\
+SIMD hardware adds several numbers in one instruction, in parallel \
+\"lanes\". Code that suits it works in fixed-width chunks with \
+independent accumulators, so no step waits on the one before. \
+`chunks_exact(4)` yields only full 4-element slices; the std docs note \
+that because every chunk has exactly that size, the compiler can often \
+optimise the loop better than with `chunks`. The 0 to 3 elements left \
+over are not yielded: they wait in `.remainder()`, and forgetting them \
+is the classic bug. Portable SIMD (`std::simd`) is unstable: on stable \
+Rust, `use std::simd` is E0658, \"use of unstable library feature \
+`portable_simd`\". A grader cannot check speed, so the Choirmaster \
+checks the answer.\n\n\
+## Syntax\n\
+```\nlet mut chunks = data.chunks_exact(4);\nfor chunk in &mut chunks { /* 4 elements */ }\nlet rest = chunks.remainder(); // 0..=3 elements\n```\n\n\
+## Task\n\
+Fix `choir_sum` so it also adds the voices that do not fill a whole \
+chunk. The program prints `choir sum: 55`, `plain sum: 55`, then \
+`empty choir: 0`.\n\n\
+## Hint\n\
+1 + 2 + ... + 10 is 55, but the choir sings 36: voices 9 and 10 are \
+never heard. Keep the iterator in a variable \
+(`let mut chunks = voices.chunks_exact(4);`), loop over `&mut chunks`, \
+then add `chunks.remainder().iter().sum::<u32>()` to the lanes. \
+(`chunks(4)`, whose last chunk may be short, is also correct, but gives \
+up the exact-width shape.)",
+                prereq: None,
+                available: true,
+                starter_code: "/// Sums in four independent lanes. The Choirmaster says some voices are\n/// never heard.\nfn choir_sum(voices: &[u32]) -> u32 {\n    let mut lanes = [0u32; 4];\n    for chunk in voices.chunks_exact(4) {\n        for (lane, voice) in lanes.iter_mut().zip(chunk) {\n            *lane += voice;\n        }\n    }\n    lanes.iter().sum::<u32>()\n}\n\nfn main() {\n    let voices: Vec<u32> = (1..=10).collect();\n    println!(\"choir sum: {}\", choir_sum(&voices));\n    println!(\"plain sum: {}\", voices.iter().sum::<u32>());\n    println!(\"empty choir: {}\", choir_sum(&[]));\n}\n",
+            },
+            Mission {
+                id: "no_std",
+                npc_name: "The Hermit",
+                prompt: "In a `#![no_std]` crate, format the beacon line into a fixed buffer with `core::fmt::Write`.",
+                tutorial: "## Concept\n\
+`#![no_std]` at the crate root drops the standard library and links \
+only `core`: no heap, no files, no threads, and no `println!` (\"cannot \
+find macro `println` in this scope\"). `String` and `format!` live in \
+`alloc` and `std`, so they are gone too. What stays is everything that \
+needs no operating system: integers, slices, `Option`, `Result`, \
+iterators, `core::fmt`. Firmware lives here. (`extern crate alloc;` \
+brings `String` and `Vec` back when the device has a global \
+allocator.) This sandbox still needs std to print, so the starter links \
+it under another name, `extern crate std as host;`, for `main` alone. \
+The `firmware` module must not use it.\n\n\
+## Syntax\n\
+```\nuse core::fmt::{self, Write};\nstruct Buf { bytes: [u8; 32], len: usize }\nimpl Write for Buf {\n    fn write_str(&mut self, s: &str) -> fmt::Result {\n        // copy s in, or return Err(fmt::Error)\n    }\n}\nwrite!(buf, \"tower {n}\")?; // no heap needed\n```\n\n\
+## Task\n\
+Rewrite `firmware::signal` to format into a 32-byte stack buffer \
+through `core::fmt::Write`, refusing (returning `Err`) instead of \
+overflowing. Then, in `main`, try to write a message longer than 32 \
+bytes into a fresh buffer and report whether it was refused. The \
+program prints `tower 7: lit (sent: true)`, then \
+`overflow refused: true`.\n\n\
+## Hint\n\
+E0425, \"cannot find type `String` in this scope\", and \"cannot find \
+macro `format` in this scope\": both live in `alloc`/`std`. rustc \
+suggests `use crate::host::format;`. That compiles, and it is exactly \
+what the outpost does not have. Give `firmware` a \
+`Beacon { bytes: [u8; 32], len: usize }` that implements \
+`core::fmt::Write` (one method, `write_str`): return `Err(fmt::Error)` \
+when `self.len + s.len()` would pass 32, otherwise `copy_from_slice` \
+the bytes in and advance `len`. `write!(beacon, ...)` then works \
+without a heap, and `core::str::from_utf8(&self.bytes[..self.len])` \
+gives the text back.",
+                prereq: None,
+                available: true,
+                starter_code: "#![no_std]\n\nextern crate std as host;\n\nmod firmware {\n    // The Hermit's outpost has no heap. Rewrite `signal` so it formats\n    // into a fixed-size buffer instead of a String.\n    pub fn signal(tower: u8, lit: bool) -> String {\n        format!(\"tower {tower}: {}\", if lit { \"lit\" } else { \"dark\" })\n    }\n}\n\nfn main() {\n    let line = firmware::signal(7, true);\n    host::println!(\"{line} (sent: true)\");\n}\n",
+            },
+            Mission {
+                id: "semver_caret",
+                npc_name: "The Registrar",
+                prompt: "Fix `caret_allows` so it follows Cargo's caret rule below 1.0 too.",
+                tutorial: "## Concept\n\
+In `Cargo.toml`, `serde = \"1.2.3\"` means the caret requirement \
+`^1.2.3`: any version from 1.2.3 up to, but not including, 2.0.0. \
+Cargo assumes semver: a change to the leftmost non-zero part may break \
+you, anything to its right should not. Below 1.0 that moves right: \
+`^0.2.3` allows 0.2.3 up to 0.3.0, and `^0.0.3` allows only 0.0.3. \
+`Cargo.lock` records the exact versions chosen; `cargo update` picks \
+newer ones the requirements allow. The rest of the ecosystem: `rustup` \
+installs toolchains, `cargo fmt` (rustfmt) formats, `cargo clippy` \
+lints, `cargo doc` builds docs, and docs.rs hosts them for every crate \
+on crates.io. None of those run in this sandbox; the caret rule does.\n\n\
+## Syntax\n\
+```\n[dependencies]\nserde = \"1.2.3\" # >= 1.2.3, < 2.0.0\nrand = \"0.8.5\"  # >= 0.8.5, < 0.9.0\ntiny = \"0.0.3\"  # exactly 0.0.3\n```\n\n\
+## Task\n\
+Make `caret_allows(required, candidate)` follow the caret rule for \
+1.x, 0.x and 0.0.x requirements (pre-release tags are out of scope). \
+The program prints `^1.2.3 accepts 1.9.0: true`, \
+`^1.2.3 accepts 2.0.0: false`, `^1.2.3 accepts 1.2.2: false`, \
+`^0.2.3 accepts 0.2.9: true`, `^0.2.3 accepts 0.3.0: false`, \
+`^0.0.3 accepts 0.0.3: true`, `^0.0.3 accepts 0.0.4: false`, then \
+`^1.2.3 vs 1.x.0: not a version`.\n\n\
+## Hint\n\
+The rule is right for `^1.2.3` and wrong for `^0.2.3`: it lets 0.3.0 \
+through. After rejecting `candidate < required`, find the leftmost \
+non-zero part of `required`: the candidate must match `required` up to \
+and including it. \
+`if required.major > 0 { ... } else if required.minor > 0 { ... } else { ... }`.",
+                prereq: None,
+                available: true,
+                starter_code: "#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]\nstruct Version {\n    major: u64,\n    minor: u64,\n    patch: u64,\n}\n\nfn parse(text: &str) -> Option<Version> {\n    let mut parts = text.split('.');\n    let major = parts.next()?.parse().ok()?;\n    let minor = parts.next()?.parse().ok()?;\n    let patch = parts.next()?.parse().ok()?;\n    if parts.next().is_some() {\n        return None;\n    }\n    Some(Version { major, minor, patch })\n}\n\n/// The Registrar says this rule is right for 1.x and wrong below it.\nfn caret_allows(required: Version, candidate: Version) -> bool {\n    candidate >= required && candidate.major == required.major\n}\n\nfn main() {\n    let checks = [\n        (\"1.2.3\", \"1.9.0\"),\n        (\"1.2.3\", \"2.0.0\"),\n        (\"1.2.3\", \"1.2.2\"),\n        (\"0.2.3\", \"0.2.9\"),\n        (\"0.2.3\", \"0.3.0\"),\n        (\"0.0.3\", \"0.0.3\"),\n        (\"0.0.3\", \"0.0.4\"),\n        (\"1.2.3\", \"1.x.0\"),\n    ];\n    for (req, cand) in checks {\n        match (parse(req), parse(cand)) {\n            (Some(r), Some(c)) => println!(\"^{req} accepts {cand}: {}\", caret_allows(r, c)),\n            _ => println!(\"^{req} vs {cand}: not a version\"),\n        }\n    }\n}\n",
+            },
+            // ── Act 10 boss: the Compiler's trial ──────────────────────
+            // Three stages owned by the Compiler (`trial::TRIALS`), no
+            // prologue: his roster mission is stage 1, as for the
+            // Librarian. One allocation, an honest lifetime, the weakest
+            // bound that works. The Compiler ends the registry: clearing
+            // `compiler_bound` clears every mission, which shows the
+            // epilogue. His authored words quote no compiler output; the
+            // real stderr is in the editor's result pane.
+            Mission {
+                id: "compiler_alloc",
+                npc_name: "The Compiler",
+                prompt: "Build the court's proclamation with exactly one allocation.",
+                tutorial: "## Concept\n\
+Every `format!` builds a new `String`, so building text with `format!` \
+in a loop asks for memory at every step, and copies everything written \
+so far each time. When you can work out the final length first, \
+`String::with_capacity(len)` allocates once, and `push_str` never \
+reallocates while the text fits. The Compiler measures with the same \
+counting allocator the Assayer used.\n\n\
+## Syntax\n\
+```\nlet mut line = String::with_capacity(11);\nline.push_str(\"crown\");\nline.push_str(\", \");\nline.push_str(\"seal\"); // 11 bytes: it fits\n```\n\n\
+## Task\n\
+Make `proclaim` cost exactly one allocation. The output text must not \
+change. The program prints \
+`Ferris, the Borrow Checker, Vexis, the Librarian`, then \
+`allocations: 1`.\n\n\
+## Hint\n\
+Read the count your program prints: every `format!` is a new `String`. \
+The final length is the names' lengths added up, plus 2 bytes \
+(`\", \"`) between each pair. \
+`String::with_capacity(letters + separators)`, then `push_str` the \
+separator (when `i > 0`) and each name. (`names.join(\", \")` also \
+measures 1 here.)",
+                prereq: None,
+                available: true,
+                starter_code: "use std::alloc::{GlobalAlloc, Layout, System};\nuse std::sync::atomic::{AtomicUsize, Ordering};\n\n/// The Assayer's scale: wraps the system allocator and counts every\n/// allocation and reallocation.\nstruct CountingAlloc;\n\nstatic ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);\n\nunsafe impl GlobalAlloc for CountingAlloc {\n    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {\n        ALLOCATIONS.fetch_add(1, Ordering::Relaxed);\n        unsafe { System.alloc(layout) }\n    }\n\n    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {\n        unsafe { System.dealloc(ptr, layout) }\n    }\n\n    unsafe fn realloc(\n        &self,\n        ptr: *mut u8,\n        layout: Layout,\n        new_size: usize,\n    ) -> *mut u8 {\n        ALLOCATIONS.fetch_add(1, Ordering::Relaxed);\n        unsafe { System.realloc(ptr, layout, new_size) }\n    }\n}\n\n#[global_allocator]\nstatic GLOBAL: CountingAlloc = CountingAlloc;\n\n/// The Compiler demands this proclamation cost exactly one allocation.\nfn proclaim(names: &[&str]) -> String {\n    let mut line = String::new();\n    for (i, name) in names.iter().enumerate() {\n        if i > 0 {\n            line = format!(\"{line}, \");\n        }\n        line = format!(\"{line}{name}\");\n    }\n    line\n}\n\nfn main() {\n    let court = [\n        \"Ferris\",\n        \"the Borrow Checker\",\n        \"Vexis\",\n        \"the Librarian\",\n    ];\n    let before = ALLOCATIONS.load(Ordering::Relaxed);\n    let line = proclaim(&court);\n    let after = ALLOCATIONS.load(Ordering::Relaxed);\n    println!(\"{line}\");\n    println!(\"allocations: {}\", after - before);\n}\n",
+            },
+            Mission {
+                id: "compiler_lifetime",
+                npc_name: "The Compiler",
+                prompt: "Give `herald` a lifetime that ties the result only to `name`.",
+                tutorial: "## Concept\n\
+With one reference input, Rust infers that the output borrows from it. \
+With two, it cannot guess, and asks you to name a lifetime. Name it \
+honestly: put `'a` only on the inputs the result may really borrow \
+from. Here the result borrows `name` (the `Borrowed` case) and never \
+`title` (the `Owned` case copies it into a new `String`). Tie `title` \
+to the result too and the compiler will believe you, and then refuse \
+any caller whose `title` is dropped first.\n\n\
+## Syntax\n\
+```\nfn pick<'a>(keep: &'a str, look: &str) -> &'a str {\n    if look.is_empty() { keep } else { keep.trim() }\n}\n```\n\n\
+## Task\n\
+Fix the signature of `herald` so the program compiles and prints \
+`Ferris (borrowed)`, then `Sir Ferris (owned)`. `main` must stay as it \
+is.\n\n\
+## Hint\n\
+E0106, \"missing lifetime specifier\": the signature does not say \
+whether the result is borrowed from `name` or from `title`. rustc's \
+help puts `'a` on both inputs; follow it and `main` fails instead, \
+E0597, \"`title` does not live long enough\": `title` is dropped at \
+the end of its block while `titled` lives on. Put `'a` on `name` and \
+the result only: \
+`fn herald<'a>(name: &'a str, title: &str) -> Cow<'a, str>`.",
+                prereq: None,
+                available: true,
+                starter_code: "use std::borrow::Cow;\n\nfn herald(name: &str, title: &str) -> Cow<str> {\n    if title.is_empty() {\n        Cow::Borrowed(name)\n    } else {\n        Cow::Owned(format!(\"{title} {name}\"))\n    }\n}\n\nfn main() {\n    let name = String::from(\"Ferris\");\n    let plain = herald(&name, \"\");\n    let titled = {\n        let title = String::from(\"Sir\");\n        herald(&name, &title)\n    };\n    for line in [&plain, &titled] {\n        let how = match line {\n            Cow::Borrowed(_) => \"borrowed\",\n            Cow::Owned(_) => \"owned\",\n        };\n        println!(\"{line} ({how})\");\n    }\n}\n",
+            },
+            Mission {
+                id: "compiler_bound",
+                npc_name: "The Compiler",
+                prompt: "Bound `T` so `strongest` works for integers, floats and strings.",
+                tutorial: "## Concept\n\
+A generic function may only do to `T` what its bounds allow. `>` comes \
+from `PartialOrd`. `Ord` is the stronger promise of a total order, \
+which `sort` and `Iterator::max` need. Floats implement `PartialOrd` \
+but not `Ord`: NaN is not equal to itself and every comparison with it \
+is false, so their order is only partial. Ask for the weakest bound \
+that does the job, and the function serves the most types.\n\n\
+## Syntax\n\
+```\nfn bigger<T: PartialOrd>(a: T, b: T) -> T {\n    if a > b { a } else { b }\n}\n```\n\n\
+## Task\n\
+Add the bound that lets `strongest` compile for the integer, float and \
+string calls in `main`. The program prints `Some(9)`, `Some(2.5)`, \
+`Some(\"vexis\")`, then `None`.\n\n\
+## Hint\n\
+E0369, \"binary operation `>` cannot be applied to type `&T`\": read \
+the help line under it. `Ord` with `.iter().max()` looks shorter; try \
+it and the float call fails with E0277, \"the trait bound \
+`{float}: Ord` is not satisfied\". \
+`fn strongest<T: PartialOrd>(champions: &[T]) -> Option<&T>`, keeping \
+the loop.",
+                prereq: None,
+                available: true,
+                starter_code: "fn strongest<T>(champions: &[T]) -> Option<&T> {\n    let mut best = champions.first()?;\n    for champion in champions {\n        if champion > best {\n            best = champion;\n        }\n    }\n    Some(best)\n}\n\nfn main() {\n    println!(\"{:?}\", strongest(&[3, 9, 4]));\n    println!(\"{:?}\", strongest(&[0.5, 2.5, 1.0]));\n    println!(\"{:?}\", strongest(&[\"ferris\", \"vexis\", \"borrow\"]));\n    println!(\"{:?}\", strongest::<i32>(&[]));\n}\n",
+            },
         ];
         // Strict-linear progression: each mission's prereq is the one
         // listed immediately before it. Shape decision logged in HANDOFF
@@ -2830,8 +3138,7 @@ fn dismiss_epilogue_on_escape(
     // Only dismiss when the epilogue is actually visible. Otherwise a
     // pre-victory Esc-press would silently set the flag and the player
     // would never see the epilogue when they clear the last mission.
-    let all_cleared = progress.cleared_count() == registry.missions.len();
-    let epilogue_visible = all_cleared
+    let epilogue_visible = epilogue_due(&progress, &registry)
         && !epilogue.dismissed_this_session
         && completion.mission_id.is_none()
         && !editor.open;
@@ -2949,6 +3256,13 @@ pub fn next_pin_visible(
     !(paused || editor_open || dialogue_open || recap_open)
 }
 
+/// Present only while a scripted capture scene wants the world without the
+/// "next mission" pin (the district line-ups, whose top-left NPC the pin
+/// would cover). Never inserted by gameplay; `screenshot::scenes` inserts
+/// it for one scene and removes it in that scene's teardown.
+#[derive(Resource, Debug, Default)]
+pub struct HideNextPinForCapture;
+
 /// Persistent "next mission" HUD pin, top-left. Visibility rule:
 /// [`next_pin_visible`]. Disappears once every mission in the build is
 /// cleared (the epilogue / end-of-demo panel takes over).
@@ -2961,7 +3275,11 @@ fn draw_next_pin(
     completion: Res<CompletionView>,
     progress: Res<MissionProgress>,
     registry: Res<MissionRegistry>,
+    capture_hide: Option<Res<HideNextPinForCapture>>,
 ) {
+    if capture_hide.is_some() {
+        return;
+    }
     let visible = next_pin_visible(
         pause.is_some_and(|p| *p.get() == PauseState::Paused),
         editor.open,
@@ -3160,8 +3478,9 @@ fn draw_trial_panel(
 /// mission in the registry. Suppressed while the editor is open or a
 /// per-mission completion panel is up so the two flows don't collide,
 /// and one Esc dismisses it for the rest of the session. Voice is the
-/// realm itself addressing the player — short, heraldic, no spoiler
-/// for future acts since none exist yet.
+/// realm itself addressing the player, then a short credits block. All
+/// ten acts are built, so it says the game is complete; it promises
+/// nothing that does not exist. Copy: [`EPILOGUE_LINES`].
 fn draw_epilogue_panel(
     mut contexts: EguiContexts,
     progress: Res<MissionProgress>,
@@ -3173,9 +3492,7 @@ fn draw_epilogue_panel(
     if editor.open
         || completion.mission_id.is_some()
         || epilogue.dismissed_this_session
-        || progress.cleared_count() != registry.missions.len()
-        // A demo build ends with its own panel, even on a full-game save.
-        || registry.missions.iter().any(|m| !m.available)
+        || !epilogue_due(&progress, &registry)
     {
         return;
     }
@@ -3184,37 +3501,71 @@ fn draw_epilogue_panel(
     };
 
     modal_panel(ctx, "epilogue", 520.0, |ui| {
-        ui_theme::heading(ui, "The realm pledges its crown.");
+        ui_theme::heading(ui, EPILOGUE_LINES.heading);
         ui_theme::rule(ui);
-        ui.label(
-            "You have walked every road of the village and answered every \
-             sworn question. The compiler bows. The Borrow Checker stands \
-             down. The banners come in.",
-        );
+        ui_theme::markdown::show_inline(ui, EPILOGUE_LINES.body, ui_theme::BODY_SIZE);
         ui.add_space(6.0);
         ui.horizontal(|ui| {
             ui_theme::status_mark(ui, ui_theme::Status::Cleared, ui_theme::BODY_SIZE);
             // Missions, not NPCs: a trial NPC owns several missions.
             ui.label(format!(
-                "{} of {} missions cleared.",
+                "{} of {} missions cleared, across all ten acts.",
                 progress.cleared_count(),
                 registry.missions.len()
             ));
         });
         ui.add_space(6.0);
-        ui_theme::caption(
-            ui,
-            "More acts are being forged. For now: revisit any NPC with [F] \
-             to re-read a lesson, or wander the village.",
-        );
+        ui_theme::caption(ui, EPILOGUE_LINES.after);
+        ui_theme::rule(ui);
+        for line in EPILOGUE_LINES.credits {
+            ui_theme::caption(ui, *line);
+        }
         ui_theme::rule(ui);
         ui_theme::key_hint(ui, &[("Esc", "close")]);
     });
 }
 
+/// Whether this save has earned the epilogue: every mission in the
+/// registry is cleared. Never in a demo build (it ends with its own
+/// panel, even on a full-game save). The panel also waits while the
+/// editor or a completion panel is open, and after one Esc.
+pub fn epilogue_due(progress: &MissionProgress, registry: &MissionRegistry) -> bool {
+    registry
+        .missions
+        .iter()
+        .all(|m| m.available && progress.is_cleared(m.id))
+}
+
+/// The epilogue's copy, in one place so tests can read it.
+pub struct EpilogueLines {
+    pub heading: &'static str,
+    /// Inline markdown (code spans render as chips).
+    pub body: &'static str,
+    pub after: &'static str,
+    pub credits: &'static [&'static str],
+}
+
+/// What the epilogue says once every mission is cleared. Plain and true:
+/// the game has ten acts and nothing more is promised. The owner is the
+/// company; no personal names.
+pub const EPILOGUE_LINES: EpilogueLines = EpilogueLines {
+    heading: "The realm pledges its crown.",
+    body: "You have answered every sworn question, from the first `let` in \
+           Hearthstone Square to the Compiler's last proof on the Throne. \
+           The Compiler rises. The banners come in.",
+    after: "That is the whole road. Revisit any NPC with [F] to re-read a \
+            lesson, or wander the realm.",
+    credits: &[
+        "Pledge & Crown, made by Chico Cell Repair LLC.",
+        "Written in Rust with Bevy, bevy_egui, bevy_ecs_tilemap and bevy_kira_audio.",
+        "Rust is a trademark of the Rust Foundation. This game is not \
+         affiliated with or endorsed by the Rust Foundation or the Rust Project.",
+    ],
+};
+
 /// What the full game adds after the demo, one line per act. Only acts
-/// that are built and in the registry belong here (Acts 3-9); do not
-/// list planned acts or features that do not exist yet.
+/// that are built and in the registry belong here (Acts 3-10, all of
+/// them); do not list features that do not exist.
 #[cfg(feature = "demo")]
 const FULL_GAME_ACTS: &[(&str, &str)] = &[
     (
@@ -3244,6 +3595,10 @@ const FULL_GAME_ACTS: &[(&str, &str)] = &[
     (
         "Act 9 - The Forbidden Library",
         "unsafe and raw pointers, extern \"C\", macro_rules!, Drop, Send and Sync, MaybeUninit",
+    ),
+    (
+        "Act 10 - The Throne",
+        "measuring allocations, Cow, const fn, chunks_exact, no_std, Cargo's caret rule",
     ),
 ];
 
@@ -3327,7 +3682,7 @@ fn draw_demo_end_panel(
         ));
         ui.add_space(6.0);
         ui.label(format!(
-            "The full game has {more} more missions across Acts 3 to 9:"
+            "The full game has {more} more missions across Acts 3 to 10:"
         ));
         ui.add_space(2.0);
         for (act, topics) in FULL_GAME_ACTS {
