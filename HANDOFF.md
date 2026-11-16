@@ -251,7 +251,22 @@ runs `scripts/ci.ps1` on the merged result as the sign-off gate.
    temporarily unavailable") on many-core hosts** because it starts one
    thread per core under the 1280 MiB build limit (6 of 40 builds on 56
    cores; 0 of 40 with lld threads capped at 4); a correct solution is
-   then wrongly failed. See the wave after 16 for the fix status.
+   then wrongly failed. **Fixed in wave 17** (`8810e66` + `79e1746`):
+   player links are capped at 4 lld threads (`build_sandbox::
+   PLAYER_LINK_THREADS`, plus `MALLOC_ARENA_MAX=2` in the build sandbox),
+   and a linker abort is reported as a server error (HTTP 500, never
+   saved as a clear) instead of blaming the player
+   (`wasm_builder::toolchain_crash`). On cnc: 35 crashes in 200 builds
+   before, 0 in 200 after; real binary unpinned on 56 cores 200/200;
+   416 + 45/45 tests. Seventh security review
+   (`.claude/reviews/security-2026-11-16-8810e66.md`): merge after one
+   fix (player text in the error log is now fully escaped; proven on cnc
+   that a forged log line no longer lands). Known and accepted: a player
+   can forge the "server error" for a build that already fails to link;
+   it is never a pass. Not done: a separate metric for toolchain crashes
+   (they count as HTTP 500s); the journal was not checked under the real
+   systemd builder unit after this fix; rustc's own crashes are still
+   reported as the player's error.
    The text below predates that run.
    **All ten acts are implemented** (Act 9 in wave 14, Act 10 in wave
    15). **Before any deploy that serves Act 9**, run the security review's
