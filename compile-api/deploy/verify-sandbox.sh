@@ -239,6 +239,12 @@ else
         fi
         if [ "$want" != "-" ]; then
             got="$(systemctl show -p "$prop" --value "$BUILDER_UNIT")"
+            # systemd 255 prints the IPAddressDeny list as `::/0 0.0.0.0/0`,
+            # 257 as `0.0.0.0/0 ::/0`. The list is a set: compare it sorted.
+            if [ "$prop" = "IPAddressDeny" ]; then
+                got="$(tr ' ' '\n' <<<"$got" | sort | tr '\n' ' ' | sed 's/ $//')"
+                want="$(tr ' ' '\n' <<<"$want" | sort | tr '\n' ' ' | sed 's/ $//')"
+            fi
             if [ "$got" != "$want" ]; then
                 shipped_bad=1; fail "shipped value: running $BUILDER_UNIT has $prop='$got', shipped '$want' (drop-in or edit?)"
             fi

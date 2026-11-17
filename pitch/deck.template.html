@@ -210,7 +210,7 @@
   <div class="grid2" style="margin-top:6px;">
     <div class="card">
       <h3>Books &amp; tutorials</h3>
-      <p>The official Book, <i>Programming Rust</i>, Rustlings. High quality &mdash;
+      <p>The Rust Book, <i>Programming Rust</i>, Rustlings. High quality &mdash;
       <span class="rose">low engagement.</span> Most readers abandon mid-ownership chapter.</p>
     </div>
     <div class="card">
@@ -260,7 +260,7 @@
   <p class="kicker">How it plays &mdash; the core loop</p>
   <h2 style="font-size:38px; margin-bottom:16px;">The Cast Editor</h2>
   <div class="editor">
-    <div class="bar"><span class="tab">CAST</span><span class="tab">TEST</span><span class="tab">COMMIT</span><span class="tab esc">ESC</span></div>
+    <div class="bar"><span class="tab">CAST</span><span class="tab">COMMIT</span><span class="tab esc">ESC</span></div>
     <div class="body">
       <div class="code"><span class="cm">// Defeat the goblin (HP 12).</span><br>
         <span class="kw">fn</span> <span class="fn">cast</span>() -&gt; <span class="ty">Spell</span> {<br>
@@ -314,7 +314,7 @@
 <section class="slide">
   <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
   <p class="kicker">The cast</p>
-  <h2 style="margin-bottom:8px;">Every concept has a face. <span class="em" style="font-size:30px;">57 NPCs, all original art.</span></h2>
+  <h2 style="margin-bottom:8px;">Every concept has a face. <span class="em" style="font-size:30px;">71 NPCs, all original art.</span></h2>
   <p class="muted" style="font-size:15px; margin:0 0 14px;">Ferris guides you. The Borrow Checker tests you. The Trait Mage, the Quartermaster, the Tavern crew &mdash; each teaches a slice of Rust. <span style="color:var(--agedpaper)">(Actual in-game sprites, below.)</span></p>
   <div class="cast">
 @@CAST_GRID@@
@@ -327,7 +327,7 @@
   <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
   <p class="kicker">The curriculum &mdash; the contract</p>
   <h2 style="margin-bottom:6px;">A full Rust education, in ten acts.</h2>
-  <p class="muted" style="font-size:15px;margin:0 0 14px;">25&ndash;35 hours &middot; every concept in the Rust Book through Chapter 20 &middot; reachable through normal play.</p>
+  <p class="muted" style="font-size:15px;margin:0 0 14px;">25&ndash;35 hours &middot; ownership and borrowing through traits, concurrency, async, unsafe and macros &middot; reachable through normal play.</p>
   <div class="acts">
     <div class="act"><span class="num">I</span><span class="nm">Hearthstone Village</span><span class="cc">variables, types, control flow, loops</span></div>
     <div class="act"><span class="num">II</span><span class="nm">The Borrow Checker&rsquo;s Bridge</span><span class="cc">ownership, borrowing, lifetimes, slices</span></div>
@@ -352,7 +352,7 @@
   <h2>It eats its own dog food.</h2>
   <p class="lead" style="margin-bottom:24px;">A Rust-teaching game, built entirely in Rust &mdash; the codebase <i>is</i> a teaching artifact.</p>
   <div class="grid3">
-    <div class="card"><h3>Engine</h3><p>Bevy ECS, native + WebGL2. <code>bevy_egui</code> + <code>egui_code_editor</code> drive the in-game IDE with real Rust syntax highlighting.</p></div>
+    <div class="card"><h3>Engine</h3><p>Bevy ECS, native + WebGL2. <code>bevy_egui</code> drives the in-game IDE, with a hand-written Rust syntax highlighter.</p></div>
     <div class="card"><h3>Player code</h3><p>Source &rarr; server-side <code>cargo</code> compile &rarr; WASM. Runs in a fuel-limited sandbox &mdash; <b class="rose">never the host process</b>. The server owns the manifest.</p></div>
     <div class="card"><h3>Everywhere</h3><p>One Rust codebase ships to desktop (native), browser (wasm), and mobile (Tauri 2.0, Android bundle builds today).</p></div>
   </div>
@@ -372,8 +372,8 @@
   <div class="grid2" style="margin-top:4px;">
     <div>
       <ul class="clean">
-        <li><b class="gold">57 missions</b> across Acts 1&ndash;8, fully playable, strict-linear curriculum gating</li>
-        <li><b class="gold">57 NPCs</b>, every one with original sprite art</li>
+        <li><b class="gold">96 missions</b> across all ten acts, fully playable, strict-linear curriculum gating</li>
+        <li><b class="gold">71 NPCs</b>, every one with original sprite art</li>
         <li>Builds &amp; runs <b>native + in-browser (WebGL2)</b></li>
         <li>Original synthwave score + sound effects</li>
         <li>Android app bundle builds end-to-end (Tauri)</li>
@@ -424,7 +424,7 @@
   <h2 style="margin-bottom:14px;">Free demo &rarr; paid game &rarr; B2B.</h2>
   <div class="card" style="padding:0; overflow:hidden;">
     <div class="funnel">
-      <div class="fstage"><div class="ph">Phase 0 &middot; Demo</div><div class="pr">Free</div><div class="ds">Acts 1&ndash;2 on itch.io. Top-of-funnel, email capture, validation.</div></div>
+      <div class="fstage"><div class="ph">Phase 0 &middot; Demo</div><div class="pr">Free</div><div class="ds">Acts 1&ndash;2 on itch.io. Top-of-funnel and validation.</div></div>
       <div class="fstage"><div class="ph">Phase 1 &middot; Early access</div><div class="pr">$14.99</div><div class="ds">Acts 1&ndash;4, itch.io. First dollars; Steam wishlist warms.</div></div>
       <div class="fstage"><div class="ph">Phase 2 &middot; Steam</div><div class="pr">$24.99</div><div class="ds">Acts 1&ndash;7 + soundtrack DLC. Mainstream discoverability.</div></div>
       <div class="fstage"><div class="ph">Phase 3 &middot; Full + B2B</div><div class="pr">$39.99</div><div class="ds">All 10 acts + Temple. Deluxe ed. + team licensing $50/seat.</div></div>
