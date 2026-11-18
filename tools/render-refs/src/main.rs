@@ -188,8 +188,8 @@ fn png_name_for(jsx_name: &str) -> Result<String> {
     let num = parts
         .next()
         .ok_or_else(|| anyhow!("missing NN in {jsx_name}"))?;
-    if num.len() != 2 || !num.chars().all(|c| c.is_ascii_digit()) {
-        bail!("expected 2-digit NN in {jsx_name}, got {num}");
+    if !(2..=3).contains(&num.len()) || !num.chars().all(|c| c.is_ascii_digit()) {
+        bail!("expected a 2- or 3-digit number in {jsx_name}, got {num}");
     }
     let suffix = parts
         .next()

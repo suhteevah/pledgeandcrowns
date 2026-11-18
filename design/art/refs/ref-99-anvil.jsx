@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-99 - Anvil on a stump, Act 6 district prop, 32x32.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-18 (Forge district style sample). Not wired yet.
 //
 // The Forge's working prop: a stone-grey anvil with its horn to the left
 // and a lit aged-paper face, on a bronze-wood stump with a brass-leaf cut

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-97 - Forge yard slab, 16x16 tiles, 2-column sheet.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-18 (Forge district style sample). Not wired yet.
 //
 // Ground for the Iterator Forge district (Act 6). Same slab layout as the
 // REF-75 flagstone so the two can meet on a straight seam, but in stone

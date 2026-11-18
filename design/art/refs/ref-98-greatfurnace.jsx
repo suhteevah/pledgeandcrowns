@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-98 - The Great Furnace, Act 6 district landmark, 64x64.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-18 (Forge district style sample). Not wired yet.
 //
 // The Iterator Forge's landmark: a stone furnace under an iron hood and a
 // brick chimney, a brass band with rivets across its brow, a brass hammer
