@@ -7,18 +7,22 @@
 //! those plazas in roster order. Oaks and cottages are sprites, not tiles —
 //! see `prop.rs`.
 //!
-//! Tiles come from the REF-76 village atlas (24 tiles, 8 columns): the 22
-//! REF-66 terrain v2 tiles followed by the 2 REF-75 plaza flagstones, copied
-//! verbatim (render-refs tests guard the copy). A tilemap binds one texture,
-//! which is why the flagstone shares the terrain sheet instead of having its
-//! own. Two tilemap layers share it:
+//! Tiles come from the REF-76 village atlas (26 tiles, 8 columns): the 22
+//! REF-66 terrain v2 tiles, the 2 REF-75 plaza flagstones and the 2 REF-97
+//! Forge slabs, copied verbatim (render-refs tests guard the copy). A
+//! tilemap binds one texture, which is why every plaza ground shares the
+//! terrain sheet instead of having its own; a new district ground is
+//! appended to it, so existing indices never move. Two tilemap layers share
+//! it:
 //!
-//! 1. **Base** — every tile is classified [`Ground::Grass`], `Cobble`, `Dirt`
-//!    or `Flagstone` by [`ground_at_tile`]; the variant (grass_a/b/tuft/
-//!    flowers, cobble_a/b, dirt_a/b, flag_a/b) is picked by a deterministic
-//!    per-tile hash. No tinting. Each plaza is flagstone inside a one-tile
-//!    cobble border (see [`plaza_zone`]), so cobble is always the paving that
-//!    meets grass and roads.
+//! 1. **Base** — every tile is classified [`Ground::Grass`], `Cobble`,
+//!    `Dirt`, `Flagstone` or a district ground (`ForgeSlab`) by
+//!    [`ground_at_tile`]; the variant (grass_a/b/tuft/flowers, cobble_a/b,
+//!    dirt_a/b, flag_a/b, soot_a/b) is picked by a deterministic per-tile
+//!    hash. No tinting. Each plaza is its district's interior ground
+//!    ([`District::interior`], flagstone unless named) inside a one-tile
+//!    cobble border (see [`plaza_zone`]), so cobble is always the paving
+//!    that meets grass and roads.
 //! 2. **Overlay** — transparent grass-edge tiles on non-grass tiles that border
 //!    grass, chosen by the pure [`fringe_for`] from the 8 neighbours.
 //!
@@ -72,6 +76,12 @@ const T_NUB_SE: u32 = 21;
 /// REF-75 plaza flagstone, two interchangeable variants.
 const T_FLAG_A: u32 = 22;
 const T_FLAG_B: u32 = 23;
+/// REF-97 Forge yard slab: `soot_a` plain, `soot_b` with a scorch mark
+/// (about one tile in six, see [`SOOT_B_ONE_IN`]).
+const T_SOOT_A: u32 = 24;
+const T_SOOT_B: u32 = 25;
+/// One Forge slab tile in this many carries the scorch mark (REF-97).
+const SOOT_B_ONE_IN: u32 = 6;
 
 /// z of the overlay tilemap; the base layer sits at 0. Y-sorted sprites live
 /// above both (see `prop::ysort_z`).
@@ -85,7 +95,46 @@ pub struct District {
     pub center: Vec2,
     pub plaza_half: f32,
     pub count: usize,
+    /// Paving inside the one-tile cobble ring. `None` keeps the village's
+    /// REF-75 flagstone; a dressed district names its own ground (the Forge:
+    /// [`Ground::ForgeSlab`]). Must be a paving ([`Ground::is_plaza_interior`]).
+    pub interior: Option<Ground>,
+    /// Hand-placed cast: one offset from `center` per roster slot of this
+    /// district, in roster order, each NPC standing at the thing they work
+    /// at. Empty = the default grid ([`district_slot`]).
+    pub cast: &'static [Vec2],
 }
+
+impl District {
+    /// The ground inside this district's cobble ring.
+    pub fn interior_ground(&self) -> Ground {
+        self.interior.unwrap_or(Ground::Flagstone)
+    }
+}
+
+/// The Forge cast at their work, offsets from the plaza centre, in roster
+/// order. The yard (`prop::LANDMARKS`, `prop::DISTRICT_PROPS`) has the
+/// Great Furnace at the back-centre (base (0, 156)), the anvil and the
+/// quench trough either side of its mouth, the coal heap to its west and
+/// the tool rack against the back wall to its east. Each NPC stands one
+/// clear tile beside their thing with the talk spot south of them; the
+/// street enters through the east edge at about y = 0, and the south half
+/// of the yard stays open.
+const FORGE_CAST: &[Vec2] = &[
+    // The Keymaster (`hashmap_basic`), the first Act 6 NPC: at the yard
+    // gate, just south of where the street comes in.
+    Vec2::new(176.0, -60.0),
+    // The Sifter (`iter_filter`): west of the coal heap.
+    Vec2::new(-144.0, 180.0),
+    // The Smelter (`iter_fold`): in front of the furnace mouth.
+    Vec2::new(0.0, 124.0),
+    // The Tallywright (`iter_enumerate`): east of the tool rack.
+    Vec2::new(152.0, 200.0),
+    // The Riveter (`iter_zip`): at the anvil, on its horn (west) side.
+    Vec2::new(-120.0, 104.0),
+    // The Bondsmith (`closure_move`): east of the quench trough.
+    Vec2::new(120.0, 100.0),
+];
 
 /// Hub + a ring of eight quarters + two districts at the ends of the
 /// north-south main street. `count`s sum to the 71-NPC roster
@@ -101,18 +150,24 @@ pub const DISTRICTS: &[District] = &[
         center: Vec2::new(0.0, 0.0),
         plaza_half: 300.0,
         count: 9,
+        interior: None,
+        cast: &[],
     },
     District {
         name: "Market Row",
         center: Vec2::new(-960.0, 0.0),
         plaza_half: 260.0,
         count: 6,
+        interior: None,
+        cast: &[],
     },
     District {
         name: "The Commons",
         center: Vec2::new(960.0, 0.0),
         plaza_half: 260.0,
         count: 6,
+        interior: None,
+        cast: &[],
     },
     // Act 3: the Guildhall Quarter.
     District {
@@ -120,6 +175,8 @@ pub const DISTRICTS: &[District] = &[
         center: Vec2::new(-720.0, 700.0),
         plaza_half: 260.0,
         count: 6,
+        interior: None,
+        cast: &[],
     },
     // Act 4: the Trait Mage's Tower (Vexis the Archmage's cast).
     District {
@@ -127,6 +184,8 @@ pub const DISTRICTS: &[District] = &[
         center: Vec2::new(720.0, 700.0),
         plaza_half: 260.0,
         count: 6,
+        interior: None,
+        cast: &[],
     },
     // Act 5: the Tavern of Tribulations.
     District {
@@ -134,13 +193,20 @@ pub const DISTRICTS: &[District] = &[
         center: Vec2::new(0.0, 800.0),
         plaza_half: 260.0,
         count: 6,
+        interior: None,
+        cast: &[],
     },
-    // Act 6: the Iterator Forge.
+    // Act 6: the Iterator Forge, the first dressed district (R1 wave A1,
+    // approved 2026-11-18): REF-97 soot slab inside the cobble ring, the
+    // Great Furnace (REF-98) at the back-centre (`prop::LANDMARKS`), the
+    // yard props in `prop::DISTRICT_PROPS`, and the cast at their work.
     District {
         name: "The Forge",
         center: Vec2::new(-720.0, -700.0),
         plaza_half: 260.0,
         count: 6,
+        interior: Some(Ground::ForgeSlab),
+        cast: FORGE_CAST,
     },
     // Act 7: the Concurrent Coast (Dockmaster, Harbormaster, ...).
     District {
@@ -148,6 +214,8 @@ pub const DISTRICTS: &[District] = &[
         center: Vec2::new(720.0, -700.0),
         plaza_half: 260.0,
         count: 6,
+        interior: None,
+        cast: &[],
     },
     // Act 8: the Vault of Pointers.
     District {
@@ -155,6 +223,8 @@ pub const DISTRICTS: &[District] = &[
         center: Vec2::new(0.0, -800.0),
         plaza_half: 260.0,
         count: 6,
+        interior: None,
+        cast: &[],
     },
     // Act 9: past the Vault, at the south end of the main street. Six
     // villagers and the Librarian (64 px), who stands alone in the
@@ -165,6 +235,8 @@ pub const DISTRICTS: &[District] = &[
         center: Vec2::new(0.0, -1400.0),
         plaza_half: 260.0,
         count: 7,
+        interior: None,
+        cast: &[],
     },
     // Act 10: past Tavern Row, at the north end of the main street. Six
     // villagers and the Compiler (64 px), alone in the centre of the back
@@ -175,6 +247,8 @@ pub const DISTRICTS: &[District] = &[
         center: Vec2::new(0.0, 1400.0),
         plaza_half: 260.0,
         count: 7,
+        interior: None,
+        cast: &[],
     },
 ];
 
@@ -268,19 +342,32 @@ const BACK_LANDMARK_EDGE_MARGIN: f32 = 40.0;
 /// landmark's sprite, so the two never overlap.
 pub const BACK_LANDMARK_GAP: f32 = 8.0;
 
-fn back_landmark_base_of(d: &District) -> Option<Vec2> {
-    if !BACK_LANDMARK_DISTRICTS.contains(&d.name) {
-        return None;
-    }
-    Some(Vec2::new(
+/// The landmark plot of `d`: centred on the plaza, its top edge
+/// [`BACK_LANDMARK_EDGE_MARGIN`] inside the plaza's north edge.
+fn landmark_plot_of(d: &District) -> Vec2 {
+    Vec2::new(
         d.center.x,
         d.center.y + d.plaza_half - BACK_LANDMARK_EDGE_MARGIN - BACK_LANDMARK_PX,
-    ))
+    )
 }
 
-/// Bottom-centre anchor of district `district`'s back landmark, if it has
-/// one: centred on the plaza, its top edge [`BACK_LANDMARK_EDGE_MARGIN`]
-/// inside the plaza's north edge, on flagstone.
+fn back_landmark_base_of(d: &District) -> Option<Vec2> {
+    BACK_LANDMARK_DISTRICTS
+        .contains(&d.name)
+        .then(|| landmark_plot_of(d))
+}
+
+/// Bottom-centre anchor of the 64x64 landmark plot at the back-centre of
+/// district `district`'s plaza, on its interior paving. Every district has
+/// one; `prop::LANDMARKS` says which are built. `None` only for an unknown
+/// district index.
+pub fn landmark_plot_base(district: usize) -> Option<Vec2> {
+    DISTRICTS.get(district).map(landmark_plot_of)
+}
+
+/// Bottom-centre anchor of district `district`'s back landmark, if its
+/// cast grid is laid out in front of one with the boss centred before it
+/// ([`BACK_LANDMARK_DISTRICTS`]): the same spot as [`landmark_plot_base`].
 pub fn back_landmark_base(district: usize) -> Option<Vec2> {
     DISTRICTS.get(district).and_then(back_landmark_base_of)
 }
@@ -292,6 +379,10 @@ pub fn district_slot(index: usize) -> Vec2 {
     for d in DISTRICTS {
         if index < acc + d.count {
             let local = index - acc;
+            // A dressed district places its cast by hand, at their work.
+            if let Some(offset) = d.cast.get(local) {
+                return d.center + *offset;
+            }
             let cols = NPC_GRID_COLS;
             let rows = d.count.div_ceil(cols);
             let col = local % cols;
@@ -370,8 +461,19 @@ pub enum Ground {
     /// Plaza border ring (REF-66 cobble).
     Cobble,
     Dirt,
-    /// Plaza interior (REF-75 flagstone).
+    /// Plaza interior (REF-75 flagstone), the default district ground.
     Flagstone,
+    /// Plaza interior of the Forge (REF-97 soot slab), named by the
+    /// district's [`District::interior`].
+    ForgeSlab,
+}
+
+impl Ground {
+    /// True for the pavings a plaza interior can be laid in (flagstone or
+    /// a district's own ground), false for grass, cobble and dirt.
+    pub fn is_plaza_interior(self) -> bool {
+        matches!(self, Ground::Flagstone | Ground::ForgeSlab)
+    }
 }
 
 /// Where a tile sits relative to one plaza. Ordered so that `max` over all
@@ -429,17 +531,21 @@ fn on_road(x: u32, y: u32) -> bool {
     })
 }
 
-/// Classify tile `(x, y)`: plaza interiors are flagstone inside a one-tile
-/// cobble border, the street grid is dirt, everything else (including the
-/// map border, where the oak treeline props stand) is grass.
+/// Classify tile `(x, y)`: plaza interiors are their district's ground
+/// ([`District::interior_ground`], flagstone unless the district names
+/// another) inside a one-tile cobble border, the street grid is dirt,
+/// everything else (including the map border, where the oak treeline props
+/// stand) is grass.
 pub fn ground_at_tile(x: u32, y: u32) -> Ground {
-    let zone = DISTRICTS
+    // Plazas never overlap, so the highest zone over all districts is the
+    // tile's zone and, for an interior tile, its district is unique.
+    let (zone, district) = DISTRICTS
         .iter()
-        .map(|d| plaza_zone(d, x, y))
-        .max()
-        .unwrap_or(PlazaZone::Outside);
+        .map(|d| (plaza_zone(d, x, y), Some(d)))
+        .max_by_key(|(z, _)| *z)
+        .unwrap_or((PlazaZone::Outside, None));
     if zone == PlazaZone::Interior {
-        Ground::Flagstone
+        district.map_or(Ground::Flagstone, District::interior_ground)
     } else if zone == PlazaZone::Border {
         Ground::Cobble
     } else if on_road(x, y) {
@@ -501,6 +607,13 @@ fn base_tile(x: u32, y: u32, ground: Ground) -> u32 {
                 T_FLAG_A
             } else {
                 T_FLAG_B
+            }
+        }
+        Ground::ForgeSlab => {
+            if h % SOOT_B_ONE_IN == 0 {
+                T_SOOT_B
+            } else {
+                T_SOOT_A
             }
         }
     }
@@ -620,8 +733,8 @@ fn spawn_village(mut commands: Commands, asset_server: Res<AssetServer>) {
     let overlay_entity = commands.spawn_empty().id();
     let mut base_storage = TileStorage::empty(map_size);
     let mut overlay_storage = TileStorage::empty(map_size);
-    let (mut grass, mut cobble, mut dirt, mut flagstone, mut overlays) =
-        (0usize, 0usize, 0usize, 0usize, 0usize);
+    let (mut grass, mut cobble, mut dirt, mut flagstone, mut district_ground, mut overlays) =
+        (0usize, 0usize, 0usize, 0usize, 0usize, 0usize);
 
     for x in 0..map_size.x {
         for y in 0..map_size.y {
@@ -632,6 +745,7 @@ fn spawn_village(mut commands: Commands, asset_server: Res<AssetServer>) {
                 Ground::Cobble => cobble += 1,
                 Ground::Dirt => dirt += 1,
                 Ground::Flagstone => flagstone += 1,
+                Ground::ForgeSlab => district_ground += 1,
             }
             let tile = commands
                 .spawn(TileBundle {
@@ -662,6 +776,7 @@ fn spawn_village(mut commands: Commands, asset_server: Res<AssetServer>) {
         cobble,
         dirt,
         flagstone,
+        district_ground,
         overlays,
         "terrain classified"
     );
@@ -775,9 +890,9 @@ mod tests {
     }
 
     #[test]
-    fn plaza_centres_are_flagstone_and_map_border_is_grass() {
+    fn plaza_centres_are_their_district_ground_and_map_border_is_grass() {
         for d in DISTRICTS {
-            assert_eq!(ground_at(d.center), Ground::Flagstone, "{}", d.name);
+            assert_eq!(ground_at(d.center), d.interior_ground(), "{}", d.name);
         }
         for x in 0..MAP_W {
             assert_eq!(ground_at_tile(x, 0), Ground::Grass);
@@ -795,6 +910,7 @@ mod tests {
                 Ground::Cobble => t == T_COBBLE_A || t == T_COBBLE_B,
                 Ground::Dirt => t == T_DIRT_A || t == T_DIRT_B,
                 Ground::Flagstone => t == T_FLAG_A || t == T_FLAG_B,
+                Ground::ForgeSlab => t == T_SOOT_A || t == T_SOOT_B,
             };
             assert!(ok, "tile {t} wrong for {g:?}");
         }
@@ -854,7 +970,7 @@ mod tests {
     }
 
     #[test]
-    fn every_plaza_is_flagstone_inside_a_one_tile_cobble_ring() {
+    fn every_plaza_is_its_ground_inside_a_one_tile_cobble_ring() {
         for d in DISTRICTS {
             let (x0, x1, y0, y1) = plaza_bounds(d);
             for y in y0..=y1 {
@@ -863,7 +979,7 @@ mod tests {
                     let want = if ring {
                         Ground::Cobble
                     } else {
-                        Ground::Flagstone
+                        d.interior_ground()
                     };
                     assert_eq!(ground_at_tile(x, y), want, "{} ({x},{y})", d.name);
                 }
@@ -903,13 +1019,15 @@ mod tests {
     }
 
     #[test]
-    fn flagstone_only_touches_paving_and_never_gets_an_overlay() {
-        // Cobble is always the tile between flagstone and grass/dirt, so the
-        // grass-edge overlay logic never has to deal with flagstone.
+    fn plaza_interiors_only_touch_paving_and_never_get_an_overlay() {
+        // Cobble is always the tile between a plaza interior (flagstone or a
+        // district ground) and grass/dirt, so the grass-edge overlay logic
+        // never has to deal with interior paving.
         let ground = |x: u32, y: u32| ground_at_tile(x, y);
         for y in 1..MAP_H - 1 {
             for x in 1..MAP_W - 1 {
-                if ground(x, y) != Ground::Flagstone {
+                let here = ground(x, y);
+                if !here.is_plaza_interior() {
                     continue;
                 }
                 assert_eq!(overlay_at(x, y, &ground), None, "({x},{y})");
@@ -925,8 +1043,8 @@ mod tests {
                 ] {
                     let n = ground(x.wrapping_add_signed(dx), y.wrapping_add_signed(dy));
                     assert!(
-                        matches!(n, Ground::Flagstone | Ground::Cobble),
-                        "flagstone ({x},{y}) touches {n:?}"
+                        n == here || n == Ground::Cobble,
+                        "{here:?} ({x},{y}) touches {n:?}"
                     );
                 }
             }
@@ -962,8 +1080,8 @@ mod tests {
             .lines()
             .filter_map(|l| l.strip_prefix("  ")?.strip_suffix(": ["))
             .collect();
-        assert_eq!(names.len(), 24, "REF-76 tile count: {names:?}");
-        let expected: [(u32, &str); 23] = [
+        assert_eq!(names.len(), 26, "REF-76 tile count: {names:?}");
+        let expected: [(u32, &str); 25] = [
             (T_GRASS_A, "grass_a"),
             (T_GRASS_B, "grass_b"),
             (T_GRASS_TUFT, "grass_tuft"),
@@ -987,6 +1105,8 @@ mod tests {
             (T_NUB_SE, "nub_se"),
             (T_FLAG_A, "flag_a"),
             (T_FLAG_B, "flag_b"),
+            (T_SOOT_A, "soot_a"),
+            (T_SOOT_B, "soot_b"),
         ];
         for (idx, name) in expected {
             assert_eq!(names[idx as usize], name, "atlas index {idx}");
@@ -1005,5 +1125,114 @@ mod tests {
             asset == render,
             "tiles_village_v3.png differs from REF76.png"
         );
+    }
+
+    // --- District grounds (REF-97 via the REF-76 atlas) --------------------
+
+    /// The Forge names its own interior ground; every other district names
+    /// none and keeps flagstone. Every named ground is a paving.
+    #[test]
+    fn district_ground_lookup_defaults_to_flagstone() {
+        for d in DISTRICTS {
+            if let Some(g) = d.interior {
+                assert!(g.is_plaza_interior(), "{} names {g:?}", d.name);
+            }
+            let want = if d.name == "The Forge" {
+                Ground::ForgeSlab
+            } else {
+                Ground::Flagstone
+            };
+            assert_eq!(d.interior_ground(), want, "{}", d.name);
+        }
+        // The lookup goes through the tile classifier: the Forge's interior
+        // is slab, its ring is still cobble and the street into it dirt.
+        let forge = DISTRICTS
+            .iter()
+            .find(|d| d.name == "The Forge")
+            .expect("the Forge");
+        let (x0, x1, y0, y1) = plaza_bounds(forge);
+        assert_eq!(
+            ground_at_tile((x0 + x1) / 2, (y0 + y1) / 2),
+            Ground::ForgeSlab
+        );
+        let (_, street_y) = world_to_tile(forge.center);
+        assert_eq!(ground_at_tile(x1, street_y), Ground::Cobble, "east ring");
+        assert_eq!(
+            ground_at_tile(x1 + 1, street_y),
+            Ground::Dirt,
+            "east street"
+        );
+        // No tile outside the Forge's interior is slab.
+        for y in 0..MAP_H {
+            for x in 0..MAP_W {
+                if ground_at_tile(x, y) == Ground::ForgeSlab {
+                    assert_eq!(plaza_zone(forge, x, y), PlazaZone::Interior, "({x},{y})");
+                }
+            }
+        }
+    }
+
+    /// REF-97: `soot_b` (the scorch mark) on about one slab in six.
+    #[test]
+    fn soot_b_is_about_one_tile_in_six() {
+        let (mut a, mut b) = (0usize, 0usize);
+        for y in 0..MAP_H {
+            for x in 0..MAP_W {
+                if ground_at_tile(x, y) == Ground::ForgeSlab {
+                    match base_tile(x, y, Ground::ForgeSlab) {
+                        T_SOOT_A => a += 1,
+                        T_SOOT_B => b += 1,
+                        t => panic!("forge slab picked tile {t}"),
+                    }
+                }
+            }
+        }
+        assert!(a + b > 500, "the Forge interior is {} tiles", a + b);
+        let share = b as f64 / (a + b) as f64;
+        assert!((0.12..=0.22).contains(&share), "soot_a {a}, soot_b {b}");
+    }
+
+    /// A hand-placed cast lists exactly one spot per roster slot, and
+    /// `district_slot` returns it.
+    #[test]
+    fn hand_placed_casts_cover_their_district() {
+        let mut first = 0usize;
+        for d in DISTRICTS {
+            if !d.cast.is_empty() {
+                assert_eq!(d.cast.len(), d.count, "{}", d.name);
+                for (i, off) in d.cast.iter().enumerate() {
+                    assert_eq!(district_slot(first + i), d.center + *off, "{}", d.name);
+                }
+            }
+            first += d.count;
+        }
+        let forge = DISTRICTS
+            .iter()
+            .find(|d| d.name == "The Forge")
+            .expect("the Forge");
+        assert_eq!(forge.cast, FORGE_CAST);
+    }
+
+    /// Every district has a landmark plot at its back-centre; only the
+    /// boss districts report it as a back landmark for their grid.
+    #[test]
+    fn landmark_plots_sit_at_the_back_centre() {
+        for (i, d) in DISTRICTS.iter().enumerate() {
+            let plot = landmark_plot_base(i).expect("plot");
+            assert_eq!(plot.x, d.center.x, "{}", d.name);
+            assert_eq!(
+                plot.y + BACK_LANDMARK_PX,
+                d.center.y + d.plaza_half - BACK_LANDMARK_EDGE_MARGIN,
+                "{}",
+                d.name
+            );
+            let back = back_landmark_base(i);
+            if BACK_LANDMARK_DISTRICTS.contains(&d.name) {
+                assert_eq!(back, Some(plot), "{}", d.name);
+            } else {
+                assert_eq!(back, None, "{}", d.name);
+            }
+        }
+        assert_eq!(landmark_plot_base(DISTRICTS.len()), None);
     }
 }

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-97 - Forge yard slab, 16x16 tiles, 2-column sheet.
-// APPROVED by Matt 2026-11-18 (Forge district style sample). Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/tiles_village_v3.png (via the REF-76 combined atlas, indices 24-25).
 //
 // Ground for the Iterator Forge district (Act 6). Same slab layout as the
 // REF-75 flagstone so the two can meet on a straight seam, but in stone

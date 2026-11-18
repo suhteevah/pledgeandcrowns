@@ -95,7 +95,7 @@ fn classify(i: usize) -> String {
     let rect = sprite_rect(i);
     if all_props()
         .iter()
-        .any(|(k, b)| k.solid_at(*b).overlaps(&rect))
+        .any(|(k, b)| k.solids_at(*b).any(|s| s.overlaps(&rect)))
     {
         return "prop-footprint".into();
     }
@@ -104,7 +104,7 @@ fn classify(i: usize) -> String {
         return "plaza-edge".into();
     }
     let base = match under.first() {
-        Some(Ground::Flagstone) => "plaza-interior",
+        Some(Ground::Flagstone | Ground::ForgeSlab) => "plaza-interior",
         Some(Ground::Dirt) => "path",
         Some(Ground::Grass) => "grass",
         Some(Ground::Cobble) | None => "plaza-edge",
@@ -246,6 +246,77 @@ fn acts_9_and_10_stand_in_the_library_and_the_throne() {
     );
 }
 
+/// The Act 6 cast stands at the Forge's yard, not in a grid: the Smelter
+/// at the Great Furnace's mouth, the Riveter at the anvil, the Bondsmith at
+/// the quench trough, the Sifter at the coal heap, the Tallywright at the
+/// tool rack, each one clear tile (16 px) beside their thing; the
+/// Keymaster by the street where it comes in. Same roster order, ids and
+/// missions as before.
+#[test]
+fn the_forge_cast_stands_at_their_work() {
+    use pledge_and_crown::plugins::prop::{DISTRICT_PROPS, LANDMARKS, PropKind};
+    use pledge_and_crown::plugins::world::landmark_plot_base;
+    let forge = DISTRICTS
+        .iter()
+        .position(|d| d.name == "The Forge")
+        .expect("the Forge");
+    let d = &DISTRICTS[forge];
+    assert_eq!(d.cast.len(), d.count, "every Forge NPC is placed by hand");
+    let first: usize = DISTRICTS[..forge].iter().map(|x| x.count).sum();
+    let cast: Vec<(&str, &str)> = NPC_ROSTER[first..first + d.count]
+        .iter()
+        .map(|s| (s.name, s.mission_id))
+        .collect();
+    assert_eq!(
+        cast,
+        [
+            ("The Keymaster", "hashmap_basic"),
+            ("The Sifter", "iter_filter"),
+            ("The Smelter", "iter_fold"),
+            ("The Tallywright", "iter_enumerate"),
+            ("The Riveter", "iter_zip"),
+            ("The Bondsmith", "closure_move"),
+        ],
+        "the Act 6 roster is unchanged"
+    );
+    let slot = |name: &str| {
+        let i = NPC_ROSTER
+            .iter()
+            .position(|s| s.name == name)
+            .unwrap_or_else(|| panic!("{name}"));
+        sprite_rect(i)
+    };
+    let prop_rect = |kind: PropKind| {
+        let base = if LANDMARKS.contains(&(forge, kind)) {
+            landmark_plot_base(forge).expect("plot")
+        } else {
+            let (_, _, off) = DISTRICT_PROPS
+                .iter()
+                .find(|(pd, k, _)| *pd == forge && *k == kind)
+                .unwrap_or_else(|| panic!("{kind:?} in the Forge"));
+            d.center + *off
+        };
+        kind.sprite_rect_at(base)
+    };
+    for (npc, kind) in [
+        ("The Smelter", PropKind::GreatFurnace),
+        ("The Riveter", PropKind::Anvil),
+        ("The Bondsmith", PropKind::QuenchTrough),
+        ("The Sifter", PropKind::CoalHeap),
+        ("The Tallywright", PropKind::ToolRack),
+    ] {
+        let g = gap(&slot(npc), &prop_rect(kind));
+        assert!(
+            (TILE..=TILE + 0.5).contains(&g),
+            "{npc} stands {g} px from the {kind:?}, not one tile"
+        );
+    }
+    // The Keymaster: in the east half, just south of where the street
+    // comes in (its three road rows span -20..+28 from the centre).
+    let k = slot("The Keymaster");
+    assert!(k.min.x > d.center.x && k.max.y < d.center.y - 24.0, "{k:?}");
+}
+
 /// The placement gate for every roster NPC, so a new act cannot put a
 /// villager on a plaza wall again:
 /// 1. the sprite and a one-tile margin around it are ONE walkable ground kind
@@ -270,7 +341,9 @@ fn npc_placement_invariants() {
         // 1. One walkable kind under the sprite and one tile around it.
         let around = kinds_under(grow(rect, TILE));
         let kind = match around.as_slice() {
-            [k @ (Ground::Flagstone | Ground::Dirt | Ground::Grass)] => Some(*k),
+            [k @ (Ground::Flagstone | Ground::ForgeSlab | Ground::Dirt | Ground::Grass)] => {
+                Some(*k)
+            }
             other => {
                 failures.push(format!("{name}: sprite + 1 tile margin on {other:?}"));
                 None
@@ -324,7 +397,7 @@ fn npc_placement_invariants() {
             }
         }
         for (k, b) in &props {
-            if k.solid_at(*b).overlaps(&feet) {
+            if k.solids_at(*b).any(|s| s.overlaps(&feet)) {
                 failures.push(format!("{name}: talk spot inside the {k:?} at {b:?}"));
             }
         }

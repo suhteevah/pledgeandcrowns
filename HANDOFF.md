@@ -269,6 +269,12 @@ runs `scripts/ci.ps1` on the merged result as the sign-off gate.
   plaza right behind it: the tower partly hides the street mouth (accepted)
   and a player coming down the street steps round it
   (`prop::tests::the_sealed_stacks_stand_behind_the_librarian`).
+- **Wired 2026-11-18 (R1 wave A1, the Forge):** REF-97 slab (REF-76 atlas
+  indices 24-25, the Forge plaza interior), REF-98 Great Furnace (landmark,
+  back-centre), REF-99..102 anvil, quench trough, coal heap, tool rack
+  (`prop::DISTRICT_PROPS`); the Act 6 cast stands at the yard
+  (`District::cast`). Districts are now dressed by data (04b section 9).
+  Capture: `scene-district-the-forge.png`, `-yard`, `landmark-great-furnace`.
 - **Awaiting approval:** no landmark.
 - **Not drawn:** boss intro/defeat frames (Librarian, Compiler), the
   Librarian's lectern, pixel font pick, title redraw, a renderable Borrow

@@ -595,29 +595,45 @@ const REF97_TILES = {
             .collect()
     }
 
-    /// REF-76 is a mechanical copy: the 22 REF-66 tiles in order, then the
-    /// 2 REF-75 tiles. Compared on rendered pixels, so any edited row,
-    /// reordering or dropped tile in the combined sheet fails here.
+    /// REF-76 is a mechanical copy, its sources appended in order: the 22
+    /// REF-66 terrain tiles (0-21), the 2 REF-75 plaza flagstones (22-23)
+    /// and the 2 REF-97 Forge slabs (24-25). Compared on rendered pixels, so
+    /// any edited row, reordering or dropped tile in the combined sheet
+    /// fails here. A later district ground is appended as one more source.
     #[test]
-    fn ref76_atlas_is_verbatim_copy_of_ref66_and_ref75() {
+    fn ref76_atlas_is_verbatim_copy_of_its_sources() {
         let p = Palette::parse(PALETTE_SRC).unwrap();
-        let r66 = render_tiles(baked("ref-66-terrain.jsx"), &p).unwrap();
-        let r75 = render_tiles(baked("ref-75-flagstone.jsx"), &p).unwrap();
         let r76 = render_tiles(baked("ref-76-village-atlas.jsx"), &p).unwrap();
-        assert_eq!((r76.width(), r76.height()), (128, 48), "REF-76 atlas size");
-        for i in 0..22 {
+        // 26 tiles at 8 columns: four rows, the last one partly empty.
+        assert_eq!((r76.width(), r76.height()), (128, 64), "REF-76 atlas size");
+        // (source ref, its column count, how many tiles, first REF-76 index)
+        let sources: [(&str, u32, u32, u32); 3] = [
+            ("ref-66-terrain.jsx", 8, 22, 0),
+            ("ref-75-flagstone.jsx", 2, 2, 22),
+            ("ref-97-forgeslab.jsx", 2, 2, 24),
+        ];
+        let mut next = 0;
+        for (jsx, cols, count, first) in sources {
             assert_eq!(
-                tile_px(&r76, 8, i, 16, 16),
-                tile_px(&r66, 8, i, 16, 16),
-                "REF-76 tile {i} differs from REF-66 tile {i}"
+                first, next,
+                "{jsx} must start where the previous source ended"
             );
+            let src = render_tiles(baked(jsx), &p).unwrap();
+            for i in 0..count {
+                assert_eq!(
+                    tile_px(&r76, 8, first + i, 16, 16),
+                    tile_px(&src, cols, i, 16, 16),
+                    "REF-76 tile {} differs from {jsx} tile {i}",
+                    first + i
+                );
+            }
+            next = first + count;
         }
-        for i in 0..2 {
-            assert_eq!(
-                tile_px(&r76, 8, 22 + i, 16, 16),
-                tile_px(&r75, 2, i, 16, 16),
-                "REF-76 tile {} differs from REF-75 tile {i}",
-                22 + i
+        // The unused cells after the last tile stay transparent.
+        for i in next..32 {
+            assert!(
+                tile_px(&r76, 8, i, 16, 16).iter().all(|px| px[3] == 0),
+                "REF-76 cell {i} past the last tile is not empty"
             );
         }
     }

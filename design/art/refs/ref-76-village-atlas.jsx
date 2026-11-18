@@ -1,19 +1,22 @@
 // SPDX-License-Identifier: MIT
 // REF-76 - Hearthstone Village combined tile atlas, 16x16 tiles, 8-column sheet.
-// MECHANICAL COPY of two approved refs, no new art; wired as sprites/tiles_village_v3.png.
+// MECHANICAL COPY of approved refs, no new art; wired as sprites/tiles_village_v3.png.
 //
-// The world's tilemaps each bind ONE atlas texture, so the plaza flagstone
-// (REF-75) has to live in the same sheet as the terrain (REF-66). This file is
-// that sheet: the 22 REF-66 tiles verbatim in their original order (indices
-// 0-21), then the 2 REF-75 tiles verbatim (22 = flag_a, 23 = flag_b). 24 tiles
-// fill exactly three rows of eight (128x48), the same size as REF-66.
+// The world's tilemaps each bind ONE atlas texture, so every plaza ground
+// has to live in the same sheet as the terrain (REF-66). This file is that
+// sheet: the 22 REF-66 tiles verbatim in their original order (indices
+// 0-21), then the 2 REF-75 plaza flagstone tiles verbatim (22 = flag_a,
+// 23 = flag_b), then the 2 REF-97 Forge slab tiles verbatim (24 = soot_a,
+// 25 = soot_b). A district ground approved later is APPENDED the same way,
+// never inserted: existing indices must not move. 26 tiles fill three rows
+// of eight and two of a fourth (128x64; the rest of row four is empty).
 //
 // Do NOT edit rows here. Change the source ref (after approval) and re-copy.
-// render-refs' test `ref76_atlas_is_verbatim_copy_of_ref66_and_ref75` fails if
+// render-refs' test `ref76_atlas_is_verbatim_copy_of_its_sources` fails if
 // any tile here drifts from its source, and game/src/plugins/world.rs tests
 // pin every atlas index constant to the tile order below.
 //
-// Legend: see ref-66-terrain.jsx and ref-75-flagstone.jsx.
+// Legend: see ref-66-terrain.jsx, ref-75-flagstone.jsx and ref-97-forgeslab.jsx.
 
 const REF76_COLS = 8;
 
@@ -449,6 +452,42 @@ const REF76_TILES = {
     'VVVVVSVVVVVVSVVV',
     'VVVVVSVVVVVVSVVV',
     'SSSSSSSSSSSSSSSS',
+  ],
+  soot_a: [
+    'VSSSSSBVSSSSSSSB',
+    'SSSSSSBSSSSSSSSB',
+    'SSSSSSBSSSSSSSSB',
+    'SSSSSSBSSSSSSSSB',
+    'SSSSSSBSSSSSSVSB',
+    'SSSSSSBSSSSSSSSB',
+    'SSSSSSBSSSSSSSSB',
+    'BBBBBBBBBBBBBBBB',
+    'SSSBVSSSSSSSBVSS',
+    'SSSBSSSSSSSSBSSS',
+    'SSSBSSSSSSSSBSSS',
+    'SSSBSSSSUSSSBSSS',
+    'SSSBSSSSSSSSBSSS',
+    'SSSBSSBSSSSSBSSS',
+    'SSSBSSSSSSSSBSSS',
+    'BBBBBBBBBBBBBBBB',
+  ],
+  soot_b: [
+    'VSSSSSSSSBVSSSSB',
+    'SSSSSSSSSBSSSSSB',
+    'SSSSSSSSSBSSSSSB',
+    'SSSBBSSSSBSSSSSB',
+    'SSBBBBSSSBSSSSSB',
+    'SSSBBSSSSBSSUSSB',
+    'SSSSSSSSSBSSSSSB',
+    'BBBBBBBBBBBBBBBB',
+    'SSSSSBVSSSSSSSSS',
+    'SSSSSBSSSSSSSSSS',
+    'SSSSSBSSSSSBSSSS',
+    'SSSSSBSSSSSSSSSS',
+    'SSSSSBSSSSSSSSSS',
+    'SSSSSBSSSSSSSSSS',
+    'SSUSSBSSSSSSSSSS',
+    'BBBBBBBBBBBBBBBB',
   ],
 };
 

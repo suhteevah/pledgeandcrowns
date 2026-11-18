@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-101 - Coal heap, Act 6 district prop, 32x32.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/coal_heap.png.
 //
 // A low mound of basalt lumps with coalblack gaps and stone-grey glints,
 // one live coal near the middle (one alarm-scarlet pixel beside one

@@ -661,20 +661,26 @@ fn world_scenes(v: &mut Vec<Scene>) {
         0.8,
         None,
     ));
-    // Each back landmark (the Sealed Stacks, REF-95; the Throne Dais,
-    // REF-96) at its plaza's back-centre: the player stands beside it
-    // (east of its footing, clear of every NPC), the landmark and the boss
-    // in front of it in view. Logs the spot so the capture can be checked.
+    // Each landmark (the Sealed Stacks, REF-95; the Throne Dais, REF-96;
+    // the Great Furnace, REF-98) at its plaza's back-centre: the player
+    // stands beside it (east of its footing, clear of every NPC), the
+    // landmark and whoever stands in front of it in view. Logs the spot so
+    // the capture can be checked.
     for &(d, kind) in crate::plugins::prop::LANDMARKS {
-        let Some(base) = crate::plugins::world::back_landmark_base(d) else {
+        let Some(base) = crate::plugins::world::landmark_plot_base(d) else {
             tracing::warn!(?kind, "landmark scene: no district {d}");
             continue;
         };
-        use crate::plugins::prop::PropKind;
         let file = match kind {
             PropKind::SealedStacks => "landmark-sealed-stacks",
             PropKind::ThroneDais => "landmark-throne-dais",
-            PropKind::Oak | PropKind::Cottage => "landmark-other",
+            PropKind::GreatFurnace => "landmark-great-furnace",
+            PropKind::Oak
+            | PropKind::Cottage
+            | PropKind::Anvil
+            | PropKind::QuenchTrough
+            | PropKind::CoalHeap
+            | PropKind::ToolRack => "landmark-other",
         };
         let solid = kind.solid_at(base);
         let feet = Vec2::new(solid.max.x + 48.0, solid.min.y);
@@ -696,6 +702,135 @@ fn world_scenes(v: &mut Vec<Scene>) {
             0.7,
             boxed(show_next_pin),
         ));
+    }
+    district_dressing_scenes(v);
+}
+
+/// Camera height for a whole-district overview: twice the play view, so a
+/// 520 px plaza and its cobble ring fit in one frame.
+const OVERVIEW_VIEW_HEIGHT: f32 = crate::plugins::VIEW_HEIGHT * 2.0;
+
+/// Set the camera's vertical view (world units); the play view is
+/// [`crate::plugins::VIEW_HEIGHT`].
+fn set_view_height(world: &mut World, height: f32) {
+    use bevy::camera::ScalingMode;
+    let mut q = world.query_filtered::<&mut Projection, With<Camera2d>>();
+    let mut n = 0usize;
+    for mut proj in q.iter_mut(world) {
+        if let Projection::Orthographic(o) = proj.as_mut() {
+            o.scaling_mode = ScalingMode::FixedVertical {
+                viewport_height: height,
+            };
+            n += 1;
+        }
+    }
+    tracing::info!(height, cameras = n, "scene: camera view height set");
+}
+
+/// One pair of captures per dressed district (a named interior ground, a
+/// landmark or yard props): `district-<name>` zoomed out to the whole plaza
+/// with the player at its centre, and `district-<name>-yard` at play zoom
+/// with the player at the talk spot of the NPC standing nearest the
+/// landmark plot (the Forge: the Smelter at the furnace mouth). Every
+/// NPC's spot and every prop is logged so the frame can be checked.
+fn district_dressing_scenes(v: &mut Vec<Scene>) {
+    use crate::plugins::prop::{DISTRICT_PROPS, LANDMARKS, all_props};
+    use crate::plugins::world::{DISTRICTS, landmark_plot_base};
+    let mut first = 0usize;
+    for (d, district) in DISTRICTS.iter().enumerate() {
+        let roster = first..first + district.count;
+        first += district.count;
+        let dressed = district.interior.is_some()
+            || DISTRICT_PROPS.iter().any(|(pd, _, _)| *pd == d)
+            || !district.cast.is_empty();
+        if !dressed {
+            continue;
+        }
+        let label = district_label(district.name);
+        let name = district.name;
+        let center = district.center;
+        let plot = landmark_plot_base(d).unwrap_or(center);
+        // The NPC standing nearest the landmark plot, and their talk spot.
+        let host = roster
+            .clone()
+            .min_by(|&a, &b| {
+                district_slot(a)
+                    .distance(plot)
+                    .total_cmp(&district_slot(b).distance(plot))
+            })
+            .map(|i| (NPC_ROSTER[i].name, district_slot(i) + TALK_SPOT_OFFSET));
+        let half = district.plaza_half;
+        let log_layout = move |w: &mut World| {
+            let mut lines = vec![format!(
+                "district {name}: centre=({:.0},{:.0}) ground={:?} landmarks={:?}",
+                center.x,
+                center.y,
+                crate::plugins::world::ground_at(center),
+                LANDMARKS
+                    .iter()
+                    .filter(|(ld, _)| *ld == d)
+                    .map(|(_, k)| k)
+                    .collect::<Vec<_>>()
+            )];
+            for (k, b) in all_props() {
+                if (b - center).abs().max_element() <= half {
+                    lines.push(format!(
+                        "  prop {k:?} at ({:.0},{:.0})",
+                        b.x - center.x,
+                        b.y - center.y
+                    ));
+                }
+            }
+            for i in roster.clone() {
+                let p = district_slot(i);
+                lines.push(format!(
+                    "  npc {} at ({:.0},{:.0})",
+                    NPC_ROSTER[i].name,
+                    p.x - center.x,
+                    p.y - center.y
+                ));
+            }
+            for line in lines {
+                tracing::info!("{line}");
+                w.resource_mut::<ShotLog>().0.push(line);
+            }
+        };
+        v.push(scene(
+            &format!("district-{label}"),
+            vec![
+                Action::EnterState(GameState::InGame, ENTER_GAME_SETTLE),
+                act(hide_next_pin),
+                act(|w| set_view_height(w, OVERVIEW_VIEW_HEIGHT)),
+                teleport_to(center),
+                act(log_layout),
+            ],
+            0.9,
+            boxed(|w| {
+                set_view_height(w, crate::plugins::VIEW_HEIGHT);
+                show_next_pin(w);
+            }),
+        ));
+        if let Some((host_name, spot)) = host {
+            v.push(scene(
+                &format!("district-{label}-yard"),
+                vec![
+                    Action::EnterState(GameState::InGame, ENTER_GAME_SETTLE),
+                    act(hide_next_pin),
+                    teleport_to(spot),
+                    act(move |w| {
+                        let line = format!(
+                            "district {name} yard: player at {host_name}'s talk spot ({:.0},{:.0})",
+                            spot.x - center.x,
+                            spot.y - center.y
+                        );
+                        tracing::info!("{line}");
+                        w.resource_mut::<ShotLog>().0.push(line);
+                    }),
+                ],
+                0.7,
+                boxed(show_next_pin),
+            ));
+        }
     }
 }
 

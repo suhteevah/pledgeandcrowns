@@ -34,6 +34,8 @@ pub const SPRITE_TILES_VILLAGE_V2: &str = "sprites/tiles_village_v2.png";
 // design/art/refs/ref-76-village-atlas.jsx and rendered via
 // `cargo run -p render-refs`. Same 128x48 layout as v2 with indices 22-23
 // added; this is the one the world loads. v2 stays on disk, unused.
+// 2026-11-18: the REF-97 Forge slab (approved by Matt 2026-11-18) is
+// appended as indices 24-25, so the sheet is now 128x64; 0-23 did not move.
 pub const SPRITE_TILES_VILLAGE_V3: &str = "sprites/tiles_village_v3.png";
 pub const SPRITE_PROP_OAK: &str = "sprites/props/oak.png";
 pub const SPRITE_PROP_COTTAGE: &str = "sprites/props/cottage.png";
@@ -180,6 +182,18 @@ pub const SPRITE_PROP_THRONE_DAIS: &str = "sprites/props/throne_dais.png";
 // solid). Source: design/art/refs/ref-95-sealedstacks.jsx.
 pub const SPRITE_PROP_SEALED_STACKS: &str = "sprites/props/sealed_stacks.png";
 
+// Act 6 district set, the Iterator Forge (approved by Matt 2026-11-18, the
+// R1 style sample): the Great Furnace, REF-98, a 64x64 landmark, and four
+// 32x32 yard props, REF-99 anvil, REF-100 quench trough, REF-101 coal heap
+// and REF-102 tool rack (bottom-centre anchor, y-sorted, solid per their
+// ref headers), placed by `plugins::prop::{LANDMARKS, DISTRICT_PROPS}`.
+// The REF-97 slab ground ships inside `SPRITE_TILES_VILLAGE_V3`.
+pub const SPRITE_PROP_GREAT_FURNACE: &str = "sprites/props/great_furnace.png";
+pub const SPRITE_PROP_ANVIL: &str = "sprites/props/anvil.png";
+pub const SPRITE_PROP_QUENCH_TROUGH: &str = "sprites/props/quench_trough.png";
+pub const SPRITE_PROP_COAL_HEAP: &str = "sprites/props/coal_heap.png";
+pub const SPRITE_PROP_TOOL_RACK: &str = "sprites/props/tool_rack.png";
+
 // Audio (Stable Audio Open generated, baked via tools/synthwave-gen).
 // Generation is a Matt-action: `powershell -ExecutionPolicy Bypass
 // -File scripts/synthwave-gen.ps1`. Files may be absent during early
@@ -288,4 +302,9 @@ pub const ALL_SPRITE_PATHS: &[&str] = &[
     SPRITE_COMPILER,
     SPRITE_PROP_THRONE_DAIS,
     SPRITE_PROP_SEALED_STACKS,
+    SPRITE_PROP_GREAT_FURNACE,
+    SPRITE_PROP_ANVIL,
+    SPRITE_PROP_QUENCH_TROUGH,
+    SPRITE_PROP_COAL_HEAP,
+    SPRITE_PROP_TOOL_RACK,
 ];

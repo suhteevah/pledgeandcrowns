@@ -487,3 +487,81 @@ fn the_landmarks_ship_their_approved_renders() {
         assert!(!src.contains("DRAFT"), "{jsx} still says DRAFT");
     }
 }
+
+/// The Forge district set (approved by Matt 2026-11-18): the Great Furnace
+/// (REF-98, 64x64) and the four yard props (REF-99..102, 32x32) ship
+/// byte-identical to their renders, preloaded, with approval headers; the
+/// REF-97 slab ships inside the terrain atlas, which is the REF-76 render
+/// (`world.rs` pins that and the tile indices).
+#[test]
+fn the_forge_set_ships_its_approved_renders() {
+    use pledge_and_crown::assets::{
+        ALL_SPRITE_PATHS, SPRITE_PROP_ANVIL, SPRITE_PROP_COAL_HEAP, SPRITE_PROP_GREAT_FURNACE,
+        SPRITE_PROP_QUENCH_TROUGH, SPRITE_PROP_TOOL_RACK, SPRITE_TILES_VILLAGE_V3,
+    };
+    let root = game_assets();
+    let refs = refs_dir();
+    for (path, want, render, jsx, px) in [
+        (
+            SPRITE_PROP_GREAT_FURNACE,
+            "sprites/props/great_furnace.png",
+            "png/REF98.png",
+            "ref-98-greatfurnace.jsx",
+            64,
+        ),
+        (
+            SPRITE_PROP_ANVIL,
+            "sprites/props/anvil.png",
+            "png/REF99.png",
+            "ref-99-anvil.jsx",
+            32,
+        ),
+        (
+            SPRITE_PROP_QUENCH_TROUGH,
+            "sprites/props/quench_trough.png",
+            "png/REF100.png",
+            "ref-100-quenchtrough.jsx",
+            32,
+        ),
+        (
+            SPRITE_PROP_COAL_HEAP,
+            "sprites/props/coal_heap.png",
+            "png/REF101.png",
+            "ref-101-coalheap.jsx",
+            32,
+        ),
+        (
+            SPRITE_PROP_TOOL_RACK,
+            "sprites/props/tool_rack.png",
+            "png/REF102.png",
+            "ref-102-toolrack.jsx",
+            32,
+        ),
+    ] {
+        assert_eq!(path, want);
+        assert!(ALL_SPRITE_PATHS.contains(&path), "{path} is not preloaded");
+        assert!(
+            read(&root.join(path)) == read(&refs.join(render)),
+            "{path} is not the {render} render"
+        );
+        assert_eq!(png_size(&root.join(path)), (px, px), "{path}");
+        let src = std::fs::read_to_string(refs.join(jsx)).expect(jsx);
+        let header = format!("// APPROVED by Matt 2026-11-18. Wired as game/assets/{want}.");
+        assert!(
+            src.lines().any(|l| l.trim_end() == header),
+            "{jsx}: no approval header"
+        );
+        assert!(!src.contains("DRAFT"), "{jsx} still says DRAFT");
+    }
+    // REF-97 reaches the game through the combined atlas (4 rows of 8).
+    let atlas = root.join(SPRITE_TILES_VILLAGE_V3);
+    assert!(read(&atlas) == read(&refs.join("png/REF76.png")));
+    assert_eq!(png_size(&atlas), (128, 64));
+    let src = std::fs::read_to_string(refs.join("ref-97-forgeslab.jsx")).expect("REF-97");
+    assert!(
+        src.lines().any(|l| l.trim_end()
+            == "// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/tiles_village_v3.png (via the REF-76 combined atlas, indices 24-25)."),
+        "ref-97-forgeslab.jsx: no approval header"
+    );
+    assert!(!src.contains("DRAFT"));
+}

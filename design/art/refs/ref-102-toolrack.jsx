@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-102 - Tool rack, Act 6 district prop, 32x32.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/tool_rack.png.
 //
 // A bronze-wood frame with a brass-lit top beam. A hammer (brass handle,
 // stone-grey head) and a pair of coalblack tongs hang from coalblack pins.

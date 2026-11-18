@@ -1070,7 +1070,7 @@ mod tests {
     fn real_solids() -> Vec<Aabb> {
         crate::plugins::prop::all_props()
             .into_iter()
-            .map(|(kind, base)| kind.solid_at(base))
+            .flat_map(|(kind, base)| kind.solids_at(base))
             .collect()
     }
 
@@ -1084,34 +1084,48 @@ mod tests {
         }
     }
 
-    /// A save inside either landmark (the Throne Dais; the Sealed Stacks,
-    /// solid from threshold to merlons) restores to a free spot nearby.
+    /// A save inside any landmark (the Throne Dais; the Sealed Stacks,
+    /// solid from threshold to merlons; the Great Furnace, plinth to hood)
+    /// or any district yard prop (the Forge's anvil, quench trough, coal
+    /// heap and each foot of the tool rack) restores to a free spot nearby.
+    /// That spot is on open plaza floor, which `prop`'s
+    /// `every_talk_spot_in_a_dressed_district_is_reachable` proves is one
+    /// region reached from the streets, so the player is never trapped.
     #[test]
-    fn a_save_inside_a_landmark_moves_to_a_free_spot_nearby() {
-        use crate::plugins::prop::{PropKind, all_props};
+    fn a_save_inside_a_landmark_or_yard_prop_moves_to_a_free_spot_nearby() {
+        use crate::plugins::prop::{DISTRICT_PROPS, LANDMARKS, PropKind, all_props};
         let solids = real_solids();
-        for kind in [PropKind::ThroneDais, PropKind::SealedStacks] {
+        let kinds: Vec<PropKind> = LANDMARKS
+            .iter()
+            .map(|(_, k)| *k)
+            .chain(DISTRICT_PROPS.iter().map(|(_, k, _)| *k))
+            .collect();
+        assert!(kinds.len() >= 7, "landmarks + Forge yard: {kinds:?}");
+        for kind in kinds {
             let (_, base) = all_props()
                 .into_iter()
                 .find(|(k, _)| *k == kind)
                 .unwrap_or_else(|| panic!("{kind:?} is placed"));
-            let solid = kind.solid_at(base);
-            // Feet in the middle of it: exactly the trap the review found.
-            let inside = (solid.min + solid.max) * 0.5 - PLAYER_FOOT.min.lerp(PLAYER_FOOT.max, 0.5);
-            assert!(
-                !spot_is_free(inside, &solids),
-                "{kind:?}: spot must be blocked"
-            );
-            let got = restore_spot(inside, &solids);
-            assert!(
-                spot_is_free(got, &solids),
-                "{kind:?}: restored into a solid: {got:?}"
-            );
-            assert_ne!(got, PLAYER_SPAWN, "a free spot is near the {kind:?}");
-            assert!(
-                got.distance(inside) <= RESTORE_SEARCH_STEP_PX * RESTORE_SEARCH_RINGS as f32 * 1.5,
-                "{kind:?}: moved too far: {inside:?} -> {got:?}"
-            );
+            for solid in kind.solids_at(base) {
+                // Feet in the middle of it: exactly the trap the review found.
+                let inside =
+                    (solid.min + solid.max) * 0.5 - PLAYER_FOOT.min.lerp(PLAYER_FOOT.max, 0.5);
+                assert!(
+                    !spot_is_free(inside, &solids),
+                    "{kind:?}: spot must be blocked"
+                );
+                let got = restore_spot(inside, &solids);
+                assert!(
+                    spot_is_free(got, &solids),
+                    "{kind:?}: restored into a solid: {got:?}"
+                );
+                assert_ne!(got, PLAYER_SPAWN, "a free spot is near the {kind:?}");
+                assert!(
+                    got.distance(inside)
+                        <= RESTORE_SEARCH_STEP_PX * RESTORE_SEARCH_RINGS as f32 * 1.5,
+                    "{kind:?}: moved too far: {inside:?} -> {got:?}"
+                );
+            }
         }
     }
 

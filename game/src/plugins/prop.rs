@@ -1,17 +1,24 @@
 // SPDX-License-Identifier: MIT
-//! Village props: oaks (REF-67, 32x48), cottages (REF-68, 64x64) and the
-//! district landmarks (the Sealed Stacks, REF-95, and the Throne Dais,
-//! REF-96, both 64x64).
+//! Village props: oaks (REF-67, 32x48), cottages (REF-68, 64x64), the
+//! district landmarks (the Sealed Stacks, REF-95, the Throne Dais, REF-96,
+//! and the Great Furnace, REF-98, all 64x64) and the district yard props
+//! (the Forge's anvil, quench trough, coal heap and tool rack, REF-99..102,
+//! 32x32).
 //!
 //! Props are ordinary sprites, not tiles. Each one is anchored bottom-centre
-//! at its ground line, y-sorted (lower on screen = drawn in front) and owns a
-//! solid [`Aabb`] footprint that `player.rs` refuses to walk into.
+//! at its ground line, y-sorted (lower on screen = drawn in front) and owns
+//! solid [`Aabb`] footprints ([`PropKind::solids_local`], one box for most,
+//! two for the tool rack's feet) that `player.rs` refuses to walk into.
 //!
-//! Placement is data: [`COTTAGE_SPOTS`] and [`MEADOW_OAKS`] are hand-picked
-//! const tables, and the border treeline is a deterministic function of the
-//! map size (fixed spacing + hash jitter), so every run builds the same
-//! village. `tests` below check every prop sits on grass, clear of roads,
-//! plazas, NPC slots and each other.
+//! Placement is data: [`COTTAGE_SPOTS`], [`MEADOW_OAKS`], [`LANDMARKS`] and
+//! [`DISTRICT_PROPS`] are hand-picked const tables, and the border treeline
+//! is a deterministic function of the map size (fixed spacing + hash
+//! jitter), so every run builds the same village. Dressing another district
+//! is a data change: name its ground in `world::DISTRICTS`, add its landmark
+//! to [`LANDMARKS`], its yard to [`DISTRICT_PROPS`] and its cast spots to
+//! the district. `tests` below check every prop sits on grass (or, for a
+//! district's own props, on its plaza paving), clear of roads, street
+//! mouths, NPC slots and each other, and that every talk spot is reachable.
 //!
 //! The same y-sort system also orders the player and NPC sprites, by querying
 //! their existing marker components (`Player`, `Npc`) — npc.rs is untouched.
@@ -23,7 +30,9 @@
 //! decision ([`occludes`]) and the ramp ([`step_alpha`]) are pure functions.
 
 use crate::assets::{
-    SPRITE_PROP_COTTAGE, SPRITE_PROP_OAK, SPRITE_PROP_SEALED_STACKS, SPRITE_PROP_THRONE_DAIS,
+    SPRITE_PROP_ANVIL, SPRITE_PROP_COAL_HEAP, SPRITE_PROP_COTTAGE, SPRITE_PROP_GREAT_FURNACE,
+    SPRITE_PROP_OAK, SPRITE_PROP_QUENCH_TROUGH, SPRITE_PROP_SEALED_STACKS, SPRITE_PROP_THRONE_DAIS,
+    SPRITE_PROP_TOOL_RACK,
 };
 use crate::plugins::animation::{SpriteLift, unlifted_anchor};
 use crate::plugins::npc::Npc;
@@ -53,6 +62,14 @@ impl Aabb {
         Self {
             min: self.min + by,
             max: self.max + by,
+        }
+    }
+
+    /// Smallest box containing both.
+    pub fn union(self, other: Aabb) -> Self {
+        Self {
+            min: self.min.min(other.min),
+            max: self.max.max(other.max),
         }
     }
 
@@ -105,7 +122,47 @@ pub enum PropKind {
     /// The Sealed Stacks (REF-95, approved 2026-11-16), the Act 9 district
     /// landmark: 64x64, placed at [`LANDMARKS`].
     SealedStacks,
+    /// The Great Furnace (REF-98, approved 2026-11-18), the Act 6 district
+    /// landmark: 64x64, placed at [`LANDMARKS`].
+    GreatFurnace,
+    /// Forge yard props (REF-99..102, approved 2026-11-18), 32x32 each,
+    /// placed by [`DISTRICT_PROPS`].
+    Anvil,
+    QuenchTrough,
+    CoalHeap,
+    ToolRack,
 }
+
+// Solid footprints, relative to the bottom-centre anchor. A ref grid of
+// width W and height H maps column `c` to x = c - W/2 (its left edge) and
+// row `r` to y = H - 1 - r (its bottom edge); `tests` re-derive every box
+// below from the ref grids.
+const OAK_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 6.0, 3.0, 11.0)];
+const COTTAGE_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 27.0, 5.0, 27.0)];
+const THRONE_DAIS_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 30.0, 3.0, 20.0)];
+const SEALED_STACKS_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 26.0, 3.0, 62.0)];
+/// REF-98 "solid from the plinth to the hood": rows 20..61 (hood top to
+/// plinth bottom), cols 7..56 (the plinth, the widest part).
+const GREAT_FURNACE_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 25.0, 2.0, 44.0)];
+/// REF-99 "solid over the stump's footprint": the stump, rows 19..30,
+/// cols 7..24. The anvil on top overhangs west (the horn) and is not solid.
+const ANVIL_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 9.0, 1.0, 13.0)];
+/// REF-100 "solid over the whole trough": rows 14..29, cols 4..27.
+const QUENCH_TROUGH_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 12.0, 2.0, 18.0)];
+/// REF-101 "solid over the mound": rows 16..28, cols 2..29.
+const COAL_HEAP_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 14.0, 3.0, 16.0)];
+/// REF-102 "solid only at the two feet": rows 28..30, cols 4..8 and
+/// 23..27. The 14 px between them stays open (the ground shows through).
+const TOOL_RACK_SOLIDS: [Aabb; 2] = [
+    Aabb {
+        min: Vec2::new(-12.0, 1.0),
+        max: Vec2::new(-7.0, 4.0),
+    },
+    Aabb {
+        min: Vec2::new(7.0, 1.0),
+        max: Vec2::new(12.0, 4.0),
+    },
+];
 
 impl PropKind {
     pub fn sprite_path(self) -> &'static str {
@@ -114,6 +171,11 @@ impl PropKind {
             PropKind::Cottage => SPRITE_PROP_COTTAGE,
             PropKind::ThroneDais => SPRITE_PROP_THRONE_DAIS,
             PropKind::SealedStacks => SPRITE_PROP_SEALED_STACKS,
+            PropKind::GreatFurnace => SPRITE_PROP_GREAT_FURNACE,
+            PropKind::Anvil => SPRITE_PROP_ANVIL,
+            PropKind::QuenchTrough => SPRITE_PROP_QUENCH_TROUGH,
+            PropKind::CoalHeap => SPRITE_PROP_COAL_HEAP,
+            PropKind::ToolRack => SPRITE_PROP_TOOL_RACK,
         }
     }
 
@@ -121,8 +183,12 @@ impl PropKind {
     pub fn size(self) -> Vec2 {
         match self {
             PropKind::Oak => Vec2::new(32.0, 48.0),
-            PropKind::Cottage | PropKind::ThroneDais | PropKind::SealedStacks => {
-                Vec2::new(64.0, 64.0)
+            PropKind::Cottage
+            | PropKind::ThroneDais
+            | PropKind::SealedStacks
+            | PropKind::GreatFurnace => Vec2::new(64.0, 64.0),
+            PropKind::Anvil | PropKind::QuenchTrough | PropKind::CoalHeap | PropKind::ToolRack => {
+                Vec2::new(32.0, 32.0)
             }
         }
     }
@@ -136,10 +202,39 @@ impl PropKind {
             PropKind::Cottage => 5.0,      // REF-68 row 58 is the footing
             PropKind::ThroneDais => 3.0,   // REF-96 row 60 is the bottom step's edge
             PropKind::SealedStacks => 3.0, // REF-95 row 60 is the threshold's edge
+            PropKind::GreatFurnace => 2.0, // REF-98 row 61 is the plinth's bottom edge
+            PropKind::Anvil => 1.0,        // REF-99 row 30 is the stump's bottom edge
+            PropKind::QuenchTrough => 2.0, // REF-100 row 29 is the feet's bottom
+            PropKind::CoalHeap => 3.0,     // REF-101 row 28 is the mound's bottom edge
+            PropKind::ToolRack => 1.0,     // REF-102 row 30 is the feet's bottom edge
         }
     }
 
-    /// Solid footprint relative to the anchor (bottom-centre).
+    /// Every solid part of the footprint, relative to the anchor
+    /// (bottom-centre). One box for every kind but the tool rack, which is
+    /// solid only at its two feet. These are what collide.
+    pub fn solids_local(self) -> &'static [Aabb] {
+        match self {
+            PropKind::Oak => &OAK_SOLID,
+            PropKind::Cottage => &COTTAGE_SOLID,
+            PropKind::ThroneDais => &THRONE_DAIS_SOLID,
+            PropKind::SealedStacks => &SEALED_STACKS_SOLID,
+            PropKind::GreatFurnace => &GREAT_FURNACE_SOLID,
+            PropKind::Anvil => &ANVIL_SOLID,
+            PropKind::QuenchTrough => &QUENCH_TROUGH_SOLID,
+            PropKind::CoalHeap => &COAL_HEAP_SOLID,
+            PropKind::ToolRack => &TOOL_RACK_SOLIDS,
+        }
+    }
+
+    /// The solid parts of a prop anchored at `base`, in world space.
+    pub fn solids_at(self, base: Vec2) -> impl Iterator<Item = Aabb> {
+        self.solids_local().iter().map(move |s| s.translated(base))
+    }
+
+    /// Bounding box of the solid footprint relative to the anchor
+    /// (bottom-centre): for a one-box kind, the box itself.
+    /// Oak: the trunk base (REF-67 cols 10..21, rows 36..44).
     /// Oak: the trunk base (REF-67 cols 10..21, rows 36..44).
     /// Cottage: the wall rows only (REF-68 cols 5..58, rows 37..58 = 54x22),
     /// so the player can walk behind the roof. Deliberately NOT widened to
@@ -155,15 +250,19 @@ impl PropKind {
     /// walk behind, so the player goes round it, never into it; the six
     /// empty columns either side and the empty rows above and below stay
     /// walkable.
+    /// Great Furnace, anvil, quench trough, coal heap: see the consts above.
+    /// Tool rack: the box round both feet; only the feet collide
+    /// ([`PropKind::solids_local`]).
     pub fn solid_local(self) -> Aabb {
-        match self {
-            PropKind::Oak => Aabb::from_base(0.0, 6.0, 3.0, 11.0),
-            PropKind::Cottage => Aabb::from_base(0.0, 27.0, 5.0, 27.0),
-            PropKind::ThroneDais => Aabb::from_base(0.0, 30.0, 3.0, 20.0),
-            PropKind::SealedStacks => Aabb::from_base(0.0, 26.0, 3.0, 62.0),
-        }
+        let parts = self.solids_local();
+        parts
+            .iter()
+            .skip(1)
+            .fold(parts[0], |acc, part| acc.union(*part))
     }
 
+    /// [`PropKind::solid_local`] for a prop anchored at `base`. A bounding
+    /// box: collide against [`PropKind::solids_at`].
     pub fn solid_at(self, base: Vec2) -> Aabb {
         self.solid_local().translated(base)
     }
@@ -173,13 +272,26 @@ impl PropKind {
     /// cols 2..61 (the eave), rows 0..58 (chimney top to footing). Throne
     /// Dais: REF-96 cols 2..61 (the bottom step), rows 0..60 (finial to the
     /// bottom step). Sealed Stacks: REF-95 cols 6..57, rows 2..60, the same
-    /// box as its solid, so no character ever stands behind it.
+    /// box as its solid, so no character ever stands behind it. Great
+    /// Furnace: REF-98 cols 7..56, rows 0..61 (chimney cap to plinth), so
+    /// the chimney fades over a player behind the hood. Anvil: REF-99 cols
+    /// 4..24, rows 9..30 (the horn overhangs west). Quench trough and coal
+    /// heap: their solid. Tool rack: REF-102 cols 4..27, rows 4..30 (beam
+    /// to feet).
     pub fn visual_local(self) -> Aabb {
         match self {
             PropKind::Oak => Aabb::from_base(0.0, 14.0, 3.0, 47.0),
             PropKind::Cottage => Aabb::from_base(0.0, 30.0, 5.0, 64.0),
             PropKind::ThroneDais => Aabb::from_base(0.0, 30.0, 3.0, 64.0),
             PropKind::SealedStacks => Aabb::from_base(0.0, 26.0, 3.0, 62.0),
+            PropKind::GreatFurnace => Aabb::from_base(0.0, 25.0, 2.0, 64.0),
+            PropKind::Anvil => Aabb {
+                min: Vec2::new(-12.0, 1.0),
+                max: Vec2::new(9.0, 23.0),
+            },
+            PropKind::QuenchTrough => QUENCH_TROUGH_SOLID[0],
+            PropKind::CoalHeap => COAL_HEAP_SOLID[0],
+            PropKind::ToolRack => Aabb::from_base(0.0, 12.0, 1.0, 28.0),
         }
     }
 
@@ -275,13 +387,32 @@ pub const COTTAGE_SPOTS: &[(usize, Side, f32)] = &[
 /// District landmarks that are approved and spawned: `(district index,
 /// kind)`. A landmark is a 64x64 bottom-centre-anchored prop standing ON
 /// its plaza at the back-centre (north edge), placed by
-/// [`world::back_landmark_base`](crate::plugins::world::back_landmark_base);
-/// the district's boss stands centred directly in front of it. The Sealed
-/// Stacks (REF-95, approved by Matt 2026-11-16) stand behind the Librarian,
-/// the Throne Dais (REF-96, approved by Matt 2026-11-15) behind the
-/// Compiler.
-pub const LANDMARKS: &[(usize, PropKind)] =
-    &[(9, PropKind::SealedStacks), (10, PropKind::ThroneDais)];
+/// [`world::landmark_plot_base`](crate::plugins::world::landmark_plot_base).
+/// In the boss districts the boss stands centred directly in front of it:
+/// the Sealed Stacks (REF-95, approved by Matt 2026-11-16) stand behind the
+/// Librarian, the Throne Dais (REF-96, approved by Matt 2026-11-15) behind
+/// the Compiler. The Great Furnace (REF-98, approved by Matt 2026-11-18)
+/// heads the Forge yard, the Smelter at its mouth.
+pub const LANDMARKS: &[(usize, PropKind)] = &[
+    (9, PropKind::SealedStacks),
+    (10, PropKind::ThroneDais),
+    (6, PropKind::GreatFurnace),
+];
+
+/// A district's own yard props: `(district index, kind, offset of the
+/// bottom-centre anchor from the plaza centre)`. They stand ON the plaza
+/// paving, clear of its street mouths and of the routes to every NPC (see
+/// `tests`). Approved sets so far: the Forge (REF-99..102, approved by Matt
+/// 2026-11-18), composed round the Great Furnace (its plot's base is at
+/// (0, 156)): anvil and quench trough either side of the furnace mouth,
+/// the coal heap to the furnace's west, the tool rack against the back
+/// wall to its east.
+pub const DISTRICT_PROPS: &[(usize, PropKind, Vec2)] = &[
+    (6, PropKind::Anvil, Vec2::new(-72.0, 92.0)),
+    (6, PropKind::QuenchTrough, Vec2::new(72.0, 88.0)),
+    (6, PropKind::CoalHeap, Vec2::new(-96.0, 168.0)),
+    (6, PropKind::ToolRack, Vec2::new(104.0, 196.0)),
+];
 
 /// Free-standing oaks in open meadow, between the quarters.
 pub const MEADOW_OAKS: &[Vec2] = &[
@@ -369,9 +500,18 @@ pub fn all_props() -> Vec<(PropKind, Vec2)> {
         }
     }
     for &(d, kind) in LANDMARKS {
-        match crate::plugins::world::back_landmark_base(d) {
+        match crate::plugins::world::landmark_plot_base(d) {
             Some(base) => out.push((kind, base)),
             None => tracing::warn!(?kind, "landmark references unknown district {d}; skipped"),
+        }
+    }
+    for &(d, kind, offset) in DISTRICT_PROPS {
+        match DISTRICTS.get(d) {
+            Some(district) => out.push((kind, district.center + offset)),
+            None => tracing::warn!(
+                ?kind,
+                "district prop references unknown district {d}; skipped"
+            ),
         }
     }
     out
@@ -447,13 +587,25 @@ fn spawn_props(mut commands: Commands, asset_server: Res<AssetServer>) {
     let mut oaks = 0usize;
     let mut cottages = 0usize;
     let mut landmarks = 0usize;
+    let mut yard = 0usize;
+    let mut extra_solids = 0usize;
     for (kind, base) in &props {
         match kind {
             PropKind::Oak => oaks += 1,
             PropKind::Cottage => cottages += 1,
-            PropKind::ThroneDais | PropKind::SealedStacks => landmarks += 1,
+            PropKind::ThroneDais | PropKind::SealedStacks | PropKind::GreatFurnace => {
+                landmarks += 1
+            }
+            PropKind::Anvil | PropKind::QuenchTrough | PropKind::CoalHeap | PropKind::ToolRack => {
+                yard += 1
+            }
         }
         tracing::trace!(?kind, x = base.x, y = base.y, "spawning prop");
+        let mut solids = kind.solids_at(*base);
+        let Some(first) = solids.next() else {
+            tracing::warn!(?kind, "prop kind has no solid footprint; skipped");
+            continue;
+        };
         commands.spawn((
             Sprite {
                 image: asset_server.load(kind.sprite_path()),
@@ -463,11 +615,19 @@ fn spawn_props(mut commands: Commands, asset_server: Res<AssetServer>) {
             Anchor::BOTTOM_CENTER,
             Transform::from_xyz(base.x, base.y, ysort_z(base.y + kind.ground_offset())),
             Prop { kind: *kind },
-            Solid(kind.solid_at(*base)),
+            Solid(first),
         ));
+        // Further solid parts (the tool rack's second foot) are bare
+        // collider entities: `player::move_player` reads every `Solid`.
+        for part in solids {
+            tracing::trace!(?kind, ?part, "spawning extra prop collider");
+            commands.spawn(Solid(part));
+            extra_solids += 1;
+        }
     }
     tracing::info!(
-        "spawned {} props ({oaks} oaks, {cottages} cottages, {landmarks} landmarks)",
+        "spawned {} props ({oaks} oaks, {cottages} cottages, {landmarks} landmarks, \
+         {yard} yard props, {extra_solids} extra colliders)",
         props.len()
     );
 }
@@ -696,12 +856,7 @@ mod tests {
 
     #[test]
     fn visual_rect_covers_the_solid_and_sits_in_the_sprite() {
-        for k in [
-            PropKind::Oak,
-            PropKind::Cottage,
-            PropKind::ThroneDais,
-            PropKind::SealedStacks,
-        ] {
+        for k in ALL_KINDS {
             let v = k.visual_local();
             let s = k.solid_local();
             let sprite = k.sprite_rect_at(Vec2::ZERO);
@@ -810,12 +965,14 @@ mod tests {
                     && r.max.y <= WORLD_HALF_H,
                 "{kind:?} at {base:?} leaves the map"
             );
-            if LANDMARKS.iter().any(|(_, k)| *k == kind) {
-                // Landmarks stand ON their plaza (flagstone, clear of the
-                // cobble ring); see `landmark_plot_is_sound`.
+            if let Some(d) = plaza_prop_district(kind, base) {
+                // Landmarks and district props stand ON their plaza (its
+                // interior paving, clear of the cobble ring); see
+                // `landmark_plot_is_sound` and `district_props_stand_on_their_plaza`.
                 assert!(
-                    rect_all(&r, Ground::Flagstone),
-                    "{kind:?} at {base:?} leaves the flagstone"
+                    rect_all(&r, DISTRICTS[d].interior_ground()),
+                    "{kind:?} at {base:?} leaves {}'s paving",
+                    DISTRICTS[d].name
                 );
             } else {
                 assert!(
@@ -919,7 +1076,7 @@ mod tests {
             "the Librarian is under it"
         );
         let talk = librarian + TALK_SPOT_OFFSET;
-        let solids: Vec<Aabb> = all_props().iter().map(|(k, b)| k.solid_at(*b)).collect();
+        let solids = every_solid();
         assert!(
             solids
                 .iter()
@@ -1004,5 +1161,454 @@ mod tests {
         for (kind, base) in all_props() {
             assert!(!foot.overlaps(&kind.solid_at(base)));
         }
+    }
+
+    // --- District dressing (the Forge, R1 wave A1) -------------------------
+
+    const ALL_KINDS: [PropKind; 9] = [
+        PropKind::Oak,
+        PropKind::Cottage,
+        PropKind::ThroneDais,
+        PropKind::SealedStacks,
+        PropKind::GreatFurnace,
+        PropKind::Anvil,
+        PropKind::QuenchTrough,
+        PropKind::CoalHeap,
+        PropKind::ToolRack,
+    ];
+
+    /// Every solid part of every prop, as `player::move_player` sees them.
+    fn every_solid() -> Vec<Aabb> {
+        all_props()
+            .iter()
+            .flat_map(|(k, b)| k.solids_at(*b))
+            .collect()
+    }
+
+    /// The district a landmark or district prop at `base` stands in, or
+    /// `None` for the village props (oaks, cottages) that stand on grass.
+    fn plaza_prop_district(kind: PropKind, base: Vec2) -> Option<usize> {
+        let landmark = LANDMARKS
+            .iter()
+            .find(|(d, k)| {
+                *k == kind && crate::plugins::world::landmark_plot_base(*d) == Some(base)
+            })
+            .map(|(d, _)| *d);
+        let yard = DISTRICT_PROPS
+            .iter()
+            .find(|(d, k, off)| *k == kind && DISTRICTS[*d].center + *off == base)
+            .map(|(d, _, _)| *d);
+        landmark.or(yard)
+    }
+
+    /// Districts dressed with a landmark or yard props.
+    fn dressed_districts() -> Vec<usize> {
+        let mut out: Vec<usize> = LANDMARKS
+            .iter()
+            .map(|(d, _)| *d)
+            .chain(DISTRICT_PROPS.iter().map(|(d, _, _)| *d))
+            .collect();
+        out.sort_unstable();
+        out.dedup();
+        out
+    }
+
+    /// Box over the opaque pixels of `rows` (and `cols`, if given) of a
+    /// ref grid, in anchor-relative coordinates: column `c` is x = c - W/2,
+    /// row `r` is y = H - 1 - r (bottom edges).
+    fn grid_box(
+        src: &str,
+        rows: std::ops::RangeInclusive<usize>,
+        cols: Option<std::ops::RangeInclusive<usize>>,
+    ) -> Aabb {
+        let grid: Vec<&str> = src
+            .lines()
+            .filter_map(|l| l.trim_start().strip_prefix('\'')?.split('\'').next())
+            .collect();
+        let (w, h) = (grid[0].len() as f32, grid.len() as f32);
+        let mut min = Vec2::splat(f32::MAX);
+        let mut max = Vec2::splat(f32::MIN);
+        for r in rows {
+            for (c, ch) in grid[r].chars().enumerate() {
+                if ch == '.' || cols.as_ref().is_some_and(|cs| !cs.contains(&c)) {
+                    continue;
+                }
+                let x = c as f32 - w * 0.5;
+                let y = h - 1.0 - r as f32;
+                min = min.min(Vec2::new(x, y));
+                max = max.max(Vec2::new(x + 1.0, y + 1.0));
+            }
+        }
+        Aabb { min, max }
+    }
+
+    /// Each Forge footprint is exactly what its ref header says is solid,
+    /// re-derived from the approved pixel grid; the visual box is the art's
+    /// opaque bounds; the ground line is the art's bottom row.
+    #[test]
+    fn forge_footprints_match_their_ref_headers() {
+        const R98: &str = include_str!("../../../design/art/refs/ref-98-greatfurnace.jsx");
+        const R99: &str = include_str!("../../../design/art/refs/ref-99-anvil.jsx");
+        const R100: &str = include_str!("../../../design/art/refs/ref-100-quenchtrough.jsx");
+        const R101: &str = include_str!("../../../design/art/refs/ref-101-coalheap.jsx");
+        const R102: &str = include_str!("../../../design/art/refs/ref-102-toolrack.jsx");
+        assert!(R98.contains("Solid from the plinth to the hood."));
+        assert!(R99.contains("over the stump's footprint"));
+        assert!(R100.contains("solid over the whole trough"));
+        assert!(R101.contains("solid over the mound"));
+        assert!(R102.contains("solid only at the two feet"));
+        // (kind, ref, solid parts as (rows, cols), visual rows)
+        type Part = (
+            std::ops::RangeInclusive<usize>,
+            Option<std::ops::RangeInclusive<usize>>,
+        );
+        let cases: [(PropKind, &str, Vec<Part>, std::ops::RangeInclusive<usize>); 5] = [
+            // Hood top (row 20) to plinth bottom (row 61).
+            (PropKind::GreatFurnace, R98, vec![(20..=61, None)], 0..=61),
+            // The stump: rows 19 (cut top outline) to 30.
+            (PropKind::Anvil, R99, vec![(19..=30, None)], 9..=30),
+            (PropKind::QuenchTrough, R100, vec![(14..=29, None)], 14..=29),
+            (PropKind::CoalHeap, R101, vec![(16..=28, None)], 16..=28),
+            // The two feet, rows 28..30, left and right halves.
+            (
+                PropKind::ToolRack,
+                R102,
+                vec![(28..=30, Some(0..=15)), (28..=30, Some(16..=31))],
+                4..=30,
+            ),
+        ];
+        for (kind, src, parts, visual) in cases {
+            let want: Vec<Aabb> = parts
+                .into_iter()
+                .map(|(rows, cols)| grid_box(src, rows, cols))
+                .collect();
+            assert_eq!(kind.solids_local(), want.as_slice(), "{kind:?} solid");
+            assert_eq!(
+                kind.visual_local(),
+                grid_box(src, visual.clone(), None),
+                "{kind:?} visual"
+            );
+            let opaque = grid_box(src, 0..=kind.size().y as usize - 1, None);
+            assert_eq!(kind.ground_offset(), opaque.min.y, "{kind:?} ground line");
+        }
+        // The tool rack is open between its feet: a player's feet fit there.
+        let rack = PropKind::ToolRack.solids_local();
+        assert_eq!(rack.len(), 2);
+        let gap = rack[1].min.x - rack[0].max.x;
+        let foot = crate::plugins::player::PLAYER_FOOT;
+        assert!(
+            gap > foot.max.x - foot.min.x,
+            "the rack's feet leave {gap} px"
+        );
+        assert_eq!(
+            PropKind::ToolRack.solid_local(),
+            rack[0].union(rack[1]),
+            "bounding box of both feet"
+        );
+    }
+
+    /// The Great Furnace is spawned exactly once, on the Forge's landmark
+    /// plot at the back-centre, on clear slab, with room to walk round it.
+    /// A player in front of its plinth draws in front; behind the hood the
+    /// chimney fades over them. The Smelter stands at its mouth.
+    #[test]
+    fn the_great_furnace_heads_the_forge_yard() {
+        let forge = DISTRICTS
+            .iter()
+            .position(|d| d.name == "The Forge")
+            .expect("the Forge");
+        assert!(LANDMARKS.contains(&(forge, PropKind::GreatFurnace)));
+        let base = crate::plugins::world::landmark_plot_base(forge).expect("plot");
+        let k = PropKind::GreatFurnace;
+        let furnaces: Vec<Vec2> = all_props()
+            .into_iter()
+            .filter(|(kk, _)| *kk == k)
+            .map(|(_, b)| b)
+            .collect();
+        assert_eq!(furnaces, vec![base], "one furnace, at the back-centre");
+        assert_eq!(k.size(), Vec2::new(64.0, 64.0));
+        assert_eq!(k.sprite_path(), crate::assets::SPRITE_PROP_GREAT_FURNACE);
+        let plot = k.sprite_rect_at(base);
+        // One clear tile of slab all round (grown a hair under 16 px: the
+        // Forge's interior ends exactly one tile above the plot, and a
+        // sample on that tile edge would round into the cobble ring).
+        let grown = Aabb {
+            min: plot.min - Vec2::splat(15.0),
+            max: plot.max + Vec2::splat(15.0),
+        };
+        assert!(rect_all(&grown, Ground::ForgeSlab), "not on clear slab");
+        for lane in mouth_lanes(&DISTRICTS[forge]) {
+            assert!(!plot.overlaps(&lane), "the furnace blocks the street");
+        }
+        let solid = k.solid_at(base);
+        for side in [
+            Aabb::from_base(solid.min.x - 16.0, 16.0, solid.min.y, solid.max.y),
+            Aabb::from_base(solid.max.x + 16.0, 16.0, solid.min.y, solid.max.y),
+        ] {
+            assert!(
+                rect_all(&side, Ground::ForgeSlab),
+                "no way round the furnace"
+            );
+        }
+        let prop_z = ysort_z(base.y + k.ground_offset());
+        let front = Vec2::new(base.x, solid.min.y - 6.0);
+        assert!(!occludes(
+            player_body_at_feet(front),
+            ysort_z(front.y),
+            k.visual_at(base),
+            prop_z
+        ));
+        let behind = Vec2::new(base.x, solid.max.y);
+        assert!(occludes(
+            player_body_at_feet(behind),
+            ysort_z(behind.y),
+            k.visual_at(base),
+            prop_z
+        ));
+        // The Smelter is at the furnace mouth: centred on it, in front.
+        let smelter = NPC_ROSTER
+            .iter()
+            .position(|s| s.name == "The Smelter")
+            .expect("the Smelter");
+        let p = district_slot(smelter);
+        assert_eq!(p.x, base.x, "the Smelter faces the mouth");
+        let top = p.y + NPC_ROSTER[smelter].native_px * 0.5;
+        assert!(
+            top <= plot.min.y && plot.min.y - top <= 16.0,
+            "Smelter top {top}"
+        );
+    }
+
+    /// Every district prop is spawned once at its plaza centre + offset,
+    /// its whole sprite on that plaza's interior paving (never on the
+    /// cobble ring; the tool rack stands against the back wall), and no
+    /// two props' sprites overlap.
+    #[test]
+    fn district_props_stand_on_their_plaza() {
+        let props = all_props();
+        for &(d, kind, offset) in DISTRICT_PROPS {
+            let dist = &DISTRICTS[d];
+            let base = dist.center + offset;
+            assert_eq!(
+                props.iter().filter(|p| **p == (kind, base)).count(),
+                1,
+                "{kind:?} in {}",
+                dist.name
+            );
+            let r = kind.sprite_rect_at(base);
+            assert!(
+                rect_all(&r, dist.interior_ground()),
+                "{kind:?} in {} is not on its {:?}",
+                dist.name,
+                dist.interior_ground()
+            );
+            for (k, b) in &props {
+                if (*k, *b) != (kind, base) {
+                    assert!(
+                        !k.sprite_rect_at(*b).overlaps(&r),
+                        "{kind:?} overlaps the {k:?} at {b:?}"
+                    );
+                }
+            }
+        }
+        // The Forge yard is the four approved REF-99..102 props.
+        let forge: Vec<PropKind> = DISTRICT_PROPS
+            .iter()
+            .filter(|(d, _, _)| DISTRICTS[*d].name == "The Forge")
+            .map(|(_, k, _)| *k)
+            .collect();
+        assert_eq!(
+            forge,
+            [
+                PropKind::Anvil,
+                PropKind::QuenchTrough,
+                PropKind::CoalHeap,
+                PropKind::ToolRack
+            ]
+        );
+    }
+
+    /// Points just inside `d`'s plaza edge where a street meets it (the
+    /// ground one tile outside is dirt), every 4 px.
+    fn street_mouths(d: &crate::plugins::world::District) -> Vec<Vec2> {
+        let h = d.plaza_half;
+        let mut out = Vec::new();
+        let mut s = -h;
+        while s <= h {
+            for (inside, outside) in [
+                (Vec2::new(s, h - 8.0), Vec2::new(s, h + 8.0)),
+                (Vec2::new(s, -h + 8.0), Vec2::new(s, -h - 8.0)),
+                (Vec2::new(-h + 8.0, s), Vec2::new(-h - 8.0, s)),
+                (Vec2::new(h - 8.0, s), Vec2::new(h + 8.0, s)),
+            ] {
+                if ground_at(d.center + outside) == Ground::Dirt {
+                    out.push(d.center + inside);
+                }
+            }
+            s += 4.0;
+        }
+        out
+    }
+
+    /// The lanes in from `d`'s streets: from each street mouth point, four
+    /// tiles straight into the plaza, half a tile either side.
+    fn mouth_lanes(d: &crate::plugins::world::District) -> Vec<Aabb> {
+        street_mouths(d)
+            .into_iter()
+            .map(|m| {
+                let inward = (d.center - m).normalize().round() * 64.0;
+                Aabb {
+                    min: m.min(m + inward) - Vec2::splat(8.0),
+                    max: m.max(m + inward) + Vec2::splat(8.0),
+                }
+            })
+            .collect()
+    }
+
+    /// No district prop blocks a street mouth: no yard prop's sprite within
+    /// four tiles inward of where a street meets its plaza. (A back-centre
+    /// landmark may face a street on purpose: the Sealed Stacks stand
+    /// across the main street's end and the player steps round them, see
+    /// `the_sealed_stacks_stand_behind_the_librarian`; the Great Furnace
+    /// keeps clear of the Forge's east street.)
+    #[test]
+    fn district_props_keep_the_street_mouths_open() {
+        for d in dressed_districts() {
+            let dist = &DISTRICTS[d];
+            let lanes = mouth_lanes(dist);
+            assert!(!lanes.is_empty(), "{} has no street", dist.name);
+            for &(pd, k, off) in DISTRICT_PROPS {
+                if pd != d {
+                    continue;
+                }
+                let r = k.sprite_rect_at(dist.center + off);
+                for lane in &lanes {
+                    assert!(
+                        !r.overlaps(lane),
+                        "the {k:?} blocks {}'s street lane {lane:?}",
+                        dist.name
+                    );
+                }
+            }
+        }
+    }
+
+    /// A set of 4 px lattice points, as offsets from a plaza centre.
+    type Lattice = std::collections::HashSet<(i32, i32)>;
+
+    /// Flood-fill a player's feet over a 4 px lattice covering `d`'s plaza
+    /// (ring included), from every street mouth, against `solids`. Returns
+    /// (reached, free) lattice points as offsets from the plaza centre.
+    fn flood_plaza(d: &crate::plugins::world::District, solids: &[Aabb]) -> (Lattice, Lattice) {
+        use crate::plugins::player::PLAYER_FOOT;
+        use std::collections::{HashSet, VecDeque};
+        let n = (d.plaza_half / 4.0).floor() as i32;
+        let at = |i: i32, j: i32| d.center + Vec2::new(i as f32, j as f32) * 4.0;
+        let near: Vec<Aabb> = solids
+            .iter()
+            .filter(|s| {
+                s.overlaps(&Aabb::from_base(
+                    d.center.x,
+                    d.plaza_half + 32.0,
+                    d.center.y - d.plaza_half - 32.0,
+                    d.center.y + d.plaza_half + 32.0,
+                ))
+            })
+            .copied()
+            .collect();
+        let free_at = |i: i32, j: i32| {
+            let foot = PLAYER_FOOT.translated(at(i, j));
+            !near.iter().any(|s| foot.overlaps(s))
+        };
+        let free: HashSet<(i32, i32)> = (-n..=n)
+            .flat_map(|i| (-n..=n).map(move |j| (i, j)))
+            .filter(|&(i, j)| free_at(i, j))
+            .collect();
+        let mut seen: HashSet<(i32, i32)> = HashSet::new();
+        let mut queue: VecDeque<(i32, i32)> = VecDeque::new();
+        for m in street_mouths(d) {
+            let o = ((m - d.center) / 4.0).round();
+            let cell = (o.x as i32, o.y as i32);
+            if free.contains(&cell) && seen.insert(cell) {
+                queue.push_back(cell);
+            }
+        }
+        while let Some((i, j)) = queue.pop_front() {
+            for next in [(i + 1, j), (i - 1, j), (i, j + 1), (i, j - 1)] {
+                if free.contains(&next) && seen.insert(next) {
+                    queue.push_back(next);
+                }
+            }
+        }
+        (seen, free)
+    }
+
+    /// In every dressed district the whole plaza floor not under a solid is
+    /// one walkable region reached from its streets (so no pocket a saved
+    /// position could restore into), and every NPC's talk spot is in it:
+    /// clear of every solid and walked to from the nearest lattice point.
+    #[test]
+    fn every_talk_spot_in_a_dressed_district_is_reachable() {
+        use crate::plugins::npc::TALK_SPOT_OFFSET;
+        use crate::plugins::player::PLAYER_FOOT;
+        let solids = every_solid();
+        for d in dressed_districts() {
+            let dist = &DISTRICTS[d];
+            let (reached, free) = flood_plaza(dist, &solids);
+            let mut pockets: Vec<&(i32, i32)> = free.difference(&reached).collect();
+            pockets.sort_unstable();
+            assert!(
+                pockets.is_empty(),
+                "{}: {} free spots cut off, e.g. {:?}",
+                dist.name,
+                pockets.len(),
+                pockets.iter().take(5).collect::<Vec<_>>()
+            );
+            let first: usize = DISTRICTS[..d].iter().map(|x| x.count).sum();
+            for (i, spec) in NPC_ROSTER.iter().enumerate().skip(first).take(dist.count) {
+                let name = spec.name;
+                let talk = district_slot(i) + TALK_SPOT_OFFSET;
+                assert!(
+                    solids
+                        .iter()
+                        .all(|s| !PLAYER_FOOT.translated(talk).overlaps(s)),
+                    "{name}'s talk spot {talk:?} is inside a solid"
+                );
+                let o = ((talk - dist.center) / 4.0).round();
+                let from = (o.x as i32, o.y as i32);
+                assert!(reached.contains(&from), "{name}: talk spot not reached");
+                let start = dist.center + Vec2::new(from.0 as f32, from.1 as f32) * 4.0;
+                let end = slide_move(start, talk - start, PLAYER_FOOT, &solids);
+                assert!(end.distance(talk) < 0.01, "{name}: stopped at {end:?}");
+            }
+        }
+    }
+
+    /// The tool rack collides only at its feet: walking into a foot stops
+    /// the player, walking between the feet does not.
+    #[test]
+    fn the_tool_rack_is_solid_only_at_its_feet() {
+        use crate::plugins::player::PLAYER_FOOT;
+        let (_, base) = all_props()
+            .into_iter()
+            .find(|(k, _)| *k == PropKind::ToolRack)
+            .expect("a tool rack");
+        let solids = every_solid();
+        let feet: Vec<Aabb> = PropKind::ToolRack.solids_at(base).collect();
+        // From the south, straight up between the feet and on behind.
+        let start = Vec2::new(base.x, base.y - 20.0);
+        let to = Vec2::new(base.x, base.y + 40.0);
+        let end = slide_move(start, to - start, PLAYER_FOOT, &solids);
+        assert!(
+            end.distance(to) < 0.01,
+            "blocked between the feet at {end:?}"
+        );
+        // From the south, up into the west foot: stopped below it.
+        let start = Vec2::new(feet[0].min.x + 2.0, base.y - 20.0);
+        let end = slide_move(start, Vec2::new(0.0, 60.0), PLAYER_FOOT, &solids);
+        assert!(
+            PLAYER_FOOT.translated(end).max.y <= feet[0].min.y + 0.01,
+            "walked through the west foot: {end:?}"
+        );
     }
 }

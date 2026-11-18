@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-100 - Quench trough, Act 6 district prop, 32x32.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/quench_trough.png.
 //
 // A bronze-wood trough with two basalt iron bands (one stone-grey rivet
 // each) and a brass-lit rim, full of teal water: the one cool colour in

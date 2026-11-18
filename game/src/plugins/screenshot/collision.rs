@@ -141,7 +141,10 @@ mod tests {
     }
 
     fn village_solids() -> Vec<Aabb> {
-        all_props().iter().map(|(k, b)| k.solid_at(*b)).collect()
+        all_props()
+            .iter()
+            .flat_map(|(k, b)| k.solids_at(*b))
+            .collect()
     }
 
     #[test]
