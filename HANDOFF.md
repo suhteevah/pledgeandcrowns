@@ -5,6 +5,11 @@
 
 ### 2026-11-18: demo is public, compile server is public
 
+**Next: `design/09-roadmap.md`** (roadmap to the paid game: R0 hold the demo
+up, R1 world art pass, R2 paid early access, R3 depth, R4 Steam). Art drafts
+REF-97 forge slab, REF-98 Great Furnace, REF-99 anvil are on the design
+canvas awaiting approval (DRAFT headers, not wired).
+
 - **Git:** `finish/integration` = `main` = `origin/main` (pushed; the owner
   delegated push/merge on green CI on 2026-11-16).
 - **itch.io:** account `pledgeandcrown` (signed in through the owner's GitHub,
