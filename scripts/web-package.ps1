@@ -22,7 +22,12 @@ param(
     [switch]$SkipBuild,
     [string]$CargoProfile = "wasm-release",
     # Package the full game instead of the demo.
-    [switch]$Full
+    [switch]$Full,
+    # JSON file holding the page's window.PLEDGE_CONFIG (apiUrl, apiToken,
+    # realCompile, timeoutSecs). It is injected into the packaged copy of
+    # index.html only; web/index.html is never modified. Keep the file out
+    # of git. Omit for an offline-graded build.
+    [string]$ConfigFile = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -65,6 +70,36 @@ if (Test-Path (Join-Path $webDir "assets")) {
     $files += Get-ChildItem -Path (Join-Path $webDir "assets") -Recurse -File
 }
 
+# Optional page config: write a patched copy of index.html and zip that.
+$indexSource = Join-Path $webDir "index.html"
+if ($ConfigFile -ne "") {
+    if (-not (Test-Path $ConfigFile)) {
+        Write-Host "[FAIL] -ConfigFile '$ConfigFile' not found." -ForegroundColor Red
+        exit 1
+    }
+    $cfg = Get-Content -Raw -Path $ConfigFile | ConvertFrom-Json
+    if (-not ($cfg.apiUrl -is [string]) -or $cfg.apiUrl -notmatch '^https://') {
+        Write-Host "[FAIL] -ConfigFile needs an https:// apiUrl (an http page config would be blocked as mixed content)." -ForegroundColor Red
+        exit 1
+    }
+    $json = $cfg | ConvertTo-Json -Compress
+    if ($json.Contains("</")) {
+        Write-Host "[FAIL] -ConfigFile contains '</'; refusing to inject it into a script tag." -ForegroundColor Red
+        exit 1
+    }
+    $marker = '<script type="module">'
+    $html = [IO.File]::ReadAllText($indexSource)
+    if (($html.Split(@($marker), [StringSplitOptions]::None)).Count -ne 2) {
+        Write-Host "[FAIL] index.html: expected exactly one '$marker' to inject the config before." -ForegroundColor Red
+        exit 1
+    }
+    $html = $html.Replace($marker, "<script>window.PLEDGE_CONFIG = $json;</script>`n$marker")
+    $indexSource = Join-Path ([IO.Path]::GetTempPath()) ("pnc-index-{0}.html" -f [Guid]::NewGuid().ToString("N"))
+    [IO.File]::WriteAllText($indexSource, $html, (New-Object System.Text.UTF8Encoding($false)))
+    Write-Host ("[info] page config injected: apiUrl={0} realCompile={1} token={2}" -f $cfg.apiUrl, [bool]$cfg.realCompile, $(if ($cfg.apiToken) { "set" } else { "none" }))
+} else {
+    Write-Host "[info] no -ConfigFile: offline-graded build (no compile server)."
+}
 New-Item -ItemType Directory -Force -Path "dist" | Out-Null
 $zipPath = Join-Path (Resolve-Path "dist").Path ("pledge-and-crown-web-{0}.zip" -f $stamp.flavour)
 if (Test-Path $zipPath) { Remove-Item -Force $zipPath }
@@ -80,7 +115,7 @@ try {
     foreach ($f in $files) {
         $rel = $f.FullName.Substring($webDir.Length).TrimStart('\', '/') -replace '\\', '/'
         [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
-            $zip, $f.FullName, $rel, [System.IO.Compression.CompressionLevel]::Optimal) | Out-Null
+            $zip, $(if ($rel -eq 'index.html') { $indexSource } else { $f.FullName }), $rel, [System.IO.Compression.CompressionLevel]::Optimal) | Out-Null
         $extracted += $f.Length
         if ($f.Length -gt $maxFile) { $maxFile = $f.Length; $maxFileName = $rel }
     }

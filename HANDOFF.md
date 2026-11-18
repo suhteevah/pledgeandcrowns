@@ -3,7 +3,50 @@
 ## Last Updated
 2026-11-16 — **Orchestrated build-out: waves 1-16 merged. All ten acts, 96 missions, 71 NPCs. Rust-lead pre-release blockers fixed. Branch is ready for the owner to play and decide on.**
 
-Branch **`finish/integration`** (not pushed, `main` untouched). Fable
+### 2026-11-18: demo is public, compile server is public
+
+- **Git:** `finish/integration` = `main` = `origin/main` (pushed; the owner
+  delegated push/merge on green CI on 2026-11-16).
+- **itch.io:** account `pledgeandcrown` (signed in through the owner's GitHub,
+  no password). Project https://pledgeandcrown.itch.io/pledge-and-crown is
+  **Public**, HTML5, no payments, 960x540 embed + fullscreen button, "In
+  development", AI disclosure = yes (graphics, sounds, text, code).
+  Channel `html5`, build `0.1.1-demo+8f10b6c` (24-mission demo).
+  butler lives in `scratch/tools/butler/` (gitignored), already logged in.
+  **Missing on the page:** cover image and screenshots. The browser tool
+  cannot drive itch's native file picker; files are ready in
+  `scratch/release/` (cover) and the capture folder, owner drags them in.
+- **Compile server is public** at `https://goblinledger.duckdns.org/pnc/`
+  (owner's existing DuckDNS site on the Contabo host; one `handle_path
+  /pnc/*` block added to `/etc/caddy/sites.d/goblinledger.caddy`, 256 KB
+  body cap, backup beside `/etc/caddy/`; remove the block and `systemctl
+  reload caddy` to unexpose). `PNC_CORS_ORIGINS` now also lists
+  `https://html-classic.itch.zone` and `https://html.itch.zone`. A second,
+  **public** bearer token for the web build is in `/etc/pnc-compile/web-token`
+  (it ships inside the page, so it is an abuse speed-bump, not a secret; the
+  original token is untouched). Checked from outside: `/pnc/health` 200,
+  no token 401, CORS preflight from the itch origin 200, one real compile
+  200 in 2.4 s. `verify-sandbox.sh` (fixed copy) on the host: 111/111.
+  Logging is still at debug; journald size was not capped.
+- **Packaging:** `scripts/web-package.ps1 -ConfigFile <json>` injects
+  `window.PLEDGE_CONFIG` into the zipped copy of `index.html` only. The
+  config file (`scratch/release/web-config.json`) is gitignored.
+  Release: `web-package.ps1 -ConfigFile ...` then `itch-push.ps1 -Target
+  pledgeandcrown/pledge-and-crown:html5 -UserVersion <v> -Confirm`.
+- **Trademark (hard rule 6):** knockout search of the USPTO register on
+  2026-11-16 found no mark containing both "pledge" and "crown". This is a
+  knockout search, not legal clearance; EU/UK registers, app stores and
+  domains were not checked. The page carries a no-affiliation line for Rust.
+- **Pitch deck:** the overclaims listed under known-open are fixed (8f10b6c).
+- **Verified on the live page:** the frame is served from
+  `https://html-classic.itch.zone` with the config in it; title screen and
+  New Game render; a `fetch` run inside that page to `/pnc/compile-real` for
+  `intro_let_binding` returned 200, `grade: passed`, in 1.1 s.
+- **Not verified:** nobody has played the public build end to end (no
+  mission was solved through the in-game editor on itch). No load test.
+  `ci-slow.ps1` was last green on 72d5525.
+
+Branch **`finish/integration`** (pushed; see the 2026-11-18 note above). Fable
 orchestrates Opus agents in git worktrees, reviews each branch, merges, and
 runs `scripts/ci.ps1` on the merged result as the sign-off gate.
 
