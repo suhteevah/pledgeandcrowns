@@ -115,8 +115,9 @@ is drawn and approved first as the style sample; the rest follow it.
 | Wave | District | Ground | Landmark | Props |
 |---|---|---|---|---|
 | A1 (sample) | The Forge (Act 6) | soot-dark slab | the great furnace | anvil, quench trough, coal heap, tool rack |
-| A2 | Hearthstone (Act 1) | exists | bell tower | well, woodpile, chicken coop, fence, signpost |
-| A2 | The Bridge (Act 2) | plank deck, gorge edge | the bridge gate | lantern post, toll desk, rope rail |
+| A2 | Hearthstone Square (Act 1) | exists | bell tower | well, woodpile, signpost, chicken coop |
+| A2 | Market Row (Act 1) | exists | market stall | crates, barrels, handcart |
+| A2 | The Commons (Act 2) | exists | the Checker's Gate | lantern post, bench, fence |
 | A3 | Guildhall (Act 3) | chequered hall floor | guildhall front | ledger desk, notice board, crates |
 | A3 | Mage's Tower (Act 4) | violet-veined slab | the tower base | orrery, rune stone, bookstand |
 | A3 | Tavern (Act 5) | plank floor | tavern front and sign | tables, barrels, hearth |
@@ -127,7 +128,9 @@ is drawn and approved first as the style sample; the rest follow it.
 | A5 | Characters | | | Borrow Checker sprite, boss intro/defeat frames, NPC idle frames |
 | A5 | UI and store | | | pixel font, title redraw, icons, Steam capsules |
 
-About 55 new pieces before characters. Engineering for each wave follows
+About 55 new pieces before characters. (There is no bridge in the world: Acts 1-2 play across Hearthstone Square, Market Row and The Commons.)
+
+Status 2026-11-18: the Forge (REF-97..102) is approved and in the game. Hearthstone (REF-103..106) and Market Row (REF-107..110) are approved, not wired. The Commons (REF-111..115) is drafted, awaiting approval. Engineering for each wave follows
 its approval, never before.
 
 ## Risks
