@@ -1,5 +1,7 @@
 // REF-03 — Borrow Checker NPC, 64×64, transparent bg.
-// Tall robed figure on stone bridge. Cobalt deep robe, Main teal embroidery
+// Tall robed figure. The stone bridge strip under him was removed
+// 2026-11-19 at the owner's request (there is no bridge in the world);
+// the figure is unchanged. Cobalt deep robe, Main teal embroidery
 // (& and &mut runes), hood low, faint Bright teal eyes. Iron staff w/ balance scale.
 
 // Legend:
@@ -66,12 +68,12 @@ const REF03_GRID = [
   '..............XX<<<<<<<<<<<<<<<<<<<<XX..............XBX.........', // 51
   '...............XXXXXXXXXXXXXXXXXXXXXX...............XBX.........', // 52 robe hem
   '................................................................', // 53 stone bridge
-  'SVSVSVSVSVSVSVSVSVSVSVSVSVSVSVSVSVSVSVSVSVSVSVSVSVSVSVSVSVSVSVSV', // 54 stone top
-  'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX', // 55
-  'BSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBS', // 56 bridge layer
-  'SBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSBSB', // 57
-  'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB', // 58
-  'YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY', // 59 deep shadow
+  '................................................................', // 54 stone top
+  '................................................................', // 55
+  '................................................................', // 56 bridge layer
+  '................................................................', // 57
+  '................................................................', // 58
+  '................................................................', // 59 deep shadow
   '................................................................', // 60
   '................................................................', // 61
   '................................................................', // 62
