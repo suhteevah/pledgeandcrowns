@@ -2076,9 +2076,12 @@ fn spawn_props(mut commands: Commands, asset_server: Res<AssetServer>) {
         ));
         // Further solid parts (the tool rack's second foot) are bare
         // collider entities: `player::move_player` reads every `Solid`.
+        // They carry no `Prop`, so the session sweep in `state.rs` would
+        // miss them and they would pile up on each Quit to Title and
+        // re-entry; `DespawnOnExit` removes them with the session.
         for part in solids {
             tracing::trace!(?kind, ?part, "spawning extra prop collider");
-            commands.spawn(Solid(part));
+            commands.spawn((Solid(part), DespawnOnExit(GameState::InGame)));
             extra_solids += 1;
         }
     }
