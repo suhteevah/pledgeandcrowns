@@ -2,10 +2,10 @@
 // REF-173 - Townsfolk: farmer, 32x32. Ambient villager, gives no mission.
 // DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
 //
-// A hayfield straw hat with a wide brim, a forest tunic with a
-// spring-meadow lit edge, bronze trousers. Stands on the approved
-// REF-71 villager body so height and stance match the cast. For the
-// village, the market and the Commons.
+// A hayfield straw hat with a wide brim, bronze hair and a short bronze
+// beard, a forest tunic with a spring-meadow lit edge, bronze
+// trousers. Second drawing: his own head. For the village, the
+// market and the Commons.
 //
 // Legend: X coalblack  Q hayfield  L brass leaf  P pink quartz
 //         R dusty rose  W wineflesh  E forest  F pine
@@ -16,13 +16,13 @@ const REF173_GRID = [
   '..........XQQQQQQQQQLX..........', //  1
   '.......XQQQQQQQQQQQQQQQLX.......', //  2
   '.......XXXXXXXXXXXXXXXXXX.......', //  3
-  '..........XPPPPPPPPRRX..........', //  4
-  '..........XPPPPPPPPPRX..........', //  5
+  '..........XZZPPPPPPZUX..........', //  4
+  '..........XZPPPPPPPPUX..........', //  5
   '..........XPXXPPPPXXRX..........', //  6
   '..........XPPXPPPPXPRX..........', //  7
   '..........XPPPPRRPPPWX..........', //  8
-  '..........XPPPRRRRPPWX..........', //  9
-  '..........XPPPRWWRPPRX..........', // 10
+  '..........XPZZRRRRZZWX..........', //  9 beard
+  '..........XPZZZWWZZZRX..........', // 10
   '...........XXPRRRRWXX...........', // 11
   '........XXXEEEFFFFEEEFXXX.......', // 12 tunic
   '......XXEEEEEEEEEEEEEEEFFXX.....', // 13

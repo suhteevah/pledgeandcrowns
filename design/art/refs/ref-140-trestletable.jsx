@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-140 - Trestle table, Act 5 district prop, 32x32.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-18. Not wired yet.
 //
 // A long brass-wood table on two trestles with two foaming tankards
 // and a loaf between them. Bottom-centre anchor; solid over the table.

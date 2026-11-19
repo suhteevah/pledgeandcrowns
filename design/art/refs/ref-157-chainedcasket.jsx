@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-157 - Chained casket, Act 8 district prop, 32x32.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-18. Not wired yet.
 //
 // A wide basalt iron casket with two gold bands on a pale stone
 // pedestal, crossed corner to corner by two heavy chains and shut

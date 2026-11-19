@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
 // REF-138 - Tavern plank floor, 16x16 tiles, 2-column sheet.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-18. Not wired yet.
 //
-// Ground for Tavern Row (Act 5): bronze floorboards, four to a tile,
-// with bog-umber seams, butt joints and knots and a few brass-lit
-// flecks. Mix the two tiles freely. Dark and warm on purpose: the
-// Tavern cast wears parchment-cream shirtsleeves.
+// Ground for Tavern Row (Act 5): wide bronze floorboards, two to a
+// tile, with a bog-umber seam between them, one butt joint and one
+// brass-lit fleck per board. Second drawing: the first had four narrow
+// boards a tile with knots and read as busy; the owner agreed. Mix the
+// two tiles freely. Dark and warm on purpose: the Tavern cast wears
+// parchment-cream shirtsleeves.
 //
 // Legend: Z bronze  U bog umber  N antique brass
 
@@ -13,39 +15,39 @@ const REF138_COLS = 2;
 
 const REF138_TILES = {
   plank_a: [
-    'ZZZZZZZZZZZNZZZZ',
-    'ZZNZZZZZZZZZZZZZ',
-    'ZZZZZZZZZZZZZZUZ',
-    'UUUUUUUUUUUUUUUU',
-    'ZZZZZZUZZZZZZZZZ',
-    'ZZZZZZUZZZZNZZZZ',
-    'ZNZZZZUZZZZZZZZZ',
-    'UUUUUUUUUUUUUUUU',
-    'ZZZZZZZZZZZZZNZZ',
+    'ZZZZZZZZZZZZZZZZ',
+    'ZZZZZZZZZZZZZZZZ',
     'ZZZZZNZZZZZZZZZZ',
     'ZZZZZZZZZZZZZZZZ',
+    'ZZZZZZZZZZZZZZZZ',
+    'ZZZZZZZZZZZZZZZZ',
+    'ZZZZZZZZZZZZZZZZ',
     'UUUUUUUUUUUUUUUU',
-    'ZZZZZZZZZZZUZZZZ',
-    'ZZNZZZZZZZZUZZZZ',
-    'ZZZZZZZZZZZUZZNZ',
+    'ZZZZZZZZZZUZZZZZ',
+    'ZZZZZZZZZZUZZZZZ',
+    'ZZZZZZZZZZUZZZZZ',
+    'ZZZZZZZZZZUZZZZZ',
+    'ZZZZZZZZZZUZZZNZ',
+    'ZZZZZZZZZZUZZZZZ',
+    'ZZZZZZZZZZUZZZZZ',
     'UUUUUUUUUUUUUUUU',
   ],
   plank_b: [
+    'ZZZZUZZZZZZZZZZZ',
+    'ZZZZUZZZZZZZZZZZ',
+    'ZZZZUZZZZZZZZZZZ',
+    'ZZZZUZZZZZZZZZZZ',
+    'ZZZZUZZZZZZNZZZZ',
+    'ZZZZUZZZZZZZZZZZ',
+    'ZZZZUZZZZZZZZZZZ',
+    'UUUUUUUUUUUUUUUU',
     'ZZZZZZZZZZZZZZZZ',
-    'ZZZZZNZZZZZZZZZZ',
-    'ZZZZZZZZZZUUZZZZ',
-    'UUUUUUUUUUUUUUUU',
-    'ZZZUZZZZZZZZZZZZ',
-    'ZZZUZZZZZZZZNZZZ',
-    'ZZZUZZZNZZZZZZZZ',
-    'UUUUUUUUUUUUUUUU',
     'ZZZZZZZZZZZZZZZZ',
-    'ZNZZZZZUUZZZZZZZ',
-    'ZZZZZZZUUZZZZZZZ',
-    'UUUUUUUUUUUUUUUU',
-    'ZZZZZZZZZZZZZUZZ',
-    'ZZZZZZZZNZZZZUZZ',
-    'ZZZZZZZZZZZZZUZZ',
+    'ZZNZZZZZZZZZZZZZ',
+    'ZZZZZZZZZZZZZZZZ',
+    'ZZZZZZZZZZZZZZZZ',
+    'ZZZZZZZZZZZZZZZZ',
+    'ZZZZZZZZZZZZZZZZ',
     'UUUUUUUUUUUUUUUU',
   ],
 };

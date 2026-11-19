@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-146 - Wharf dock planks and harbour water, 16x16 tiles, 4-column sheet.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-18. Not wired yet.
 //
 // Ground for the Wharf (Act 7). dock_a and dock_b are weathered
 // aged-paper boards running north to south with stone-grey seams and

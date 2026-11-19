@@ -2,33 +2,33 @@
 // REF-175 - Townsfolk: elder, 32x32. Ambient villager, gives no mission.
 // DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
 //
-// White hair at the temples and a full aged-paper beard down to the
-// chest, a bronze coat with a brass front, a brass walking stick in
-// his left hand. Built on the approved REF-71 villager body. For
-// benches and the well.
+// Bald on top with white hair at the sides and a long aged-paper
+// beard that falls to a point on his chest, a bronze coat, a brass
+// walking stick in his left hand. Second drawing: the beard now
+// reads. For benches and the well.
 //
 // Legend: X coalblack  V aged paper  S stone grey  P pink quartz
 //         R dusty rose  W wineflesh  Z bronze  N antique brass
-//         G old gold  U bog umber
+//         G old gold  U bog umber  C parchment cream
 
 const REF175_GRID = [
   '................................', //  0
   '................................', //  1
   '................................', //  2
   '...........XXXXXXXXXX...........', //  3
-  '..........XVVPPPPPPVSX..........', //  4 white hair
-  '..........XVPPPPPPPPSX..........', //  5
-  '..........XPXXPPPPXXRX..........', //  6
-  '..........XPPXPPPPXPRX..........', //  7
-  '..........XPPPPRRPPPWX..........', //  8
-  '..........XVVVVVVVVVSX..........', //  9 beard
-  '..........XVVVRRRRVVSX..........', // 10
-  '...........XXVVVVVSXX...........', // 11
-  '........XXXZZVVVVVVZZVXXX.......', // 12
-  '......XXZZZZZZZZZZZZZZZUUXX.....', // 13 coat
-  '.....XZZZZUXNNZZZZZZXZZZUUXXXX..', // 14 walking stick
-  '.....XZZZUUXNZZZZZZZXZZUUUNNNX..', // 15
-  '.....XPPRXXXNZZZZZZZXXXPPRX.NX..', // 16
+  '..........XPPPPPPPPPRX..........', //  4
+  '..........XVPPPPPPPPVX..........', //  5 white side hair
+  '..........XVXXPPPPXXVX..........', //  6
+  '..........XVPXPPPPXPVX..........', //  7
+  '..........XVVPPRRPPVSX..........', //  8 beard
+  '..........XVVVRRRRVVSX..........', //  9
+  '..........XVVVVWWVVVSX..........', // 10
+  '..........XVVVVVVVVVSX..........', // 11
+  '........XXXXVVVVVVVVSXXXX.......', // 12
+  '......XXZZZCXVVVVVVSXCZUUXX.....', // 13
+  '.....XZZZZUXNXVVVVSXXCZZUUXXXX..', // 14 walking stick
+  '.....XZZZUUXNZXVVSXZXCZUUUNNNX..', // 15
+  '.....XPPRXXXNZZZZZZZXXXPPRX.NX..', // 16 coat
   '.....XPRRX.XNZZZZZZUX.XPRRX.NX..', // 17
   '......XXX..XNZZZZZZUX..XXX..NX..', // 18
   '..........XXNZZZZZZUXX......NX..', // 19

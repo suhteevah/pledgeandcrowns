@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-162 - Carpet runner, 16x16 tiles, 2-column sheet.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-18. Not wired yet.
 //
 // An oxblood runner with a gold edge and wineflesh ring motifs, laid
 // over a plaza's ground from the street mouth to the landmark.

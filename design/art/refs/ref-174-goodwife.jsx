@@ -2,10 +2,10 @@
 // REF-174 - Townsfolk: goodwife, 32x32. Ambient villager, gives no mission.
 // DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
 //
-// A wine kerchief tied over her hair, a cream blouse, a long teal
-// skirt to the ankle, a brass basket on her arm. Built on the approved
-// REF-71 villager body. For the well, the market stall and the
-// benches.
+// A wine kerchief tied low over brass-brown hair and down past her
+// ears, a cream blouse, a long teal skirt to the ankle, a brass
+// basket on her arm. Second drawing: her own head. For the well, the
+// market stall and the benches.
 //
 // Legend: X coalblack  W wineflesh  R dusty rose  O oxblood
 //         P pink quartz  C parchment cream  V aged paper
@@ -17,11 +17,11 @@ const REF174_GRID = [
   '................................', //  1
   '...........XXXXXXXXXX...........', //  2 kerchief
   '..........XRWWWWWWWWOX..........', //  3
-  '..........XWWPPPPPPWOX..........', //  4
-  '..........XWPPPPPPPPOX..........', //  5
-  '..........XPXXPPPPXXRX..........', //  6
-  '..........XPPXPPPPXPRX..........', //  7
-  '..........XPPPPRRPPPWX..........', //  8
+  '..........XWWWWWWWWWOX..........', //  4
+  '..........XWNNNPPNNNOX..........', //  5
+  '.........XXPXXPPPPXXROX.........', //  6
+  '.........XWPPXPPPPXPROX.........', //  7
+  '.........XWPPPPRRPPPWOX.........', //  8
   '..........XPPPRRRRPPWX..........', //  9
   '..........XPPPRWWRPPRX..........', // 10
   '...........XXPRRRRWXX...........', // 11

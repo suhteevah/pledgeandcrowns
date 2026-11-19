@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-161 - Iron safe, Act 8 district prop, 32x32.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-18. Not wired yet.
 //
 // A squat basalt safe with a stone-grey door, a brass dial, a handle
 // and four gold rivets, on two feet. Bottom-centre anchor; solid over

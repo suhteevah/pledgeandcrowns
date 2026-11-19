@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-168 - Column, Act 10 district prop, 32x32.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-18. Not wired yet.
 //
 // A pale fluted column with a square capital and base and a gold
 // band at each end. Stand them in two rows down the Throne plaza to

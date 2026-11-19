@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-139 - The Tavern, Act 5 district landmark, 64x64.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-18. Not wired yet.
 //
 // A half-timbered tavern: cream plaster, bronze beams with two braces,
 // a deep-teal roof (the only teal roof in the kingdom, so it is found

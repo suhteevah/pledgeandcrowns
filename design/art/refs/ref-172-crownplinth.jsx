@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-172 - The Crown on its plinth, Act 10 district prop, 32x32.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-18. Not wired yet.
 //
 // The Crown the game is named for: old gold with three points, a wine
 // stone and a cobalt stone, on a wine cushion on a pale stone plinth.

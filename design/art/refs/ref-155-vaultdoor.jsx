@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-155 - The Vault door, Act 8 district landmark, 64x64.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-18. Not wired yet.
 //
 // A round strongroom door set in a stone wall: a basalt rim, a
 // stone-grey face with twelve gold studs, and a brass spoked wheel

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-154 - Vault floor, 16x16 tiles, 2-column sheet.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-18. Not wired yet.
 //
 // Ground for the Vault (Act 8): dark basalt slabs, one per tile, with a
 // coalblack joint and one old-gold stud at the corner; the second tile

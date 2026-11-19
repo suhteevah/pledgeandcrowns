@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-166 - Globe, Act 9 district prop, 32x32.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-18. Not wired yet.
 //
 // A cobalt globe with forest continents in a gold meridian ring on a
 // brass stand, one specular-white pixel. For the Library and the

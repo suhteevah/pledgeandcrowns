@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-147 - The harbour crane, Act 7 district landmark, 64x64.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-18. Not wired yet.
 //
 // A bronze timber crane on a stone quay: a braced mast with iron
 // bands, a jib rising to the right with a stay rope, a winch, and a

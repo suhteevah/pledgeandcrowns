@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
-// REF-176 - Townsfolk: child, 32x32. Ambient villager, gives no mission.
+// REF-176 - Townsfolk: boy, 32x32. Ambient villager, gives no mission.
 // DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
 //
-// Four pixels shorter than an adult with the same size head, bronze
-// hair, a dusty-rose tunic, cobalt trousers. Built on the approved
-// REF-71 villager body with four rows taken out of the torso. For
-// anywhere a parent stands.
+// Four pixels shorter than an adult with the same size head, a mop
+// of bronze hair with a brass-lit lock, a dusty-rose tunic, cobalt
+// trousers. For anywhere a parent stands.
 //
-// Legend: X coalblack  Z bronze  U bog umber  P pink quartz
-//         R dusty rose  W wineflesh  L brass leaf  < cobalt deep
+// Legend: X coalblack  Z bronze  N antique brass  U bog umber
+//         P pink quartz  R dusty rose  W wineflesh  L brass leaf
+//         < cobalt deep
 
 const REF176_GRID = [
   '................................', //  0
@@ -18,9 +18,9 @@ const REF176_GRID = [
   '................................', //  4
   '................................', //  5
   '................................', //  6
-  '...........XXXXXXXXXX...........', //  7 head
-  '..........XZZZZZZZZZUX..........', //  8
-  '..........XZPPPPPPPPUX..........', //  9
+  '..........XXXXXXXXXXXX..........', //  7 head
+  '..........XZZZZNZZZZUX..........', //  8
+  '..........XZZPPPPPZZUX..........', //  9
   '..........XPXXPPPPXXRX..........', // 10
   '..........XPPXPPPPXPRX..........', // 11
   '..........XPPPPRRPPPWX..........', // 12

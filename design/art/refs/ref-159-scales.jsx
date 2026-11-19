@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-159 - Scales, Act 8 district prop, 32x32.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-18. Not wired yet.
 //
 // A heavy gold balance: a thick beam across the full width, two deep
 // pans, three stacked coins in the left and an iron weight in the

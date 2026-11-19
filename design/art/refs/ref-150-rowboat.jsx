@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-150 - Rowboat, Act 7 district prop, 32x32.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-18. Not wired yet.
 //
 // A bronze clinker rowboat seen from the side with a gold gunwale, two
 // thwarts and an oar shipped across it, riding on a bright-teal

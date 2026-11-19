@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-148 - Bollard, Act 7 district prop, 32x32.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-18. Not wired yet.
 //
 // A basalt iron mooring bollard with three turns of hayfield rope and
 // the line running off to the right. Place them along the dock edge.

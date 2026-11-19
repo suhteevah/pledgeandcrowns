@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-167 - Candelabra, Act 9 district prop, 32x32.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-18. Not wired yet.
 //
 // A standing gold candelabra with three cream candles, the middle one
 // tallest, each with a brass-leaf flame and one alarm-scarlet pixel.

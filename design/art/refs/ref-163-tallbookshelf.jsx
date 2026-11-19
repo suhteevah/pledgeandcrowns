@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-163 - Tall bookshelf, Act 9 district prop, 32x32.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-18. Not wired yet.
 //
 // A full-height bronze bookcase, four shelves of books in the whole
 // palette with a brass-leaf mark on each spine. Stand them in rows

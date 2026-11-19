@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-144 - Round table and stools, Act 5 district prop, 32x32.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-18. Not wired yet.
 //
 // A round brass-wood table on one leg with a lit candle (two
 // alarm-scarlet pixels of flame), a tankard and a plate, and a stool
