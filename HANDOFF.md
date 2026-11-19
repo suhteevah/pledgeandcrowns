@@ -299,7 +299,7 @@ runs `scripts/ci.ps1` on the merged result as the sign-off gate.
   `scene-district-{guildhall-quarter,the-mages-tower,tavern-row}[-yard]`,
   `scene-landmark-{guildhall,mages-tower,tavern}`.
 - **Wired 2026-11-19 (Acts 8-10):** REF-154..161 in the Vault (basalt
-  floor with a gold ring on one slab in six, the vault door, a treasury
+  floor with a thin brass ring on one slab in twelve, the vault door, a treasury
   behind a chain cordon, the key rack, the chained casket, the scales
   behind a chain, a second cordon along the south wall), REF-162..167 in
   the Forbidden Library (the runner two tiles wide from the south wall to

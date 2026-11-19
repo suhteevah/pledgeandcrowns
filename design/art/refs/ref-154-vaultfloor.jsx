@@ -4,9 +4,11 @@
 //
 // Ground for the Vault (Act 8): dark basalt slabs, one per tile, with a
 // coalblack joint and one old-gold stud at the corner; the second tile
-// carries a gold ring inlay (use it for about one tile in six). The
-// darkest ground in the game on purpose: the Vault cast wears
-// stone-grey plate and would vanish on a grey floor.
+// carries a thin antique-brass ring inlay (use it for about one tile
+// in twelve). Second drawing (owner agreed 2026-11-19): the first ring
+// was a double gold-and-brass line on one tile in six and read as
+// busy. The darkest ground in the game on purpose: the Vault cast
+// wears stone-grey plate and would vanish on a grey floor.
 //
 // Legend: B basalt  X coalblack  S stone grey  G old gold
 //         N antique brass
@@ -36,14 +38,14 @@ const REF154_TILES = {
     'GBBBBBBBBBBBBBBX',
     'BBBBBBBBBBBBBBBX',
     'BBBBBBBNNBBBBBBX',
-    'BBBBBBNGGNBBBBBX',
-    'BBBBBNGBBGNBBBBX',
-    'BBBBNGBBBBGNBBBX',
-    'BBBNGBBBBBBGNBBX',
-    'BBBNGBBBBBBGNBBX',
-    'BBBBNGBBBBGNBBBX',
-    'BBBBBNGBBGNBBBBX',
-    'BBBBBBNGGNBBBBBX',
+    'BBBBBBNBBNBBBBBX',
+    'BBBBBNBBBBNBBBBX',
+    'BBBBNBBBBBBNBBBX',
+    'BBBNBBBBBBBBNBBX',
+    'BBBNBBBBBBBBNBBX',
+    'BBBBNBBBBBBNBBBX',
+    'BBBBBNBBBBNBBBBX',
+    'BBBBBBNBBNBBBBBX',
     'BBBBBBBNNBBBBBBX',
     'BBBBBBBBBBBBBBBX',
     'BBBBBBBBBBBBBBBX',

@@ -110,11 +110,11 @@ const RUNE_RING_RADIUS_PX: f32 = 80.0;
 const T_PLANK_A: u32 = 30;
 const T_PLANK_B: u32 = 31;
 /// REF-154 vault floor: a plain basalt slab and a slab with a gold ring
-/// inlaid, the ring on about one tile in six ([`VAULT_RING_ONE_IN`]).
+/// inlaid, the ring on about one tile in twelve ([`VAULT_RING_ONE_IN`]).
 const T_VAULT_PLAIN: u32 = 32;
 const T_VAULT_RING: u32 = 33;
 /// One vault slab in this many carries the gold ring (REF-154).
-const VAULT_RING_ONE_IN: u32 = 6;
+const VAULT_RING_ONE_IN: u32 = 12;
 /// REF-162 carpet runner, laid in the overlay layer over a plaza's ground
 /// ([`Runner`]): `runner_mid` tiles vertically, `runner_end` is its fringed
 /// south end.
@@ -2102,10 +2102,10 @@ mod tests {
         assert!((0.12..=0.22).contains(&share), "soot_a {a}, soot_b {b}");
     }
 
-    /// REF-154: the gold ring slab on about one vault tile in six, the
+    /// REF-154: the ring slab on about one vault tile in twelve, the
     /// plain basalt slab everywhere else.
     #[test]
-    fn vault_ring_is_about_one_tile_in_six() {
+    fn vault_ring_is_about_one_tile_in_twelve() {
         assert_eq!(
             Ground::VaultFloor.paving().map(|p| p.lay),
             Some(Lay::OneIn(VAULT_RING_ONE_IN))
@@ -2116,7 +2116,7 @@ mod tests {
         let plain = tiles.iter().filter(|(_, _, t)| *t == T_VAULT_PLAIN).count();
         assert_eq!(ring + plain, tiles.len());
         let share = ring as f64 / tiles.len() as f64;
-        assert!((0.12..=0.22).contains(&share), "plain {plain}, ring {ring}");
+        assert!((0.05..=0.12).contains(&share), "plain {plain}, ring {ring}");
     }
 
     /// REF-162: the Library and the Throne each lay a runner two tiles
