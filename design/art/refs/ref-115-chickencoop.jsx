@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-115 - Chicken coop, Act 1 Hearthstone Village prop, 32x32.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/chicken_coop.png.
 //
 // A small brass-wood coop on legs with a wine roof to match the
 // cottages, a dark doorway, a ramp, and one cream hen beside it (one

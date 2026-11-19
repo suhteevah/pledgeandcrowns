@@ -565,3 +565,106 @@ fn the_forge_set_ships_its_approved_renders() {
     );
     assert!(!src.contains("DRAFT"));
 }
+
+/// The free demo's plaza set (approved by Matt 2026-11-18): three 64x64
+/// landmarks (REF-103 Bell Tower, REF-107 market stall, REF-111 Checker's
+/// Gate) and ten 32x32 props ship byte-identical to their renders,
+/// preloaded, with approval headers and no DRAFT left.
+#[test]
+fn the_demo_plaza_set_ships_its_approved_renders() {
+    use pledge_and_crown::assets::{
+        ALL_SPRITE_PATHS, SPRITE_PROP_BARRELS, SPRITE_PROP_BELL_TOWER, SPRITE_PROP_BENCH,
+        SPRITE_PROP_CHECKERS_GATE, SPRITE_PROP_CHICKEN_COOP, SPRITE_PROP_CRATES, SPRITE_PROP_FENCE,
+        SPRITE_PROP_HANDCART, SPRITE_PROP_LANTERN_POST, SPRITE_PROP_MARKET_STALL,
+        SPRITE_PROP_SIGNPOST, SPRITE_PROP_WELL, SPRITE_PROP_WOODPILE,
+    };
+    let root = game_assets();
+    let refs = refs_dir();
+    for (path, file, n, jsx, px) in [
+        (
+            SPRITE_PROP_BELL_TOWER,
+            "bell_tower",
+            103,
+            "ref-103-belltower.jsx",
+            64,
+        ),
+        (SPRITE_PROP_WELL, "well", 104, "ref-104-well.jsx", 32),
+        (
+            SPRITE_PROP_WOODPILE,
+            "woodpile",
+            105,
+            "ref-105-woodpile.jsx",
+            32,
+        ),
+        (
+            SPRITE_PROP_SIGNPOST,
+            "signpost",
+            106,
+            "ref-106-signpost.jsx",
+            32,
+        ),
+        (
+            SPRITE_PROP_MARKET_STALL,
+            "market_stall",
+            107,
+            "ref-107-marketstall.jsx",
+            64,
+        ),
+        (SPRITE_PROP_CRATES, "crates", 108, "ref-108-crates.jsx", 32),
+        (
+            SPRITE_PROP_BARRELS,
+            "barrels",
+            109,
+            "ref-109-barrels.jsx",
+            32,
+        ),
+        (
+            SPRITE_PROP_HANDCART,
+            "handcart",
+            110,
+            "ref-110-handcart.jsx",
+            32,
+        ),
+        (
+            SPRITE_PROP_CHECKERS_GATE,
+            "checkers_gate",
+            111,
+            "ref-111-checkersgate.jsx",
+            64,
+        ),
+        (
+            SPRITE_PROP_LANTERN_POST,
+            "lantern_post",
+            112,
+            "ref-112-lanternpost.jsx",
+            32,
+        ),
+        (SPRITE_PROP_BENCH, "bench", 113, "ref-113-bench.jsx", 32),
+        (SPRITE_PROP_FENCE, "fence", 114, "ref-114-fence.jsx", 32),
+        (
+            SPRITE_PROP_CHICKEN_COOP,
+            "chicken_coop",
+            115,
+            "ref-115-chickencoop.jsx",
+            32,
+        ),
+    ] {
+        let want = format!("sprites/props/{file}.png");
+        let render = format!("png/REF{n}.png");
+        assert_eq!(path, want);
+        assert!(ALL_SPRITE_PATHS.contains(&path), "{path} is not preloaded");
+        assert!(
+            read(&root.join(path)) == read(&refs.join(&render)),
+            "{path} is not the {render} render"
+        );
+        assert_eq!(png_size(&root.join(path)), (px, px), "{path}");
+        let src = std::fs::read_to_string(refs.join(jsx)).expect(jsx);
+        let header = format!("// APPROVED by Matt 2026-11-18. Wired as game/assets/{want}.");
+        assert!(
+            src.lines().any(|l| l.trim_end() == header),
+            "{jsx}: no approval header"
+        );
+        assert!(!src.contains("DRAFT"), "{jsx} still says DRAFT");
+        assert!(!src.contains("Not wired yet"), "{jsx} still says not wired");
+    }
+}

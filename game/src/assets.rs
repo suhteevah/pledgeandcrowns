@@ -194,6 +194,28 @@ pub const SPRITE_PROP_QUENCH_TROUGH: &str = "sprites/props/quench_trough.png";
 pub const SPRITE_PROP_COAL_HEAP: &str = "sprites/props/coal_heap.png";
 pub const SPRITE_PROP_TOOL_RACK: &str = "sprites/props/tool_rack.png";
 
+// The free demo's three plazas (approved by Matt 2026-11-18, R1 wave A2):
+// Hearthstone Square, REF-103 bell tower (64x64 landmark), REF-104 well,
+// REF-105 woodpile, REF-106 signpost, REF-115 chicken coop; Market Row,
+// REF-107 market stall (64x64 landmark), REF-108 crates, REF-109 barrels,
+// REF-110 handcart; The Commons, REF-111 Checker's Gate (64x64 landmark),
+// REF-112 lantern post, REF-113 bench, REF-114 fence. Bottom-centre
+// anchor, y-sorted, solid per their ref headers, placed by
+// `plugins::prop::{LANDMARKS, DISTRICT_PROPS}`.
+pub const SPRITE_PROP_BELL_TOWER: &str = "sprites/props/bell_tower.png";
+pub const SPRITE_PROP_WELL: &str = "sprites/props/well.png";
+pub const SPRITE_PROP_WOODPILE: &str = "sprites/props/woodpile.png";
+pub const SPRITE_PROP_SIGNPOST: &str = "sprites/props/signpost.png";
+pub const SPRITE_PROP_MARKET_STALL: &str = "sprites/props/market_stall.png";
+pub const SPRITE_PROP_CRATES: &str = "sprites/props/crates.png";
+pub const SPRITE_PROP_BARRELS: &str = "sprites/props/barrels.png";
+pub const SPRITE_PROP_HANDCART: &str = "sprites/props/handcart.png";
+pub const SPRITE_PROP_CHECKERS_GATE: &str = "sprites/props/checkers_gate.png";
+pub const SPRITE_PROP_LANTERN_POST: &str = "sprites/props/lantern_post.png";
+pub const SPRITE_PROP_BENCH: &str = "sprites/props/bench.png";
+pub const SPRITE_PROP_FENCE: &str = "sprites/props/fence.png";
+pub const SPRITE_PROP_CHICKEN_COOP: &str = "sprites/props/chicken_coop.png";
+
 // Audio (Stable Audio Open generated, baked via tools/synthwave-gen).
 // Generation is a Matt-action: `powershell -ExecutionPolicy Bypass
 // -File scripts/synthwave-gen.ps1`. Files may be absent during early
@@ -307,4 +329,17 @@ pub const ALL_SPRITE_PATHS: &[&str] = &[
     SPRITE_PROP_QUENCH_TROUGH,
     SPRITE_PROP_COAL_HEAP,
     SPRITE_PROP_TOOL_RACK,
+    SPRITE_PROP_BELL_TOWER,
+    SPRITE_PROP_WELL,
+    SPRITE_PROP_WOODPILE,
+    SPRITE_PROP_SIGNPOST,
+    SPRITE_PROP_MARKET_STALL,
+    SPRITE_PROP_CRATES,
+    SPRITE_PROP_BARRELS,
+    SPRITE_PROP_HANDCART,
+    SPRITE_PROP_CHECKERS_GATE,
+    SPRITE_PROP_LANTERN_POST,
+    SPRITE_PROP_BENCH,
+    SPRITE_PROP_FENCE,
+    SPRITE_PROP_CHICKEN_COOP,
 ];

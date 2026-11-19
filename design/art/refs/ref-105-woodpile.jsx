@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-105 - Woodpile, Act 1 Hearthstone Village prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/woodpile.png.
 //
 // Nine log ends stacked four, three, two (the Firewood Quest counts
 // logs), brass and old-gold rings on bronze. Bottom-centre anchor;

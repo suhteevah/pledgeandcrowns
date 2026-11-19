@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-108 - Crate stack, Market Row district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/crates.png.
 //
 // Three brass-wood crates, two on the ground and one on top, each with
 // a bronze frame and one diagonal brace. Also meant for the Guildhall

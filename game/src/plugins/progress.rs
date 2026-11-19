@@ -1085,45 +1085,62 @@ mod tests {
     }
 
     /// A save inside any landmark (the Throne Dais; the Sealed Stacks,
-    /// solid from threshold to merlons; the Great Furnace, plinth to hood)
-    /// or any district yard prop (the Forge's anvil, quench trough, coal
-    /// heap and each foot of the tool rack) restores to a free spot nearby.
-    /// That spot is on open plaza floor, which `prop`'s
-    /// `every_talk_spot_in_a_dressed_district_is_reachable` proves is one
-    /// region reached from the streets, so the player is never trapped.
+    /// solid from threshold to merlons; the Great Furnace, plinth to hood;
+    /// the Bell Tower, base to eave; the market stall; each pillar of the
+    /// Checker's Gate) or any district prop (the Forge yard; every well,
+    /// woodpile, signpost post, coop, crate stack, barrel group, handcart,
+    /// lantern foot, bench seat and fence piece of the three demo plazas)
+    /// restores to a free spot nearby. Every placed instance is checked,
+    /// not just one per kind: a saved Hearthstone position (the spawn
+    /// plaza) could be under any of them. That spot is on open plaza floor,
+    /// which `prop`'s `every_talk_spot_in_a_dressed_district_is_reachable`
+    /// proves is one region reached from the streets, so the player is
+    /// never trapped. The spawn itself is free.
     #[test]
     fn a_save_inside_a_landmark_or_yard_prop_moves_to_a_free_spot_nearby() {
-        use crate::plugins::prop::{DISTRICT_PROPS, LANDMARKS, PropKind, all_props};
+        use crate::plugins::prop::{DISTRICT_PROPS, LANDMARKS, all_props};
+        use crate::plugins::world::{DISTRICTS, landmark_plot_base};
         let solids = real_solids();
-        let kinds: Vec<PropKind> = LANDMARKS
-            .iter()
-            .map(|(_, k)| *k)
-            .chain(DISTRICT_PROPS.iter().map(|(_, k, _)| *k))
+        assert!(spot_is_free(PLAYER_SPAWN, &solids), "the spawn is blocked");
+        let placed: Vec<_> = all_props()
+            .into_iter()
+            .filter(|(k, b)| {
+                LANDMARKS
+                    .iter()
+                    .any(|(d, lk)| lk == k && landmark_plot_base(*d) == Some(*b))
+                    || DISTRICT_PROPS
+                        .iter()
+                        .any(|(d, dk, off)| dk == k && DISTRICTS[*d].center + *off == *b)
+            })
             .collect();
-        assert!(kinds.len() >= 7, "landmarks + Forge yard: {kinds:?}");
-        for kind in kinds {
-            let (_, base) = all_props()
-                .into_iter()
-                .find(|(k, _)| *k == kind)
-                .unwrap_or_else(|| panic!("{kind:?} is placed"));
+        assert_eq!(
+            placed.len(),
+            LANDMARKS.len() + DISTRICT_PROPS.len(),
+            "every landmark and district prop is placed"
+        );
+        assert!(placed.len() >= 50, "landmarks + Forge yard + demo plazas");
+        for (kind, base) in placed {
             for solid in kind.solids_at(base) {
                 // Feet in the middle of it: exactly the trap the review found.
                 let inside =
                     (solid.min + solid.max) * 0.5 - PLAYER_FOOT.min.lerp(PLAYER_FOOT.max, 0.5);
                 assert!(
                     !spot_is_free(inside, &solids),
-                    "{kind:?}: spot must be blocked"
+                    "{kind:?} at {base:?}: spot must be blocked"
                 );
                 let got = restore_spot(inside, &solids);
                 assert!(
                     spot_is_free(got, &solids),
-                    "{kind:?}: restored into a solid: {got:?}"
+                    "{kind:?} at {base:?}: restored into a solid: {got:?}"
                 );
-                assert_ne!(got, PLAYER_SPAWN, "a free spot is near the {kind:?}");
+                assert_ne!(
+                    got, PLAYER_SPAWN,
+                    "a free spot is near the {kind:?} at {base:?}"
+                );
                 assert!(
                     got.distance(inside)
                         <= RESTORE_SEARCH_STEP_PX * RESTORE_SEARCH_RINGS as f32 * 1.5,
-                    "{kind:?}: moved too far: {inside:?} -> {got:?}"
+                    "{kind:?} at {base:?}: moved too far: {inside:?} -> {got:?}"
                 );
             }
         }

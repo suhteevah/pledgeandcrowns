@@ -30,9 +30,12 @@
 //! decision ([`occludes`]) and the ramp ([`step_alpha`]) are pure functions.
 
 use crate::assets::{
-    SPRITE_PROP_ANVIL, SPRITE_PROP_COAL_HEAP, SPRITE_PROP_COTTAGE, SPRITE_PROP_GREAT_FURNACE,
-    SPRITE_PROP_OAK, SPRITE_PROP_QUENCH_TROUGH, SPRITE_PROP_SEALED_STACKS, SPRITE_PROP_THRONE_DAIS,
-    SPRITE_PROP_TOOL_RACK,
+    SPRITE_PROP_ANVIL, SPRITE_PROP_BARRELS, SPRITE_PROP_BELL_TOWER, SPRITE_PROP_BENCH,
+    SPRITE_PROP_CHECKERS_GATE, SPRITE_PROP_CHICKEN_COOP, SPRITE_PROP_COAL_HEAP,
+    SPRITE_PROP_COTTAGE, SPRITE_PROP_CRATES, SPRITE_PROP_FENCE, SPRITE_PROP_GREAT_FURNACE,
+    SPRITE_PROP_HANDCART, SPRITE_PROP_LANTERN_POST, SPRITE_PROP_MARKET_STALL, SPRITE_PROP_OAK,
+    SPRITE_PROP_QUENCH_TROUGH, SPRITE_PROP_SEALED_STACKS, SPRITE_PROP_SIGNPOST,
+    SPRITE_PROP_THRONE_DAIS, SPRITE_PROP_TOOL_RACK, SPRITE_PROP_WELL, SPRITE_PROP_WOODPILE,
 };
 use crate::plugins::animation::{SpriteLift, unlifted_anchor};
 use crate::plugins::npc::Npc;
@@ -131,6 +134,34 @@ pub enum PropKind {
     QuenchTrough,
     CoalHeap,
     ToolRack,
+    /// The Bell Tower (REF-103, approved 2026-11-18), the Hearthstone
+    /// Square landmark: 64x64, placed at [`LANDMARKS`].
+    BellTower,
+    /// Hearthstone props (REF-104..106, REF-115, approved 2026-11-18),
+    /// 32x32 each, placed by [`DISTRICT_PROPS`]. `SignpostWest` is the
+    /// REF-106 signpost mirrored (its header: "mirror it for a
+    /// left-pointing sign"), the same art drawn with `flip_x`.
+    Well,
+    Woodpile,
+    Signpost,
+    SignpostWest,
+    ChickenCoop,
+    /// The market stall (REF-107, approved 2026-11-18), the Market Row
+    /// landmark: 64x64, placed at [`LANDMARKS`].
+    MarketStall,
+    /// Market Row props (REF-108..110, approved 2026-11-18), 32x32 each.
+    Crates,
+    Barrels,
+    Handcart,
+    /// The Checker's Gate (REF-111, approved 2026-11-18), The Commons
+    /// landmark: 64x64, placed at [`LANDMARKS`], solid only at its two
+    /// pillars so the player walks through the arch.
+    CheckersGate,
+    /// The Commons props (REF-112..114, approved 2026-11-18), 32x32 each.
+    /// Fence pieces placed side by side 32 px apart join into one run.
+    LanternPost,
+    Bench,
+    Fence,
 }
 
 // Solid footprints, relative to the bottom-centre anchor. A ref grid of
@@ -164,6 +195,57 @@ const TOOL_RACK_SOLIDS: [Aabb; 2] = [
     },
 ];
 
+/// REF-103 "solid from the base to the eave": rows 18..61 (eave to base),
+/// cols 14..49 (the eave, the widest part of those rows).
+const BELL_TOWER_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 18.0, 2.0, 46.0)];
+/// REF-104 "solid over the ring": rows 18..29, cols 4..27.
+const WELL_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 12.0, 2.0, 14.0)];
+/// REF-105 "solid over the stack": rows 16..28, cols 4..27.
+const WOODPILE_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 12.0, 3.0, 16.0)];
+/// REF-106 "solid only at the post": the post below the board, rows
+/// 16..29, cols 14..17. Symmetric about the anchor, so the mirrored sign
+/// shares it.
+const SIGNPOST_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 2.0, 2.0, 16.0)];
+/// REF-115 "solid over the coop, not the hen": rows 13..29 (eave line to
+/// the legs and ramp), cols 4..24; the hen (cols 25..30) stays walkable.
+const CHICKEN_COOP_SOLID: [Aabb; 1] = [Aabb {
+    min: Vec2::new(-12.0, 2.0),
+    max: Vec2::new(9.0, 19.0),
+}];
+/// REF-107 "solid from the counter's foot to the awning": rows 8..56,
+/// cols 4..59.
+const MARKET_STALL_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 28.0, 7.0, 56.0)];
+/// REF-108 "solid over the stack": rows 4..29, cols 3..28.
+const CRATES_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 13.0, 2.0, 28.0)];
+/// REF-109 "solid over the group": rows 5..29, cols 3..28.
+const BARRELS_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 13.0, 2.0, 27.0)];
+/// REF-110 "solid over the body and wheel": rows 12..29, cols 8..27 (the
+/// handle to the west, cols 2..7, is not solid).
+const HANDCART_SOLID: [Aabb; 1] = [Aabb {
+    min: Vec2::new(-8.0, 2.0),
+    max: Vec2::new(12.0, 20.0),
+}];
+/// REF-111 "solid at the two pillars only": rows 18..61 (below the arch
+/// spring to the base), cols 6..21 and 42..57. The 20 px between them is
+/// the arch the player walks through.
+const CHECKERS_GATE_SOLIDS: [Aabb; 2] = [
+    Aabb {
+        min: Vec2::new(-26.0, 2.0),
+        max: Vec2::new(-10.0, 46.0),
+    },
+    Aabb {
+        min: Vec2::new(10.0, 2.0),
+        max: Vec2::new(26.0, 46.0),
+    },
+];
+/// REF-112 "solid only at the foot": rows 27..30, cols 11..20.
+const LANTERN_POST_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 5.0, 1.0, 5.0)];
+/// REF-113 "solid over the seat": rows 18..22, cols 3..28.
+const BENCH_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 13.0, 9.0, 14.0)];
+/// REF-114 "solid along the rails": rows 13..23 (upper rail top to lower
+/// rail bottom), the full 32 px width, so pieces 32 px apart join.
+const FENCE_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 16.0, 8.0, 19.0)];
+
 impl PropKind {
     pub fn sprite_path(self) -> &'static str {
         match self {
@@ -176,7 +258,39 @@ impl PropKind {
             PropKind::QuenchTrough => SPRITE_PROP_QUENCH_TROUGH,
             PropKind::CoalHeap => SPRITE_PROP_COAL_HEAP,
             PropKind::ToolRack => SPRITE_PROP_TOOL_RACK,
+            PropKind::BellTower => SPRITE_PROP_BELL_TOWER,
+            PropKind::Well => SPRITE_PROP_WELL,
+            PropKind::Woodpile => SPRITE_PROP_WOODPILE,
+            PropKind::Signpost | PropKind::SignpostWest => SPRITE_PROP_SIGNPOST,
+            PropKind::ChickenCoop => SPRITE_PROP_CHICKEN_COOP,
+            PropKind::MarketStall => SPRITE_PROP_MARKET_STALL,
+            PropKind::Crates => SPRITE_PROP_CRATES,
+            PropKind::Barrels => SPRITE_PROP_BARRELS,
+            PropKind::Handcart => SPRITE_PROP_HANDCART,
+            PropKind::CheckersGate => SPRITE_PROP_CHECKERS_GATE,
+            PropKind::LanternPost => SPRITE_PROP_LANTERN_POST,
+            PropKind::Bench => SPRITE_PROP_BENCH,
+            PropKind::Fence => SPRITE_PROP_FENCE,
         }
+    }
+
+    /// True for a kind drawn as its sprite mirrored left-right (the
+    /// west-pointing signpost).
+    pub fn mirrored(self) -> bool {
+        matches!(self, PropKind::SignpostWest)
+    }
+
+    /// True for a 64x64 district landmark (placed by [`LANDMARKS`]).
+    pub fn is_landmark(self) -> bool {
+        matches!(
+            self,
+            PropKind::ThroneDais
+                | PropKind::SealedStacks
+                | PropKind::GreatFurnace
+                | PropKind::BellTower
+                | PropKind::MarketStall
+                | PropKind::CheckersGate
+        )
     }
 
     /// Native sprite size in pixels (displayed at 1x, like characters).
@@ -186,10 +300,25 @@ impl PropKind {
             PropKind::Cottage
             | PropKind::ThroneDais
             | PropKind::SealedStacks
-            | PropKind::GreatFurnace => Vec2::new(64.0, 64.0),
-            PropKind::Anvil | PropKind::QuenchTrough | PropKind::CoalHeap | PropKind::ToolRack => {
-                Vec2::new(32.0, 32.0)
-            }
+            | PropKind::GreatFurnace
+            | PropKind::BellTower
+            | PropKind::MarketStall
+            | PropKind::CheckersGate => Vec2::new(64.0, 64.0),
+            PropKind::Anvil
+            | PropKind::QuenchTrough
+            | PropKind::CoalHeap
+            | PropKind::ToolRack
+            | PropKind::Well
+            | PropKind::Woodpile
+            | PropKind::Signpost
+            | PropKind::SignpostWest
+            | PropKind::ChickenCoop
+            | PropKind::Crates
+            | PropKind::Barrels
+            | PropKind::Handcart
+            | PropKind::LanternPost
+            | PropKind::Bench
+            | PropKind::Fence => Vec2::new(32.0, 32.0),
         }
     }
 
@@ -207,6 +336,19 @@ impl PropKind {
             PropKind::QuenchTrough => 2.0, // REF-100 row 29 is the feet's bottom
             PropKind::CoalHeap => 3.0,     // REF-101 row 28 is the mound's bottom edge
             PropKind::ToolRack => 1.0,     // REF-102 row 30 is the feet's bottom edge
+            PropKind::BellTower => 2.0,    // REF-103 row 61 is the base's bottom edge
+            PropKind::Well => 2.0,         // REF-104 row 29 is the ring's bottom edge
+            PropKind::Woodpile => 3.0,     // REF-105 row 28 is the bottom logs' edge
+            PropKind::Signpost | PropKind::SignpostWest => 1.0, // REF-106 row 30: the tufts
+            PropKind::ChickenCoop => 2.0,  // REF-115 row 29 is the legs' bottom
+            PropKind::MarketStall => 7.0,  // REF-107 row 56 is the counter's foot
+            PropKind::Crates => 2.0,       // REF-108 row 29 is the ground crates' edge
+            PropKind::Barrels => 2.0,      // REF-109 row 29 is the front barrels' edge
+            PropKind::Handcart => 2.0,     // REF-110 row 29 is the wheel's bottom
+            PropKind::CheckersGate => 2.0, // REF-111 row 61 is the pillar bases' edge
+            PropKind::LanternPost => 1.0,  // REF-112 row 30 is the foot's bottom edge
+            PropKind::Bench => 3.0,        // REF-113 row 28 is the legs' bottom
+            PropKind::Fence => 3.0,        // REF-114 row 28 is the posts' bottom
         }
     }
 
@@ -224,6 +366,19 @@ impl PropKind {
             PropKind::QuenchTrough => &QUENCH_TROUGH_SOLID,
             PropKind::CoalHeap => &COAL_HEAP_SOLID,
             PropKind::ToolRack => &TOOL_RACK_SOLIDS,
+            PropKind::BellTower => &BELL_TOWER_SOLID,
+            PropKind::Well => &WELL_SOLID,
+            PropKind::Woodpile => &WOODPILE_SOLID,
+            PropKind::Signpost | PropKind::SignpostWest => &SIGNPOST_SOLID,
+            PropKind::ChickenCoop => &CHICKEN_COOP_SOLID,
+            PropKind::MarketStall => &MARKET_STALL_SOLID,
+            PropKind::Crates => &CRATES_SOLID,
+            PropKind::Barrels => &BARRELS_SOLID,
+            PropKind::Handcart => &HANDCART_SOLID,
+            PropKind::CheckersGate => &CHECKERS_GATE_SOLIDS,
+            PropKind::LanternPost => &LANTERN_POST_SOLID,
+            PropKind::Bench => &BENCH_SOLID,
+            PropKind::Fence => &FENCE_SOLID,
         }
     }
 
@@ -234,7 +389,6 @@ impl PropKind {
 
     /// Bounding box of the solid footprint relative to the anchor
     /// (bottom-centre): for a one-box kind, the box itself.
-    /// Oak: the trunk base (REF-67 cols 10..21, rows 36..44).
     /// Oak: the trunk base (REF-67 cols 10..21, rows 36..44).
     /// Cottage: the wall rows only (REF-68 cols 5..58, rows 37..58 = 54x22),
     /// so the player can walk behind the roof. Deliberately NOT widened to
@@ -250,8 +404,9 @@ impl PropKind {
     /// walk behind, so the player goes round it, never into it; the six
     /// empty columns either side and the empty rows above and below stay
     /// walkable.
-    /// Great Furnace, anvil, quench trough, coal heap: see the consts above.
-    /// Tool rack: the box round both feet; only the feet collide
+    /// Great Furnace, anvil, quench trough, coal heap and the demo plaza
+    /// set (REF-103..115): see the consts above. Tool rack and Checker's
+    /// Gate: the box round both feet / pillars; only those parts collide
     /// ([`PropKind::solids_local`]).
     pub fn solid_local(self) -> Aabb {
         let parts = self.solids_local();
@@ -277,7 +432,9 @@ impl PropKind {
     /// the chimney fades over a player behind the hood. Anvil: REF-99 cols
     /// 4..24, rows 9..30 (the horn overhangs west). Quench trough and coal
     /// heap: their solid. Tool rack: REF-102 cols 4..27, rows 4..30 (beam
-    /// to feet).
+    /// to feet). The demo plaza set (REF-103..115): every opaque pixel, so
+    /// a roof, awning, lintel, lantern or sign board fades over a character
+    /// behind it; the mirrored signpost mirrors its box.
     pub fn visual_local(self) -> Aabb {
         match self {
             PropKind::Oak => Aabb::from_base(0.0, 14.0, 3.0, 47.0),
@@ -292,6 +449,41 @@ impl PropKind {
             PropKind::QuenchTrough => QUENCH_TROUGH_SOLID[0],
             PropKind::CoalHeap => COAL_HEAP_SOLID[0],
             PropKind::ToolRack => Aabb::from_base(0.0, 12.0, 1.0, 28.0),
+            // REF-103 cols 14..49, rows 0..61.
+            PropKind::BellTower => Aabb::from_base(0.0, 18.0, 2.0, 64.0),
+            // REF-104 cols 3..28, rows 2..29.
+            PropKind::Well => Aabb::from_base(0.0, 13.0, 2.0, 30.0),
+            PropKind::Woodpile => WOODPILE_SOLID[0],
+            // REF-106 cols 4..29 (the board points east), rows 6..30.
+            PropKind::Signpost => Aabb {
+                min: Vec2::new(-12.0, 1.0),
+                max: Vec2::new(14.0, 26.0),
+            },
+            PropKind::SignpostWest => Aabb {
+                min: Vec2::new(-14.0, 1.0),
+                max: Vec2::new(12.0, 26.0),
+            },
+            // REF-115 cols 4..29 (the hen included), rows 3..29.
+            PropKind::ChickenCoop => Aabb {
+                min: Vec2::new(-12.0, 2.0),
+                max: Vec2::new(14.0, 29.0),
+            },
+            PropKind::MarketStall => MARKET_STALL_SOLID[0],
+            PropKind::Crates => CRATES_SOLID[0],
+            PropKind::Barrels => BARRELS_SOLID[0],
+            // REF-110 cols 2..27 (handle to rest leg), rows 8..29.
+            PropKind::Handcart => Aabb {
+                min: Vec2::new(-14.0, 2.0),
+                max: Vec2::new(12.0, 24.0),
+            },
+            // REF-111 cols 4..59 (the lintel), rows 2..61.
+            PropKind::CheckersGate => Aabb::from_base(0.0, 28.0, 2.0, 62.0),
+            // REF-112 cols 11..20, rows 1..30.
+            PropKind::LanternPost => Aabb::from_base(0.0, 5.0, 1.0, 31.0),
+            // REF-113 cols 3..28, rows 10..28.
+            PropKind::Bench => Aabb::from_base(0.0, 13.0, 3.0, 22.0),
+            // REF-114 cols 0..31, rows 7..28.
+            PropKind::Fence => Aabb::from_base(0.0, 16.0, 3.0, 25.0),
         }
     }
 
@@ -392,11 +584,18 @@ pub const COTTAGE_SPOTS: &[(usize, Side, f32)] = &[
 /// the Sealed Stacks (REF-95, approved by Matt 2026-11-16) stand behind the
 /// Librarian, the Throne Dais (REF-96, approved by Matt 2026-11-15) behind
 /// the Compiler. The Great Furnace (REF-98, approved by Matt 2026-11-18)
-/// heads the Forge yard, the Smelter at its mouth.
+/// heads the Forge yard, the Smelter at its mouth. The free demo's plazas
+/// (approved by Matt 2026-11-18): the Bell Tower (REF-103) heads
+/// Hearthstone Square, the Bellringer beside it; the market stall
+/// (REF-107) heads Market Row, the Twin at its counter; the Checker's Gate
+/// (REF-111) heads The Commons, the Auditor at the arch.
 pub const LANDMARKS: &[(usize, PropKind)] = &[
     (9, PropKind::SealedStacks),
     (10, PropKind::ThroneDais),
     (6, PropKind::GreatFurnace),
+    (0, PropKind::BellTower),
+    (1, PropKind::MarketStall),
+    (2, PropKind::CheckersGate),
 ];
 
 /// A district's own yard props: `(district index, kind, offset of the
@@ -406,12 +605,83 @@ pub const LANDMARKS: &[(usize, PropKind)] = &[
 /// 2026-11-18), composed round the Great Furnace (its plot's base is at
 /// (0, 156)): anvil and quench trough either side of the furnace mouth,
 /// the coal heap to the furnace's west, the tool rack against the back
-/// wall to its east.
+/// wall to its east. The free demo's three plazas (REF-104..106,
+/// REF-108..110, REF-112..115, approved by Matt 2026-11-18) are dressed
+/// across their whole area, a kind used as often as it fits and outside
+/// its home district where it belongs (crates and barrels by the well, a
+/// fence and lantern posts in Hearthstone, a signpost and a lantern post
+/// at Market Row's street mouth). Each plaza's composition is described
+/// on its cast in `world.rs`. Same-y fence pieces 32 px apart form one
+/// run (`tests::fences_form_joined_runs`); the Commons runs meet the
+/// Checker's Gate pillars, so the gate is a boundary you pass through.
 pub const DISTRICT_PROPS: &[(usize, PropKind, Vec2)] = &[
     (6, PropKind::Anvil, Vec2::new(-72.0, 92.0)),
     (6, PropKind::QuenchTrough, Vec2::new(72.0, 88.0)),
     (6, PropKind::CoalHeap, Vec2::new(-96.0, 168.0)),
     (6, PropKind::ToolRack, Vec2::new(104.0, 196.0)),
+    // Hearthstone Square: the well before the Bell Tower with the
+    // Cooper's barrels and a crate stack either side of it.
+    (0, PropKind::Well, Vec2::new(0.0, 120.0)),
+    (0, PropKind::Barrels, Vec2::new(-40.0, 120.0)),
+    (0, PropKind::Crates, Vec2::new(40.0, 120.0)),
+    // North-west: the woodpile, two stacks.
+    (0, PropKind::Woodpile, Vec2::new(-184.0, 204.0)),
+    (0, PropKind::Woodpile, Vec2::new(-216.0, 196.0)),
+    // North-east: the chicken coop behind a three-piece fence.
+    (0, PropKind::ChickenCoop, Vec2::new(176.0, 200.0)),
+    (0, PropKind::Fence, Vec2::new(144.0, 152.0)),
+    (0, PropKind::Fence, Vec2::new(176.0, 152.0)),
+    (0, PropKind::Fence, Vec2::new(208.0, 152.0)),
+    // A signpost at each side street: east to The Commons, west (the
+    // mirrored sign) to Market Row.
+    (0, PropKind::Signpost, Vec2::new(248.0, 52.0)),
+    (0, PropKind::SignpostWest, Vec2::new(-248.0, 52.0)),
+    // South-east: lantern posts either side of the Borrow Checker.
+    (0, PropKind::LanternPost, Vec2::new(112.0, -208.0)),
+    (0, PropKind::LanternPost, Vec2::new(240.0, -208.0)),
+    // South-west: a bench, and crates by the west street.
+    (0, PropKind::Bench, Vec2::new(-136.0, -244.0)),
+    (0, PropKind::Crates, Vec2::new(-232.0, -104.0)),
+    // Either side of the south street: barrels west, a bench east.
+    (0, PropKind::Barrels, Vec2::new(-136.0, -72.0)),
+    (0, PropKind::Bench, Vec2::new(128.0, -88.0)),
+    // Market Row: crates and barrels either side of the stall, a handcart
+    // in front of it, more stock in the north corners.
+    (1, PropKind::Crates, Vec2::new(-56.0, 160.0)),
+    (1, PropKind::Barrels, Vec2::new(56.0, 156.0)),
+    (1, PropKind::Handcart, Vec2::new(96.0, 96.0)),
+    (1, PropKind::Barrels, Vec2::new(-184.0, 200.0)),
+    (1, PropKind::Crates, Vec2::new(176.0, 184.0)),
+    // The street mouth (east edge): a signpost north of it pointing to
+    // the hub, a lantern post south of it.
+    (1, PropKind::Signpost, Vec2::new(200.0, 64.0)),
+    (1, PropKind::LanternPost, Vec2::new(200.0, -72.0)),
+    // South-west: a second handcart being unloaded, barrels and crates.
+    (1, PropKind::Handcart, Vec2::new(-120.0, -100.0)),
+    (1, PropKind::Barrels, Vec2::new(-176.0, -108.0)),
+    (1, PropKind::Crates, Vec2::new(-136.0, -168.0)),
+    // South: a bench, and crates in the south-east corner.
+    (1, PropKind::Bench, Vec2::new(72.0, -200.0)),
+    (1, PropKind::Crates, Vec2::new(184.0, -184.0)),
+    // The Commons: a fence run either side of the Checker's Gate, the
+    // inner pieces meeting its pillars.
+    (2, PropKind::Fence, Vec2::new(-104.0, 156.0)),
+    (2, PropKind::Fence, Vec2::new(-72.0, 156.0)),
+    (2, PropKind::Fence, Vec2::new(-40.0, 156.0)),
+    (2, PropKind::Fence, Vec2::new(40.0, 156.0)),
+    (2, PropKind::Fence, Vec2::new(72.0, 156.0)),
+    (2, PropKind::Fence, Vec2::new(104.0, 156.0)),
+    // A bench in the court behind the gate.
+    (2, PropKind::Bench, Vec2::new(72.0, 196.0)),
+    // Lantern posts flanking the approach, and one by the street mouth.
+    (2, PropKind::LanternPost, Vec2::new(-40.0, 40.0)),
+    (2, PropKind::LanternPost, Vec2::new(40.0, 40.0)),
+    (2, PropKind::LanternPost, Vec2::new(-208.0, 64.0)),
+    // The south half: two benches, the stores (crates and barrels).
+    (2, PropKind::Bench, Vec2::new(-104.0, -120.0)),
+    (2, PropKind::Bench, Vec2::new(104.0, -160.0)),
+    (2, PropKind::Crates, Vec2::new(-192.0, -168.0)),
+    (2, PropKind::Barrels, Vec2::new(-192.0, -120.0)),
 ];
 
 /// Free-standing oaks in open meadow, between the quarters.
@@ -593,12 +863,8 @@ fn spawn_props(mut commands: Commands, asset_server: Res<AssetServer>) {
         match kind {
             PropKind::Oak => oaks += 1,
             PropKind::Cottage => cottages += 1,
-            PropKind::ThroneDais | PropKind::SealedStacks | PropKind::GreatFurnace => {
-                landmarks += 1
-            }
-            PropKind::Anvil | PropKind::QuenchTrough | PropKind::CoalHeap | PropKind::ToolRack => {
-                yard += 1
-            }
+            k if k.is_landmark() => landmarks += 1,
+            _ => yard += 1,
         }
         tracing::trace!(?kind, x = base.x, y = base.y, "spawning prop");
         let mut solids = kind.solids_at(*base);
@@ -610,6 +876,7 @@ fn spawn_props(mut commands: Commands, asset_server: Res<AssetServer>) {
             Sprite {
                 image: asset_server.load(kind.sprite_path()),
                 custom_size: Some(kind.size()),
+                flip_x: kind.mirrored(),
                 ..default()
             },
             Anchor::BOTTOM_CENTER,
@@ -993,6 +1260,11 @@ mod tests {
             .collect();
         for (i, (ka, a)) in big.iter().enumerate() {
             for (kb, b) in big.iter().skip(i + 1) {
+                // Two plaza props are checked pixel by pixel in
+                // `district_props_stand_on_their_plaza`.
+                if ref_src(*ka).is_some() && ref_src(*kb).is_some() {
+                    continue;
+                }
                 assert!(!a.overlaps(b), "{ka:?} {a:?} overlaps {kb:?} {b:?}");
             }
         }
@@ -1165,7 +1437,7 @@ mod tests {
 
     // --- District dressing (the Forge, R1 wave A1) -------------------------
 
-    const ALL_KINDS: [PropKind; 9] = [
+    const ALL_KINDS: [PropKind; 23] = [
         PropKind::Oak,
         PropKind::Cottage,
         PropKind::ThroneDais,
@@ -1175,7 +1447,106 @@ mod tests {
         PropKind::QuenchTrough,
         PropKind::CoalHeap,
         PropKind::ToolRack,
+        PropKind::BellTower,
+        PropKind::Well,
+        PropKind::Woodpile,
+        PropKind::Signpost,
+        PropKind::SignpostWest,
+        PropKind::ChickenCoop,
+        PropKind::MarketStall,
+        PropKind::Crates,
+        PropKind::Barrels,
+        PropKind::Handcart,
+        PropKind::CheckersGate,
+        PropKind::LanternPost,
+        PropKind::Bench,
+        PropKind::Fence,
     ];
+
+    /// The approved ref grid behind a plaza prop's sprite (landmarks and
+    /// district props), or `None` for the village oak and cottage.
+    fn ref_src(kind: PropKind) -> Option<&'static str> {
+        Some(match kind {
+            PropKind::Oak | PropKind::Cottage => return None,
+            PropKind::SealedStacks => {
+                include_str!("../../../design/art/refs/ref-95-sealedstacks.jsx")
+            }
+            PropKind::ThroneDais => include_str!("../../../design/art/refs/ref-96-thronedais.jsx"),
+            PropKind::GreatFurnace => {
+                include_str!("../../../design/art/refs/ref-98-greatfurnace.jsx")
+            }
+            PropKind::Anvil => include_str!("../../../design/art/refs/ref-99-anvil.jsx"),
+            PropKind::QuenchTrough => {
+                include_str!("../../../design/art/refs/ref-100-quenchtrough.jsx")
+            }
+            PropKind::CoalHeap => include_str!("../../../design/art/refs/ref-101-coalheap.jsx"),
+            PropKind::ToolRack => include_str!("../../../design/art/refs/ref-102-toolrack.jsx"),
+            PropKind::BellTower => include_str!("../../../design/art/refs/ref-103-belltower.jsx"),
+            PropKind::Well => include_str!("../../../design/art/refs/ref-104-well.jsx"),
+            PropKind::Woodpile => include_str!("../../../design/art/refs/ref-105-woodpile.jsx"),
+            PropKind::Signpost | PropKind::SignpostWest => {
+                include_str!("../../../design/art/refs/ref-106-signpost.jsx")
+            }
+            PropKind::ChickenCoop => {
+                include_str!("../../../design/art/refs/ref-115-chickencoop.jsx")
+            }
+            PropKind::MarketStall => {
+                include_str!("../../../design/art/refs/ref-107-marketstall.jsx")
+            }
+            PropKind::Crates => include_str!("../../../design/art/refs/ref-108-crates.jsx"),
+            PropKind::Barrels => include_str!("../../../design/art/refs/ref-109-barrels.jsx"),
+            PropKind::Handcart => include_str!("../../../design/art/refs/ref-110-handcart.jsx"),
+            PropKind::CheckersGate => {
+                include_str!("../../../design/art/refs/ref-111-checkersgate.jsx")
+            }
+            PropKind::LanternPost => {
+                include_str!("../../../design/art/refs/ref-112-lanternpost.jsx")
+            }
+            PropKind::Bench => include_str!("../../../design/art/refs/ref-113-bench.jsx"),
+            PropKind::Fence => include_str!("../../../design/art/refs/ref-114-fence.jsx"),
+        })
+    }
+
+    /// The rows of a ref's pixel grid.
+    fn grid_rows(src: &str) -> Vec<&str> {
+        src.lines()
+            .filter_map(|l| l.trim_start().strip_prefix('\'')?.split('\'').next())
+            .collect()
+    }
+
+    /// World pixels (the bottom-left corner of each) covered by an opaque
+    /// pixel of a plaza prop anchored at `base` (mirrored kinds drawn
+    /// mirrored), or `None` for a kind without a ref grid.
+    fn opaque_pixels(kind: PropKind, base: Vec2) -> Option<std::collections::HashSet<(i32, i32)>> {
+        let grid = grid_rows(ref_src(kind)?);
+        let (w, h) = (grid[0].len() as i32, grid.len() as i32);
+        let (bx, by) = (base.x.round() as i32, base.y.round() as i32);
+        let mut out = std::collections::HashSet::new();
+        for (r, row) in grid.iter().enumerate() {
+            for (c, ch) in row.chars().enumerate() {
+                if ch == '.' {
+                    continue;
+                }
+                let c = if kind.mirrored() {
+                    w - 1 - c as i32
+                } else {
+                    c as i32
+                };
+                out.insert((bx + c - w / 2, by + h - 1 - r as i32));
+            }
+        }
+        Some(out)
+    }
+
+    /// True when two props visibly overlap: for two plaza props, any
+    /// opaque pixel in common (a fence may run into a gate pillar's empty
+    /// margin); otherwise their whole sprite rectangles.
+    fn props_overlap(a: (PropKind, Vec2), b: (PropKind, Vec2)) -> bool {
+        match (opaque_pixels(a.0, a.1), opaque_pixels(b.0, b.1)) {
+            (Some(pa), Some(pb)) => !pa.is_disjoint(&pb),
+            _ => a.0.sprite_rect_at(a.1).overlaps(&b.0.sprite_rect_at(b.1)),
+        }
+    }
 
     /// Every solid part of every prop, as `player::move_player` sees them.
     fn every_solid() -> Vec<Aabb> {
@@ -1221,10 +1592,7 @@ mod tests {
         rows: std::ops::RangeInclusive<usize>,
         cols: Option<std::ops::RangeInclusive<usize>>,
     ) -> Aabb {
-        let grid: Vec<&str> = src
-            .lines()
-            .filter_map(|l| l.trim_start().strip_prefix('\'')?.split('\'').next())
-            .collect();
+        let grid = grid_rows(src);
         let (w, h) = (grid[0].len() as f32, grid.len() as f32);
         let mut min = Vec2::splat(f32::MAX);
         let mut max = Vec2::splat(f32::MIN);
@@ -1405,11 +1773,22 @@ mod tests {
             for (k, b) in &props {
                 if (*k, *b) != (kind, base) {
                     assert!(
-                        !k.sprite_rect_at(*b).overlaps(&r),
-                        "{kind:?} overlaps the {k:?} at {b:?}"
+                        !props_overlap((kind, base), (*k, *b)),
+                        "{kind:?} at {base:?} overlaps the {k:?} at {b:?}"
                     );
                 }
             }
+        }
+        // Each demo plaza is dressed across its area: 10 to 18 props,
+        // landmark included (Hearthstone, 600 px across, has the most).
+        for name in ["Hearthstone Square", "Market Row", "The Commons"] {
+            let d = DISTRICTS
+                .iter()
+                .position(|x| x.name == name)
+                .expect("demo plaza");
+            let n = DISTRICT_PROPS.iter().filter(|(pd, _, _)| *pd == d).count()
+                + LANDMARKS.iter().filter(|(ld, _)| *ld == d).count();
+            assert!((10..=18).contains(&n), "{name} has {n} props");
         }
         // The Forge yard is the four approved REF-99..102 props.
         let forge: Vec<PropKind> = DISTRICT_PROPS
@@ -1610,5 +1989,415 @@ mod tests {
             PLAYER_FOOT.translated(end).max.y <= feet[0].min.y + 0.01,
             "walked through the west foot: {end:?}"
         );
+    }
+
+    // --- The demo plazas (R1 wave A2) ---------------------------------------
+
+    /// Index into `DISTRICTS` of the district named `name`.
+    fn district_index(name: &str) -> usize {
+        DISTRICTS
+            .iter()
+            .position(|d| d.name == name)
+            .unwrap_or_else(|| panic!("no district {name}"))
+    }
+
+    /// Each demo footprint is exactly what its ref header says is solid,
+    /// re-derived from the approved pixel grid; the visual box is the art's
+    /// opaque bounds (mirrored for the west signpost); the ground line is
+    /// the art's bottom row.
+    #[test]
+    fn demo_footprints_match_their_ref_headers() {
+        type Part = (
+            std::ops::RangeInclusive<usize>,
+            Option<std::ops::RangeInclusive<usize>>,
+        );
+        // (kind, header phrase, solid parts as (rows, cols), visual rows)
+        let cases: Vec<(PropKind, &str, Vec<Part>, std::ops::RangeInclusive<usize>)> = vec![
+            // Eave (row 18) to base (row 61).
+            (
+                PropKind::BellTower,
+                "solid from\n// the base to the eave",
+                vec![(18..=61, None)],
+                0..=61,
+            ),
+            (
+                PropKind::Well,
+                "solid over the ring",
+                vec![(18..=29, None)],
+                2..=29,
+            ),
+            (
+                PropKind::Woodpile,
+                "solid over the stack",
+                vec![(16..=28, None)],
+                16..=28,
+            ),
+            // The post below the board, without the grass tufts.
+            (
+                PropKind::Signpost,
+                "solid only at the post",
+                vec![(16..=29, Some(14..=17))],
+                6..=30,
+            ),
+            (
+                PropKind::SignpostWest,
+                "solid only at the post",
+                vec![(16..=29, Some(14..=17))],
+                6..=30,
+            ),
+            // Eave line to legs and ramp, west of the hen (cols 25..30).
+            (
+                PropKind::ChickenCoop,
+                "solid over the coop, not the hen",
+                vec![(13..=29, Some(0..=24))],
+                3..=29,
+            ),
+            (
+                PropKind::MarketStall,
+                "solid from the\n// counter's foot to the awning",
+                vec![(8..=56, None)],
+                8..=56,
+            ),
+            (
+                PropKind::Crates,
+                "solid over the stack",
+                vec![(4..=29, None)],
+                4..=29,
+            ),
+            (
+                PropKind::Barrels,
+                "solid over the group",
+                vec![(5..=29, None)],
+                5..=29,
+            ),
+            // Body and wheel; the handle (cols 2..7) is not solid.
+            (
+                PropKind::Handcart,
+                "solid over the body\n// and wheel",
+                vec![(12..=29, Some(8..=27))],
+                8..=29,
+            ),
+            // The two pillars, below the arch spring.
+            (
+                PropKind::CheckersGate,
+                "Solid at the two pillars only",
+                vec![(18..=61, Some(0..=31)), (18..=61, Some(32..=63))],
+                0..=61,
+            ),
+            (
+                PropKind::LanternPost,
+                "solid only at the foot",
+                vec![(27..=30, None)],
+                0..=30,
+            ),
+            (
+                PropKind::Bench,
+                "solid over the seat",
+                vec![(18..=22, None)],
+                10..=28,
+            ),
+            // Upper rail top to lower rail bottom, edge to edge.
+            (
+                PropKind::Fence,
+                "solid along the rails",
+                vec![(13..=23, None)],
+                7..=28,
+            ),
+        ];
+        for (kind, phrase, parts, visual) in cases {
+            let src = ref_src(kind).expect("a ref");
+            assert!(
+                src.replace('\r', "").contains(phrase),
+                "{kind:?}: header lost {phrase:?}"
+            );
+            let want: Vec<Aabb> = parts
+                .into_iter()
+                .map(|(rows, cols)| grid_box(src, rows, cols))
+                .collect();
+            assert_eq!(kind.solids_local(), want.as_slice(), "{kind:?} solid");
+            let mut v = grid_box(src, visual, None);
+            if kind.mirrored() {
+                v = Aabb {
+                    min: Vec2::new(-v.max.x, v.min.y),
+                    max: Vec2::new(-v.min.x, v.max.y),
+                };
+            }
+            assert_eq!(kind.visual_local(), v, "{kind:?} visual");
+            let opaque = grid_box(src, 0..=kind.size().y as usize - 1, None);
+            assert_eq!(kind.ground_offset(), opaque.min.y, "{kind:?} ground line");
+        }
+        // The arch between the gate's pillars fits a player's feet.
+        let gate = PropKind::CheckersGate.solids_local();
+        let foot = crate::plugins::player::PLAYER_FOOT;
+        assert!(gate[1].min.x - gate[0].max.x > foot.max.x - foot.min.x);
+        // The signpost's post is symmetric, so the mirrored sign shares it.
+        let post = PropKind::Signpost.solid_local();
+        assert_eq!(post.min.x, -post.max.x);
+        assert!(PropKind::SignpostWest.mirrored() && !PropKind::Signpost.mirrored());
+    }
+
+    /// The three demo landmarks each stand once on their plaza's
+    /// back-centre plot, on clear flagstone with a tile of paving round
+    /// them and room to walk past either side. In front of the base a
+    /// player draws in front; behind the bell tower's eave or the gate's
+    /// lintel they fade; the stall is solid to its top, so nobody stands
+    /// behind it.
+    #[test]
+    fn the_demo_landmarks_head_their_plazas() {
+        for (name, k) in [
+            ("Hearthstone Square", PropKind::BellTower),
+            ("Market Row", PropKind::MarketStall),
+            ("The Commons", PropKind::CheckersGate),
+        ] {
+            let d = district_index(name);
+            assert!(LANDMARKS.contains(&(d, k)), "{name}: {k:?}");
+            assert!(k.is_landmark());
+            let base = crate::plugins::world::landmark_plot_base(d).expect("plot");
+            let placed: Vec<Vec2> = all_props()
+                .into_iter()
+                .filter(|(kk, _)| *kk == k)
+                .map(|(_, b)| b)
+                .collect();
+            assert_eq!(placed, vec![base], "one {k:?}, at the back-centre");
+            assert_eq!(k.size(), Vec2::splat(64.0));
+            let plot = k.sprite_rect_at(base);
+            let grown = Aabb {
+                min: plot.min - Vec2::splat(15.0),
+                max: plot.max + Vec2::splat(15.0),
+            };
+            assert!(
+                rect_all(&grown, Ground::Flagstone),
+                "{k:?}: not on clear flagstone"
+            );
+            let solid = k.solid_at(base);
+            for side in [
+                Aabb::from_base(solid.min.x - 16.0, 16.0, solid.min.y, solid.max.y),
+                Aabb::from_base(solid.max.x + 16.0, 16.0, solid.min.y, solid.max.y),
+            ] {
+                assert!(rect_all(&side, Ground::Flagstone), "{k:?}: no way round");
+            }
+            let prop_z = ysort_z(base.y + k.ground_offset());
+            let front = Vec2::new(base.x, solid.min.y - 6.0);
+            assert!(!occludes(
+                player_body_at_feet(front),
+                ysort_z(front.y),
+                k.visual_at(base),
+                prop_z
+            ));
+            let behind = Vec2::new(base.x, solid.max.y);
+            let fades = occludes(
+                player_body_at_feet(behind),
+                ysort_z(behind.y),
+                k.visual_at(base),
+                prop_z,
+            );
+            if k == PropKind::MarketStall {
+                assert_eq!(k.visual_at(base), solid, "nothing to stand behind");
+            } else {
+                assert!(fades, "{k:?}: no fade behind it");
+            }
+        }
+    }
+
+    /// The Checker's Gate is a gate: a player walks north through the
+    /// arch, between the pillars, into the court behind; walking into a
+    /// pillar stops them.
+    #[test]
+    fn the_checkers_gate_is_passable_through_its_arch() {
+        use crate::plugins::player::PLAYER_FOOT;
+        let d = district_index("The Commons");
+        let base = crate::plugins::world::landmark_plot_base(d).expect("plot");
+        let solids = every_solid();
+        let start = Vec2::new(base.x, base.y - 40.0);
+        let court = Vec2::new(base.x, base.y + 70.0);
+        let end = slide_move(start, court - start, PLAYER_FOOT, &solids);
+        assert!(end.distance(court) < 0.01, "stopped in the arch at {end:?}");
+        // And back out again.
+        let end = slide_move(court, start - court, PLAYER_FOOT, &solids);
+        assert!(
+            end.distance(start) < 0.01,
+            "stopped on the way out at {end:?}"
+        );
+        // Up into the west pillar: stopped below it.
+        let pillar = PropKind::CheckersGate
+            .solids_at(base)
+            .next()
+            .expect("pillar");
+        let start = Vec2::new((pillar.min.x + pillar.max.x) * 0.5, base.y - 40.0);
+        let end = slide_move(start, Vec2::new(0.0, 110.0), PLAYER_FOOT, &solids);
+        assert!(
+            PLAYER_FOOT.translated(end).max.y <= pillar.min.y + 0.01,
+            "walked through the pillar: {end:?}"
+        );
+    }
+
+    /// Fence pieces at the same height 32 px apart are one run: their
+    /// rails meet edge to edge, so no player squeezes between them. Every
+    /// run has at least three pieces. In The Commons the two runs end on
+    /// the Checker's Gate, their rails meeting its pillars, so the only
+    /// ways past are the arch and the open ends (the flood fill in
+    /// `every_talk_spot_in_a_dressed_district_is_reachable` proves nothing
+    /// is sealed off).
+    #[test]
+    fn fences_form_joined_runs() {
+        use crate::plugins::player::PLAYER_FOOT;
+        let solids = every_solid();
+        let foot_w = PLAYER_FOOT.max.x - PLAYER_FOOT.min.x;
+        let mut runs_checked = 0usize;
+        for (d, district) in DISTRICTS.iter().enumerate() {
+            let mut pieces: Vec<Vec2> = DISTRICT_PROPS
+                .iter()
+                .filter(|(pd, k, _)| *pd == d && *k == PropKind::Fence)
+                .map(|(_, _, off)| district.center + *off)
+                .collect();
+            pieces.sort_by(|a, b| a.y.total_cmp(&b.y).then(a.x.total_cmp(&b.x)));
+            // Split into runs: same y, 32 px steps.
+            let mut runs: Vec<Vec<Vec2>> = Vec::new();
+            for p in pieces {
+                match runs.last_mut() {
+                    Some(run) if run.last().is_some_and(|q| q.y == p.y && p.x - q.x == 32.0) => {
+                        run.push(p)
+                    }
+                    _ => runs.push(vec![p]),
+                }
+            }
+            for run in &runs {
+                assert!(
+                    run.len() >= 3,
+                    "{}: a fence run of {}",
+                    district.name,
+                    run.len()
+                );
+                for pair in run.windows(2) {
+                    let a = PropKind::Fence.solid_at(pair[0]);
+                    let b = PropKind::Fence.solid_at(pair[1]);
+                    assert_eq!(a.max.x, b.min.x, "rails do not meet at {:?}", pair[1]);
+                }
+                runs_checked += 1;
+            }
+        }
+        assert!(runs_checked >= 3, "Hearthstone's run and the Commons' two");
+        // The Commons: one run either side of the gate, each meeting a
+        // pillar with no gap a player's feet fit through.
+        let d = district_index("The Commons");
+        let base = crate::plugins::world::landmark_plot_base(d).expect("plot");
+        let pillars: Vec<Aabb> = PropKind::CheckersGate.solids_at(base).collect();
+        let fences: Vec<Aabb> = DISTRICT_PROPS
+            .iter()
+            .filter(|(pd, k, _)| *pd == d && *k == PropKind::Fence)
+            .map(|(_, _, off)| PropKind::Fence.solid_at(DISTRICTS[d].center + *off))
+            .collect();
+        let west = fences
+            .iter()
+            .filter(|f| f.max.x <= base.x)
+            .map(|f| f.max.x)
+            .fold(f32::MIN, f32::max);
+        let east = fences
+            .iter()
+            .filter(|f| f.min.x >= base.x)
+            .map(|f| f.min.x)
+            .fold(f32::MAX, f32::min);
+        assert!(
+            west >= pillars[0].min.x,
+            "west run stops short of the pillar"
+        );
+        assert!(
+            east <= pillars[1].max.x,
+            "east run stops short of the pillar"
+        );
+        // Straight north next to each pillar's outer face: stopped by rail
+        // or pillar, never through.
+        for x in [
+            pillars[0].min.x - foot_w * 0.5,
+            pillars[1].max.x + foot_w * 0.5,
+        ] {
+            let start = Vec2::new(x, base.y - 30.0);
+            let end = slide_move(start, Vec2::new(0.0, 100.0), PLAYER_FOOT, &solids);
+            assert!(
+                end.y < base.y + 20.0,
+                "slipped past the gate at x={x}: {end:?}"
+            );
+        }
+    }
+
+    /// Hearthstone Square stays readable for the first minute: no prop
+    /// within four tiles of the spawn, the spawn's feet free, and a
+    /// straight walk from the spawn reaches Ferris's talk spot (Ferris
+    /// stands where the grid put him before the square was dressed).
+    /// Coming down the north street the Bell Tower stands across its end,
+    /// as the Sealed Stacks do in the Library: the player steps round it
+    /// and walks on to the spawn.
+    #[test]
+    fn hearthstone_keeps_the_spawn_and_ferris_clear() {
+        use crate::plugins::npc::TALK_SPOT_OFFSET;
+        use crate::plugins::player::PLAYER_FOOT;
+        use crate::plugins::world::PLAYER_SPAWN;
+        let solids = every_solid();
+        let around = Aabb::from_base(
+            PLAYER_SPAWN.x,
+            64.0,
+            PLAYER_SPAWN.y - 64.0,
+            PLAYER_SPAWN.y + 64.0,
+        );
+        for (k, b) in all_props() {
+            assert!(
+                !k.sprite_rect_at(b).overlaps(&around),
+                "{k:?} at {b:?} crowds the spawn"
+            );
+        }
+        assert!(
+            solids
+                .iter()
+                .all(|s| !PLAYER_FOOT.translated(PLAYER_SPAWN).overlaps(s))
+        );
+        let ferris = NPC_ROSTER
+            .iter()
+            .position(|s| s.name == "Ferris")
+            .expect("Ferris");
+        assert_eq!(ferris, 0);
+        assert_eq!(
+            district_slot(ferris),
+            Vec2::new(-228.0, -228.0),
+            "Ferris moved"
+        );
+        let talk = district_slot(ferris) + TALK_SPOT_OFFSET;
+        let end = slide_move(PLAYER_SPAWN, talk - PLAYER_SPAWN, PLAYER_FOOT, &solids);
+        assert!(
+            end.distance(talk) < 0.01,
+            "the way to Ferris is blocked at {end:?}"
+        );
+        // The east, west and south streets lead straight to the spawn.
+        let d = &DISTRICTS[district_index("Hearthstone Square")];
+        let h = d.plaza_half + 40.0;
+        for from in [Vec2::new(h, 8.0), Vec2::new(-h, 8.0), Vec2::new(8.0, -h)] {
+            let end = slide_move(from, PLAYER_SPAWN - from, PLAYER_FOOT, &solids);
+            assert!(
+                end.distance(PLAYER_SPAWN) < 0.01,
+                "from {from:?} stopped at {end:?}"
+            );
+        }
+        // The north street: down to the tower, which stops a straight walk,
+        // then round its east side and between the well and the crates.
+        let tower = PropKind::BellTower
+            .solid_at(crate::plugins::world::landmark_plot_base(0).expect("plot"));
+        let street = Vec2::new(8.0, h);
+        let straight = slide_move(street, PLAYER_SPAWN - street, PLAYER_FOOT, &solids);
+        assert!(
+            straight.y > tower.min.y,
+            "walked through the tower: {straight:?}"
+        );
+        let above = tower.max.y - PLAYER_FOOT.min.y + 2.0;
+        let mut p = street;
+        for to in [
+            Vec2::new(8.0, above),
+            Vec2::new(40.0, above),
+            Vec2::new(40.0, 170.0),
+            Vec2::new(20.0, 170.0),
+            Vec2::new(20.0, 0.0),
+            PLAYER_SPAWN,
+        ] {
+            p = slide_move(p, to - p, PLAYER_FOOT, &solids);
+            assert!(p.distance(to) < 0.01, "stopped at {p:?} heading for {to:?}");
+        }
     }
 }

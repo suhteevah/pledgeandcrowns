@@ -662,7 +662,9 @@ fn world_scenes(v: &mut Vec<Scene>) {
         None,
     ));
     // Each landmark (the Sealed Stacks, REF-95; the Throne Dais, REF-96;
-    // the Great Furnace, REF-98) at its plaza's back-centre: the player
+    // the Great Furnace, REF-98; the Bell Tower, REF-103; the market
+    // stall, REF-107; the Checker's Gate, REF-111) at its plaza's
+    // back-centre: the player
     // stands beside it (east of its footing, clear of every NPC), the
     // landmark and whoever stands in front of it in view. Logs the spot so
     // the capture can be checked.
@@ -675,12 +677,10 @@ fn world_scenes(v: &mut Vec<Scene>) {
             PropKind::SealedStacks => "landmark-sealed-stacks",
             PropKind::ThroneDais => "landmark-throne-dais",
             PropKind::GreatFurnace => "landmark-great-furnace",
-            PropKind::Oak
-            | PropKind::Cottage
-            | PropKind::Anvil
-            | PropKind::QuenchTrough
-            | PropKind::CoalHeap
-            | PropKind::ToolRack => "landmark-other",
+            PropKind::BellTower => "landmark-bell-tower",
+            PropKind::MarketStall => "landmark-market-stall",
+            PropKind::CheckersGate => "landmark-checkers-gate",
+            _ => "landmark-other",
         };
         let solid = kind.solid_at(base);
         let feet = Vec2::new(solid.max.x + 48.0, solid.min.y);

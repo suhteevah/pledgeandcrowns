@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-112 - Lantern post, The Commons district prop, 32x32.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/lantern_post.png.
 //
 // A basalt iron post with a brass-framed lantern and a teal flame (the
 // Lifetime Lantern mission is given here). One specular-white pixel.

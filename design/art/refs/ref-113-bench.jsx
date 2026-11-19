@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-113 - Bench, The Commons district prop, 32x32.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/bench.png.
 //
 // A brass-wood bench on bronze legs, seen from the front: a back rail
 // and a seat. Bottom-centre anchor; solid over the seat.

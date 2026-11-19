@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-107 - Market stall, Market Row district landmark, 64x64.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/market_stall.png.
 //
 // The landmark of Market Row (the second Act 1 plaza): a wine-and-cream
 // striped awning with a scalloped edge on two bronze posts, over a

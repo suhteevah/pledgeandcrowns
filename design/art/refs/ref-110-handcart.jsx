@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-110 - Handcart, Market Row district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/handcart.png.
 //
 // A brass-wood handcart seen from the side: one spoked wheel with a
 // stone-grey hub, a handle to the left, a rest leg to the right, two

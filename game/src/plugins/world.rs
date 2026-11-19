@@ -136,6 +136,95 @@ const FORGE_CAST: &[Vec2] = &[
     Vec2::new(120.0, 100.0),
 ];
 
+/// The Hearthstone Square cast (Acts 1-2 prelude), offsets from the plaza
+/// centre (the player's spawn), in roster order. The square
+/// (`prop::LANDMARKS`, `prop::DISTRICT_PROPS`) has the Bell Tower at the
+/// back-centre (base (0, 196)) with the well, the Cooper's barrels and a
+/// crate stack in front of it, the woodpile to the north-west, the chicken
+/// coop behind a short fence to the north-east, a signpost at the west and
+/// east street mouths, two lantern posts beside the Borrow Checker in the
+/// south-east, a bench in the south-west, and barrels and a bench either
+/// side of the south street. The four streets meet at the
+/// centre, and the cross between them stays open: nothing stands within
+/// 64 px of the spawn.
+const HEARTHSTONE_CAST: &[Vec2] = &[
+    // Ferris (`intro_let_binding`), the first quest ("find Ferris"):
+    // exactly where the grid stood him before the square was dressed,
+    // with open paving between him and the spawn.
+    Vec2::new(-228.0, -228.0),
+    // The Trait Mage (`double_function`): beside the south-west bench.
+    Vec2::new(-88.0, -228.0),
+    // The Borrow Checker (`borrow_preview`, then the trial that ends with
+    // the Lifetime Lantern, `bridge_lantern`): 64 px, between his two
+    // lantern posts.
+    Vec2::new(176.0, -176.0),
+    // The Smith (`mut_binding`): at the woodpile, his forge's fuel.
+    Vec2::new(-136.0, 216.0),
+    // The Cartographer (`if_else_sign`, "one road at the fork"): at the
+    // east signpost, where the street leaves for The Commons.
+    Vec2::new(200.0, 80.0),
+    // The Bellringer (`loop_break`, the rope and the bell): east of the
+    // Bell Tower.
+    Vec2::new(64.0, 220.0),
+    // The Oracle (`match_option`): at the well, in front of it, the first
+    // villager north of the spawn.
+    Vec2::new(0.0, 88.0),
+    // The Herald (`struct_basic`): west of the Bell Tower, announcing.
+    Vec2::new(-64.0, 208.0),
+    // The Cooper (`vec_iter`, "the Cooper's barrel is the lesson"): at
+    // his barrels beside the well.
+    Vec2::new(-88.0, 124.0),
+];
+
+/// The Market Row cast, offsets from the plaza centre, in roster order.
+/// The market stall stands at the back-centre (base (0, 156)) with crates
+/// to its west, barrels to its east and a handcart in front; more barrels
+/// and crates fill the corners, a second handcart is unloading in the
+/// south-west, a bench sits in the south and the street enters through
+/// the east edge between a signpost and a lantern post.
+const MARKET_ROW_CAST: &[Vec2] = &[
+    // The Twin (`tuple_destructure`): keeping the stall, at its counter.
+    Vec2::new(0.0, 124.0),
+    // The Tinker (`while_loop`, "tightens, checks, tightens again"): at
+    // the handcart beside the stall.
+    Vec2::new(144.0, 96.0),
+    // The Forgewright (`borrow_mut`): at the barrels east of the stall.
+    Vec2::new(104.0, 164.0),
+    // The Linguist (`string_vs_str`): at the bench, book in hand.
+    Vec2::new(120.0, -188.0),
+    // The Pilgrim (`option_unwrap_or`, the road-walker with the lit
+    // lantern): at the lantern post by the street mouth.
+    Vec2::new(152.0, -80.0),
+    // The Drillmaster (`for_in_range`, counting cadence): at the crates
+    // west of the stall.
+    Vec2::new(-104.0, 184.0),
+];
+
+/// The Commons cast, offsets from the plaza centre, in roster order. The
+/// Checker's Gate stands at the back-centre (base (0, 156)) with a fence
+/// run either side, so the north of the plaza is a small court entered
+/// through the arch (or round the fence ends); a bench sits in the court.
+/// Two lantern posts flank the approach to the gate, a third stands by
+/// the street mouth (west edge), and the south half has two benches and a
+/// stack of crates and barrels.
+const COMMONS_CAST: &[Vec2] = &[
+    // The Reckoner (`closure_basic`, the ledger clerk): at the south-east
+    // bench.
+    Vec2::new(152.0, -152.0),
+    // The Quartermaster (`slice_basic`, the stores): at the crates.
+    Vec2::new(-144.0, -160.0),
+    // The Auditor (`result_question_mark`, who stops at the first
+    // discrepancy): at the gate, west of the arch.
+    Vec2::new(-48.0, 124.0),
+    // The Chronicler (`derive_debug`): at the south-west bench.
+    Vec2::new(-56.0, -112.0),
+    // The Alchemist (`iter_map_collect`): at the east lantern post, by its
+    // teal flame.
+    Vec2::new(88.0, 48.0),
+    // The Heraldic Sage (`enum_match`): at the east end of the fence.
+    Vec2::new(120.0, 124.0),
+];
+
 /// Hub + a ring of eight quarters + two districts at the ends of the
 /// north-south main street. `count`s sum to the 71-NPC roster
 /// (9 + 8*6 + 7 + 7). Roster order fills them, so the earliest (Act 1-2)
@@ -144,14 +233,17 @@ const FORGE_CAST: &[Vec2] = &[
 /// Forbidden Library and Act 10 at the Throne.
 pub const DISTRICTS: &[District] = &[
     // Acts 1-2 (the village prelude, the Borrow Checker among them) fill
-    // the hub and the two quarters on the east-west street.
+    // the hub and the two quarters on the east-west street: the free
+    // demo's plazas, dressed in R1 wave A2 (approved 2026-11-18) with a
+    // landmark each (`prop::LANDMARKS`), their props
+    // (`prop::DISTRICT_PROPS`) and the cast at them. Flagstone ground.
     District {
         name: "Hearthstone Square",
         center: Vec2::new(0.0, 0.0),
         plaza_half: 300.0,
         count: 9,
         interior: None,
-        cast: &[],
+        cast: HEARTHSTONE_CAST,
     },
     District {
         name: "Market Row",
@@ -159,7 +251,7 @@ pub const DISTRICTS: &[District] = &[
         plaza_half: 260.0,
         count: 6,
         interior: None,
-        cast: &[],
+        cast: MARKET_ROW_CAST,
     },
     District {
         name: "The Commons",
@@ -167,7 +259,7 @@ pub const DISTRICTS: &[District] = &[
         plaza_half: 260.0,
         count: 6,
         interior: None,
-        cast: &[],
+        cast: COMMONS_CAST,
     },
     // Act 3: the Guildhall Quarter.
     District {

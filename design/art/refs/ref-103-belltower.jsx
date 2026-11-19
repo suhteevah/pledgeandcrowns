@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-103 - The Bell Tower, Act 1 Hearthstone Village landmark, 64x64.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/bell_tower.png.
 //
 // The village landmark and the Act 1 goal (the Bell Tower mission rings
 // it three times). Same materials as the REF-68 cottage so it belongs to

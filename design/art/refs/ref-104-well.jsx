@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-104 - Village well, Act 1 Hearthstone Village prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/well.png.
 //
 // A stone-grey ring with a lit aged-paper lip and deep-teal water, two
 // bronze posts, a small wine roof that matches the cottages, and a

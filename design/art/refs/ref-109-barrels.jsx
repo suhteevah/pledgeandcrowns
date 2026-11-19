@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-109 - Barrels, Market Row district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/barrels.png.
 //
 // Three bronze barrels with basalt iron bands and brass-lit staves, one
 // standing behind the other two. Also meant for the Tavern and the

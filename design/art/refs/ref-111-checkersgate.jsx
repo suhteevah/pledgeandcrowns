@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-111 - The Checker's Gate, The Commons district landmark, 64x64.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/checkers_gate.png.
 //
 // The Borrow Checker's post (Act 2): a stone-grey gate, two pillars under
 // an arched lintel, with a basalt keystone plaque that carries an

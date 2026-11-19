@@ -275,6 +275,12 @@ runs `scripts/ci.ps1` on the merged result as the sign-off gate.
   (`prop::DISTRICT_PROPS`); the Act 6 cast stands at the yard
   (`District::cast`). Districts are now dressed by data (04b section 9).
   Capture: `scene-district-the-forge.png`, `-yard`, `landmark-great-furnace`.
+- **Wired 2026-11-18 (R1 wave A2, the demo plazas):** REF-103..115 in
+  Hearthstone Square (Bell Tower + 17 props), Market Row (stall + 12) and
+  The Commons (Checker's Gate + fence runs + 13); all 21 Act 1-2 NPCs stand
+  at things (`District::cast`), Ferris unmoved. The Borrow Checker is a
+  Hearthstone NPC, so the gate's keeper is the Auditor. Capture:
+  `scene-district-{hearthstone-square,market-row,the-commons}[-yard].png`.
 - **Awaiting approval:** no landmark.
 - **Not drawn:** boss intro/defeat frames (Librarian, Compiler), the
   Librarian's lectern, pixel font pick, title redraw, a renderable Borrow

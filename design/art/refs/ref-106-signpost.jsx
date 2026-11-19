@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-106 - Signpost, Act 1 Hearthstone Village prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/signpost.png.
 //
 // A bronze post with a brass board pointing right, bog-umber lettering
 // marks (not readable text), two tufts of grass at its foot. Meant for

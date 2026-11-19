@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-114 - Fence, The Commons and Hearthstone prop, 32x32.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/fence.png.
 //
 // Two brass-wood rails on two pointed bronze posts. The rails run to
 // both edges, so pieces placed side by side join into one fence.

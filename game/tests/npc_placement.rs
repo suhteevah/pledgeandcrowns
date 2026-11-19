@@ -317,6 +317,142 @@ fn the_forge_cast_stands_at_their_work() {
     assert!(k.min.x > d.center.x && k.max.y < d.center.y - 24.0, "{k:?}");
 }
 
+/// The free demo's casts stand at things in their dressed plazas, not in
+/// a grid, each one clear tile (16 px) from the nearest prop of the kind
+/// they are matched with. Matches by the mission registry where it has
+/// one: the Bellringer (`loop_break`) at the Bell Tower, the Cooper
+/// (`vec_iter`, his barrel) at the barrels, the Cartographer
+/// (`if_else_sign`, the road fork) at a signpost, the Borrow Checker
+/// (whose trial ends with the Lifetime Lantern, `bridge_lantern`) at the
+/// lantern posts. Ferris stays where the grid stood him. Same roster
+/// order, ids and missions as before.
+#[test]
+fn the_demo_casts_stand_at_their_things() {
+    use pledge_and_crown::plugins::prop::{DISTRICT_PROPS, LANDMARKS, PropKind};
+    use pledge_and_crown::plugins::world::landmark_plot_base;
+    let casts: [(&str, &[(&str, &str)]); 3] = [
+        (
+            "Hearthstone Square",
+            &[
+                ("Ferris", "intro_let_binding"),
+                ("Trait Mage", "double_function"),
+                ("The Borrow Checker", "borrow_preview"),
+                ("The Smith", "mut_binding"),
+                ("The Cartographer", "if_else_sign"),
+                ("The Bellringer", "loop_break"),
+                ("The Oracle", "match_option"),
+                ("The Herald", "struct_basic"),
+                ("The Cooper", "vec_iter"),
+            ],
+        ),
+        (
+            "Market Row",
+            &[
+                ("The Twin", "tuple_destructure"),
+                ("The Tinker", "while_loop"),
+                ("The Forgewright", "borrow_mut"),
+                ("The Linguist", "string_vs_str"),
+                ("The Pilgrim", "option_unwrap_or"),
+                ("The Drillmaster", "for_in_range"),
+            ],
+        ),
+        (
+            "The Commons",
+            &[
+                ("The Reckoner", "closure_basic"),
+                ("The Quartermaster", "slice_basic"),
+                ("The Auditor", "result_question_mark"),
+                ("The Chronicler", "derive_debug"),
+                ("The Alchemist", "iter_map_collect"),
+                ("The Heraldic Sage", "enum_match"),
+            ],
+        ),
+    ];
+    let mut first = 0usize;
+    for (name, want) in casts {
+        let d = DISTRICTS
+            .iter()
+            .find(|x| x.name == name)
+            .unwrap_or_else(|| panic!("{name}"));
+        assert_eq!(d.cast.len(), d.count, "{name}: every NPC is placed by hand");
+        let got: Vec<(&str, &str)> = NPC_ROSTER[first..first + d.count]
+            .iter()
+            .map(|s| (s.name, s.mission_id))
+            .collect();
+        assert_eq!(got, want, "{name}: the roster is unchanged");
+        first += d.count;
+    }
+    let district = |name: &str| {
+        DISTRICTS
+            .iter()
+            .position(|d| d.name == name)
+            .unwrap_or_else(|| panic!("{name}"))
+    };
+    let slot = |name: &str| {
+        let i = NPC_ROSTER
+            .iter()
+            .position(|s| s.name == name)
+            .unwrap_or_else(|| panic!("{name}"));
+        sprite_rect(i)
+    };
+    // Every placed prop of `kind` in district `d`, as sprite rectangles.
+    let rects = |d: usize, kind: PropKind| -> Vec<Aabb> {
+        let mut out: Vec<Aabb> = DISTRICT_PROPS
+            .iter()
+            .filter(|(pd, k, _)| *pd == d && *k == kind)
+            .map(|(_, _, off)| kind.sprite_rect_at(DISTRICTS[d].center + *off))
+            .collect();
+        if LANDMARKS.contains(&(d, kind)) {
+            out.push(kind.sprite_rect_at(landmark_plot_base(d).expect("plot")));
+        }
+        out
+    };
+    for (plaza, npc, kind) in [
+        ("Hearthstone Square", "The Bellringer", PropKind::BellTower),
+        ("Hearthstone Square", "The Herald", PropKind::BellTower),
+        ("Hearthstone Square", "The Smith", PropKind::Woodpile),
+        ("Hearthstone Square", "The Cartographer", PropKind::Signpost),
+        ("Hearthstone Square", "The Oracle", PropKind::Well),
+        ("Hearthstone Square", "The Cooper", PropKind::Barrels),
+        (
+            "Hearthstone Square",
+            "The Borrow Checker",
+            PropKind::LanternPost,
+        ),
+        ("Hearthstone Square", "Trait Mage", PropKind::Bench),
+        ("Market Row", "The Twin", PropKind::MarketStall),
+        ("Market Row", "The Tinker", PropKind::Handcart),
+        ("Market Row", "The Forgewright", PropKind::Barrels),
+        ("Market Row", "The Linguist", PropKind::Bench),
+        ("Market Row", "The Pilgrim", PropKind::LanternPost),
+        ("Market Row", "The Drillmaster", PropKind::Crates),
+        ("The Commons", "The Reckoner", PropKind::Bench),
+        ("The Commons", "The Quartermaster", PropKind::Crates),
+        ("The Commons", "The Auditor", PropKind::CheckersGate),
+        ("The Commons", "The Chronicler", PropKind::Bench),
+        ("The Commons", "The Alchemist", PropKind::LanternPost),
+        ("The Commons", "The Heraldic Sage", PropKind::Fence),
+    ] {
+        let d = district(plaza);
+        let me = slot(npc);
+        let g = rects(d, kind)
+            .iter()
+            .map(|r| gap(&me, r))
+            .fold(f32::MAX, f32::min);
+        assert!(
+            (TILE..=TILE + 0.5).contains(&g),
+            "{npc} stands {g} px from the nearest {kind:?} in {plaza}, not one tile"
+        );
+    }
+    // The Borrow Checker stands between his two lantern posts.
+    let checker = slot("The Borrow Checker");
+    let lanterns = rects(district("Hearthstone Square"), PropKind::LanternPost);
+    assert!(lanterns.iter().any(|r| r.max.x <= checker.min.x));
+    assert!(lanterns.iter().any(|r| r.min.x >= checker.max.x));
+    // Ferris has not moved: the first quest finds him where it always did.
+    assert_eq!(district_slot(0), Vec2::new(-228.0, -228.0));
+}
+
 /// The placement gate for every roster NPC, so a new act cannot put a
 /// villager on a plaza wall again:
 /// 1. the sprite and a one-tile margin around it are ONE walkable ground kind
