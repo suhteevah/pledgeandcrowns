@@ -228,6 +228,36 @@ pub const SPRITE_PROP_WORKBENCH: &str = "sprites/props/workbench.png";
 pub const SPRITE_PROP_BUCKET_SHOVEL: &str = "sprites/props/bucket_shovel.png";
 pub const SPRITE_PROP_STRONGBOX: &str = "sprites/props/strongbox.png";
 pub const SPRITE_PROP_PLANTER: &str = "sprites/props/planter.png";
+// Acts 3-5 district sets (approved by Matt 2026-11-18): the Guildhall
+// Quarter, REF-123 Guildhall (64x64 landmark), REF-124 ledger desk, REF-125
+// notice board, REF-126 guild banner, REF-127 scroll shelf; the Mage's
+// Tower, REF-131 tower (64x64 landmark), REF-132 orrery, REF-133 rune
+// stone, REF-134 lectern, REF-135 crystal, REF-136 cauldron, REF-137
+// telescope; Tavern Row, REF-139 tavern (64x64 landmark), REF-140 trestle
+// table, REF-141 keg rack, REF-142 firepit, REF-143 tavern sign, REF-144
+// round table, REF-145 tab slate. Bottom-centre anchor, y-sorted, solid
+// per their ref headers, placed by `plugins::prop::{LANDMARKS,
+// DISTRICT_PROPS}`. The REF-122, REF-130 and REF-138 grounds ship inside
+// `SPRITE_TILES_VILLAGE_V3`.
+pub const SPRITE_PROP_GUILDHALL: &str = "sprites/props/guildhall.png";
+pub const SPRITE_PROP_LEDGER_DESK: &str = "sprites/props/ledger_desk.png";
+pub const SPRITE_PROP_NOTICE_BOARD: &str = "sprites/props/notice_board.png";
+pub const SPRITE_PROP_GUILD_BANNER: &str = "sprites/props/guild_banner.png";
+pub const SPRITE_PROP_SCROLL_SHELF: &str = "sprites/props/scroll_shelf.png";
+pub const SPRITE_PROP_MAGES_TOWER: &str = "sprites/props/mages_tower.png";
+pub const SPRITE_PROP_ORRERY: &str = "sprites/props/orrery.png";
+pub const SPRITE_PROP_RUNE_STONE: &str = "sprites/props/rune_stone.png";
+pub const SPRITE_PROP_LECTERN: &str = "sprites/props/lectern.png";
+pub const SPRITE_PROP_CRYSTAL: &str = "sprites/props/crystal.png";
+pub const SPRITE_PROP_CAULDRON: &str = "sprites/props/cauldron.png";
+pub const SPRITE_PROP_TELESCOPE: &str = "sprites/props/telescope.png";
+pub const SPRITE_PROP_TAVERN: &str = "sprites/props/tavern.png";
+pub const SPRITE_PROP_TRESTLE_TABLE: &str = "sprites/props/trestle_table.png";
+pub const SPRITE_PROP_KEG_RACK: &str = "sprites/props/keg_rack.png";
+pub const SPRITE_PROP_FIREPIT: &str = "sprites/props/firepit.png";
+pub const SPRITE_PROP_TAVERN_SIGN: &str = "sprites/props/tavern_sign.png";
+pub const SPRITE_PROP_ROUND_TABLE: &str = "sprites/props/round_table.png";
+pub const SPRITE_PROP_TAB_SLATE: &str = "sprites/props/tab_slate.png";
 
 // Audio (Stable Audio Open generated, baked via tools/synthwave-gen).
 // Generation is a Matt-action: `powershell -ExecutionPolicy Bypass
@@ -363,4 +393,23 @@ pub const ALL_SPRITE_PATHS: &[&str] = &[
     SPRITE_PROP_BUCKET_SHOVEL,
     SPRITE_PROP_STRONGBOX,
     SPRITE_PROP_PLANTER,
+    SPRITE_PROP_GUILDHALL,
+    SPRITE_PROP_LEDGER_DESK,
+    SPRITE_PROP_NOTICE_BOARD,
+    SPRITE_PROP_GUILD_BANNER,
+    SPRITE_PROP_SCROLL_SHELF,
+    SPRITE_PROP_MAGES_TOWER,
+    SPRITE_PROP_ORRERY,
+    SPRITE_PROP_RUNE_STONE,
+    SPRITE_PROP_LECTERN,
+    SPRITE_PROP_CRYSTAL,
+    SPRITE_PROP_CAULDRON,
+    SPRITE_PROP_TELESCOPE,
+    SPRITE_PROP_TAVERN,
+    SPRITE_PROP_TRESTLE_TABLE,
+    SPRITE_PROP_KEG_RACK,
+    SPRITE_PROP_FIREPIT,
+    SPRITE_PROP_TAVERN_SIGN,
+    SPRITE_PROP_ROUND_TABLE,
+    SPRITE_PROP_TAB_SLATE,
 ];

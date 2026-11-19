@@ -105,10 +105,10 @@ fn classify(i: usize) -> String {
         return "plaza-edge".into();
     }
     let base = match under.first() {
-        Some(Ground::Flagstone | Ground::ForgeSlab) => "plaza-interior",
+        Some(g) if g.is_plaza_interior() => "plaza-interior",
         Some(Ground::Dirt) => "path",
         Some(Ground::Grass) => "grass",
-        Some(Ground::Cobble) | None => "plaza-edge",
+        Some(_) | None => "plaza-edge",
     };
     if kinds_under(grow(rect, TILE)).len() > 1 {
         format!("{base}(<1 tile from edge)")
@@ -247,13 +247,47 @@ fn acts_9_and_10_stand_in_the_library_and_the_throne() {
     );
 }
 
-/// The four dressed plazas' casts (the Forge, Act 6, and the free demo's
-/// Hearthstone Square, Market Row and The Commons) are placed by hand:
+/// The seven dressed plazas' casts (the free demo's Hearthstone Square,
+/// Market Row and The Commons, the Act 3-5 Guildhall Quarter, Mage's Tower
+/// and Tavern Row, and the Forge, Act 6) are placed by hand:
 /// one spot per roster slot, the roster order, names and missions as
 /// before.
 #[test]
 fn the_dressed_casts_keep_their_roster() {
-    let casts: [(&str, &[(&str, &str)]); 4] = [
+    let casts: [(&str, &[(&str, &str)]); 7] = [
+        (
+            "Guildhall Quarter",
+            &[
+                ("The Guildmaster", "impl_method"),
+                ("The Recruiter", "assoc_new"),
+                ("The Locksmith", "if_let"),
+                ("The Porter", "while_let"),
+                ("The Surveyor", "tuple_struct"),
+                ("The Armorer", "enum_data_match"),
+            ],
+        ),
+        (
+            "The Mage's Tower",
+            &[
+                ("Vexis the Archmage", "trait_def"),
+                ("The Wandwright", "generic_fn"),
+                ("The Conjurer", "generic_struct"),
+                ("The Familiar", "dyn_trait"),
+                ("The Lanternkeeper", "lifetimes"),
+                ("The Loremaster", "assoc_type"),
+            ],
+        ),
+        (
+            "Tavern Row",
+            &[
+                ("The Barkeep", "result_match"),
+                ("The Bouncer", "custom_error"),
+                ("The Interpreter", "from_error"),
+                ("The Mixologist", "option_map"),
+                ("The Tabkeeper", "and_then"),
+                ("The Cellarer", "unwrap_or_else"),
+            ],
+        ),
         (
             "Hearthstone Square",
             &[
@@ -368,7 +402,47 @@ fn the_dressed_casts_gather_at_their_props() {
         );
     };
     // (plaza, the prop they gather at, who)
-    let groups: [(&str, PropKind, &[&str]); 8] = [
+    let groups: [(&str, PropKind, &[&str]); 16] = [
+        (
+            "Guildhall Quarter",
+            PropKind::LedgerDesk,
+            &["The Guildmaster", "The Recruiter"],
+        ),
+        (
+            "Guildhall Quarter",
+            PropKind::NoticeBoard,
+            &["The Surveyor", "The Locksmith", "The Armorer", "The Porter"],
+        ),
+        (
+            "The Mage's Tower",
+            PropKind::Lectern,
+            &["Vexis the Archmage", "The Lanternkeeper"],
+        ),
+        (
+            "The Mage's Tower",
+            PropKind::Orrery,
+            &["The Wandwright", "The Loremaster"],
+        ),
+        (
+            "The Mage's Tower",
+            PropKind::Cauldron,
+            &["The Conjurer", "The Familiar"],
+        ),
+        (
+            "Tavern Row",
+            PropKind::Tavern,
+            &["The Barkeep", "The Bouncer"],
+        ),
+        (
+            "Tavern Row",
+            PropKind::Firepit,
+            &["The Interpreter", "The Mixologist"],
+        ),
+        (
+            "Tavern Row",
+            PropKind::TrestleTable,
+            &["The Tabkeeper", "The Cellarer"],
+        ),
         (
             "Hearthstone Square",
             PropKind::Well,
@@ -419,6 +493,8 @@ fn the_dressed_casts_gather_at_their_props() {
         ("The Forge", "The Keymaster", PropKind::Workbench),
         // The seating corner: the Alchemist at its lantern post.
         ("The Commons", "The Alchemist", PropKind::LanternPost),
+        // The tavern door: the Barkeep by his tab slate.
+        ("Tavern Row", "The Barkeep", PropKind::TabSlate),
         // Alone at their own thing.
         ("Hearthstone Square", "The Bellringer", PropKind::BellTower),
         ("Hearthstone Square", "The Smith", PropKind::Woodpile),
@@ -431,7 +507,16 @@ fn the_dressed_casts_gather_at_their_props() {
         within_reach(plaza, npc, kind);
     }
     // Who stands together: each member within 96 px of another member.
-    let gatherings: [&[&str]; 8] = [
+    let gatherings: [&[&str]; 17] = [
+        &["The Guildmaster", "The Recruiter"],
+        &["The Surveyor", "The Locksmith"],
+        &["The Armorer", "The Porter"],
+        &["Vexis the Archmage", "The Lanternkeeper"],
+        &["The Wandwright", "The Loremaster"],
+        &["The Conjurer", "The Familiar"],
+        &["The Barkeep", "The Bouncer"],
+        &["The Interpreter", "The Mixologist"],
+        &["The Tabkeeper", "The Cellarer"],
         &["The Oracle", "The Cooper", "The Herald"],
         &["The Borrow Checker", "Trait Mage"],
         &["The Drillmaster", "The Twin", "The Forgewright"],
@@ -453,6 +538,36 @@ fn the_dressed_casts_gather_at_their_props() {
                 nearest <= 96.0,
                 "{a} stands {nearest} px from the rest of {group:?}"
             );
+        }
+    }
+    // Nobody in the Act 3-5 quarters stands at storage: no NPC sprite
+    // within a tile of a strongbox, keg rack, barrel group, crate stack or
+    // scroll shelf. People gather where people would stand.
+    for plaza in ["Guildhall Quarter", "The Mage's Tower", "Tavern Row"] {
+        let d = district(plaza);
+        let first: usize = DISTRICTS[..d].iter().map(|x| x.count).sum();
+        for (i, spec) in NPC_ROSTER
+            .iter()
+            .enumerate()
+            .skip(first)
+            .take(DISTRICTS[d].count)
+        {
+            let me = sprite_rect(i);
+            for kind in [
+                PropKind::Strongbox,
+                PropKind::KegRack,
+                PropKind::Barrels,
+                PropKind::Crates,
+                PropKind::ScrollShelf,
+            ] {
+                for r in rects(d, kind) {
+                    assert!(
+                        gap(&me, &r) > TILE,
+                        "{} stands at the {kind:?} in {plaza}",
+                        spec.name
+                    );
+                }
+            }
         }
     }
     // The Borrow Checker stands between his two lantern posts.
@@ -495,9 +610,7 @@ fn npc_placement_invariants() {
         // 1. One walkable kind under the sprite and one tile around it.
         let around = kinds_under(grow(rect, TILE));
         let kind = match around.as_slice() {
-            [k @ (Ground::Flagstone | Ground::ForgeSlab | Ground::Dirt | Ground::Grass)] => {
-                Some(*k)
-            }
+            [k] if k.is_plaza_interior() || matches!(k, Ground::Dirt | Ground::Grass) => Some(*k),
             other => {
                 failures.push(format!("{name}: sprite + 1 tile margin on {other:?}"));
                 None

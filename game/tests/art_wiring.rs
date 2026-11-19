@@ -736,3 +736,184 @@ fn the_density_pass_set_ships_its_approved_renders() {
         assert!(!src.contains("Not wired yet"), "{jsx} still says not wired");
     }
 }
+
+/// The Acts 3-5 district sets (approved by Matt 2026-11-18): three 64x64
+/// landmarks (REF-123 Guildhall, REF-131 Mage's Tower, REF-139 tavern) and
+/// sixteen 32x32 props ship byte-identical to their renders, preloaded,
+/// with approval headers naming their game file and no DRAFT left. The
+/// three grounds (REF-122, REF-130, REF-138) ship inside the terrain
+/// atlas, which is the REF-76 render (`world.rs` pins the indices).
+#[test]
+fn the_act3_to_5_sets_ship_their_approved_renders() {
+    use pledge_and_crown::assets::{
+        ALL_SPRITE_PATHS, SPRITE_PROP_CAULDRON, SPRITE_PROP_CRYSTAL, SPRITE_PROP_FIREPIT,
+        SPRITE_PROP_GUILD_BANNER, SPRITE_PROP_GUILDHALL, SPRITE_PROP_KEG_RACK, SPRITE_PROP_LECTERN,
+        SPRITE_PROP_LEDGER_DESK, SPRITE_PROP_MAGES_TOWER, SPRITE_PROP_NOTICE_BOARD,
+        SPRITE_PROP_ORRERY, SPRITE_PROP_ROUND_TABLE, SPRITE_PROP_RUNE_STONE,
+        SPRITE_PROP_SCROLL_SHELF, SPRITE_PROP_TAB_SLATE, SPRITE_PROP_TAVERN,
+        SPRITE_PROP_TAVERN_SIGN, SPRITE_PROP_TELESCOPE, SPRITE_PROP_TRESTLE_TABLE,
+        SPRITE_TILES_VILLAGE_V3,
+    };
+    let root = game_assets();
+    let refs = refs_dir();
+    for (path, file, n, jsx, px) in [
+        (
+            SPRITE_PROP_GUILDHALL,
+            "guildhall",
+            123,
+            "ref-123-guildhall.jsx",
+            64,
+        ),
+        (
+            SPRITE_PROP_LEDGER_DESK,
+            "ledger_desk",
+            124,
+            "ref-124-ledgerdesk.jsx",
+            32,
+        ),
+        (
+            SPRITE_PROP_NOTICE_BOARD,
+            "notice_board",
+            125,
+            "ref-125-noticeboard.jsx",
+            32,
+        ),
+        (
+            SPRITE_PROP_GUILD_BANNER,
+            "guild_banner",
+            126,
+            "ref-126-guildbanner.jsx",
+            32,
+        ),
+        (
+            SPRITE_PROP_SCROLL_SHELF,
+            "scroll_shelf",
+            127,
+            "ref-127-scrollshelf.jsx",
+            32,
+        ),
+        (
+            SPRITE_PROP_MAGES_TOWER,
+            "mages_tower",
+            131,
+            "ref-131-magestower.jsx",
+            64,
+        ),
+        (SPRITE_PROP_ORRERY, "orrery", 132, "ref-132-orrery.jsx", 32),
+        (
+            SPRITE_PROP_RUNE_STONE,
+            "rune_stone",
+            133,
+            "ref-133-runestone.jsx",
+            32,
+        ),
+        (
+            SPRITE_PROP_LECTERN,
+            "lectern",
+            134,
+            "ref-134-lectern.jsx",
+            32,
+        ),
+        (
+            SPRITE_PROP_CRYSTAL,
+            "crystal",
+            135,
+            "ref-135-crystal.jsx",
+            32,
+        ),
+        (
+            SPRITE_PROP_CAULDRON,
+            "cauldron",
+            136,
+            "ref-136-cauldron.jsx",
+            32,
+        ),
+        (
+            SPRITE_PROP_TELESCOPE,
+            "telescope",
+            137,
+            "ref-137-telescope.jsx",
+            32,
+        ),
+        (SPRITE_PROP_TAVERN, "tavern", 139, "ref-139-tavern.jsx", 64),
+        (
+            SPRITE_PROP_TRESTLE_TABLE,
+            "trestle_table",
+            140,
+            "ref-140-trestletable.jsx",
+            32,
+        ),
+        (
+            SPRITE_PROP_KEG_RACK,
+            "keg_rack",
+            141,
+            "ref-141-kegrack.jsx",
+            32,
+        ),
+        (
+            SPRITE_PROP_FIREPIT,
+            "firepit",
+            142,
+            "ref-142-firepit.jsx",
+            32,
+        ),
+        (
+            SPRITE_PROP_TAVERN_SIGN,
+            "tavern_sign",
+            143,
+            "ref-143-tavernsign.jsx",
+            32,
+        ),
+        (
+            SPRITE_PROP_ROUND_TABLE,
+            "round_table",
+            144,
+            "ref-144-roundtable.jsx",
+            32,
+        ),
+        (
+            SPRITE_PROP_TAB_SLATE,
+            "tab_slate",
+            145,
+            "ref-145-tabslate.jsx",
+            32,
+        ),
+    ] {
+        let want = format!("sprites/props/{file}.png");
+        let render = format!("png/REF{n}.png");
+        assert_eq!(path, want);
+        assert!(ALL_SPRITE_PATHS.contains(&path), "{path} is not preloaded");
+        assert!(
+            read(&root.join(path)) == read(&refs.join(&render)),
+            "{path} is not the {render} render"
+        );
+        assert_eq!(png_size(&root.join(path)), (px, px), "{path}");
+        let src = std::fs::read_to_string(refs.join(jsx)).expect(jsx);
+        let header = format!("// APPROVED by Matt 2026-11-18. Wired as game/assets/{want}.");
+        assert!(
+            src.lines().any(|l| l.trim_end() == header),
+            "{jsx}: no approval header"
+        );
+        assert!(!src.contains("DRAFT"), "{jsx} still says DRAFT");
+        assert!(!src.contains("Not wired yet"), "{jsx} still says not wired");
+    }
+    // The grounds reach the game through the combined atlas (4 full rows).
+    let atlas = root.join(SPRITE_TILES_VILLAGE_V3);
+    assert!(read(&atlas) == read(&refs.join("png/REF76.png")));
+    assert_eq!(png_size(&atlas), (128, 64));
+    for (jsx, indices) in [
+        ("ref-122-hallfloor.jsx", "26-27"),
+        ("ref-130-courtfloor.jsx", "28-29"),
+        ("ref-138-tavernplanks.jsx", "30-31"),
+    ] {
+        let src = std::fs::read_to_string(refs.join(jsx)).expect(jsx);
+        let header = format!(
+            "// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/tiles_village_v3.png (via the REF-76 combined atlas, indices {indices})."
+        );
+        assert!(
+            src.lines().any(|l| l.trim_end() == header),
+            "{jsx}: no approval header"
+        );
+        assert!(!src.contains("Not wired yet"), "{jsx} still says not wired");
+    }
+}

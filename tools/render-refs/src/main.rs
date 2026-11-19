@@ -596,21 +596,26 @@ const REF97_TILES = {
     }
 
     /// REF-76 is a mechanical copy, its sources appended in order: the 22
-    /// REF-66 terrain tiles (0-21), the 2 REF-75 plaza flagstones (22-23)
-    /// and the 2 REF-97 Forge slabs (24-25). Compared on rendered pixels, so
-    /// any edited row, reordering or dropped tile in the combined sheet
-    /// fails here. A later district ground is appended as one more source.
+    /// REF-66 terrain tiles (0-21), the 2 REF-75 plaza flagstones (22-23),
+    /// the 2 REF-97 Forge slabs (24-25), the 2 REF-122 Guildhall floor
+    /// tiles (26-27), the 2 REF-130 tower court tiles (28-29) and the 2
+    /// REF-138 tavern planks (30-31). Compared on rendered pixels, so any
+    /// edited row, reordering or dropped tile in the combined sheet fails
+    /// here. A later district ground is appended as one more source.
     #[test]
     fn ref76_atlas_is_verbatim_copy_of_its_sources() {
         let p = Palette::parse(PALETTE_SRC).unwrap();
         let r76 = render_tiles(baked("ref-76-village-atlas.jsx"), &p).unwrap();
-        // 26 tiles at 8 columns: four rows, the last one partly empty.
+        // 32 tiles at 8 columns: four full rows.
         assert_eq!((r76.width(), r76.height()), (128, 64), "REF-76 atlas size");
         // (source ref, its column count, how many tiles, first REF-76 index)
-        let sources: [(&str, u32, u32, u32); 3] = [
+        let sources: [(&str, u32, u32, u32); 6] = [
             ("ref-66-terrain.jsx", 8, 22, 0),
             ("ref-75-flagstone.jsx", 2, 2, 22),
             ("ref-97-forgeslab.jsx", 2, 2, 24),
+            ("ref-122-hallfloor.jsx", 2, 2, 26),
+            ("ref-130-courtfloor.jsx", 2, 2, 28),
+            ("ref-138-tavernplanks.jsx", 2, 2, 30),
         ];
         let mut next = 0;
         for (jsx, cols, count, first) in sources {
@@ -629,8 +634,10 @@ const REF97_TILES = {
             }
             next = first + count;
         }
-        // The unused cells after the last tile stay transparent.
-        for i in next..32 {
+        // Any unused cells after the last tile stay transparent (none at
+        // 32 tiles; a later ground starts a fifth row).
+        let cells = (r76.width() / 16) * (r76.height() / 16);
+        for i in next..cells {
             assert!(
                 tile_px(&r76, 8, i, 16, 16).iter().all(|px| px[3] == 0),
                 "REF-76 cell {i} past the last tile is not empty"

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-142 - Firepit with a spit, Act 5 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/firepit.png.
 //
 // A stone-ringed fire, gold-ramp flames over a parchment-cream bed
 // with two alarm-scarlet tips, and a roast on an iron spit between

@@ -287,6 +287,17 @@ runs `scripts/ci.ps1` on the merged result as the sign-off gate.
   (`prop::tests::lanes_from_the_streets_are_two_tiles_wide`); the casts
   gather 2-3 to a prop, centres >= 56 px apart (`world::CAST_MIN_SPACING`).
   Overview captures now fit the whole plaza.
+- **Wired 2026-11-18 (Acts 3-5):** REF-122..127, REF-130..145 in the
+  Guildhall Quarter (chequered floor, Guildhall + banners in pairs, ledger
+  desk, notice boards), the Mage's Tower (court with a rune-slab ring,
+  tower, lectern, orrery, eight rune stones round the cauldron) and Tavern
+  Row (planks, tavern, firepit, trestle and round tables, keg racks, tab
+  slate, a sign at each street mouth). Grounds appended to REF-76 (26-31);
+  each paving's laying rule is data (`world::Ground::paving`, `Lay`).
+  Props (landmark incl.): Guildhall 41, Tower 40, Tavern 40. Casts gather
+  in pairs (three gatherings per plaza). Capture:
+  `scene-district-{guildhall-quarter,the-mages-tower,tavern-row}[-yard]`,
+  `scene-landmark-{guildhall,mages-tower,tavern}`.
 - **Awaiting approval:** no landmark.
 - **Not drawn:** boss intro/defeat frames (Librarian, Compiler), the
   Librarian's lectern, pixel font pick, title redraw, a renderable Borrow

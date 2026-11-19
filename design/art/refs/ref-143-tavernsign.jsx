@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-143 - Tavern sign, Act 5 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/tavern_sign.png.
 //
 // A bronze post with an iron arm and a hanging brass board showing a
 // foaming tankard. For street mouths, so the district announces itself.

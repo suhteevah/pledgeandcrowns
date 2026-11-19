@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-136 - Cauldron, Act 4 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/cauldron.png.
 //
 // A basalt iron cauldron on three legs, a teal brew with bright bubbles
 // and a few rising motes, a small gold fire under it with one

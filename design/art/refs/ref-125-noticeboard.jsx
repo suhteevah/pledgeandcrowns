@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-125 - Notice board, Act 3 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/notice_board.png.
 //
 // A brass-wood board on two bronze posts under a small wine roof, with
 // four pinned notices (parchment, aged paper, one dusty rose). Marks,

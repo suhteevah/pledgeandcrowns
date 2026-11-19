@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-124 - Ledger desk, Act 3 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/ledger_desk.png.
 //
 // A brass-wood desk with an open ledger (parchment pages, stone-grey
 // ruled lines), a cobalt inkpot and a quill. Where records are kept:

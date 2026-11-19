@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-145 - The tab slate, Act 5 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/tab_slate.png.
 //
 // A framed basalt slate on two legs where the Tavern keeps its tally:
 // a tick with five teal tally strokes on the top row, a cross with two
