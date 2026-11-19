@@ -127,6 +127,15 @@ pub const TOWNSFOLK: &[Townsperson] = &[
     // weapon rack.
     folk(6, Folk::Farmer, 136.0, -136.0, PropKind::Handcart),
     folk(6, Folk::Boy, 96.0, -104.0, PropKind::WeaponRack),
+    // The Wharf: a guard by the lantern at the street mouth, a merchant
+    // buying at the fish crates, the elder on the net menders' bench, a
+    // girl at the south-west net racks and a boy by the bollard on the
+    // south-east quay, watching the boats.
+    folk(7, Folk::Guard, -188.0, -52.0, PropKind::LanternPost),
+    folk(7, Folk::Merchant, -160.0, 72.0, PropKind::FishCrates),
+    folk(7, Folk::Elder, -152.0, 164.0, PropKind::Bench),
+    folk(7, Folk::Girl, -176.0, -164.0, PropKind::NetRack),
+    folk(7, Folk::Boy, 92.0, -176.0, PropKind::Bollard),
     // The Vault: two guards flanking the vault door, a merchant at the
     // south-east treasury.
     folk(8, Folk::Guard, -56.0, 148.0, PropKind::VaultDoor),
@@ -219,17 +228,13 @@ mod tests {
         }
     }
 
-    /// Two to five figures in each dressed district, none in the Wharf
-    /// (not dressed yet).
+    /// Two to five figures in each district (every district is dressed
+    /// since the Wharf, 2026-11-19).
     #[test]
     fn two_to_five_per_dressed_district() {
         for (d, district) in DISTRICTS.iter().enumerate() {
             let n = TOWNSFOLK.iter().filter(|t| t.district == d).count();
-            if district.name == "The Wharf" {
-                assert_eq!(n, 0, "the Wharf is not dressed");
-            } else {
-                assert!((2..=5).contains(&n), "{} has {n}", district.name);
-            }
+            assert!((2..=5).contains(&n), "{} has {n}", district.name);
         }
     }
 }

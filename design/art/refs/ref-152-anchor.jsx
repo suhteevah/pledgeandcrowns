@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-152 - Anchor, Act 7 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/anchor.png.
 //
 // A basalt iron anchor stood upright: ring, stock, shank and two
 // flukes, lit stone grey on its left. Bottom-centre anchor; solid over

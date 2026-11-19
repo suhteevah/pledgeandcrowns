@@ -1087,6 +1087,96 @@ fn the_act8_to_10_sets_ship_their_approved_renders() {
     }
 }
 
+/// The Wharf set (approved by Matt 2026-11-18): the harbour crane
+/// (REF-147, 64x64) and six 32x32 props (REF-148..153) ship
+/// byte-identical to their renders, preloaded, with approval headers
+/// naming their game file. The dock planks and the two water frames
+/// (REF-146) ship inside the terrain atlas, the REF-76 render, at indices
+/// 36-39 (`world.rs` pins the indices).
+#[test]
+fn the_wharf_set_ships_its_approved_renders() {
+    use pledge_and_crown::assets::{
+        SPRITE_PROP_ANCHOR, SPRITE_PROP_BOLLARD, SPRITE_PROP_FISH_CRATES,
+        SPRITE_PROP_HARBOUR_CRANE, SPRITE_PROP_NET_RACK, SPRITE_PROP_ROWBOAT,
+        SPRITE_PROP_SIGNAL_MAST, SPRITE_TILES_VILLAGE_V3,
+    };
+    for (path, file, n, jsx, px) in [
+        (
+            SPRITE_PROP_HARBOUR_CRANE,
+            "harbour_crane",
+            147,
+            "ref-147-harbourcrane.jsx",
+            64,
+        ),
+        (
+            SPRITE_PROP_BOLLARD,
+            "bollard",
+            148,
+            "ref-148-bollard.jsx",
+            32,
+        ),
+        (
+            SPRITE_PROP_NET_RACK,
+            "net_rack",
+            149,
+            "ref-149-netrack.jsx",
+            32,
+        ),
+        (
+            SPRITE_PROP_ROWBOAT,
+            "rowboat",
+            150,
+            "ref-150-rowboat.jsx",
+            32,
+        ),
+        (
+            SPRITE_PROP_FISH_CRATES,
+            "fish_crates",
+            151,
+            "ref-151-fishcrates.jsx",
+            32,
+        ),
+        (SPRITE_PROP_ANCHOR, "anchor", 152, "ref-152-anchor.jsx", 32),
+        (
+            SPRITE_PROP_SIGNAL_MAST,
+            "signal_mast",
+            153,
+            "ref-153-signalmast.jsx",
+            32,
+        ),
+    ] {
+        assert_wired(path, "props", file, n, jsx, px, "2026-11-18");
+    }
+    let root = game_assets();
+    let refs = refs_dir();
+    let atlas = root.join(SPRITE_TILES_VILLAGE_V3);
+    assert!(read(&atlas) == read(&refs.join("png/REF76.png")));
+    assert_eq!(png_size(&atlas), (128, 80));
+    // The REF-146 sheet itself is rendered and committed (4 tiles across).
+    assert_eq!(png_size(&refs.join("png/REF146.png")), (64, 16));
+    let src = std::fs::read_to_string(refs.join("ref-146-dock.jsx")).expect("REF-146");
+    let header = "// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/tiles_village_v3.png (via the REF-76 combined atlas, indices 36-39).";
+    assert!(
+        src.lines().any(|l| l.trim_end() == header),
+        "ref-146-dock.jsx: no approval header"
+    );
+    assert!(
+        !src.contains("Not wired yet"),
+        "REF-146 still says not wired"
+    );
+    // No ref anywhere is left approved but unwired: every district is
+    // dressed.
+    for entry in std::fs::read_dir(&refs).expect("refs dir") {
+        let path = entry.expect("entry").path();
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if !name.starts_with("ref-") {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path).expect("ref");
+        assert!(!text.contains("Not wired yet"), "{name} is still not wired");
+    }
+}
+
 /// The ambient townsfolk (REF-173..179, approved by Matt 2026-11-19) ship
 /// byte-identical to their 32x32 renders, preloaded, with approval headers
 /// naming their game file; each `townsfolk::Folk` kind loads its own.

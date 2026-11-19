@@ -686,6 +686,7 @@ fn world_scenes(v: &mut Vec<Scene>) {
             PropKind::MagesTower => "landmark-mages-tower",
             PropKind::Tavern => "landmark-tavern",
             PropKind::VaultDoor => "landmark-vault-door",
+            PropKind::HarbourCrane => "landmark-harbour-crane",
             _ => "landmark-other",
         };
         let solid = kind.solid_at(base);
@@ -711,6 +712,71 @@ fn world_scenes(v: &mut Vec<Scene>) {
     }
     district_dressing_scenes(v);
     townsfolk_scenes(v);
+    harbour_scenes(v);
+}
+
+/// The Wharf's harbour (REF-146), at play zoom: `district-the-wharf-jetty`
+/// stands the player on the jetty, out over the water, and
+/// `district-the-wharf-quay` looks along the quay's edge from the jetty's
+/// landing, a little zoomed out, so the basin, the bollards, the boats and
+/// the water's two frames (either may be showing) are in view. Logs the
+/// spot, the ground under the player and the water colliders.
+fn harbour_scenes(v: &mut Vec<Scene>) {
+    use crate::plugins::world::{DISTRICTS, ground_at, water_solids};
+    let Some(wharf) = DISTRICTS.iter().find(|d| d.harbour.is_some()) else {
+        tracing::warn!("harbour scenes: no district has a harbour");
+        return;
+    };
+    let center = wharf.center;
+    for (file, at, height) in [
+        (
+            "district-the-wharf-jetty",
+            Vec2::new(168.0, 12.0),
+            crate::plugins::VIEW_HEIGHT,
+        ),
+        (
+            "district-the-wharf-quay",
+            Vec2::new(104.0, 8.0),
+            crate::plugins::VIEW_HEIGHT * 1.6,
+        ),
+    ] {
+        let spot = center + at;
+        v.push(scene(
+            file,
+            vec![
+                Action::EnterState(GameState::InGame, ENTER_GAME_SETTLE),
+                act(hide_next_pin),
+                act(move |w| set_view_height(w, height)),
+                teleport_to(spot),
+                act(move |w| {
+                    let mut lines = vec![format!(
+                        "harbour: player at ({:.0},{:.0}) on {:?}",
+                        at.x,
+                        at.y,
+                        ground_at(spot)
+                    )];
+                    for s in water_solids() {
+                        lines.push(format!(
+                            "  water collider ({:.0},{:.0})..({:.0},{:.0})",
+                            s.min.x - center.x,
+                            s.min.y - center.y,
+                            s.max.x - center.x,
+                            s.max.y - center.y
+                        ));
+                    }
+                    for line in lines {
+                        tracing::info!("{line}");
+                        w.resource_mut::<ShotLog>().0.push(line);
+                    }
+                }),
+            ],
+            0.8,
+            boxed(|w| {
+                set_view_height(w, crate::plugins::VIEW_HEIGHT);
+                show_next_pin(w);
+            }),
+        ));
+    }
 }
 
 /// One capture per district with ambient townsfolk, at play zoom:

@@ -11,11 +11,14 @@
 // 27 = hall_dark), the 2 REF-130 tower court tiles (28 = court_plain,
 // 29 = court_rune) and the 2 REF-138 tavern planks (30 = plank_a,
 // 31 = plank_b), the 2 REF-154 vault floor tiles (32 = vault_plain,
-// 33 = vault_ring) and the 2 REF-162 carpet runner tiles (34 = runner_mid,
-// 35 = runner_end), all verbatim. A district ground approved later is
-// APPENDED the same way, never inserted: existing indices must not move.
-// 36 tiles fill four rows of eight and half a fifth (128x80; the rest of
-// row five is empty). The runner is laid in the overlay layer, over the
+// 33 = vault_ring), the 2 REF-162 carpet runner tiles (34 = runner_mid,
+// 35 = runner_end) and the 4 REF-146 Wharf tiles (36 = dock_a, 37 =
+// dock_b, 38 = harbour_a, 39 = harbour_b), all verbatim. REF-146 names
+// its water frames water_a and water_b; they are keyed harbour_a and
+// harbour_b here only because REF-66 already has a water_a (index 9).
+// A district ground approved later is APPENDED the same way, never
+// inserted: existing indices must not move. 40 tiles fill five rows of
+// eight (128x80). The runner is laid in the overlay layer, over the
 // plaza ground, so runner_end's open fringe shows the flagstone under it.
 //
 // Do NOT edit rows here. Change the source ref (after approval) and re-copy.
@@ -25,7 +28,7 @@
 //
 // Legend: see ref-66-terrain.jsx, ref-75-flagstone.jsx, ref-97-forgeslab.jsx,
 // ref-122-hallfloor.jsx, ref-130-courtfloor.jsx, ref-138-tavernplanks.jsx,
-// ref-154-vaultfloor.jsx and ref-162-runner.jsx.
+// ref-154-vaultfloor.jsx, ref-162-runner.jsx and ref-146-dock.jsx.
 
 const REF76_COLS = 8;
 
@@ -677,6 +680,78 @@ const REF76_TILES = {
     'GGGGGGGGGGGGGGGG',
     'GXGXGXGXGXGXGXGX',
     '.G.G.G.G.G.G.G.G',
+  ],
+  dock_a: [
+    'VVVVVSVVVVVVVVVS',
+    'VVVVVSVVVVVVVVVS',
+    'VZVVVSVVVVVVZVVS',
+    'VVVVVSVVVVVVVVVS',
+    'VVVVVSVVVVVVVVVS',
+    'VVVVVSVVVSVVVVVS',
+    'VVVVVSVVVVVVVVVS',
+    'VVVVVSVVVVVVVVVS',
+    'VVVVVSVVVVVVVVVS',
+    'VVVVVSVVVVVVVVVS',
+    'VVVSVSVVVVVVVVVS',
+    'VVVVVSVVVVVVVVVS',
+    'VVVVVSVVVVVVVVVS',
+    'VZVVVSVVVVVVZVVS',
+    'VVVVVSVVVVVVVVVS',
+    'VVVVVSVVVVVVVVVS',
+  ],
+  dock_b: [
+    'VVVVVVVVVVSVVVVS',
+    'VVVVVVVVVVSVVVVS',
+    'VVZVVVVVVVSVVZVS',
+    'VVVVVVVVVVSVVVVS',
+    'VVVVSVVVVVSVVVVS',
+    'VVVVVVVVVVSVVVVS',
+    'VVVVVVVVVVSVVVVS',
+    'SSSSSSSSSSSVVVVS',
+    'VVVVVVVVVVSVVVVS',
+    'VVVVVVVVVVSVVVVS',
+    'VVVVVVVVVVSVVVVS',
+    'VVVVVVVSVVSVVVVS',
+    'VVVVVVVVVVSVVVVS',
+    'VVZVVVVVVVSVVZVS',
+    'VVVVVVVVVVSVVVVS',
+    'VVVVVVVVVVSVVVVS',
+  ],
+  harbour_a: [
+    'TTTTTTTTTTTTTTTT',
+    'TTTTTTTTTTTTTTTT',
+    'TTTIIITTTTTTTTTT',
+    'TTTTTTTTTTTTTDDT',
+    'TTTTTTTTTTTTTTTT',
+    'TTTTTTTTTIIIITTT',
+    'TDDTTTTTTTTTTTTT',
+    'TTTTTTTTTTTTTTTT',
+    'TTTTTTTTTTTTTTTT',
+    'TTTTIITTTTTTTTTT',
+    'TTTTTTTTTTTDDDTT',
+    'TTTTTTTTTTTTTTTT',
+    'TTTTTTTTTTTTTTTT',
+    'TIIITTTTTTIITTTT',
+    'TTTTTTTDDTTTTTTT',
+    'TTTTTTTTTTTTTTTT',
+  ],
+  harbour_b: [
+    'TTTTTTTTTTTTTTTT',
+    'TTTTTTTTTTTTTTTT',
+    'TTTTTIIITTTTTTTT',
+    'TTTTTTTTTTTDDTTT',
+    'TTTTTTTTTTTTTTTT',
+    'TTTTTTTIIIITTTTT',
+    'TTTDDTTTTTTTTTTT',
+    'TTTTTTTTTTTTTTTT',
+    'TTTTTTTTTTTTTTTT',
+    'TTTTTTIITTTTTTTT',
+    'TTTTTTTTTDDDTTTT',
+    'TTTTTTTTTTTTTTTT',
+    'TTTTTTTTTTTTTTTT',
+    'TTTIIITTTTTTIITT',
+    'TTTTTDDTTTTTTTTT',
+    'TTTTTTTTTTTTTTTT',
   ],
 };
 

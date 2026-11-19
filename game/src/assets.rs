@@ -285,6 +285,19 @@ pub const SPRITE_PROP_BRAZIER: &str = "sprites/props/brazier.png";
 pub const SPRITE_PROP_ROYAL_BANNER: &str = "sprites/props/royal_banner.png";
 pub const SPRITE_PROP_GUARD_STATUE: &str = "sprites/props/guard_statue.png";
 pub const SPRITE_PROP_CROWN_PLINTH: &str = "sprites/props/crown_plinth.png";
+// The Wharf, Act 7 (approved by Matt 2026-11-18): REF-147 harbour crane
+// (64x64 landmark), REF-148 bollard, REF-149 net rack, REF-150 rowboat (on
+// the water), REF-151 fish crates, REF-152 anchor, REF-153 signal mast.
+// Bottom-centre anchor, y-sorted, solid per their ref headers, placed by
+// `plugins::prop::{LANDMARKS, DISTRICT_PROPS}`. The REF-146 dock planks and
+// the two harbour water frames ship inside `SPRITE_TILES_VILLAGE_V3`.
+pub const SPRITE_PROP_HARBOUR_CRANE: &str = "sprites/props/harbour_crane.png";
+pub const SPRITE_PROP_BOLLARD: &str = "sprites/props/bollard.png";
+pub const SPRITE_PROP_NET_RACK: &str = "sprites/props/net_rack.png";
+pub const SPRITE_PROP_ROWBOAT: &str = "sprites/props/rowboat.png";
+pub const SPRITE_PROP_FISH_CRATES: &str = "sprites/props/fish_crates.png";
+pub const SPRITE_PROP_ANCHOR: &str = "sprites/props/anchor.png";
+pub const SPRITE_PROP_SIGNAL_MAST: &str = "sprites/props/signal_mast.png";
 
 // Ambient townsfolk (approved by Matt 2026-11-19): REF-173 farmer, REF-174
 // goodwife, REF-175 elder, REF-176 boy, REF-177 merchant, REF-178 guard,
@@ -468,6 +481,13 @@ pub const ALL_SPRITE_PATHS: &[&str] = &[
     SPRITE_PROP_ROYAL_BANNER,
     SPRITE_PROP_GUARD_STATUE,
     SPRITE_PROP_CROWN_PLINTH,
+    SPRITE_PROP_HARBOUR_CRANE,
+    SPRITE_PROP_BOLLARD,
+    SPRITE_PROP_NET_RACK,
+    SPRITE_PROP_ROWBOAT,
+    SPRITE_PROP_FISH_CRATES,
+    SPRITE_PROP_ANCHOR,
+    SPRITE_PROP_SIGNAL_MAST,
     SPRITE_FOLK_FARMER,
     SPRITE_FOLK_GOODWIFE,
     SPRITE_FOLK_ELDER,

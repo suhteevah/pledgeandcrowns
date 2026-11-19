@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-151 - Fish crates, Act 7 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/fish_crates.png.
 //
 // Three open brass-wood crates, one stacked on two, each packed with
 // silver fish on bright-teal ice. Bottom-centre anchor; solid over the

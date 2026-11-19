@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-148 - Bollard, Act 7 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/bollard.png.
 //
 // A basalt iron mooring bollard with three turns of hayfield rope and
 // the line running off to the right. Place them along the dock edge.

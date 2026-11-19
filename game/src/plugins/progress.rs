@@ -1067,11 +1067,54 @@ mod tests {
 
     // ── Restoring a saved position (rust-lead should-fix 1) ──────────
 
+    /// Every `Solid` the game spawns: each prop's parts and the harbour
+    /// water's boxes.
     fn real_solids() -> Vec<Aabb> {
         crate::plugins::prop::all_props()
             .into_iter()
             .flat_map(|(kind, base)| kind.solids_at(base))
+            .chain(crate::plugins::world::water_solids())
             .collect()
+    }
+
+    /// A save on the Wharf's harbour water (any water tile, the middle of
+    /// the basin included) restores to a free spot nearby on dry ground,
+    /// never on the water and never back at the spawn.
+    #[test]
+    fn a_save_on_the_water_moves_to_dry_ground_nearby() {
+        use crate::plugins::world::{Ground, ground_at, on_water, water_solids};
+        let solids = real_solids();
+        let water = water_solids();
+        assert!(!water.is_empty(), "the Wharf has water");
+        let mut checked = 0usize;
+        for s in &water {
+            let mut y = s.min.y + 8.0;
+            while y < s.max.y {
+                let mut x = s.min.x + 8.0;
+                while x < s.max.x {
+                    // Feet on the centre of this water tile.
+                    let tile = Vec2::new(x, y);
+                    let saved = tile - PLAYER_FOOT.min.lerp(PLAYER_FOOT.max, 0.5);
+                    assert!(on_water(tile));
+                    assert!(!spot_is_free(saved, &solids), "{tile:?}: water is walkable");
+                    let got = restore_spot(saved, &solids);
+                    assert!(spot_is_free(got, &solids), "{tile:?} -> {got:?}");
+                    assert_ne!(got, PLAYER_SPAWN, "{tile:?}: sent home");
+                    let feet = PLAYER_FOOT.translated(got);
+                    for c in [feet.min + Vec2::splat(0.5), feet.max - Vec2::splat(0.5)] {
+                        assert_ne!(ground_at(c), Ground::Water, "{tile:?} -> {got:?}");
+                    }
+                    assert!(
+                        got.distance(saved)
+                            <= RESTORE_SEARCH_STEP_PX * RESTORE_SEARCH_RINGS as f32 * 1.5
+                    );
+                    checked += 1;
+                    x += 16.0;
+                }
+                y += 16.0;
+            }
+        }
+        assert_eq!(checked, 174, "every water tile");
     }
 
     #[test]
@@ -1119,6 +1162,8 @@ mod tests {
             "every landmark and district prop is placed"
         );
         assert!(placed.len() >= 50, "landmarks + Forge yard + demo plazas");
+        // (The harbour water is checked tile by tile in
+        // `a_save_on_the_water_moves_to_dry_ground_nearby`.)
         for (kind, base) in placed {
             for solid in kind.solids_at(base) {
                 // Feet in the middle of it: exactly the trap the review found.

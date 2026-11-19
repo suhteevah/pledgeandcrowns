@@ -2,10 +2,12 @@
 //! Village props: oaks (REF-67, 32x48), cottages (REF-68, 64x64), the
 //! district landmarks (the Sealed Stacks, REF-95, the Throne Dais, REF-96,
 //! and the Great Furnace, REF-98, the Bell Tower, the market stall and the
-//! Checker's Gate, the Guildhall, the Mage's Tower, the tavern and the vault
-//! door, all 64x64) and the district yard props (REF-99..102,
-//! REF-104..106, REF-108..110, REF-112..121, REF-124..129, REF-132..137,
-//! REF-140..145, REF-156..161, REF-163..172, 32x32).
+//! Checker's Gate, the Guildhall, the Mage's Tower, the tavern, the vault
+//! door and the harbour crane, all 64x64) and the district yard props
+//! (REF-99..102, REF-104..106, REF-108..110, REF-112..121, REF-124..129,
+//! REF-132..137, REF-140..145, REF-148..153, REF-156..161, REF-163..172,
+//! 32x32). The Wharf's rowboats float on the harbour water
+//! ([`PropKind::floats`]); every other prop stands on paving or grass.
 //!
 //! Props are ordinary sprites, not tiles. Each one is anchored bottom-centre
 //! at its ground line, y-sorted (lower on screen = drawn in front) and owns
@@ -31,6 +33,10 @@
 //! [`OCCLUDER_ALPHA`] over [`FADE_SECS`], and back to opaque once clear. The
 //! decision ([`occludes`]) and the ramp ([`step_alpha`]) are pure functions.
 
+use crate::assets::{
+    SPRITE_PROP_ANCHOR, SPRITE_PROP_BOLLARD, SPRITE_PROP_FISH_CRATES, SPRITE_PROP_HARBOUR_CRANE,
+    SPRITE_PROP_NET_RACK, SPRITE_PROP_ROWBOAT, SPRITE_PROP_SIGNAL_MAST,
+};
 use crate::assets::{
     SPRITE_PROP_ANVIL, SPRITE_PROP_BARRELS, SPRITE_PROP_BELL_TOWER, SPRITE_PROP_BELLOWS,
     SPRITE_PROP_BENCH, SPRITE_PROP_BUCKET_SHOVEL, SPRITE_PROP_CHECKERS_GATE,
@@ -253,6 +259,19 @@ pub enum PropKind {
     RoyalBanner,
     GuardStatue,
     CrownPlinth,
+    /// The harbour crane (REF-147, approved 2026-11-18), the Act 7 district
+    /// landmark: 64x64, placed at [`LANDMARKS`], solid over its quay and
+    /// its mast, not under the hanging crate.
+    HarbourCrane,
+    /// The Wharf props (REF-148..153, approved 2026-11-18), 32x32 each. The
+    /// net rack is solid only at its two posts, the signal mast at its
+    /// foot; the rowboat floats on the harbour water beside the dock.
+    Bollard,
+    NetRack,
+    Rowboat,
+    FishCrates,
+    Anchor,
+    SignalMast,
 }
 
 // Solid footprints, relative to the bottom-centre anchor. A ref grid of
@@ -499,6 +518,48 @@ const GUARD_STATUE_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 12.0, 1.0, 6.0)];
 /// rows 19..30, cols 7..24.
 const CROWN_PLINTH_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 9.0, 1.0, 13.0)];
 
+// --- Act 7, the Wharf (approved 2026-11-18) -----------------------------
+/// REF-147 "solid over the quay and mast, not under the hanging crate": the
+/// stone quay, rows 52..61, cols 8..43, and the mast above it, rows 2..51,
+/// cols 20..27. The crate on the hook (cols 46..60) is open beneath.
+const HARBOUR_CRANE_SOLIDS: [Aabb; 2] = [
+    Aabb {
+        min: Vec2::new(-24.0, 2.0),
+        max: Vec2::new(12.0, 12.0),
+    },
+    Aabb {
+        min: Vec2::new(-12.0, 12.0),
+        max: Vec2::new(-4.0, 62.0),
+    },
+];
+/// REF-148 "solid over the bollard": rows 5..30, cols 8..23. The line
+/// running off to the right is not solid.
+const BOLLARD_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 8.0, 1.0, 27.0)];
+/// REF-149 "solid only at the two posts": below the floats, rows 27..29,
+/// cols 3..5 and 26..28. The 20 px between them stays open.
+const NET_RACK_SOLIDS: [Aabb; 2] = [
+    Aabb {
+        min: Vec2::new(-13.0, 2.0),
+        max: Vec2::new(-10.0, 5.0),
+    },
+    Aabb {
+        min: Vec2::new(10.0, 2.0),
+        max: Vec2::new(13.0, 5.0),
+    },
+];
+/// REF-150 "solid over the hull": the gunwale to the keel, rows 11..26,
+/// cols 1..30. The oar and the waterline are not solid. It floats on the
+/// harbour water, which is solid anyway.
+const ROWBOAT_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 15.0, 5.0, 21.0)];
+/// REF-151 "solid over the stack": rows 6..29, cols 1..30.
+const FISH_CRATES_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 15.0, 2.0, 26.0)];
+/// REF-152 "solid over the shank and arms": the shank's top (row 9) down
+/// through the stock and the flukes to the crown (row 29), cols 2..29. The
+/// ring above is not solid.
+const ANCHOR_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 14.0, 2.0, 23.0)];
+/// REF-153 "solid at the foot": rows 27..30, cols 10..21.
+const SIGNAL_MAST_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 6.0, 1.0, 5.0)];
+
 impl PropKind {
     pub fn sprite_path(self) -> &'static str {
         match self {
@@ -568,7 +629,21 @@ impl PropKind {
             PropKind::RoyalBanner => SPRITE_PROP_ROYAL_BANNER,
             PropKind::GuardStatue => SPRITE_PROP_GUARD_STATUE,
             PropKind::CrownPlinth => SPRITE_PROP_CROWN_PLINTH,
+            PropKind::HarbourCrane => SPRITE_PROP_HARBOUR_CRANE,
+            PropKind::Bollard => SPRITE_PROP_BOLLARD,
+            PropKind::NetRack => SPRITE_PROP_NET_RACK,
+            PropKind::Rowboat => SPRITE_PROP_ROWBOAT,
+            PropKind::FishCrates => SPRITE_PROP_FISH_CRATES,
+            PropKind::Anchor => SPRITE_PROP_ANCHOR,
+            PropKind::SignalMast => SPRITE_PROP_SIGNAL_MAST,
         }
+    }
+
+    /// True for a kind that floats on the harbour water (the REF-150
+    /// rowboat, "meant for the water tiles beside the dock") rather than
+    /// standing on paving.
+    pub fn floats(self) -> bool {
+        matches!(self, PropKind::Rowboat)
     }
 
     /// True for a kind drawn as its sprite mirrored left-right (the
@@ -591,6 +666,7 @@ impl PropKind {
                 | PropKind::MagesTower
                 | PropKind::Tavern
                 | PropKind::VaultDoor
+                | PropKind::HarbourCrane
         )
     }
 
@@ -608,7 +684,8 @@ impl PropKind {
             | PropKind::Guildhall
             | PropKind::MagesTower
             | PropKind::Tavern
-            | PropKind::VaultDoor => Vec2::new(64.0, 64.0),
+            | PropKind::VaultDoor
+            | PropKind::HarbourCrane => Vec2::new(64.0, 64.0),
             PropKind::Anvil
             | PropKind::QuenchTrough
             | PropKind::CoalHeap
@@ -663,7 +740,13 @@ impl PropKind {
             | PropKind::Brazier
             | PropKind::RoyalBanner
             | PropKind::GuardStatue
-            | PropKind::CrownPlinth => Vec2::new(32.0, 32.0),
+            | PropKind::CrownPlinth
+            | PropKind::Bollard
+            | PropKind::NetRack
+            | PropKind::Rowboat
+            | PropKind::FishCrates
+            | PropKind::Anchor
+            | PropKind::SignalMast => Vec2::new(32.0, 32.0),
         }
     }
 
@@ -738,6 +821,13 @@ impl PropKind {
             PropKind::RoyalBanner => 1.0,  // REF-170 row 30 is the foot's bottom
             PropKind::GuardStatue => 1.0,  // REF-171 row 30 is the plinth's bottom
             PropKind::CrownPlinth => 1.0,  // REF-172 row 30 is the plinth's bottom
+            PropKind::HarbourCrane => 2.0, // REF-147 row 61 is the quay's bottom edge
+            PropKind::Bollard => 1.0,      // REF-148 row 30 is the foot's bottom
+            PropKind::NetRack => 2.0,      // REF-149 row 29 is the posts' bottom
+            PropKind::Rowboat => 2.0,      // REF-150 row 29 is the waterline's bottom
+            PropKind::FishCrates => 2.0,   // REF-151 row 29 is the crates' bottom
+            PropKind::Anchor => 2.0,       // REF-152 row 29 is the crown's bottom
+            PropKind::SignalMast => 1.0,   // REF-153 row 30 is the foot's bottom
         }
     }
 
@@ -812,6 +902,13 @@ impl PropKind {
             PropKind::RoyalBanner => &ROYAL_BANNER_SOLID,
             PropKind::GuardStatue => &GUARD_STATUE_SOLID,
             PropKind::CrownPlinth => &CROWN_PLINTH_SOLID,
+            PropKind::HarbourCrane => &HARBOUR_CRANE_SOLIDS,
+            PropKind::Bollard => &BOLLARD_SOLID,
+            PropKind::NetRack => &NET_RACK_SOLIDS,
+            PropKind::Rowboat => &ROWBOAT_SOLID,
+            PropKind::FishCrates => &FISH_CRATES_SOLID,
+            PropKind::Anchor => &ANCHOR_SOLID,
+            PropKind::SignalMast => &SIGNAL_MAST_SOLID,
         }
     }
 
@@ -1023,6 +1120,27 @@ impl PropKind {
             PropKind::GuardStatue => Aabb::from_base(0.0, 12.0, 1.0, 32.0),
             // REF-172 cols 7..24, rows 4..30 (the crown's points).
             PropKind::CrownPlinth => Aabb::from_base(0.0, 9.0, 1.0, 28.0),
+            // Act 7, the Wharf (REF-147..153): every opaque pixel, so the
+            // jib, a mast, a net or a pennant fades over a character behind.
+            // REF-147 cols 7..60 (the winch brace to the crate), rows 2..61.
+            PropKind::HarbourCrane => Aabb {
+                min: Vec2::new(-25.0, 2.0),
+                max: Vec2::new(29.0, 62.0),
+            },
+            // REF-148 cols 8..30 (the line runs off to the right), rows 5..30.
+            PropKind::Bollard => Aabb {
+                min: Vec2::new(-8.0, 1.0),
+                max: Vec2::new(15.0, 27.0),
+            },
+            // REF-149 cols 2..29, rows 4..29 (the frame's caps to the posts).
+            PropKind::NetRack => Aabb::from_base(0.0, 14.0, 2.0, 28.0),
+            // REF-150 cols 0..31 (the waterline), rows 1..29 (the oar's tip).
+            PropKind::Rowboat => Aabb::from_base(0.0, 16.0, 2.0, 31.0),
+            PropKind::FishCrates => FISH_CRATES_SOLID[0],
+            // REF-152 cols 2..29, rows 2..29 (the ring to the crown).
+            PropKind::Anchor => Aabb::from_base(0.0, 14.0, 2.0, 30.0),
+            // REF-153 cols 0..31 (the lowest pennants), rows 0..30.
+            PropKind::SignalMast => Aabb::from_base(0.0, 16.0, 1.0, 32.0),
         }
     }
 
@@ -1135,7 +1253,9 @@ pub const COTTAGE_SPOTS: &[(usize, Side, f32)] = &[
 /// bosses (the Guildmaster, Vexis, the Barkeep) are ordinary 32 px
 /// villagers who hold a trial, so no boss stands centred on a plot here.
 /// Act 8 (approved by Matt 2026-11-18): the vault door (REF-155) heads the
-/// Vault, guards either side of it.
+/// Vault, guards either side of it. Act 7 (approved by Matt 2026-11-18):
+/// the harbour crane (REF-147) heads the Wharf, the Dockmaster and the
+/// Harbormaster at its quay.
 pub const LANDMARKS: &[(usize, PropKind)] = &[
     (9, PropKind::SealedStacks),
     (10, PropKind::ThroneDais),
@@ -1147,6 +1267,7 @@ pub const LANDMARKS: &[(usize, PropKind)] = &[
     (4, PropKind::MagesTower),
     (5, PropKind::Tavern),
     (8, PropKind::VaultDoor),
+    (7, PropKind::HarbourCrane),
 ];
 
 /// A district's own yard props: `(district index, kind, offset of the
@@ -1163,7 +1284,8 @@ pub const LANDMARKS: &[(usize, PropKind)] = &[
 /// REF-108..110, REF-112..115) and the density pass (REF-116..121 Forge
 /// yard set, REF-128 strongbox, REF-129 planter) and the Acts 3-5 sets
 /// (REF-124..127 Guildhall, REF-132..137 Mage's Tower, REF-140..145
-/// Tavern Row), all approved by Matt 2026-11-18. Same-y fence pieces 32 px apart form one run
+/// Tavern Row), the Acts 8-10 sets and the Wharf (REF-148..153), all
+/// approved by Matt 2026-11-18. Same-y fence pieces 32 px apart form one run
 /// (`tests::fences_form_joined_runs`); the Commons runs meet the Checker's
 /// Gate pillars, so the gate is a boundary you pass through.
 pub const DISTRICT_PROPS: &[(usize, PropKind, Vec2)] = &[
@@ -1539,6 +1661,67 @@ pub const DISTRICT_PROPS: &[(usize, PropKind, Vec2)] = &[
     (5, PropKind::TavernSign, Vec2::new(200.0, -56.0)),
     (5, PropKind::TavernSign, Vec2::new(-64.0, -236.0)),
     (5, PropKind::TavernSign, Vec2::new(-72.0, 204.0)),
+    // --- The Wharf (harbour crane base (0, 156); the only street, the
+    // lower cross-street, meets the plaza at the west edge at y -20..28).
+    // The harbour basin fills the east of the plaza (x 144..240, the full
+    // interior height) and a jetty three tiles wide runs out into it on
+    // the street's line (`world::Harbour`). The open quay between the
+    // mouth and the jetty is the promenade; a scene in each corner.
+    // The crane yard: cargo stacked west of the crane, waiting to be lifted.
+    (7, PropKind::Crates, Vec2::new(-80.0, 200.0)),
+    (7, PropKind::Crates, Vec2::new(-112.0, 200.0)),
+    (7, PropKind::Barrels, Vec2::new(-80.0, 168.0)),
+    (7, PropKind::Handcart, Vec2::new(-120.0, 164.0)),
+    // The net loft in the north-west: two net racks drying along the wall,
+    // the menders' bench before them.
+    (7, PropKind::NetRack, Vec2::new(-208.0, 200.0)),
+    (7, PropKind::NetRack, Vec2::new(-176.0, 200.0)),
+    (7, PropKind::Bench, Vec2::new(-192.0, 152.0)),
+    // The fish market north of the promenade: the catch on ice, a barrel
+    // of brine, a bench for the buyers.
+    (7, PropKind::FishCrates, Vec2::new(-176.0, 96.0)),
+    (7, PropKind::FishCrates, Vec2::new(-144.0, 96.0)),
+    (7, PropKind::Barrels, Vec2::new(-112.0, 100.0)),
+    (7, PropKind::Bench, Vec2::new(-72.0, 72.0)),
+    // The street mouth: a sign pointing down the quay, a lantern.
+    (7, PropKind::Signpost, Vec2::new(-216.0, 48.0)),
+    (7, PropKind::LanternPost, Vec2::new(-220.0, -64.0)),
+    // Lantern posts either side of the promenade, mid-quay and at the
+    // jetty's landing.
+    (7, PropKind::LanternPost, Vec2::new(-40.0, 48.0)),
+    (7, PropKind::LanternPost, Vec2::new(-40.0, -64.0)),
+    (7, PropKind::LanternPost, Vec2::new(124.0, 48.0)),
+    (7, PropKind::LanternPost, Vec2::new(124.0, -64.0)),
+    // The signal station on the north-east quay: the signal mast at the
+    // water's edge, a bollard below it.
+    (7, PropKind::SignalMast, Vec2::new(100.0, 196.0)),
+    (7, PropKind::Bollard, Vec2::new(124.0, 104.0)),
+    // The jetty landing: the day's catch and a handcart to take it up to
+    // the market, a bollard at the jetty's head.
+    (7, PropKind::FishCrates, Vec2::new(88.0, 48.0)),
+    (7, PropKind::Handcart, Vec2::new(52.0, 52.0)),
+    (7, PropKind::Bollard, Vec2::new(188.0, -12.0)),
+    // The south-east quay: a spare anchor stood up by the water, a bollard
+    // at the edge, stores along the south wall.
+    (7, PropKind::Anchor, Vec2::new(64.0, -120.0)),
+    (7, PropKind::Bollard, Vec2::new(124.0, -160.0)),
+    (7, PropKind::Crates, Vec2::new(40.0, -228.0)),
+    (7, PropKind::Crates, Vec2::new(72.0, -228.0)),
+    (7, PropKind::Barrels, Vec2::new(104.0, -228.0)),
+    // The south-west chandlery: stores and a second anchor along the south
+    // wall, nets drying, a bench.
+    (7, PropKind::Crates, Vec2::new(-208.0, -228.0)),
+    (7, PropKind::Crates, Vec2::new(-176.0, -228.0)),
+    (7, PropKind::Barrels, Vec2::new(-144.0, -228.0)),
+    (7, PropKind::Anchor, Vec2::new(-104.0, -224.0)),
+    (7, PropKind::NetRack, Vec2::new(-192.0, -136.0)),
+    (7, PropKind::NetRack, Vec2::new(-160.0, -136.0)),
+    (7, PropKind::Bench, Vec2::new(-112.0, -128.0)),
+    // Rowboats moored on the water: beside the jetty, in the north basin
+    // and off the south quay.
+    (7, PropKind::Rowboat, Vec2::new(176.0, -64.0)),
+    (7, PropKind::Rowboat, Vec2::new(184.0, 120.0)),
+    (7, PropKind::Rowboat, Vec2::new(176.0, -196.0)),
     // --- The Vault (vault door base (0, 156); the main street through the
     // north and south edges, the lower cross-street through the west and
     // east edges at y 80..128). A cross of open floor between the four
@@ -2168,6 +2351,16 @@ mod tests {
         true
     }
 
+    /// What a plaza prop of `kind` in district `d` stands on: the harbour
+    /// water for a kind that floats (the rowboat), else the plaza's paving.
+    fn standing_ground(kind: PropKind, d: usize) -> Ground {
+        if kind.floats() {
+            Ground::Water
+        } else {
+            DISTRICTS[d].interior_ground()
+        }
+    }
+
     /// Sample every 4px across `r` and require grass under all of it.
     fn rect_all_grass(r: &Aabb) -> bool {
         rect_all(r, Ground::Grass)
@@ -2246,8 +2439,9 @@ mod tests {
                 // Landmarks and district props stand ON their plaza (its
                 // interior paving, clear of the cobble ring); see
                 // `landmark_plot_is_sound` and `district_props_stand_on_their_plaza`.
+                // A rowboat floats on the harbour water instead.
                 assert!(
-                    rect_all(&r, DISTRICTS[d].interior_ground()),
+                    rect_all(&r, standing_ground(kind, d)),
                     "{kind:?} at {base:?} leaves {}'s paving",
                     DISTRICTS[d].name
                 );
@@ -2450,7 +2644,14 @@ mod tests {
 
     // --- District dressing (the Forge, R1 wave A1) -------------------------
 
-    const ALL_KINDS: [PropKind; 67] = [
+    const ALL_KINDS: [PropKind; 74] = [
+        PropKind::HarbourCrane,
+        PropKind::Bollard,
+        PropKind::NetRack,
+        PropKind::Rowboat,
+        PropKind::FishCrates,
+        PropKind::Anchor,
+        PropKind::SignalMast,
         PropKind::VaultDoor,
         PropKind::CoinPile,
         PropKind::ChainedCasket,
@@ -2643,6 +2844,19 @@ mod tests {
             PropKind::CrownPlinth => {
                 include_str!("../../../design/art/refs/ref-172-crownplinth.jsx")
             }
+            PropKind::HarbourCrane => {
+                include_str!("../../../design/art/refs/ref-147-harbourcrane.jsx")
+            }
+            PropKind::Bollard => include_str!("../../../design/art/refs/ref-148-bollard.jsx"),
+            PropKind::NetRack => include_str!("../../../design/art/refs/ref-149-netrack.jsx"),
+            PropKind::Rowboat => include_str!("../../../design/art/refs/ref-150-rowboat.jsx"),
+            PropKind::FishCrates => {
+                include_str!("../../../design/art/refs/ref-151-fishcrates.jsx")
+            }
+            PropKind::Anchor => include_str!("../../../design/art/refs/ref-152-anchor.jsx"),
+            PropKind::SignalMast => {
+                include_str!("../../../design/art/refs/ref-153-signalmast.jsx")
+            }
         })
     }
 
@@ -2687,11 +2901,13 @@ mod tests {
         }
     }
 
-    /// Every solid part of every prop, as `player::move_player` sees them.
+    /// Every solid part of every prop and the harbour water's boxes, as
+    /// `player::move_player` sees them.
     fn every_solid() -> Vec<Aabb> {
         all_props()
             .iter()
             .flat_map(|(k, b)| k.solids_at(*b))
+            .chain(crate::plugins::world::water_solids())
             .collect()
     }
 
@@ -2904,10 +3120,10 @@ mod tests {
             );
             let r = kind.sprite_rect_at(base);
             assert!(
-                rect_all(&r, dist.interior_ground()),
+                rect_all(&r, standing_ground(kind, d)),
                 "{kind:?} in {} is not on its {:?}",
                 dist.name,
-                dist.interior_ground()
+                standing_ground(kind, d)
             );
             for (k, b) in &props {
                 if (*k, *b) != (kind, base) {
@@ -2933,6 +3149,8 @@ mod tests {
             ("The Vault", 35..=45),
             ("The Forbidden Library", 35..=45),
             ("The Throne", 35..=45),
+            // Act 7, the same standard.
+            ("The Wharf", 35..=45),
         ] {
             let d = district_index(name);
             let n = DISTRICT_PROPS.iter().filter(|(pd, _, _)| *pd == d).count()
@@ -4298,6 +4516,271 @@ mod tests {
                 "{boss} moved"
             );
             assert_eq!(DISTRICTS[d].cast.len(), DISTRICTS[d].count - 1, "{name}");
+        }
+    }
+
+    // --- Act 7: the Wharf -----------------------------------------------------
+
+    /// Each Wharf footprint is exactly what its ref header says is solid,
+    /// re-derived from the approved pixel grid; the visual box is the art's
+    /// opaque bounds; the ground line is the art's bottom row.
+    #[test]
+    fn wharf_footprints_match_their_ref_headers() {
+        type Part = (
+            std::ops::RangeInclusive<usize>,
+            Option<std::ops::RangeInclusive<usize>>,
+        );
+        // (kind, header phrase, solid parts as (rows, cols), visual rows)
+        let cases: Vec<(PropKind, &str, Vec<Part>, std::ops::RangeInclusive<usize>)> = vec![
+            // The stone quay, and the mast above it; not the hanging crate.
+            (
+                PropKind::HarbourCrane,
+                "solid over the\n// quay and mast, not under the hanging crate",
+                vec![(52..=61, Some(8..=43)), (2..=51, Some(20..=27))],
+                2..=61,
+            ),
+            // The bollard itself, not the line running off to the right.
+            (
+                PropKind::Bollard,
+                "solid over the bollard",
+                vec![(5..=30, Some(8..=23))],
+                5..=30,
+            ),
+            // The two posts below the floats.
+            (
+                PropKind::NetRack,
+                "solid only at the two posts",
+                vec![(27..=29, Some(0..=15)), (27..=29, Some(16..=31))],
+                4..=29,
+            ),
+            // The gunwale to the keel.
+            (
+                PropKind::Rowboat,
+                "solid over the hull",
+                vec![(11..=26, None)],
+                1..=29,
+            ),
+            (
+                PropKind::FishCrates,
+                "solid over the\n// stack",
+                vec![(6..=29, None)],
+                6..=29,
+            ),
+            // The shank's top down to the crown; not the ring.
+            (
+                PropKind::Anchor,
+                "solid over\n// the shank and arms",
+                vec![(9..=29, None)],
+                2..=29,
+            ),
+            (
+                PropKind::SignalMast,
+                "solid at the foot",
+                vec![(27..=30, None)],
+                0..=30,
+            ),
+        ];
+        for (kind, phrase, parts, visual) in cases {
+            let src = ref_src(kind).expect("a ref");
+            assert!(
+                src.replace('\r', "").contains(phrase),
+                "{kind:?}: header lost {phrase:?}"
+            );
+            let want: Vec<Aabb> = parts
+                .into_iter()
+                .map(|(rows, cols)| grid_box(src, rows, cols))
+                .collect();
+            assert_eq!(kind.solids_local(), want.as_slice(), "{kind:?} solid");
+            assert_eq!(
+                kind.visual_local(),
+                grid_box(src, visual, None),
+                "{kind:?} visual"
+            );
+            let opaque = grid_box(src, 0..=kind.size().y as usize - 1, None);
+            assert_eq!(kind.ground_offset(), opaque.min.y, "{kind:?} ground line");
+        }
+        // The crate on the crane's hook (cols 46..60) is open beneath.
+        const R147: &str = include_str!("../../../design/art/refs/ref-147-harbourcrane.jsx");
+        let crate_box = grid_box(R147, 37..=50, Some(46..=60));
+        for s in PropKind::HarbourCrane.solids_local() {
+            assert!(!s.overlaps(&crate_box), "solid under the hanging crate");
+        }
+        // A player's feet fit between the net rack's posts.
+        let foot = crate::plugins::player::PLAYER_FOOT;
+        let s = PropKind::NetRack.solids_local();
+        assert_eq!(s.len(), 2);
+        assert!(s[1].min.x - s[0].max.x > foot.max.x - foot.min.x);
+        assert!(PropKind::Rowboat.floats());
+        assert!(ALL_KINDS.iter().filter(|k| k.floats()).count() == 1);
+    }
+
+    /// The harbour crane stands once on the Wharf's back-centre plot, on a
+    /// clear tile of dock all round, with room to walk past either side;
+    /// a player in front of its quay draws in front, behind it the jib and
+    /// the mast fade. The Dockmaster and the Harbormaster stand at its
+    /// quay, either side of the way up to it.
+    #[test]
+    fn the_harbour_crane_heads_the_wharf() {
+        let d = district_index("The Wharf");
+        let k = PropKind::HarbourCrane;
+        assert_eq!(DISTRICTS[d].interior_ground(), Ground::DockPlanks);
+        assert!(LANDMARKS.contains(&(d, k)));
+        assert!(k.is_landmark());
+        let base = crate::plugins::world::landmark_plot_base(d).expect("plot");
+        let placed: Vec<Vec2> = all_props()
+            .into_iter()
+            .filter(|(kk, _)| *kk == k)
+            .map(|(_, b)| b)
+            .collect();
+        assert_eq!(placed, vec![base], "one crane, at the back-centre");
+        assert_eq!(k.size(), Vec2::splat(64.0));
+        assert_eq!(crate::plugins::world::back_landmark_base(d), None);
+        let plot = k.sprite_rect_at(base);
+        let grown = Aabb {
+            min: plot.min - Vec2::splat(15.0),
+            max: plot.max + Vec2::splat(15.0),
+        };
+        assert!(rect_all(&grown, Ground::DockPlanks), "not on clear dock");
+        let solid = k.solid_at(base);
+        for side in [
+            Aabb::from_base(solid.min.x - 16.0, 16.0, solid.min.y, solid.max.y),
+            Aabb::from_base(solid.max.x + 16.0, 16.0, solid.min.y, solid.max.y),
+        ] {
+            assert!(rect_all(&side, Ground::DockPlanks), "no way round");
+        }
+        let prop_z = ysort_z(base.y + k.ground_offset());
+        let front = Vec2::new(base.x, solid.min.y - 6.0);
+        assert!(!occludes(
+            player_body_at_feet(front),
+            ysort_z(front.y),
+            k.visual_at(base),
+            prop_z
+        ));
+        // Behind the quay, beside the mast (both solid), under the jib: the
+        // crane fades over the player there.
+        let behind = Vec2::new(base.x + 16.0, base.y + 20.0);
+        // (`behind` is the feet's bottom edge; the foot box hangs 16 px
+        // below the sprite centre.)
+        let feet = crate::plugins::player::PLAYER_FOOT.translated(behind + Vec2::new(0.0, 16.0));
+        assert!(
+            k.solids_at(base).all(|s| !s.overlaps(&feet)),
+            "behind is solid"
+        );
+        assert!(occludes(
+            player_body_at_feet(behind),
+            ysort_z(behind.y),
+            k.visual_at(base),
+            prop_z
+        ));
+        for name in ["The Dockmaster", "The Harbormaster"] {
+            let i = NPC_ROSTER
+                .iter()
+                .position(|s| s.name == name)
+                .expect("in the roster");
+            let p = district_slot(i);
+            let top = p.y + 16.0;
+            assert!(
+                top <= plot.min.y && plot.min.y - top <= 16.0,
+                "{name} is not at the crane's quay"
+            );
+            assert!(
+                (p.x - base.x).abs() <= 48.0,
+                "{name} stands off to the side"
+            );
+        }
+    }
+
+    /// The water's edge: no Wharf prop but a rowboat touches the water
+    /// (every other sprite stands wholly on dock, checked in
+    /// `district_props_stand_on_their_plaza`), every rowboat floats wholly
+    /// on it within two tiles of the quay or the jetty, and nothing but
+    /// water and rowboats is solid on the basin.
+    #[test]
+    fn rowboats_float_at_the_quay_and_nothing_else_is_on_the_water() {
+        use crate::plugins::world::on_water;
+        let d = district_index("The Wharf");
+        let mut boats = 0usize;
+        for &(pd, k, off) in DISTRICT_PROPS {
+            let r = k.sprite_rect_at(DISTRICTS[pd].center + off);
+            if k.floats() {
+                assert_eq!(pd, d, "a rowboat outside the Wharf");
+                boats += 1;
+                assert!(rect_all(&r, Ground::Water), "a rowboat on dry land");
+                let near = Aabb {
+                    min: r.min - Vec2::splat(32.0),
+                    max: r.max + Vec2::splat(32.0),
+                };
+                let mut quay = false;
+                let mut y = near.min.y;
+                while y <= near.max.y {
+                    let mut x = near.min.x;
+                    while x <= near.max.x {
+                        quay |= ground_at(Vec2::new(x, y)) == Ground::DockPlanks;
+                        x += 4.0;
+                    }
+                    y += 4.0;
+                }
+                assert!(quay, "the rowboat at {off:?} is far out on the water");
+                continue;
+            }
+            let mut y = r.min.y;
+            while y <= r.max.y {
+                let mut x = r.min.x;
+                while x <= r.max.x {
+                    assert!(
+                        !on_water(Vec2::new(x, y)),
+                        "the {k:?} at {off:?} in {} stands in the water",
+                        DISTRICTS[pd].name
+                    );
+                    x += 4.0;
+                }
+                y += 4.0;
+            }
+        }
+        assert_eq!(boats, 3, "three rowboats moored");
+        // The landmark too.
+        let base = crate::plugins::world::landmark_plot_base(d).expect("plot");
+        assert!(rect_all(
+            &PropKind::HarbourCrane.sprite_rect_at(base),
+            Ground::DockPlanks
+        ));
+    }
+
+    /// Walking in from the street: the promenade leads from the west street
+    /// mouth onto the jetty and out to the bollard at its head, and every
+    /// water point of the plaza lattice is blocked (so no saved position
+    /// restores onto the water, and nobody walks on it).
+    #[test]
+    fn the_street_leads_onto_the_jetty_and_the_water_is_blocked() {
+        use crate::plugins::player::PLAYER_FOOT;
+        use crate::plugins::world::on_water;
+        let d = district_index("The Wharf");
+        let dist = &DISTRICTS[d];
+        let solids = every_solid();
+        let (reached, free) = flood_plaza(dist, &solids);
+        // Out along the jetty to just short of the head bollard.
+        for x in [140.0, 156.0, 164.0] {
+            let p = Vec2::new(x, 4.0);
+            let o = (p / 4.0).round();
+            assert!(
+                reached.contains(&(o.x as i32, o.y as i32)),
+                "jetty point {p:?} not reached from the street"
+            );
+            let feet = PLAYER_FOOT.translated(dist.center + p);
+            assert!(solids.iter().all(|s| !s.overlaps(&feet)));
+        }
+        // Every lattice point whose feet would touch water is blocked.
+        for &(i, j) in &free {
+            let p = dist.center + Vec2::new(i as f32, j as f32) * 4.0;
+            let feet = PLAYER_FOOT.translated(p);
+            for c in [
+                feet.min + Vec2::splat(0.5),
+                feet.max - Vec2::splat(0.5),
+                Vec2::new(feet.min.x + 0.5, feet.max.y - 0.5),
+                Vec2::new(feet.max.x - 0.5, feet.min.y + 0.5),
+            ] {
+                assert!(!on_water(c), "free spot {p:?} has its feet in the water");
+            }
         }
     }
 }

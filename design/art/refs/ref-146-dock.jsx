@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-146 - Wharf dock planks and harbour water, 16x16 tiles, 4-column sheet.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/tiles_village_v3.png (via the REF-76 combined atlas, indices 36-39).
 //
 // Ground for the Wharf (Act 7). dock_a and dock_b are weathered
 // aged-paper boards running north to south with stone-grey seams and

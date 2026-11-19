@@ -313,16 +313,38 @@ runs `scripts/ci.ps1` on the merged result as the sign-off gate.
   Library 39, Throne 38. Casts gather in pairs at the casket, scales, key
   rack; reading desk, globe, lectern; Crown, globe, reading desk. The
   Librarian and the Compiler keep their grid spot (their `cast` lists the
-  six villagers only). The Wharf (REF-146..153) is NOT wired (needs water).
+  six villagers only). (The Wharf followed the same day, below.)
   Capture: `scene-district-{the-vault,the-forbidden-library,the-throne}
   [-yard]`, `scene-landmark-vault-door`.
 - **Wired 2026-11-19 (ambient townsfolk):** REF-173..179 (farmer, goodwife,
   elder, boy, merchant, guard, girl) as `sprites/townsfolk/*_idle_0.png`,
   placed by `townsfolk::TOWNSFOLK` (district, kind, offset, the prop they
-  stand at): 2-3 in each of the ten dressed plazas, 24 in all. Not in the
+  stand at): 2-3 in each of the ten dressed plazas, 24 in all (29 with
+  the Wharf's five). Not in the
   roster, no `Npc` component (no talk, no marker, nothing saved), not
   solid; y-sorted, faded behind props, idle bob. Capture:
   `scene-townsfolk-<district>`.
+- **Wired 2026-11-19 (Act 7, the Wharf; every district is now dressed):**
+  REF-146 dock planks (REF-76 36-37) and its two water frames (38-39,
+  keyed `harbour_a`/`harbour_b` because REF-66 already has a `water_a`).
+  Water is `world::Ground::Water`, laid by the district's `harbour`
+  (`world::Harbour`: a basin rectangle less its jetties): the basin is the
+  east six interior columns (the side with no street), full height, with
+  a jetty three tiles wide and four long on the street's line, two tiles
+  of water beyond its head; the cobble ring is the quay rim and stays
+  walkable. Water tiles merge into three `Solid` boxes
+  (`world::water_solids`, spawned with `DespawnOnExit(InGame)`), so the
+  player, the restore logic and the lane/flood tests all see it. The two
+  frames are laid in a chequer and `world::swell_water` swaps them every
+  0.6 s (`WATER_FRAME_SECS`). REF-147 harbour crane (landmark) and
+  REF-148..153 bollard, net rack, rowboat (floats on the water,
+  `PropKind::floats`), fish crates, anchor, signal mast; 38 props with
+  the landmark. Casts: crane (Dockmaster, Harbormaster), signal mast
+  (Signaler, Tideforecaster), anchor (Lighthouse Keeper, Tidewatch, at
+  the bollard). Townsfolk: guard at the mouth's lantern, merchant at the
+  fish crates, elder at the menders' bench, girl at the net racks, boy at
+  a bollard. Capture: `scene-district-the-wharf[-yard,-jetty,-quay]`,
+  `scene-landmark-harbour-crane`, `scene-townsfolk-the-wharf`.
 - **Awaiting approval:** no landmark.
 - **Not drawn:** boss intro/defeat frames (Librarian, Compiler), the
   Librarian's lectern, pixel font pick, title redraw, a renderable Borrow

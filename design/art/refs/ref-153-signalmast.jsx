@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-153 - Signal mast, Act 7 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/signal_mast.png.
 //
 // A bronze mast with a gold truck and two strings of four signal
 // pennants running down and out from the masthead: wine, cobalt, gold

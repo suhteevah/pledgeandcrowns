@@ -135,8 +135,9 @@ fn npc_ground_audit() {
             None => counts.push((class, 1)),
         }
     }
-    // The village has no water tiles yet (atlas tile 9 is unused).
-    println!("counts: {counts:?} (water: 0, no water in the layout)");
+    // The Wharf's harbour is the only water; nobody stands on it
+    // (`nobody_stands_on_the_water`).
+    println!("counts: {counts:?}");
     let total: usize = counts.iter().map(|(_, n)| n).sum();
     assert_eq!(total, NPC_ROSTER.len());
 }
@@ -251,15 +252,26 @@ fn acts_9_and_10_stand_in_the_library_and_the_throne() {
     );
 }
 
-/// The ten dressed plazas' casts (the free demo's Hearthstone Square,
-/// Market Row and The Commons, the Act 3-5 Guildhall Quarter, Mage's Tower
-/// and Tavern Row, the Forge, Act 6, and the Act 8-10 Vault, Forbidden
-/// Library and Throne) are placed by hand: one spot per roster slot (the
+/// All eleven plazas' casts (the free demo's Hearthstone Square, Market
+/// Row and The Commons, the Act 3-5 Guildhall Quarter, Mage's Tower and
+/// Tavern Row, the Forge, Act 6, the Wharf, Act 7, and the Act 8-10 Vault,
+/// Forbidden Library and Throne) are placed by hand: one spot per roster slot (the
 /// Library's and the Throne's bosses excepted, on their grid spot), the
 /// roster order, names and missions as before.
 #[test]
 fn the_dressed_casts_keep_their_roster() {
-    let casts: [(&str, &[(&str, &str)]); 10] = [
+    let casts: [(&str, &[(&str, &str)]); 11] = [
+        (
+            "The Wharf",
+            &[
+                ("The Dockmaster", "thread_spawn"),
+                ("The Lighthouse Keeper", "arc_mutex"),
+                ("The Signaler", "mpsc_channel"),
+                ("The Tidewatch", "atomic"),
+                ("The Harbormaster", "thread_scope"),
+                ("The Tideforecaster", "async_fn"),
+            ],
+        ),
         (
             "The Vault",
             &[
@@ -446,7 +458,22 @@ fn the_dressed_casts_gather_at_their_props() {
         );
     };
     // (plaza, the prop they gather at, who)
-    let groups: [(&str, PropKind, &[&str]); 24] = [
+    let groups: [(&str, PropKind, &[&str]); 27] = [
+        (
+            "The Wharf",
+            PropKind::HarbourCrane,
+            &["The Dockmaster", "The Harbormaster"],
+        ),
+        (
+            "The Wharf",
+            PropKind::SignalMast,
+            &["The Signaler", "The Tideforecaster"],
+        ),
+        (
+            "The Wharf",
+            PropKind::Anchor,
+            &["The Lighthouse Keeper", "The Tidewatch"],
+        ),
         (
             "The Vault",
             PropKind::ChainedCasket,
@@ -585,6 +612,8 @@ fn the_dressed_casts_gather_at_their_props() {
         // The globe at the top of the Throne's aisle.
         ("The Throne", "The Hermit", PropKind::Globe),
         ("The Throne", "The Astronomer", PropKind::Globe),
+        // The Tidewatch at the anchor and the quay's bollard beside it.
+        ("The Wharf", "The Tidewatch", PropKind::Bollard),
         // Alone at their own thing.
         ("Hearthstone Square", "The Bellringer", PropKind::BellTower),
         ("Hearthstone Square", "The Smith", PropKind::Woodpile),
@@ -597,7 +626,10 @@ fn the_dressed_casts_gather_at_their_props() {
         within_reach(plaza, npc, kind);
     }
     // Who stands together: each member within 96 px of another member.
-    let gatherings: [&[&str]; 26] = [
+    let gatherings: [&[&str]; 29] = [
+        &["The Dockmaster", "The Harbormaster"],
+        &["The Signaler", "The Tideforecaster"],
+        &["The Lighthouse Keeper", "The Tidewatch"],
         &["The Vaultwright", "The Strongbox"],
         &["The Sharekeeper", "The Ghostkeeper"],
         &["The Warden", "The Swapwarden"],
@@ -639,15 +671,17 @@ fn the_dressed_casts_gather_at_their_props() {
             );
         }
     }
-    // Nobody in the Act 3-5 and 8-10 plazas stands at storage: no NPC
+    // Nobody in the Act 3-5 and 7-10 plazas stands at storage: no NPC
     // sprite within a tile of a strongbox, keg rack, barrel group, crate
-    // stack, scroll shelf, coin pile, iron safe, tall bookshelf or book
-    // pile. People gather where people would stand. (The chained casket is
-    // not storage here: REF-157's header puts the `Box<T>` mission at it.)
+    // stack, scroll shelf, coin pile, iron safe, tall bookshelf, book pile
+    // or fish crate stack. People gather where people would stand. (The
+    // chained casket is not storage here: REF-157's header puts the
+    // `Box<T>` mission at it.)
     for plaza in [
         "Guildhall Quarter",
         "The Mage's Tower",
         "Tavern Row",
+        "The Wharf",
         "The Vault",
         "The Forbidden Library",
         "The Throne",
@@ -671,6 +705,7 @@ fn the_dressed_casts_gather_at_their_props() {
                 PropKind::IronSafe,
                 PropKind::TallBookshelf,
                 PropKind::BookPile,
+                PropKind::FishCrates,
             ] {
                 for r in rects(d, kind) {
                     assert!(
@@ -905,6 +940,62 @@ fn townsfolk_placement_invariants() {
         failures.len(),
         failures.join("\n")
     );
+}
+
+/// Nobody stands on the Wharf's harbour water, or within a tile of it:
+/// no roster NPC's sprite, no talk spot (where the player's feet go to
+/// press F) and no townsperson's sprite, each grown by a tile, has water
+/// under it. Every district now places its cast by hand, so no NPC falls
+/// back to the grid either.
+#[test]
+fn nobody_stands_on_the_water() {
+    use pledge_and_crown::plugins::townsfolk::{FOLK_PX, TOWNSFOLK, townsperson_pos};
+    let mut failures: Vec<String> = Vec::new();
+    let wharf = DISTRICTS
+        .iter()
+        .position(|d| d.name == "The Wharf")
+        .expect("the Wharf");
+    let water_tiles = {
+        let d = &DISTRICTS[wharf];
+        let mut n = 0usize;
+        let mut y = d.center.y - d.plaza_half + 8.0;
+        while y < d.center.y + d.plaza_half {
+            let mut x = d.center.x - d.plaza_half + 8.0;
+            while x < d.center.x + d.plaza_half {
+                if ground_at(Vec2::new(x, y)) == Ground::Water {
+                    n += 1;
+                }
+                x += 16.0;
+            }
+            y += 16.0;
+        }
+        n
+    };
+    assert!(
+        water_tiles > 100,
+        "the Wharf has its harbour ({water_tiles})"
+    );
+    for (i, spec) in NPC_ROSTER.iter().enumerate() {
+        let p = district_slot(i);
+        if kinds_under(grow(sprite_rect(i), TILE)).contains(&Ground::Water) {
+            failures.push(format!("{} stands within a tile of water", spec.name));
+        }
+        let feet = PLAYER_FOOT.translated(p + TALK_SPOT_OFFSET);
+        if kinds_under(feet).contains(&Ground::Water) {
+            failures.push(format!("{}'s talk spot is on water", spec.name));
+        }
+    }
+    for (n, t) in TOWNSFOLK.iter().enumerate() {
+        let r = square(townsperson_pos(t).expect("district"), FOLK_PX);
+        if kinds_under(grow(r, TILE)).contains(&Ground::Water) {
+            failures.push(format!("{:?} #{n} stands within a tile of water", t.folk));
+        }
+    }
+    for d in DISTRICTS {
+        let hand_placed = d.cast.len() + usize::from(d.cast.len() < d.count);
+        assert_eq!(hand_placed, d.count, "{} has grid-placed NPCs", d.name);
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
 /// The townsfolk are not part of the mission roster: no roster entry

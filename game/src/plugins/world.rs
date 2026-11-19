@@ -7,11 +7,12 @@
 //! those plazas in roster order. Oaks and cottages are sprites, not tiles —
 //! see `prop.rs`.
 //!
-//! Tiles come from the REF-76 village atlas (36 tiles, 8 columns): the 22
+//! Tiles come from the REF-76 village atlas (40 tiles, 8 columns): the 22
 //! REF-66 terrain v2 tiles, the 2 REF-75 plaza flagstones, the 2 REF-97
 //! Forge slabs, the 2 REF-122 Guildhall floor squares, the 2 REF-130 tower
-//! court slabs, the 2 REF-138 tavern planks, the 2 REF-154 vault slabs and
-//! the 2 REF-162 carpet runner tiles, copied verbatim
+//! court slabs, the 2 REF-138 tavern planks, the 2 REF-154 vault slabs,
+//! the 2 REF-162 carpet runner tiles and the 4 REF-146 Wharf tiles (two
+//! dock planks, two harbour water frames), copied verbatim
 //! (render-refs tests guard the copy). A tilemap binds one texture, which
 //! is why every plaza ground shares the terrain sheet instead of having its
 //! own; a new district ground is appended to it, so existing indices never
@@ -19,7 +20,8 @@
 //!
 //! 1. **Base** — every tile is classified [`Ground::Grass`], `Cobble`,
 //!    `Dirt`, `Flagstone` or a district ground (`ForgeSlab`, `GuildFloor`,
-//!    `TowerCourt`, `TavernPlanks`) by [`ground_at_tile`]. Grass, cobble
+//!    `TowerCourt`, `TavernPlanks`, `VaultFloor`, `DockPlanks`) or harbour
+//!    `Water` ([`Harbour`]) by [`ground_at_tile`]. Grass, cobble
 //!    and dirt variants are picked by a deterministic per-tile hash; a
 //!    paving's two tiles are laid by its own rule ([`Ground::paving`],
 //!    [`Lay`]: mixed, one in n, a chequer, or a ring round the landmark).
@@ -31,6 +33,11 @@
 //!    grass, chosen by the pure [`fringe_for`] from the 8 neighbours, and
 //!    the REF-162 carpet runner laid over a plaza's paving ([`Runner`]);
 //!    the two never meet (a runner lies on interior tiles only).
+//!
+//! Harbour water (the Wharf) is a base-layer ground inside the cobble
+//! ring: its two REF-146 frames are laid in a chequer and swapped on a slow
+//! timer by [`swell_water`], and its tiles are merged into a few solid
+//! boxes ([`water_solids`]) so nobody walks on it.
 //!
 //! Orientation: `bevy_ecs_tilemap` tile `y` grows *upward* in world space,
 //! which is also screen-up for our 2D camera, and atlas images are drawn
@@ -113,6 +120,19 @@ const VAULT_RING_ONE_IN: u32 = 6;
 /// south end.
 const T_RUNNER_MID: u32 = 34;
 const T_RUNNER_END: u32 = 35;
+/// REF-146 Wharf dock planks, two tiles mixed freely.
+const T_DOCK_A: u32 = 36;
+const T_DOCK_B: u32 = 37;
+/// REF-146 harbour water: two frames of the same tile (REF-146 names them
+/// `water_a` and `water_b`; REF-76 keys them `harbour_a` and `harbour_b`
+/// because REF-66 already has a `water_a`). Laid in a chequer and swapped
+/// on a slow timer ([`swell_water`]), so neighbours are always out of
+/// phase.
+pub const T_HARBOUR_A: u32 = 38;
+pub const T_HARBOUR_B: u32 = 39;
+/// Seconds between harbour water frames. REF-146 asks for "every half
+/// second for a slow swell"; a touch slower reads calmer at play zoom.
+pub const WATER_FRAME_SECS: f32 = 0.6;
 
 /// z of the overlay tilemap; the base layer sits at 0. Y-sorted sprites live
 /// above both (see `prop::ysort_z`).
@@ -139,7 +159,37 @@ pub struct District {
     pub cast: &'static [Vec2],
     /// A carpet runner (REF-162) laid over the plaza's ground, or `None`.
     pub runner: Option<Runner>,
+    /// Harbour water inside the plaza (the Wharf), or `None`.
+    pub harbour: Option<Harbour>,
 }
+
+/// Harbour water laid inside a plaza's cobble ring: every interior tile
+/// whose centre lies in `basin` is [`Ground::Water`], except the tiles of
+/// a jetty, which stay the plaza's paving and run out into it. Both are
+/// plaza-local pixel rectangles on tile edges. Water is not walkable: its
+/// tiles are merged into a few solid boxes ([`water_solids`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Harbour {
+    pub basin: Rect,
+    pub jetties: &'static [Rect],
+}
+
+/// The Wharf's harbour: a basin six tiles wide along the east side, the
+/// side with no street, from the south row of the interior to the north
+/// row (x 144..240, y -244..252), and a jetty three tiles wide and four
+/// long running out into it on the street's line (the lower cross-street
+/// meets the plaza's west edge at y -20..28), leaving two tiles of water
+/// beyond its head. The cobble ring round the basin is the quay's rim.
+const WHARF_HARBOUR: Harbour = Harbour {
+    basin: Rect {
+        min: Vec2::new(144.0, -244.0),
+        max: Vec2::new(240.0, 252.0),
+    },
+    jetties: &[Rect {
+        min: Vec2::new(144.0, -20.0),
+        max: Vec2::new(208.0, 28.0),
+    }],
+};
 
 /// A REF-162 carpet runner: `tiles_wide` tiles side by side, centred on the
 /// plaza's x, over the interior tiles whose centres lie from `from_y` up
@@ -396,6 +446,36 @@ const TAVERN_CAST: &[Vec2] = &[
     Vec2::new(176.0, 16.0),
 ];
 
+/// The Wharf cast (Act 7), offsets from the plaza centre, in roster order.
+/// The Wharf is a working harbour on dock planks: the harbour crane at the
+/// back-centre (base (0, 156)) with cargo stacked to its west, the basin
+/// along the east side with a jetty out into it, the signal mast on the
+/// north-east quay, a spare anchor on the south-east quay, a fish market
+/// and a net loft in the west. One street, through the west edge at
+/// y -20..28, straight down the promenade to the jetty. Three gatherings:
+/// the crane (the Dockmaster, `thread::spawn`, and the Harbormaster,
+/// scoped threads: many hands, one load, everyone joined before it is
+/// lifted, as REF-147's header puts it), the signal mast (the Signaler,
+/// channels, and the Tideforecaster, async: messages sent and awaited,
+/// REF-153) and the anchor by the water (the Lighthouse Keeper, shared
+/// state behind a lock, and the Tidewatch, atomics, at the bollard). Nobody
+/// stands on the water, within a tile of it, or at the stores.
+const WHARF_CAST: &[Vec2] = &[
+    // The Dockmaster (`thread_spawn`): at the crane's quay, west side.
+    Vec2::new(-40.0, 132.0),
+    // The Lighthouse Keeper (`arc_mutex`): at the anchor, west side.
+    Vec2::new(24.0, -108.0),
+    // The Signaler (`mpsc_channel`): at the foot of the signal mast, west.
+    Vec2::new(60.0, 204.0),
+    // The Tidewatch (`atomic`): at the anchor, east side, by the bollard.
+    Vec2::new(104.0, -108.0),
+    // The Harbormaster (`thread_scope`): at the crane's quay, east side.
+    Vec2::new(32.0, 132.0),
+    // The Tideforecaster (`async_fn`): below the signal mast, at the
+    // water's edge.
+    Vec2::new(100.0, 164.0),
+];
+
 /// The Vault cast (Act 8), offsets from the plaza centre, in roster order.
 /// The Vault is a strongroom on the darkest floor in the game: the vault
 /// door at the back-centre (base (0, 156)), a treasury behind a chain
@@ -500,6 +580,7 @@ pub const DISTRICTS: &[District] = &[
         interior: None,
         cast: HEARTHSTONE_CAST,
         runner: None,
+        harbour: None,
     },
     District {
         name: "Market Row",
@@ -509,6 +590,7 @@ pub const DISTRICTS: &[District] = &[
         interior: None,
         cast: MARKET_ROW_CAST,
         runner: None,
+        harbour: None,
     },
     District {
         name: "The Commons",
@@ -518,6 +600,7 @@ pub const DISTRICTS: &[District] = &[
         interior: None,
         cast: COMMONS_CAST,
         runner: None,
+        harbour: None,
     },
     // Acts 3-5 (approved 2026-11-18), dressed like the Forge: each its own
     // ground (REF-122 chequered hall floor, REF-130 court slabs with a
@@ -532,6 +615,7 @@ pub const DISTRICTS: &[District] = &[
         interior: Some(Ground::GuildFloor),
         cast: GUILDHALL_CAST,
         runner: None,
+        harbour: None,
     },
     // Act 4: the Trait Mage's Tower (Vexis the Archmage's cast).
     District {
@@ -542,6 +626,7 @@ pub const DISTRICTS: &[District] = &[
         interior: Some(Ground::TowerCourt),
         cast: TOWER_CAST,
         runner: None,
+        harbour: None,
     },
     // Act 5: the Tavern of Tribulations.
     District {
@@ -552,6 +637,7 @@ pub const DISTRICTS: &[District] = &[
         interior: Some(Ground::TavernPlanks),
         cast: TAVERN_CAST,
         runner: None,
+        harbour: None,
     },
     // Act 6: the Iterator Forge, the first dressed district (R1 wave A1,
     // approved 2026-11-18): REF-97 soot slab inside the cobble ring, the
@@ -565,16 +651,21 @@ pub const DISTRICTS: &[District] = &[
         interior: Some(Ground::ForgeSlab),
         cast: FORGE_CAST,
         runner: None,
+        harbour: None,
     },
-    // Act 7: the Concurrent Coast (Dockmaster, Harbormaster, ...).
+    // Act 7: the Concurrent Coast (approved 2026-11-18): REF-146 dock
+    // planks, the harbour basin along the east side with a jetty out into
+    // it (animated REF-146 water, solid), the harbour crane (REF-147) at
+    // the back-centre, its props and the cast gathered at them.
     District {
         name: "The Wharf",
         center: Vec2::new(720.0, -700.0),
         plaza_half: 260.0,
         count: 6,
-        interior: None,
-        cast: &[],
+        interior: Some(Ground::DockPlanks),
+        cast: WHARF_CAST,
         runner: None,
+        harbour: Some(WHARF_HARBOUR),
     },
     // Act 8: the Vault of Pointers (approved 2026-11-18): REF-154 vault
     // floor, the vault door (REF-155) at the back-centre, its props and
@@ -587,6 +678,7 @@ pub const DISTRICTS: &[District] = &[
         interior: Some(Ground::VaultFloor),
         cast: VAULT_CAST,
         runner: None,
+        harbour: None,
     },
     // Act 9: past the Vault, at the south end of the main street. Six
     // villagers at their props (approved 2026-11-18) and the Librarian
@@ -602,6 +694,7 @@ pub const DISTRICTS: &[District] = &[
         interior: None,
         cast: LIBRARY_CAST,
         runner: Some(LANDMARK_RUNNER),
+        harbour: None,
     },
     // Act 10: past Tavern Row, at the north end of the main street. Six
     // villagers at their props (approved 2026-11-18) and the Compiler
@@ -617,6 +710,7 @@ pub const DISTRICTS: &[District] = &[
         interior: None,
         cast: THRONE_CAST,
         runner: Some(LANDMARK_RUNNER),
+        harbour: None,
     },
 ];
 
@@ -798,7 +892,62 @@ impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
         tracing::debug!("WorldPlugin::build");
         app.add_plugins(TilemapPlugin)
-            .add_systems(OnEnter(GameState::InGame), spawn_village);
+            .init_resource::<WaterSwell>()
+            .add_systems(OnEnter(GameState::InGame), spawn_village)
+            .add_systems(Update, swell_water.run_if(in_state(GameState::InGame)));
+    }
+}
+
+/// A harbour water tile in the base tilemap. `odd` is its chequer square
+/// (tile x + y odd), so neighbours always show different frames.
+#[derive(Component, Clone, Copy, Debug)]
+pub struct WaterTile {
+    pub odd: bool,
+}
+
+/// The harbour swell: which water frame the even squares show, flipped
+/// every [`WATER_FRAME_SECS`].
+#[derive(Resource, Debug)]
+pub struct WaterSwell {
+    timer: Timer,
+    flipped: bool,
+}
+
+impl Default for WaterSwell {
+    fn default() -> Self {
+        Self {
+            timer: Timer::from_seconds(WATER_FRAME_SECS, TimerMode::Repeating),
+            flipped: false,
+        }
+    }
+}
+
+/// The REF-146 water frame a tile on chequer square `odd` shows: the even
+/// squares `harbour_a` and the odd ones `harbour_b`, the other way round
+/// while the swell is `flipped`. Only ever one of the two water indices.
+pub fn water_frame(odd: bool, flipped: bool) -> u32 {
+    if odd ^ flipped {
+        T_HARBOUR_B
+    } else {
+        T_HARBOUR_A
+    }
+}
+
+/// Swap every harbour water tile to its other frame each time the swell
+/// timer runs out. No per-frame logging: the swap itself is the whole job.
+pub fn swell_water(
+    time: Res<Time>,
+    mut swell: ResMut<WaterSwell>,
+    mut tiles: Query<(&WaterTile, &mut TileTextureIndex)>,
+) {
+    let flips = swell.timer.tick(time.delta()).times_finished_this_tick();
+    if flips % 2 == 0 {
+        return;
+    }
+    swell.flipped = !swell.flipped;
+    let flipped = swell.flipped;
+    for (w, mut idx) in &mut tiles {
+        idx.0 = water_frame(w.odd, flipped);
     }
 }
 
@@ -842,6 +991,11 @@ pub enum Ground {
     TavernPlanks,
     /// Plaza interior of the Vault (REF-154 basalt slabs).
     VaultFloor,
+    /// Plaza interior of the Wharf (REF-146 dock planks).
+    DockPlanks,
+    /// Harbour water inside a plaza ([`Harbour`], REF-146 water frames).
+    /// Not a paving: nobody stands on it and it is solid.
+    Water,
 }
 
 /// How a paving's two tiles are laid across a plaza: per-district ground
@@ -877,7 +1031,7 @@ impl Ground {
     /// for grass, cobble and dirt.
     pub fn paving(self) -> Option<Paving> {
         let (first, second, lay) = match self {
-            Ground::Grass | Ground::Cobble | Ground::Dirt => return None,
+            Ground::Grass | Ground::Cobble | Ground::Dirt | Ground::Water => return None,
             Ground::Flagstone => (T_FLAG_A, T_FLAG_B, Lay::Mix),
             Ground::ForgeSlab => (T_SOOT_A, T_SOOT_B, Lay::OneIn(SOOT_B_ONE_IN)),
             Ground::GuildFloor => (T_HALL_LIGHT, T_HALL_DARK, Lay::Chequer),
@@ -890,12 +1044,13 @@ impl Ground {
             ),
             Ground::TavernPlanks => (T_PLANK_A, T_PLANK_B, Lay::Mix),
             Ground::VaultFloor => (T_VAULT_PLAIN, T_VAULT_RING, Lay::OneIn(VAULT_RING_ONE_IN)),
+            Ground::DockPlanks => (T_DOCK_A, T_DOCK_B, Lay::Mix),
         };
         Some(Paving { first, second, lay })
     }
 
     /// True for the pavings a plaza interior can be laid in (flagstone or
-    /// a district's own ground), false for grass, cobble and dirt.
+    /// a district's own ground), false for grass, cobble, dirt and water.
     pub fn is_plaza_interior(self) -> bool {
         self.paving().is_some()
     }
@@ -970,7 +1125,11 @@ pub fn ground_at_tile(x: u32, y: u32) -> Ground {
         .max_by_key(|(z, _)| *z)
         .unwrap_or((PlazaZone::Outside, None));
     if zone == PlazaZone::Interior {
-        district.map_or(Ground::Flagstone, District::interior_ground)
+        match district {
+            Some(d) if in_harbour_water(d, x, y) => Ground::Water,
+            Some(d) => d.interior_ground(),
+            None => Ground::Flagstone,
+        }
     } else if zone == PlazaZone::Border {
         Ground::Cobble
     } else if on_road(x, y) {
@@ -984,6 +1143,72 @@ pub fn ground_at_tile(x: u32, y: u32) -> Ground {
 pub fn ground_at(w: Vec2) -> Ground {
     let (x, y) = world_to_tile(w);
     ground_at_tile(x, y)
+}
+
+/// True when tile `(x, y)` (an interior tile of `d`) lies in `d`'s
+/// harbour basin and on no jetty.
+fn in_harbour_water(d: &District, x: u32, y: u32) -> bool {
+    let Some(h) = d.harbour else {
+        return false;
+    };
+    let local = tile_to_world(x, y) - d.center;
+    h.basin.contains(local) && !h.jetties.iter().any(|j| j.contains(local))
+}
+
+/// True when the world point `w` lies on a harbour water tile.
+pub fn on_water(w: Vec2) -> bool {
+    ground_at(w) == Ground::Water
+}
+
+/// The harbour water as solid boxes, in world space: each row of water
+/// tiles split into runs, and a run merged into the box above it when they
+/// span the same columns. So the Wharf's basin is three boxes (north of
+/// the jetty, beyond its head, south of it), not one per tile. Together
+/// they cover exactly the water tiles and never overlap.
+pub fn water_solids() -> Vec<crate::plugins::prop::Aabb> {
+    use crate::plugins::prop::Aabb;
+    let mut out: Vec<Aabb> = Vec::new();
+    for d in DISTRICTS.iter().filter(|d| d.harbour.is_some()) {
+        let (x0, y0) = world_to_tile(d.center - Vec2::splat(d.plaza_half));
+        let (x1, y1) = world_to_tile(d.center + Vec2::splat(d.plaza_half));
+        // Boxes still growing upward, and the row they last reached.
+        let mut open: Vec<Aabb> = Vec::new();
+        for y in y0..=y1 {
+            let mut runs: Vec<Aabb> = Vec::new();
+            for x in x0..=x1 {
+                if ground_at_tile(x, y) != Ground::Water {
+                    continue;
+                }
+                let c = tile_to_world(x, y);
+                let tile = Aabb {
+                    min: c - Vec2::splat(TILE_PX * 0.5),
+                    max: c + Vec2::splat(TILE_PX * 0.5),
+                };
+                match runs.last_mut() {
+                    Some(run) if run.max.x == tile.min.x => run.max.x = tile.max.x,
+                    _ => runs.push(tile),
+                }
+            }
+            let mut next: Vec<Aabb> = Vec::new();
+            for run in runs {
+                let above = open.iter().position(|o| {
+                    o.min.x == run.min.x && o.max.x == run.max.x && o.max.y == run.min.y
+                });
+                match above {
+                    Some(i) => {
+                        let mut grown = open.swap_remove(i);
+                        grown.max.y = run.max.y;
+                        next.push(grown);
+                    }
+                    None => next.push(run),
+                }
+            }
+            out.append(&mut open);
+            open = next;
+        }
+        out.append(&mut open);
+    }
+    out
 }
 
 /// Deterministic per-tile hash (murmur3 finaliser). Well mixed, so variant
@@ -1032,7 +1257,8 @@ fn base_tile(x: u32, y: u32, ground: Ground) -> u32 {
         | Ground::GuildFloor
         | Ground::TowerCourt
         | Ground::TavernPlanks
-        | Ground::VaultFloor => match ground.paving() {
+        | Ground::VaultFloor
+        | Ground::DockPlanks => match ground.paving() {
             Some(p) => {
                 if lays_second(p.lay, x, y, h) {
                     p.second
@@ -1045,6 +1271,8 @@ fn base_tile(x: u32, y: u32, ground: Ground) -> u32 {
                 T_FLAG_A
             }
         },
+        // The swell's first frame; `swell_water` swaps it from there.
+        Ground::Water => water_frame((x + y) % 2 == 1, false),
     }
 }
 
@@ -1225,6 +1453,7 @@ fn spawn_village(mut commands: Commands, asset_server: Res<AssetServer>) {
     let (mut grass, mut cobble, mut dirt, mut flagstone, mut district_ground, mut overlays) =
         (0usize, 0usize, 0usize, 0usize, 0usize, 0usize);
     let mut runners = 0usize;
+    let mut water = 0usize;
 
     for x in 0..map_size.x {
         for y in 0..map_size.y {
@@ -1239,16 +1468,22 @@ fn spawn_village(mut commands: Commands, asset_server: Res<AssetServer>) {
                 | Ground::GuildFloor
                 | Ground::TowerCourt
                 | Ground::TavernPlanks
-                | Ground::VaultFloor => district_ground += 1,
+                | Ground::VaultFloor
+                | Ground::DockPlanks => district_ground += 1,
+                Ground::Water => water += 1,
             }
-            let tile = commands
-                .spawn(TileBundle {
-                    position: pos,
-                    tilemap_id: TilemapId(base_entity),
-                    texture_index: TileTextureIndex(base_tile(x, y, g)),
-                    ..default()
-                })
-                .id();
+            let mut tile = commands.spawn(TileBundle {
+                position: pos,
+                tilemap_id: TilemapId(base_entity),
+                texture_index: TileTextureIndex(base_tile(x, y, g)),
+                ..default()
+            });
+            if g == Ground::Water {
+                tile.insert(WaterTile {
+                    odd: (x + y) % 2 == 1,
+                });
+            }
+            let tile = tile.id();
             base_storage.set(&pos, tile);
 
             let runner = runner_tile(x, y);
@@ -1277,7 +1512,26 @@ fn spawn_village(mut commands: Commands, asset_server: Res<AssetServer>) {
         district_ground,
         overlays,
         runners,
+        water,
         "terrain classified"
+    );
+
+    // Harbour water is not walkable: its merged boxes are colliders like a
+    // prop's (`player::move_player` and the saved-position restore read
+    // every `Solid`), despawned when the session ends.
+    let solids = water_solids();
+    for s in &solids {
+        tracing::debug!(min = ?s.min, max = ?s.max, "spawning harbour water collider");
+        commands.spawn((
+            crate::plugins::prop::Solid(*s),
+            DespawnOnExit(GameState::InGame),
+        ));
+    }
+    tracing::debug!(
+        water_tiles = water,
+        colliders = solids.len(),
+        frame_secs = WATER_FRAME_SECS,
+        "harbour water laid: chequered frames, swell on a timer"
     );
 
     commands.entity(base_entity).insert(TilemapBundle {
@@ -1414,6 +1668,8 @@ mod tests {
                 Ground::TowerCourt => t == T_COURT_PLAIN || t == T_COURT_RUNE,
                 Ground::TavernPlanks => t == T_PLANK_A || t == T_PLANK_B,
                 Ground::VaultFloor => t == T_VAULT_PLAIN || t == T_VAULT_RING,
+                Ground::DockPlanks => t == T_DOCK_A || t == T_DOCK_B,
+                Ground::Water => t == T_HARBOUR_A || t == T_HARBOUR_B,
             };
             assert!(ok, "tile {t} wrong for {g:?}");
         }
@@ -1481,6 +1737,9 @@ mod tests {
                     let ring = x == x0 || x == x1 || y == y0 || y == y1;
                     let want = if ring {
                         Ground::Cobble
+                    } else if in_harbour_water(d, x, y) {
+                        // The Wharf's basin lies inside the ring too.
+                        Ground::Water
                     } else {
                         d.interior_ground()
                     };
@@ -1545,8 +1804,10 @@ mod tests {
                     (1, 1),
                 ] {
                     let n = ground(x.wrapping_add_signed(dx), y.wrapping_add_signed(dy));
+                    // The Wharf's dock is the one paving that meets water.
+                    let quay = here == Ground::DockPlanks && n == Ground::Water;
                     assert!(
-                        n == here || n == Ground::Cobble,
+                        n == here || n == Ground::Cobble || quay,
                         "{here:?} ({x},{y}) touches {n:?}"
                     );
                 }
@@ -1583,8 +1844,8 @@ mod tests {
             .lines()
             .filter_map(|l| l.strip_prefix("  ")?.strip_suffix(": ["))
             .collect();
-        assert_eq!(names.len(), 36, "REF-76 tile count: {names:?}");
-        let expected: [(u32, &str); 35] = [
+        assert_eq!(names.len(), 40, "REF-76 tile count: {names:?}");
+        let expected: [(u32, &str); 39] = [
             (T_GRASS_A, "grass_a"),
             (T_GRASS_B, "grass_b"),
             (T_GRASS_TUFT, "grass_tuft"),
@@ -1620,6 +1881,10 @@ mod tests {
             (T_VAULT_RING, "vault_ring"),
             (T_RUNNER_MID, "runner_mid"),
             (T_RUNNER_END, "runner_end"),
+            (T_DOCK_A, "dock_a"),
+            (T_DOCK_B, "dock_b"),
+            (T_HARBOUR_A, "harbour_a"),
+            (T_HARBOUR_B, "harbour_b"),
         ];
         for (idx, name) in expected {
             assert_eq!(names[idx as usize], name, "atlas index {idx}");
@@ -1643,12 +1908,13 @@ mod tests {
     // --- District grounds (REF-97 via the REF-76 atlas) --------------------
 
     /// The districts with a ground of their own, and that ground.
-    const NAMED_GROUNDS: [(&str, Ground); 5] = [
+    const NAMED_GROUNDS: [(&str, Ground); 6] = [
         ("Guildhall Quarter", Ground::GuildFloor),
         ("The Mage's Tower", Ground::TowerCourt),
         ("Tavern Row", Ground::TavernPlanks),
         ("The Forge", Ground::ForgeSlab),
         ("The Vault", Ground::VaultFloor),
+        ("The Wharf", Ground::DockPlanks),
     ];
 
     /// The Forge and the Act 3-5 quarters name their own interior ground;
@@ -1738,7 +2004,13 @@ mod tests {
             (p(Ground::GuildFloor).first, p(Ground::GuildFloor).second),
             (T_HALL_LIGHT, T_HALL_DARK)
         );
-        for g in [Ground::Grass, Ground::Cobble, Ground::Dirt] {
+        assert_eq!(p(Ground::DockPlanks).lay, Lay::Mix);
+        assert_eq!(
+            (p(Ground::DockPlanks).first, p(Ground::DockPlanks).second),
+            (T_DOCK_A, T_DOCK_B)
+        );
+        // Water is no paving: nobody stands on it.
+        for g in [Ground::Grass, Ground::Cobble, Ground::Dirt, Ground::Water] {
             assert_eq!(g.paving(), None, "{g:?}");
             assert!(!g.is_plaza_interior());
         }
@@ -1965,5 +2237,222 @@ mod tests {
             }
         }
         assert_eq!(landmark_plot_base(DISTRICTS.len()), None);
+    }
+
+    // --- The Wharf's harbour (REF-146) ---------------------------------------
+
+    fn wharf() -> &'static District {
+        DISTRICTS
+            .iter()
+            .find(|d| d.name == "The Wharf")
+            .expect("the Wharf")
+    }
+
+    /// The Wharf is the only district with water, and its water is the
+    /// basin along the east side (no street there) minus the jetty: every
+    /// interior tile with its centre at x >= 144 is water except the
+    /// jetty's 4 x 3 tiles, which stay dock and continue the street's line;
+    /// two tiles of water lie beyond the jetty's head. No water tile is on
+    /// the cobble ring, the plaza's centre or the west street mouth.
+    #[test]
+    fn the_wharf_basin_lies_along_the_east_side_with_a_jetty() {
+        let w = wharf();
+        assert_eq!(w.harbour, Some(WHARF_HARBOUR));
+        assert!(
+            DISTRICTS
+                .iter()
+                .filter(|d| d.harbour.is_some())
+                .all(|d| d.name == "The Wharf")
+        );
+        let (x0, x1, y0, y1) = plaza_bounds(w);
+        let (mut water, mut jetty) = (0usize, 0usize);
+        for y in 0..MAP_H {
+            for x in 0..MAP_W {
+                let g = ground_at_tile(x, y);
+                if g == Ground::Water {
+                    assert_eq!(plaza_zone(w, x, y), PlazaZone::Interior, "({x},{y})");
+                    water += 1;
+                }
+                if plaza_zone(w, x, y) != PlazaZone::Interior {
+                    continue;
+                }
+                let local = tile_to_world(x, y) - w.center;
+                let on_jetty =
+                    (144.0..208.0).contains(&local.x) && (-20.0..28.0).contains(&local.y);
+                if on_jetty {
+                    jetty += 1;
+                }
+                let want = if local.x > 144.0 && !on_jetty {
+                    Ground::Water
+                } else {
+                    Ground::DockPlanks
+                };
+                assert_eq!(g, want, "({x},{y}) local {local:?}");
+            }
+        }
+        assert_eq!(jetty, 4 * 3, "a jetty four tiles long, three wide");
+        // Six columns by the 31 interior rows, less the jetty.
+        assert_eq!(water, 6 * 31 - 12);
+        // The ring is cobble all round, the street meets dock.
+        for y in y0..=y1 {
+            assert_eq!(ground_at_tile(x1, y), Ground::Cobble);
+        }
+        assert_eq!(ground_at(w.center), Ground::DockPlanks);
+        let (_, street_y) = world_to_tile(w.center + Vec2::new(0.0, 4.0));
+        assert_eq!(
+            ground_at_tile(x0 - 1, street_y),
+            Ground::Dirt,
+            "west street"
+        );
+        assert_eq!(ground_at_tile(x0 + 1, street_y), Ground::DockPlanks);
+        // The jetty is on the street's three rows.
+        for dy in [-1i32, 0, 1] {
+            let y = street_y.wrapping_add_signed(dy);
+            assert_eq!(ground_at_tile(x0 - 1, y), Ground::Dirt);
+            let head = world_to_tile(w.center + Vec2::new(200.0, 0.0)).0;
+            assert_eq!(ground_at_tile(head, y), Ground::DockPlanks, "jetty head");
+            assert_eq!(
+                ground_at_tile(head + 1, y),
+                Ground::Water,
+                "beyond the head"
+            );
+        }
+    }
+
+    /// Every tile in a plaza, as (x, y).
+    fn tiles_of(d: &District) -> Vec<(u32, u32)> {
+        let (x0, x1, y0, y1) = plaza_bounds(d);
+        (y0..=y1)
+            .flat_map(|y| (x0..=x1).map(move |x| (x, y)))
+            .collect()
+    }
+
+    /// The water colliders cover exactly the water tiles: every water
+    /// tile's centre (and the whole tile) is inside one box, no other
+    /// tile's centre is inside any, the boxes never overlap, their area is
+    /// the water's area, and there are three (north of the jetty, beyond
+    /// its head, south of it), not one per tile.
+    #[test]
+    fn water_solids_cover_exactly_the_water_tiles() {
+        use crate::plugins::prop::Aabb;
+        let solids = water_solids();
+        assert_eq!(solids.len(), 3, "{solids:?}");
+        let mut area = 0.0;
+        for (i, a) in solids.iter().enumerate() {
+            area += (a.max.x - a.min.x) * (a.max.y - a.min.y);
+            for b in solids.iter().skip(i + 1) {
+                assert!(!a.overlaps(b), "{a:?} overlaps {b:?}");
+            }
+        }
+        let mut water = 0usize;
+        for (x, y) in tiles_of(wharf()) {
+            let c = tile_to_world(x, y);
+            let tile = Aabb {
+                min: c - Vec2::splat(TILE_PX * 0.5),
+                max: c + Vec2::splat(TILE_PX * 0.5),
+            };
+            let holders: Vec<&Aabb> = solids
+                .iter()
+                .filter(|s| s.min.cmple(tile.min).all() && s.max.cmpge(tile.max).all())
+                .collect();
+            if ground_at_tile(x, y) == Ground::Water {
+                water += 1;
+                assert_eq!(holders.len(), 1, "water tile ({x},{y})");
+                assert!(on_water(c));
+            } else {
+                assert!(holders.is_empty(), "({x},{y}) is solid but not water");
+                assert!(
+                    solids.iter().all(|s| !s.overlaps(&tile)),
+                    "({x},{y}) is touched by a water box"
+                );
+            }
+        }
+        assert_eq!(area, water as f32 * TILE_PX * TILE_PX, "area");
+        // The boxes line up with the basin and the jetty.
+        let w = wharf();
+        let local: Vec<(Vec2, Vec2)> = solids
+            .iter()
+            .map(|s| (s.min - w.center, s.max - w.center))
+            .collect();
+        for want in [
+            (Vec2::new(144.0, -244.0), Vec2::new(240.0, -20.0)),
+            (Vec2::new(208.0, -20.0), Vec2::new(240.0, 28.0)),
+            (Vec2::new(144.0, 28.0), Vec2::new(240.0, 252.0)),
+        ] {
+            assert!(local.contains(&want), "{want:?} not in {local:?}");
+        }
+    }
+
+    /// The harbour water is laid as a chequer of the two REF-146 frames,
+    /// so neighbours are always out of phase.
+    #[test]
+    fn harbour_water_is_laid_in_a_chequer_of_its_two_frames() {
+        let mut seen = std::collections::HashSet::new();
+        for (x, y) in tiles_of(wharf()) {
+            if ground_at_tile(x, y) != Ground::Water {
+                continue;
+            }
+            let t = base_tile(x, y, Ground::Water);
+            seen.insert(t);
+            assert_eq!(t, water_frame((x + y) % 2 == 1, false));
+            if ground_at_tile(x + 1, y) == Ground::Water {
+                assert_ne!(t, base_tile(x + 1, y, Ground::Water), "({x},{y})");
+            }
+        }
+        assert_eq!(
+            seen,
+            [T_HARBOUR_A, T_HARBOUR_B].into_iter().collect(),
+            "both frames"
+        );
+    }
+
+    /// The swell swaps every water tile between exactly the two REF-146
+    /// frames, once per `WATER_FRAME_SECS`, with neighbours (odd and even
+    /// squares) always showing different frames, and does nothing between
+    /// swaps.
+    #[test]
+    fn the_swell_swaps_between_exactly_the_two_water_frames() {
+        use bevy::ecs::system::RunSystemOnce;
+        use std::time::Duration;
+        let mut world = World::new();
+        world.insert_resource(Time::<()>::default());
+        world.insert_resource(WaterSwell::default());
+        let even = world
+            .spawn((
+                WaterTile { odd: false },
+                TileTextureIndex(water_frame(false, false)),
+            ))
+            .id();
+        let odd = world
+            .spawn((
+                WaterTile { odd: true },
+                TileTextureIndex(water_frame(true, false)),
+            ))
+            .id();
+        let index = |w: &World, e: Entity| w.get::<TileTextureIndex>(e).map(|t| t.0);
+        let mut seen = std::collections::HashSet::new();
+        let mut swaps = 0usize;
+        // A quarter of the timer's own duration, a nanosecond over, so the
+        // fourth step always reaches the next swap.
+        let step = Duration::from_secs_f32(WATER_FRAME_SECS) / 4 + Duration::from_nanos(1);
+        let mut last = index(&world, even);
+        for _ in 0..40 {
+            world.resource_mut::<Time>().advance_by(step);
+            world.run_system_once(swell_water).expect("swell runs");
+            let (e, o) = (index(&world, even), index(&world, odd));
+            let (e, o) = (e.expect("even tile"), o.expect("odd tile"));
+            assert!([T_HARBOUR_A, T_HARBOUR_B].contains(&e), "{e}");
+            assert!([T_HARBOUR_A, T_HARBOUR_B].contains(&o), "{o}");
+            assert_ne!(e, o, "neighbours in phase");
+            seen.insert(e);
+            if Some(e) != last {
+                swaps += 1;
+            }
+            last = Some(e);
+        }
+        assert_eq!(seen.len(), 2);
+        // 40 quarter-frames: one swap every four steps.
+        assert_eq!(swaps, 10, "one swap per {WATER_FRAME_SECS} s");
+        assert!((0.6..=0.8).contains(&WATER_FRAME_SECS));
     }
 }
