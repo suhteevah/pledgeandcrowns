@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-156 - Coin pile, Act 8 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/coin_pile.png.
 //
 // A heap of old-gold coins with brass-leaf glints, two loose coins and
 // a small crown with two wine stones lying on top. One specular-white

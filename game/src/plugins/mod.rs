@@ -22,6 +22,7 @@ pub mod screenshot;
 pub mod state;
 pub mod stub_grader;
 pub mod title;
+pub mod townsfolk;
 pub mod trial;
 pub mod ui_theme;
 pub mod world;
@@ -54,7 +55,7 @@ impl Plugin for CorePlugin {
                 audio::GameAudioPlugin,
             ))
             // Outside the tuple above: Bevy plugin tuples stop at 15.
-            .add_plugins(animation::AnimationPlugin);
+            .add_plugins((animation::AnimationPlugin, townsfolk::TownsfolkPlugin));
     }
 }
 

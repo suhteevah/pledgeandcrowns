@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-167 - Candelabra, Act 9 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/candelabra.png.
 //
 // A standing gold candelabra with three cream candles, the middle one
 // tallest, each with a brass-leaf flame and one alarm-scarlet pixel.

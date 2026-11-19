@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-164 - Reading desk, Act 9 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/reading_desk.png.
 //
 // A brass-wood desk with an open book, a tall candle (one
 // alarm-scarlet pixel of flame) and a closed oxblood volume.

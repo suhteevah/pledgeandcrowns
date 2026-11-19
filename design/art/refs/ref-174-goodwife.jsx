@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-174 - Townsfolk: goodwife, 32x32. Ambient villager, gives no mission.
-// APPROVED by Matt 2026-11-19. Not wired yet.
+// APPROVED by Matt 2026-11-19. Wired as game/assets/sprites/townsfolk/goodwife_idle_0.png.
 //
 // A wine kerchief tied low over brass-brown hair and down past her
 // ears, a cream blouse, a long teal skirt to the ankle. Third

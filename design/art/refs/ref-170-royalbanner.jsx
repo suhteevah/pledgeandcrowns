@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-170 - Royal banner, Act 10 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/royal_banner.png.
 //
 // A cobalt-deep banner with a gold crown, a gold hem and fringe, on a
 // gold pole with a pale stone foot. The Throne's colours, as the

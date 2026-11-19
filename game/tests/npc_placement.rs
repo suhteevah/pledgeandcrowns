@@ -142,8 +142,11 @@ fn npc_ground_audit() {
 }
 
 /// The seven NPCs from roster name `first` to `boss` stand in `district`,
-/// and the 64 px boss stands alone, centred, in its back (north) row,
-/// with the six villagers in front of him.
+/// and the 64 px boss stands alone, centred, in front of the back
+/// landmark: no villager stands in the boss's column between him and it
+/// (within 64 px of the centre line, north of him). Since the plazas were
+/// dressed (2026-11-19) the six villagers stand at their props, some in
+/// the north corners beside him, so they are no longer all south of him.
 fn assert_cast_with_boss_at_the_back(district: &str, first: &str, boss: &str) {
     let d_index = DISTRICTS
         .iter()
@@ -164,9 +167,10 @@ fn assert_cast_with_boss_at_the_back(district: &str, first: &str, boss: &str) {
     let p = district_slot(boss_i);
     assert_eq!(p.x, d.center.x, "{boss} is centred in its row");
     for (i, spec) in NPC_ROSTER.iter().enumerate().skip(first).take(6) {
+        let v = district_slot(i);
         assert!(
-            district_slot(i).y < p.y,
-            "{} stands in front of {boss}",
+            v.y < p.y || (v.x - p.x).abs() >= 64.0,
+            "{} stands between {boss} and the landmark",
             spec.name
         );
     }
@@ -247,14 +251,50 @@ fn acts_9_and_10_stand_in_the_library_and_the_throne() {
     );
 }
 
-/// The seven dressed plazas' casts (the free demo's Hearthstone Square,
+/// The ten dressed plazas' casts (the free demo's Hearthstone Square,
 /// Market Row and The Commons, the Act 3-5 Guildhall Quarter, Mage's Tower
-/// and Tavern Row, and the Forge, Act 6) are placed by hand:
-/// one spot per roster slot, the roster order, names and missions as
-/// before.
+/// and Tavern Row, the Forge, Act 6, and the Act 8-10 Vault, Forbidden
+/// Library and Throne) are placed by hand: one spot per roster slot (the
+/// Library's and the Throne's bosses excepted, on their grid spot), the
+/// roster order, names and missions as before.
 #[test]
 fn the_dressed_casts_keep_their_roster() {
-    let casts: [(&str, &[(&str, &str)]); 7] = [
+    let casts: [(&str, &[(&str, &str)]); 10] = [
+        (
+            "The Vault",
+            &[
+                ("The Vaultwright", "box_basic"),
+                ("The Sharekeeper", "rc_basic"),
+                ("The Warden", "refcell"),
+                ("The Swapwarden", "cell"),
+                ("The Strongbox", "rc_refcell"),
+                ("The Ghostkeeper", "weak_ref"),
+            ],
+        ),
+        (
+            "The Forbidden Library",
+            &[
+                ("The Shelfmark", "raw_pointer"),
+                ("The Envoy", "extern_c"),
+                ("The Macro Monk", "macro_rules"),
+                ("The Sexton", "drop_trait"),
+                ("The Courier", "send_sync"),
+                ("The Bookbinder", "maybe_uninit"),
+                ("The Librarian", "librarian_index"),
+            ],
+        ),
+        (
+            "The Throne",
+            &[
+                ("The Assayer", "prealloc"),
+                ("The Copyist", "cow_borrow"),
+                ("The Astronomer", "const_eval"),
+                ("The Choirmaster", "chunks_exact"),
+                ("The Hermit", "no_std"),
+                ("The Registrar", "semver_caret"),
+                ("The Compiler", "compiler_alloc"),
+            ],
+        ),
         (
             "Guildhall Quarter",
             &[
@@ -342,7 +382,11 @@ fn the_dressed_casts_keep_their_roster() {
             .position(|x| x.name == name)
             .unwrap_or_else(|| panic!("{name}"));
         let d = &DISTRICTS[d_index];
-        assert_eq!(d.cast.len(), d.count, "{name}: every NPC is placed by hand");
+        // The Library's and the Throne's bosses keep their grid spot, so
+        // their lists stop one short.
+        let boss_on_grid = name == "The Forbidden Library" || name == "The Throne";
+        let placed = if boss_on_grid { d.count - 1 } else { d.count };
+        assert_eq!(d.cast.len(), placed, "{name}: every NPC is placed by hand");
         let first: usize = DISTRICTS[..d_index].iter().map(|x| x.count).sum();
         let got: Vec<(&str, &str)> = NPC_ROSTER[first..first + d.count]
             .iter()
@@ -402,7 +446,47 @@ fn the_dressed_casts_gather_at_their_props() {
         );
     };
     // (plaza, the prop they gather at, who)
-    let groups: [(&str, PropKind, &[&str]); 16] = [
+    let groups: [(&str, PropKind, &[&str]); 24] = [
+        (
+            "The Vault",
+            PropKind::ChainedCasket,
+            &["The Vaultwright", "The Strongbox"],
+        ),
+        (
+            "The Vault",
+            PropKind::Scales,
+            &["The Sharekeeper", "The Ghostkeeper"],
+        ),
+        (
+            "The Vault",
+            PropKind::KeyRack,
+            &["The Warden", "The Swapwarden"],
+        ),
+        (
+            "The Forbidden Library",
+            PropKind::ReadingDesk,
+            &["The Shelfmark", "The Bookbinder"],
+        ),
+        (
+            "The Forbidden Library",
+            PropKind::Globe,
+            &["The Envoy", "The Courier"],
+        ),
+        (
+            "The Forbidden Library",
+            PropKind::Lectern,
+            &["The Macro Monk"],
+        ),
+        (
+            "The Throne",
+            PropKind::CrownPlinth,
+            &["The Assayer", "The Registrar"],
+        ),
+        (
+            "The Throne",
+            PropKind::ReadingDesk,
+            &["The Copyist", "The Choirmaster"],
+        ),
         (
             "Guildhall Quarter",
             PropKind::LedgerDesk,
@@ -495,6 +579,12 @@ fn the_dressed_casts_gather_at_their_props() {
         ("The Commons", "The Alchemist", PropKind::LanternPost),
         // The tavern door: the Barkeep by his tab slate.
         ("Tavern Row", "The Barkeep", PropKind::TabSlate),
+        // The lectern: the Sexton at the candelabra beside it.
+        ("The Forbidden Library", "The Sexton", PropKind::Candelabra),
+        ("The Forbidden Library", "The Sexton", PropKind::Lectern),
+        // The globe at the top of the Throne's aisle.
+        ("The Throne", "The Hermit", PropKind::Globe),
+        ("The Throne", "The Astronomer", PropKind::Globe),
         // Alone at their own thing.
         ("Hearthstone Square", "The Bellringer", PropKind::BellTower),
         ("Hearthstone Square", "The Smith", PropKind::Woodpile),
@@ -507,7 +597,16 @@ fn the_dressed_casts_gather_at_their_props() {
         within_reach(plaza, npc, kind);
     }
     // Who stands together: each member within 96 px of another member.
-    let gatherings: [&[&str]; 17] = [
+    let gatherings: [&[&str]; 26] = [
+        &["The Vaultwright", "The Strongbox"],
+        &["The Sharekeeper", "The Ghostkeeper"],
+        &["The Warden", "The Swapwarden"],
+        &["The Shelfmark", "The Bookbinder"],
+        &["The Envoy", "The Courier"],
+        &["The Macro Monk", "The Sexton"],
+        &["The Assayer", "The Registrar"],
+        &["The Copyist", "The Choirmaster"],
+        &["The Hermit", "The Astronomer"],
         &["The Guildmaster", "The Recruiter"],
         &["The Surveyor", "The Locksmith"],
         &["The Armorer", "The Porter"],
@@ -540,10 +639,19 @@ fn the_dressed_casts_gather_at_their_props() {
             );
         }
     }
-    // Nobody in the Act 3-5 quarters stands at storage: no NPC sprite
-    // within a tile of a strongbox, keg rack, barrel group, crate stack or
-    // scroll shelf. People gather where people would stand.
-    for plaza in ["Guildhall Quarter", "The Mage's Tower", "Tavern Row"] {
+    // Nobody in the Act 3-5 and 8-10 plazas stands at storage: no NPC
+    // sprite within a tile of a strongbox, keg rack, barrel group, crate
+    // stack, scroll shelf, coin pile, iron safe, tall bookshelf or book
+    // pile. People gather where people would stand. (The chained casket is
+    // not storage here: REF-157's header puts the `Box<T>` mission at it.)
+    for plaza in [
+        "Guildhall Quarter",
+        "The Mage's Tower",
+        "Tavern Row",
+        "The Vault",
+        "The Forbidden Library",
+        "The Throne",
+    ] {
         let d = district(plaza);
         let first: usize = DISTRICTS[..d].iter().map(|x| x.count).sum();
         for (i, spec) in NPC_ROSTER
@@ -559,6 +667,10 @@ fn the_dressed_casts_gather_at_their_props() {
                 PropKind::Barrels,
                 PropKind::Crates,
                 PropKind::ScrollShelf,
+                PropKind::CoinPile,
+                PropKind::IronSafe,
+                PropKind::TallBookshelf,
+                PropKind::BookPile,
             ] {
                 for r in rects(d, kind) {
                     assert!(
@@ -700,4 +812,113 @@ fn npc_placement_invariants() {
         failures.len(),
         failures.join("\n")
     );
+}
+
+/// The placement gate for the ambient townsfolk (`plugins::townsfolk`),
+/// who give no mission and are not in the roster:
+/// 1. the sprite and a one-tile margin round it are its plaza's own
+///    paving (never the cobble ring), inside that plaza;
+/// 2. gathered at a prop: a placed prop of the kind it names stands within
+///    a tile of its sprite, and no prop's sprite overlaps it, so it stands
+///    on no solid;
+/// 3. at least `CAST_MIN_SPACING` from every roster NPC's centre, and its
+///    sprite clear of every NPC's talk spot (where the player stands to
+///    press F), so the people with missions stay easy to pick out and
+///    reach;
+/// 4. no two figures overlap, and none within two tiles of the new-game
+///    spawn.
+///
+/// Street mouths are kept clear in `prop.rs`
+/// (`townsfolk_keep_the_street_mouths_open`). They are not solid, so they
+/// can never block a lane or a restored position.
+#[test]
+fn townsfolk_placement_invariants() {
+    use pledge_and_crown::plugins::prop::{DISTRICT_PROPS, LANDMARKS};
+    use pledge_and_crown::plugins::townsfolk::{FOLK_PX, TOWNSFOLK, townsperson_pos};
+    use pledge_and_crown::plugins::world::landmark_plot_base;
+    let props = all_props();
+    let mut failures: Vec<String> = Vec::new();
+    let rects: Vec<Aabb> = TOWNSFOLK
+        .iter()
+        .map(|t| square(townsperson_pos(t).expect("district"), FOLK_PX))
+        .collect();
+    for (n, t) in TOWNSFOLK.iter().enumerate() {
+        let d = &DISTRICTS[t.district];
+        let who = format!("{:?} #{n} in {}", t.folk, d.name);
+        let pos = d.center + t.offset;
+        let rect = rects[n];
+
+        // 1. Its plaza's own paving under it and a tile round it.
+        let around = kinds_under(grow(rect, TILE));
+        if around != vec![d.interior_ground()] {
+            failures.push(format!("{who}: sprite + 1 tile on {around:?}"));
+        }
+
+        // 2. At its prop, on none.
+        let mut nearest = f32::MAX;
+        for &(pd, k, off) in DISTRICT_PROPS {
+            if pd == t.district && k == t.at {
+                nearest = nearest.min(gap(&rect, &k.sprite_rect_at(d.center + off)));
+            }
+        }
+        if LANDMARKS.contains(&(t.district, t.at)) {
+            let base = landmark_plot_base(t.district).expect("plot");
+            nearest = nearest.min(gap(&rect, &t.at.sprite_rect_at(base)));
+        }
+        if !(0.0..=TILE).contains(&nearest) {
+            failures.push(format!("{who}: {nearest} px from the nearest {:?}", t.at));
+        }
+        for (k, b) in &props {
+            if k.sprite_rect_at(*b).overlaps(&rect) {
+                failures.push(format!("{who}: under the {k:?} at {b:?}"));
+            }
+        }
+
+        // 3. Clear of the mission cast and where the player talks to them.
+        for (i, spec) in NPC_ROSTER.iter().enumerate() {
+            let p = district_slot(i);
+            let dist = p.distance(pos);
+            if dist < CAST_MIN_SPACING {
+                failures.push(format!("{who}: {dist} px from {}", spec.name));
+            }
+            if square(p + TALK_SPOT_OFFSET, PLAYER_PX).overlaps(&rect) {
+                failures.push(format!("{who}: on {}'s talk spot", spec.name));
+            }
+            if sprite_rect(i).overlaps(&rect) {
+                failures.push(format!("{who}: overlaps {}", spec.name));
+            }
+        }
+
+        // 4. Apart from each other and from the spawn.
+        for (m, other) in rects.iter().enumerate().skip(n + 1) {
+            if other.overlaps(&rect) {
+                failures.push(format!("{who}: overlaps townsperson #{m}"));
+            }
+        }
+        if gap(&rect, &square(PLAYER_SPAWN, PLAYER_PX)) < 2.0 * TILE {
+            failures.push(format!("{who}: within two tiles of the spawn"));
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "{} townsfolk placement failures:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
+}
+
+/// The townsfolk are not part of the mission roster: no roster entry
+/// uses a townsfolk sprite, and the roster still ends with the Compiler at
+/// 71 NPCs (ids, order and missions are pinned in
+/// `the_dressed_casts_keep_their_roster`).
+#[test]
+fn townsfolk_are_not_in_the_roster() {
+    use pledge_and_crown::plugins::townsfolk::Folk;
+    assert_eq!(NPC_ROSTER.len(), 71);
+    for f in Folk::ALL {
+        assert!(
+            NPC_ROSTER.iter().all(|s| s.sprite_path != f.sprite_path()),
+            "{f:?} is a roster sprite"
+        );
+    }
 }

@@ -298,6 +298,31 @@ runs `scripts/ci.ps1` on the merged result as the sign-off gate.
   in pairs (three gatherings per plaza). Capture:
   `scene-district-{guildhall-quarter,the-mages-tower,tavern-row}[-yard]`,
   `scene-landmark-{guildhall,mages-tower,tavern}`.
+- **Wired 2026-11-19 (Acts 8-10):** REF-154..161 in the Vault (basalt
+  floor with a gold ring on one slab in six, the vault door, a treasury
+  behind a chain cordon, the key rack, the chained casket, the scales
+  behind a chain, a second cordon along the south wall), REF-162..167 in
+  the Forbidden Library (the runner two tiles wide from the south wall to
+  the Sealed Stacks, three rows of tall bookshelves either side, reading
+  desks, globes, candelabras, the lectern) and REF-168..172 in the Throne
+  (the runner from the street mouth to the dais, an aisle of columns and
+  braziers, guard statues at the mouth, the Crown beside the top of the
+  aisle, royal banners). Vault floor appended to REF-76 (32-33), runner
+  (34-35; atlas now 128x80); the runner is an overlay over flagstone,
+  per district (`world::Runner`). Props (landmark incl.): Vault 39,
+  Library 39, Throne 38. Casts gather in pairs at the casket, scales, key
+  rack; reading desk, globe, lectern; Crown, globe, reading desk. The
+  Librarian and the Compiler keep their grid spot (their `cast` lists the
+  six villagers only). The Wharf (REF-146..153) is NOT wired (needs water).
+  Capture: `scene-district-{the-vault,the-forbidden-library,the-throne}
+  [-yard]`, `scene-landmark-vault-door`.
+- **Wired 2026-11-19 (ambient townsfolk):** REF-173..179 (farmer, goodwife,
+  elder, boy, merchant, guard, girl) as `sprites/townsfolk/*_idle_0.png`,
+  placed by `townsfolk::TOWNSFOLK` (district, kind, offset, the prop they
+  stand at): 2-3 in each of the ten dressed plazas, 24 in all. Not in the
+  roster, no `Npc` component (no talk, no marker, nothing saved), not
+  solid; y-sorted, faded behind props, idle bob. Capture:
+  `scene-townsfolk-<district>`.
 - **Awaiting approval:** no landmark.
 - **Not drawn:** boss intro/defeat frames (Librarian, Compiler), the
   Librarian's lectern, pixel font pick, title redraw, a renderable Borrow

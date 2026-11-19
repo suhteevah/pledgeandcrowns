@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-165 - Book pile, Act 9 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/book_pile.png.
 //
 // Five thick books stacked crooked, oxblood, cobalt, forest, crypt and
 // gold, with an open one face-down on top. Floor clutter for the

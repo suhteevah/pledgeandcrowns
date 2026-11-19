@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-158 - Chain barrier, Act 8 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/chain_barrier.png.
 //
 // Two basalt posts with gold caps and a chain sagging between them;
 // the chain runs to both edges, so pieces placed side by side join

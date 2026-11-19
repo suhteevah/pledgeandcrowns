@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-168 - Column, Act 10 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/column.png.
 //
 // A pale fluted column with a square capital and base and a gold
 // band at each end. Stand them in two rows down the Throne plaza to

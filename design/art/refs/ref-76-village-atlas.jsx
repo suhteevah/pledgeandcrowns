@@ -10,9 +10,13 @@
 // 25 = soot_b), then the 2 REF-122 Guildhall floor tiles (26 = hall_light,
 // 27 = hall_dark), the 2 REF-130 tower court tiles (28 = court_plain,
 // 29 = court_rune) and the 2 REF-138 tavern planks (30 = plank_a,
-// 31 = plank_b), all verbatim. A district ground approved later is APPENDED
-// the same way, never inserted: existing indices must not move. 32 tiles
-// fill four rows of eight (128x64); a further ground starts a fifth row.
+// 31 = plank_b), the 2 REF-154 vault floor tiles (32 = vault_plain,
+// 33 = vault_ring) and the 2 REF-162 carpet runner tiles (34 = runner_mid,
+// 35 = runner_end), all verbatim. A district ground approved later is
+// APPENDED the same way, never inserted: existing indices must not move.
+// 36 tiles fill four rows of eight and half a fifth (128x80; the rest of
+// row five is empty). The runner is laid in the overlay layer, over the
+// plaza ground, so runner_end's open fringe shows the flagstone under it.
 //
 // Do NOT edit rows here. Change the source ref (after approval) and re-copy.
 // render-refs' test `ref76_atlas_is_verbatim_copy_of_its_sources` fails if
@@ -20,7 +24,8 @@
 // pin every atlas index constant to the tile order below.
 //
 // Legend: see ref-66-terrain.jsx, ref-75-flagstone.jsx, ref-97-forgeslab.jsx,
-// ref-122-hallfloor.jsx, ref-130-courtfloor.jsx and ref-138-tavernplanks.jsx.
+// ref-122-hallfloor.jsx, ref-130-courtfloor.jsx, ref-138-tavernplanks.jsx,
+// ref-154-vaultfloor.jsx and ref-162-runner.jsx.
 
 const REF76_COLS = 8;
 
@@ -600,6 +605,78 @@ const REF76_TILES = {
     'ZZZZZZZZZZZZZZZZ',
     'ZZZZZZZZZZZZZZZZ',
     'UUUUUUUUUUUUUUUU',
+  ],
+  vault_plain: [
+    'GBBBBBBBBBBBBBBX',
+    'BBBBBBBBBBBBBBBX',
+    'BBBBBBBBBBBBBBBX',
+    'BBBBBBBBBBBBBBBX',
+    'BBBBBBBBBBSBBBBX',
+    'BBBBBBBBBBBBBBBX',
+    'BBBBBBBBBBBBBBBX',
+    'BBBBBBBBBBBBBBBX',
+    'BBBBBBBBBBBBBBBX',
+    'BBBBBBBBBBBBBBBX',
+    'BBBSBBBBBBBBBBBX',
+    'BBBBBBBBBBBBBBBX',
+    'BBBBBBBBBBBBBBBX',
+    'BBBBBBBBBBBBBBBX',
+    'BBBBBBBBBBBBBBBX',
+    'XXXXXXXXXXXXXXXX',
+  ],
+  vault_ring: [
+    'GBBBBBBBBBBBBBBX',
+    'BBBBBBBBBBBBBBBX',
+    'BBBBBBBNNBBBBBBX',
+    'BBBBBBNGGNBBBBBX',
+    'BBBBBNGBBGNBBBBX',
+    'BBBBNGBBBBGNBBBX',
+    'BBBNGBBBBBBGNBBX',
+    'BBBNGBBBBBBGNBBX',
+    'BBBBNGBBBBGNBBBX',
+    'BBBBBNGBBGNBBBBX',
+    'BBBBBBNGGNBBBBBX',
+    'BBBBBBBNNBBBBBBX',
+    'BBBBBBBBBBBBBBBX',
+    'BBBBBBBBBBBBBBBX',
+    'BBBBBBBBBBBBBBBX',
+    'XXXXXXXXXXXXXXXX',
+  ],
+  runner_mid: [
+    'GNOOOOOOOOOOOONG',
+    'GNOOOOOOOOOOOONG',
+    'GNOOOOOOOOOOOONG',
+    'GNOOOOOWWOOOOONG',
+    'GNOOOOWOOWOOOONG',
+    'GNOOOOWOOWOOOONG',
+    'GNOOOOOWWOOOOONG',
+    'GNOOOOOOOOOOOONG',
+    'GNOOOOOOOOOOOONG',
+    'GNOOOOOOOOOOOONG',
+    'GNOOOOOOOOOOOONG',
+    'GNOOOYOOOOYOOONG',
+    'GNOOOOYOOYOOOONG',
+    'GNOOOOOOOOOOOONG',
+    'GNOOOOOOOOOOOONG',
+    'GNOOOOOOOOOOOONG',
+  ],
+  runner_end: [
+    'GNOOOOOOOOOOOONG',
+    'GNOOOOOOOOOOOONG',
+    'GNOOOOOOOOOOOONG',
+    'GNOOOOOOOOOOOONG',
+    'GNOOOOOWWOOOOONG',
+    'GNOOOOWOOWOOOONG',
+    'GNOOOOOWWOOOOONG',
+    'GNOOOOOOOOOOOONG',
+    'GNOOOOOOOOOOOONG',
+    'GNOOOOOOOOOOOONG',
+    'GNOOOOOOOOOOOONG',
+    'GNOOOOOOOOOOOONG',
+    'GNNNNNNNNNNNNNNG',
+    'GGGGGGGGGGGGGGGG',
+    'GXGXGXGXGXGXGXGX',
+    '.G.G.G.G.G.G.G.G',
   ],
 };
 

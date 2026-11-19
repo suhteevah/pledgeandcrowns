@@ -258,6 +258,45 @@ pub const SPRITE_PROP_FIREPIT: &str = "sprites/props/firepit.png";
 pub const SPRITE_PROP_TAVERN_SIGN: &str = "sprites/props/tavern_sign.png";
 pub const SPRITE_PROP_ROUND_TABLE: &str = "sprites/props/round_table.png";
 pub const SPRITE_PROP_TAB_SLATE: &str = "sprites/props/tab_slate.png";
+// Acts 8-10 district sets (approved by Matt 2026-11-18): the Vault, REF-155
+// vault door (64x64 landmark), REF-156 coin pile, REF-157 chained casket,
+// REF-158 chain barrier, REF-159 scales, REF-160 key rack, REF-161 iron
+// safe; the Forbidden Library, REF-163 tall bookshelf, REF-164 reading
+// desk, REF-165 book pile, REF-166 globe, REF-167 candelabra; the Throne,
+// REF-168 column, REF-169 brazier, REF-170 royal banner, REF-171 guard
+// statue, REF-172 crown plinth. Bottom-centre anchor, y-sorted, solid per
+// their ref headers, placed by `plugins::prop::{LANDMARKS,
+// DISTRICT_PROPS}`. The REF-154 vault floor and the REF-162 carpet runner
+// ship inside `SPRITE_TILES_VILLAGE_V3`.
+pub const SPRITE_PROP_VAULT_DOOR: &str = "sprites/props/vault_door.png";
+pub const SPRITE_PROP_COIN_PILE: &str = "sprites/props/coin_pile.png";
+pub const SPRITE_PROP_CHAINED_CASKET: &str = "sprites/props/chained_casket.png";
+pub const SPRITE_PROP_CHAIN_BARRIER: &str = "sprites/props/chain_barrier.png";
+pub const SPRITE_PROP_SCALES: &str = "sprites/props/scales.png";
+pub const SPRITE_PROP_KEY_RACK: &str = "sprites/props/key_rack.png";
+pub const SPRITE_PROP_IRON_SAFE: &str = "sprites/props/iron_safe.png";
+pub const SPRITE_PROP_TALL_BOOKSHELF: &str = "sprites/props/tall_bookshelf.png";
+pub const SPRITE_PROP_READING_DESK: &str = "sprites/props/reading_desk.png";
+pub const SPRITE_PROP_BOOK_PILE: &str = "sprites/props/book_pile.png";
+pub const SPRITE_PROP_GLOBE: &str = "sprites/props/globe.png";
+pub const SPRITE_PROP_CANDELABRA: &str = "sprites/props/candelabra.png";
+pub const SPRITE_PROP_COLUMN: &str = "sprites/props/column.png";
+pub const SPRITE_PROP_BRAZIER: &str = "sprites/props/brazier.png";
+pub const SPRITE_PROP_ROYAL_BANNER: &str = "sprites/props/royal_banner.png";
+pub const SPRITE_PROP_GUARD_STATUE: &str = "sprites/props/guard_statue.png";
+pub const SPRITE_PROP_CROWN_PLINTH: &str = "sprites/props/crown_plinth.png";
+
+// Ambient townsfolk (approved by Matt 2026-11-19): REF-173 farmer, REF-174
+// goodwife, REF-175 elder, REF-176 boy, REF-177 merchant, REF-178 guard,
+// REF-179 girl. 32x32 villagers who give no mission and are not in the
+// roster, placed by `plugins::townsfolk::TOWNSFOLK`.
+pub const SPRITE_FOLK_FARMER: &str = "sprites/townsfolk/farmer_idle_0.png";
+pub const SPRITE_FOLK_GOODWIFE: &str = "sprites/townsfolk/goodwife_idle_0.png";
+pub const SPRITE_FOLK_ELDER: &str = "sprites/townsfolk/elder_idle_0.png";
+pub const SPRITE_FOLK_BOY: &str = "sprites/townsfolk/boy_idle_0.png";
+pub const SPRITE_FOLK_MERCHANT: &str = "sprites/townsfolk/merchant_idle_0.png";
+pub const SPRITE_FOLK_GUARD: &str = "sprites/townsfolk/guard_idle_0.png";
+pub const SPRITE_FOLK_GIRL: &str = "sprites/townsfolk/girl_idle_0.png";
 
 // Audio (Stable Audio Open generated, baked via tools/synthwave-gen).
 // Generation is a Matt-action: `powershell -ExecutionPolicy Bypass
@@ -412,4 +451,28 @@ pub const ALL_SPRITE_PATHS: &[&str] = &[
     SPRITE_PROP_TAVERN_SIGN,
     SPRITE_PROP_ROUND_TABLE,
     SPRITE_PROP_TAB_SLATE,
+    SPRITE_PROP_VAULT_DOOR,
+    SPRITE_PROP_COIN_PILE,
+    SPRITE_PROP_CHAINED_CASKET,
+    SPRITE_PROP_CHAIN_BARRIER,
+    SPRITE_PROP_SCALES,
+    SPRITE_PROP_KEY_RACK,
+    SPRITE_PROP_IRON_SAFE,
+    SPRITE_PROP_TALL_BOOKSHELF,
+    SPRITE_PROP_READING_DESK,
+    SPRITE_PROP_BOOK_PILE,
+    SPRITE_PROP_GLOBE,
+    SPRITE_PROP_CANDELABRA,
+    SPRITE_PROP_COLUMN,
+    SPRITE_PROP_BRAZIER,
+    SPRITE_PROP_ROYAL_BANNER,
+    SPRITE_PROP_GUARD_STATUE,
+    SPRITE_PROP_CROWN_PLINTH,
+    SPRITE_FOLK_FARMER,
+    SPRITE_FOLK_GOODWIFE,
+    SPRITE_FOLK_ELDER,
+    SPRITE_FOLK_BOY,
+    SPRITE_FOLK_MERCHANT,
+    SPRITE_FOLK_GUARD,
+    SPRITE_FOLK_GIRL,
 ];

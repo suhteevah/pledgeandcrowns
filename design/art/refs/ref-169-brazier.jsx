@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-169 - Brazier, Act 10 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/brazier.png.
 //
 // A basalt iron fire bowl with a gold rim on a tripod, gold-ramp
 // flames over a cream bed and three alarm-scarlet tips. Place them in

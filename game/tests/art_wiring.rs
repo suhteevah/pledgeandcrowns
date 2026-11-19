@@ -553,10 +553,10 @@ fn the_forge_set_ships_its_approved_renders() {
         );
         assert!(!src.contains("DRAFT"), "{jsx} still says DRAFT");
     }
-    // REF-97 reaches the game through the combined atlas (4 rows of 8).
+    // REF-97 reaches the game through the combined atlas (5 rows of 8).
     let atlas = root.join(SPRITE_TILES_VILLAGE_V3);
     assert!(read(&atlas) == read(&refs.join("png/REF76.png")));
-    assert_eq!(png_size(&atlas), (128, 64));
+    assert_eq!(png_size(&atlas), (128, 80));
     let src = std::fs::read_to_string(refs.join("ref-97-forgeslab.jsx")).expect("REF-97");
     assert!(
         src.lines().any(|l| l.trim_end()
@@ -897,10 +897,10 @@ fn the_act3_to_5_sets_ship_their_approved_renders() {
         assert!(!src.contains("DRAFT"), "{jsx} still says DRAFT");
         assert!(!src.contains("Not wired yet"), "{jsx} still says not wired");
     }
-    // The grounds reach the game through the combined atlas (4 full rows).
+    // The grounds reach the game through the combined atlas (5 rows).
     let atlas = root.join(SPRITE_TILES_VILLAGE_V3);
     assert!(read(&atlas) == read(&refs.join("png/REF76.png")));
-    assert_eq!(png_size(&atlas), (128, 64));
+    assert_eq!(png_size(&atlas), (128, 80));
     for (jsx, indices) in [
         ("ref-122-hallfloor.jsx", "26-27"),
         ("ref-130-courtfloor.jsx", "28-29"),
@@ -915,5 +915,211 @@ fn the_act3_to_5_sets_ship_their_approved_renders() {
             "{jsx}: no approval header"
         );
         assert!(!src.contains("Not wired yet"), "{jsx} still says not wired");
+    }
+}
+
+/// Checks one wired 2D asset: the path is `sprites/<dir>/<file>.png`,
+/// preloaded, byte-identical to its `REF<n>.png` render and `px` square,
+/// and its ref header says it is approved on `date` and wired there, with
+/// no DRAFT or "Not wired yet" left.
+fn assert_wired(path: &str, dir: &str, file: &str, n: u32, jsx: &str, px: u32, date: &str) {
+    use pledge_and_crown::assets::ALL_SPRITE_PATHS;
+    let root = game_assets();
+    let refs = refs_dir();
+    let want = format!("sprites/{dir}/{file}.png");
+    let render = format!("png/REF{n}.png");
+    assert_eq!(path, want);
+    assert!(ALL_SPRITE_PATHS.contains(&path), "{path} is not preloaded");
+    assert!(
+        read(&root.join(path)) == read(&refs.join(&render)),
+        "{path} is not the {render} render"
+    );
+    assert_eq!(png_size(&root.join(path)), (px, px), "{path}");
+    let src = std::fs::read_to_string(refs.join(jsx)).expect(jsx);
+    let header = format!("// APPROVED by Matt {date}. Wired as game/assets/{want}.");
+    assert!(
+        src.lines().any(|l| l.trim_end() == header),
+        "{jsx}: no approval header"
+    );
+    assert!(!src.contains("DRAFT"), "{jsx} still says DRAFT");
+    assert!(!src.contains("Not wired yet"), "{jsx} still says not wired");
+}
+
+/// The Acts 8-10 district sets (approved by Matt 2026-11-18): the vault
+/// door (REF-155, 64x64) and sixteen 32x32 props (REF-156..161,
+/// REF-163..172) ship byte-identical to their renders, preloaded, with
+/// approval headers naming their game file. The vault floor (REF-154) and
+/// the carpet runner (REF-162) ship inside the terrain atlas, the REF-76
+/// render (`world.rs` pins the indices).
+#[test]
+fn the_act8_to_10_sets_ship_their_approved_renders() {
+    use pledge_and_crown::assets::{
+        SPRITE_PROP_BOOK_PILE, SPRITE_PROP_BRAZIER, SPRITE_PROP_CANDELABRA,
+        SPRITE_PROP_CHAIN_BARRIER, SPRITE_PROP_CHAINED_CASKET, SPRITE_PROP_COIN_PILE,
+        SPRITE_PROP_COLUMN, SPRITE_PROP_CROWN_PLINTH, SPRITE_PROP_GLOBE, SPRITE_PROP_GUARD_STATUE,
+        SPRITE_PROP_IRON_SAFE, SPRITE_PROP_KEY_RACK, SPRITE_PROP_READING_DESK,
+        SPRITE_PROP_ROYAL_BANNER, SPRITE_PROP_SCALES, SPRITE_PROP_TALL_BOOKSHELF,
+        SPRITE_PROP_VAULT_DOOR, SPRITE_TILES_VILLAGE_V3,
+    };
+    for (path, file, n, jsx, px) in [
+        (
+            SPRITE_PROP_VAULT_DOOR,
+            "vault_door",
+            155,
+            "ref-155-vaultdoor.jsx",
+            64,
+        ),
+        (
+            SPRITE_PROP_COIN_PILE,
+            "coin_pile",
+            156,
+            "ref-156-coinpile.jsx",
+            32,
+        ),
+        (
+            SPRITE_PROP_CHAINED_CASKET,
+            "chained_casket",
+            157,
+            "ref-157-chainedcasket.jsx",
+            32,
+        ),
+        (
+            SPRITE_PROP_CHAIN_BARRIER,
+            "chain_barrier",
+            158,
+            "ref-158-chainbarrier.jsx",
+            32,
+        ),
+        (SPRITE_PROP_SCALES, "scales", 159, "ref-159-scales.jsx", 32),
+        (
+            SPRITE_PROP_KEY_RACK,
+            "key_rack",
+            160,
+            "ref-160-keyrack.jsx",
+            32,
+        ),
+        (
+            SPRITE_PROP_IRON_SAFE,
+            "iron_safe",
+            161,
+            "ref-161-ironsafe.jsx",
+            32,
+        ),
+        (
+            SPRITE_PROP_TALL_BOOKSHELF,
+            "tall_bookshelf",
+            163,
+            "ref-163-tallbookshelf.jsx",
+            32,
+        ),
+        (
+            SPRITE_PROP_READING_DESK,
+            "reading_desk",
+            164,
+            "ref-164-readingdesk.jsx",
+            32,
+        ),
+        (
+            SPRITE_PROP_BOOK_PILE,
+            "book_pile",
+            165,
+            "ref-165-bookpile.jsx",
+            32,
+        ),
+        (SPRITE_PROP_GLOBE, "globe", 166, "ref-166-globe.jsx", 32),
+        (
+            SPRITE_PROP_CANDELABRA,
+            "candelabra",
+            167,
+            "ref-167-candelabra.jsx",
+            32,
+        ),
+        (SPRITE_PROP_COLUMN, "column", 168, "ref-168-column.jsx", 32),
+        (
+            SPRITE_PROP_BRAZIER,
+            "brazier",
+            169,
+            "ref-169-brazier.jsx",
+            32,
+        ),
+        (
+            SPRITE_PROP_ROYAL_BANNER,
+            "royal_banner",
+            170,
+            "ref-170-royalbanner.jsx",
+            32,
+        ),
+        (
+            SPRITE_PROP_GUARD_STATUE,
+            "guard_statue",
+            171,
+            "ref-171-guardstatue.jsx",
+            32,
+        ),
+        (
+            SPRITE_PROP_CROWN_PLINTH,
+            "crown_plinth",
+            172,
+            "ref-172-crownplinth.jsx",
+            32,
+        ),
+    ] {
+        assert_wired(path, "props", file, n, jsx, px, "2026-11-18");
+    }
+    let root = game_assets();
+    let refs = refs_dir();
+    let atlas = root.join(SPRITE_TILES_VILLAGE_V3);
+    assert!(read(&atlas) == read(&refs.join("png/REF76.png")));
+    assert_eq!(png_size(&atlas), (128, 80));
+    for (jsx, indices) in [
+        ("ref-154-vaultfloor.jsx", "32-33"),
+        ("ref-162-runner.jsx", "34-35"),
+    ] {
+        let src = std::fs::read_to_string(refs.join(jsx)).expect(jsx);
+        let header = format!(
+            "// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/tiles_village_v3.png (via the REF-76 combined atlas, indices {indices})."
+        );
+        assert!(
+            src.lines().any(|l| l.trim_end() == header),
+            "{jsx}: no approval header"
+        );
+        assert!(!src.contains("Not wired yet"), "{jsx} still says not wired");
+    }
+}
+
+/// The ambient townsfolk (REF-173..179, approved by Matt 2026-11-19) ship
+/// byte-identical to their 32x32 renders, preloaded, with approval headers
+/// naming their game file; each `townsfolk::Folk` kind loads its own.
+#[test]
+fn the_townsfolk_ship_their_approved_renders() {
+    use pledge_and_crown::plugins::townsfolk::Folk;
+    for (folk, file, n, jsx) in [
+        (Folk::Farmer, "farmer_idle_0", 173, "ref-173-farmer.jsx"),
+        (
+            Folk::Goodwife,
+            "goodwife_idle_0",
+            174,
+            "ref-174-goodwife.jsx",
+        ),
+        (Folk::Elder, "elder_idle_0", 175, "ref-175-elder.jsx"),
+        (Folk::Boy, "boy_idle_0", 176, "ref-176-child.jsx"),
+        (
+            Folk::Merchant,
+            "merchant_idle_0",
+            177,
+            "ref-177-merchant.jsx",
+        ),
+        (Folk::Guard, "guard_idle_0", 178, "ref-178-guard.jsx"),
+        (Folk::Girl, "girl_idle_0", 179, "ref-179-girl.jsx"),
+    ] {
+        assert_wired(
+            folk.sprite_path(),
+            "townsfolk",
+            file,
+            n,
+            jsx,
+            32,
+            "2026-11-19",
+        );
     }
 }

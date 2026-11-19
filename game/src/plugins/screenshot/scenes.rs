@@ -664,7 +664,8 @@ fn world_scenes(v: &mut Vec<Scene>) {
     // Each landmark (the Sealed Stacks, REF-95; the Throne Dais, REF-96;
     // the Great Furnace, REF-98; the Bell Tower, REF-103; the market
     // stall, REF-107; the Checker's Gate, REF-111; the Guildhall, REF-123;
-    // the Mage's Tower, REF-131; the tavern, REF-139) at its plaza's
+    // the Mage's Tower, REF-131; the tavern, REF-139; the vault door,
+    // REF-155) at its plaza's
     // back-centre: the player
     // stands beside it (east of its footing, clear of every NPC), the
     // landmark and whoever stands in front of it in view. Logs the spot so
@@ -684,6 +685,7 @@ fn world_scenes(v: &mut Vec<Scene>) {
             PropKind::Guildhall => "landmark-guildhall",
             PropKind::MagesTower => "landmark-mages-tower",
             PropKind::Tavern => "landmark-tavern",
+            PropKind::VaultDoor => "landmark-vault-door",
             _ => "landmark-other",
         };
         let solid = kind.solid_at(base);
@@ -708,6 +710,57 @@ fn world_scenes(v: &mut Vec<Scene>) {
         ));
     }
     district_dressing_scenes(v);
+    townsfolk_scenes(v);
+}
+
+/// One capture per district with ambient townsfolk, at play zoom:
+/// `townsfolk-<district>` puts the player (and so the camera) at the middle
+/// of that district's figures, zoomed out a little, so the figures and the
+/// props they stand at are in view. Each figure's spot and prop is logged.
+fn townsfolk_scenes(v: &mut Vec<Scene>) {
+    use crate::plugins::townsfolk::{TOWNSFOLK, townsperson_pos};
+    use crate::plugins::world::DISTRICTS;
+    for (d, district) in DISTRICTS.iter().enumerate() {
+        let folk: Vec<(String, Vec2)> = TOWNSFOLK
+            .iter()
+            .filter(|t| t.district == d)
+            .filter_map(|t| {
+                townsperson_pos(t).map(|p| (format!("{:?} at the {:?}", t.folk, t.at), p))
+            })
+            .collect();
+        if folk.is_empty() {
+            continue;
+        }
+        let mid = folk.iter().map(|(_, p)| *p).sum::<Vec2>() / folk.len() as f32;
+        let name = district.name;
+        let center = district.center;
+        v.push(scene(
+            &format!("townsfolk-{}", district_label(name)),
+            vec![
+                Action::EnterState(GameState::InGame, ENTER_GAME_SETTLE),
+                act(hide_next_pin),
+                // Wide enough for figures spread across the plaza.
+                act(|w| set_view_height(w, crate::plugins::VIEW_HEIGHT * 1.6)),
+                teleport_to(mid),
+                act(move |w| {
+                    for (what, p) in &folk {
+                        let line = format!(
+                            "townsfolk {name}: {what} ({:.0},{:.0})",
+                            p.x - center.x,
+                            p.y - center.y
+                        );
+                        tracing::info!("{line}");
+                        w.resource_mut::<ShotLog>().0.push(line);
+                    }
+                }),
+            ],
+            0.8,
+            boxed(|w| {
+                set_view_height(w, crate::plugins::VIEW_HEIGHT);
+                show_next_pin(w);
+            }),
+        ));
+    }
 }
 
 /// Camera height for a whole-district overview: at least twice the play

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-160 - Key rack, Act 8 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/key_rack.png.
 //
 // Four long keys, two gold, one iron and one brass, hanging from a
 // brass-wood rail on two bronze posts. Every Vault warden carries a

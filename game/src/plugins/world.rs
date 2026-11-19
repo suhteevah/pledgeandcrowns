@@ -7,10 +7,11 @@
 //! those plazas in roster order. Oaks and cottages are sprites, not tiles —
 //! see `prop.rs`.
 //!
-//! Tiles come from the REF-76 village atlas (32 tiles, 8 columns): the 22
+//! Tiles come from the REF-76 village atlas (36 tiles, 8 columns): the 22
 //! REF-66 terrain v2 tiles, the 2 REF-75 plaza flagstones, the 2 REF-97
 //! Forge slabs, the 2 REF-122 Guildhall floor squares, the 2 REF-130 tower
-//! court slabs and the 2 REF-138 tavern planks, copied verbatim
+//! court slabs, the 2 REF-138 tavern planks, the 2 REF-154 vault slabs and
+//! the 2 REF-162 carpet runner tiles, copied verbatim
 //! (render-refs tests guard the copy). A tilemap binds one texture, which
 //! is why every plaza ground shares the terrain sheet instead of having its
 //! own; a new district ground is appended to it, so existing indices never
@@ -27,7 +28,9 @@
 //!    cobble border (see [`plaza_zone`]), so cobble is always the paving
 //!    that meets grass and roads.
 //! 2. **Overlay** — transparent grass-edge tiles on non-grass tiles that border
-//!    grass, chosen by the pure [`fringe_for`] from the 8 neighbours.
+//!    grass, chosen by the pure [`fringe_for`] from the 8 neighbours, and
+//!    the REF-162 carpet runner laid over a plaza's paving ([`Runner`]);
+//!    the two never meet (a runner lies on interior tiles only).
 //!
 //! Orientation: `bevy_ecs_tilemap` tile `y` grows *upward* in world space,
 //! which is also screen-up for our 2D camera, and atlas images are drawn
@@ -99,6 +102,17 @@ const RUNE_RING_RADIUS_PX: f32 = 80.0;
 /// REF-138 tavern floorboards, two tiles mixed freely.
 const T_PLANK_A: u32 = 30;
 const T_PLANK_B: u32 = 31;
+/// REF-154 vault floor: a plain basalt slab and a slab with a gold ring
+/// inlaid, the ring on about one tile in six ([`VAULT_RING_ONE_IN`]).
+const T_VAULT_PLAIN: u32 = 32;
+const T_VAULT_RING: u32 = 33;
+/// One vault slab in this many carries the gold ring (REF-154).
+const VAULT_RING_ONE_IN: u32 = 6;
+/// REF-162 carpet runner, laid in the overlay layer over a plaza's ground
+/// ([`Runner`]): `runner_mid` tiles vertically, `runner_end` is its fringed
+/// south end.
+const T_RUNNER_MID: u32 = 34;
+const T_RUNNER_END: u32 = 35;
 
 /// z of the overlay tilemap; the base layer sits at 0. Y-sorted sprites live
 /// above both (see `prop::ysort_z`).
@@ -118,9 +132,38 @@ pub struct District {
     pub interior: Option<Ground>,
     /// Hand-placed cast: one offset from `center` per roster slot of this
     /// district, in roster order, each NPC standing at the thing they work
-    /// at. Empty = the default grid ([`district_slot`]).
+    /// at. Empty = the default grid ([`district_slot`]). A slot past the
+    /// end of the list keeps its grid spot: the Library and the Throne list
+    /// their six villagers and leave the boss (the last slot) where the
+    /// grid stands him, centred before the back landmark.
     pub cast: &'static [Vec2],
+    /// A carpet runner (REF-162) laid over the plaza's ground, or `None`.
+    pub runner: Option<Runner>,
 }
+
+/// A REF-162 carpet runner: `tiles_wide` tiles side by side, centred on the
+/// plaza's x, over the interior tiles whose centres lie from `from_y` up
+/// to `to_y` (offsets from the plaza centre). The southmost row is
+/// `runner_end` (the fringe), the rest `runner_mid`. Walkable; drawn in the
+/// overlay layer, so the paving shows through the fringe.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Runner {
+    pub tiles_wide: u32,
+    pub from_y: f32,
+    pub to_y: f32,
+}
+
+/// The runner laid from the plaza's south edge up to the back landmark
+/// (the Sealed Stacks, the Throne Dais): two tiles wide, because the
+/// plaza's centre line x = 0 falls on a tile seam and a one-tile runner
+/// would sit half a tile off the landmark's door. Its top row runs under
+/// the landmark's bottom edge; its fringed end is the plaza's last
+/// interior row.
+const LANDMARK_RUNNER: Runner = Runner {
+    tiles_wide: 2,
+    from_y: -248.0,
+    to_y: 160.0,
+};
 
 impl District {
     /// The ground inside this district's cobble ring.
@@ -353,6 +396,90 @@ const TAVERN_CAST: &[Vec2] = &[
     Vec2::new(176.0, 16.0),
 ];
 
+/// The Vault cast (Act 8), offsets from the plaza centre, in roster order.
+/// The Vault is a strongroom on the darkest floor in the game: the vault
+/// door at the back-centre (base (0, 156)), a treasury behind a chain
+/// cordon to its west (coin piles and a strongbox), the wardens' key rack
+/// and an iron safe to its east, the chained casket in the south-west and
+/// the scales behind a second chain in the south-east, and stores and a
+/// second cordon along the south wall. Four streets: the main street
+/// through the north (behind the door) and south edges, the lower
+/// cross-street through the west and east edges at about y = 104. Three
+/// gatherings: the chained casket (the Vaultwright, `Box<T>`, as its
+/// header asks, and the Strongbox, `Rc<RefCell<T>>`), the scales (the
+/// Sharekeeper and the Ghostkeeper, strong and weak counts) and the key
+/// rack (the Warden and the Swapwarden, `RefCell` and `Cell`).
+const VAULT_CAST: &[Vec2] = &[
+    // The Vaultwright (`box_basic`): at the chained casket, west side.
+    Vec2::new(-176.0, 4.0),
+    // The Sharekeeper (`rc_basic`): at the scales, west side, the chain
+    // of many holders behind.
+    Vec2::new(96.0, 4.0),
+    // The Warden (`refcell`): at the key rack, west side.
+    Vec2::new(112.0, 204.0),
+    // The Swapwarden (`cell`): at the key rack, east side.
+    Vec2::new(192.0, 204.0),
+    // The Strongbox (`rc_refcell`): at the chained casket, east side.
+    Vec2::new(-96.0, 4.0),
+    // The Ghostkeeper (`weak_ref`): at the scales, east side.
+    Vec2::new(176.0, 4.0),
+];
+
+/// The Forbidden Library cast (Act 9), offsets from the plaza centre, in
+/// roster order: the six villagers only. The Librarian, the last slot,
+/// keeps the grid spot centred before the Sealed Stacks ([`district_slot`],
+/// [`BACK_LANDMARK_DISTRICTS`]). The Library is a hall of stacks: the
+/// Sealed Stacks at the back-centre with a candelabra either side, the
+/// REF-162 runner from the south wall up to them, three rows of tall
+/// bookshelves either side of the runner, reading corners in the north
+/// (a desk to the west, a globe to the east) and a lectern in the south.
+/// The only street meets the plaza behind the Stacks. Three gatherings:
+/// the reading desk (the Shelfmark and the Bookbinder, both working
+/// through raw pointers), the globe (the Envoy and the Courier, who carry
+/// things across borders and threads) and the lectern (the Macro Monk,
+/// with the Sexton at the candelabra beside it).
+const LIBRARY_CAST: &[Vec2] = &[
+    // The Shelfmark (`raw_pointer`): at the reading desk, west side.
+    Vec2::new(-192.0, 180.0),
+    // The Envoy (`extern_c`): at the globe, west side.
+    Vec2::new(112.0, 180.0),
+    // The Macro Monk (`macro_rules`): at the lectern, west side.
+    Vec2::new(-152.0, -196.0),
+    // The Sexton (`drop_trait`): east of the lectern, at the candelabra.
+    Vec2::new(-72.0, -196.0),
+    // The Courier (`send_sync`): at the globe, east side.
+    Vec2::new(192.0, 180.0),
+    // The Bookbinder (`maybe_uninit`): at the reading desk, east side.
+    Vec2::new(-112.0, 180.0),
+];
+
+/// The Throne cast (Act 10), offsets from the plaza centre, in roster
+/// order: the six villagers only; the Compiler, the last slot, keeps the
+/// grid spot centred before the Throne Dais. The Throne is a hall of
+/// state: the dais at the back-centre between two royal banners, the
+/// REF-162 runner two tiles wide from the street mouth to the dais, an
+/// aisle of columns with braziers between them, guard statues at the
+/// street mouth, the Crown on its plinth beside the top of the aisle,
+/// and a court across the north. The only street enters through the
+/// south edge. Three gatherings: the Crown (the Assayer, who weighs its
+/// gold, and the Registrar), the globe (the Hermit and the Astronomer)
+/// and the reading desk (the Copyist and the Choirmaster).
+const THRONE_CAST: &[Vec2] = &[
+    // The Assayer (`prealloc`): at the Crown, west side.
+    Vec2::new(-144.0, 84.0),
+    // The Copyist (`cow_borrow`): at the reading desk, west side.
+    Vec2::new(-200.0, 188.0),
+    // The Astronomer (`const_eval`): at the globe, east side.
+    Vec2::new(144.0, 84.0),
+    // The Choirmaster (`chunks_exact`): at the reading desk, east side.
+    Vec2::new(-120.0, 188.0),
+    // The Hermit (`no_std`): at the globe, west side.
+    Vec2::new(64.0, 84.0),
+    // The Registrar (`semver_caret`): at the Crown, east side, on the
+    // way to the dais.
+    Vec2::new(-64.0, 84.0),
+];
+
 /// Hub + a ring of eight quarters + two districts at the ends of the
 /// north-south main street. `count`s sum to the 71-NPC roster
 /// (9 + 8*6 + 7 + 7). Roster order fills them, so the earliest (Act 1-2)
@@ -372,6 +499,7 @@ pub const DISTRICTS: &[District] = &[
         count: 9,
         interior: None,
         cast: HEARTHSTONE_CAST,
+        runner: None,
     },
     District {
         name: "Market Row",
@@ -380,6 +508,7 @@ pub const DISTRICTS: &[District] = &[
         count: 6,
         interior: None,
         cast: MARKET_ROW_CAST,
+        runner: None,
     },
     District {
         name: "The Commons",
@@ -388,6 +517,7 @@ pub const DISTRICTS: &[District] = &[
         count: 6,
         interior: None,
         cast: COMMONS_CAST,
+        runner: None,
     },
     // Acts 3-5 (approved 2026-11-18), dressed like the Forge: each its own
     // ground (REF-122 chequered hall floor, REF-130 court slabs with a
@@ -401,6 +531,7 @@ pub const DISTRICTS: &[District] = &[
         count: 6,
         interior: Some(Ground::GuildFloor),
         cast: GUILDHALL_CAST,
+        runner: None,
     },
     // Act 4: the Trait Mage's Tower (Vexis the Archmage's cast).
     District {
@@ -410,6 +541,7 @@ pub const DISTRICTS: &[District] = &[
         count: 6,
         interior: Some(Ground::TowerCourt),
         cast: TOWER_CAST,
+        runner: None,
     },
     // Act 5: the Tavern of Tribulations.
     District {
@@ -419,6 +551,7 @@ pub const DISTRICTS: &[District] = &[
         count: 6,
         interior: Some(Ground::TavernPlanks),
         cast: TAVERN_CAST,
+        runner: None,
     },
     // Act 6: the Iterator Forge, the first dressed district (R1 wave A1,
     // approved 2026-11-18): REF-97 soot slab inside the cobble ring, the
@@ -431,6 +564,7 @@ pub const DISTRICTS: &[District] = &[
         count: 6,
         interior: Some(Ground::ForgeSlab),
         cast: FORGE_CAST,
+        runner: None,
     },
     // Act 7: the Concurrent Coast (Dockmaster, Harbormaster, ...).
     District {
@@ -440,39 +574,49 @@ pub const DISTRICTS: &[District] = &[
         count: 6,
         interior: None,
         cast: &[],
+        runner: None,
     },
-    // Act 8: the Vault of Pointers.
+    // Act 8: the Vault of Pointers (approved 2026-11-18): REF-154 vault
+    // floor, the vault door (REF-155) at the back-centre, its props and
+    // the cast gathered at them.
     District {
         name: "The Vault",
         center: Vec2::new(0.0, -800.0),
         plaza_half: 260.0,
         count: 6,
-        interior: None,
-        cast: &[],
+        interior: Some(Ground::VaultFloor),
+        cast: VAULT_CAST,
+        runner: None,
     },
     // Act 9: past the Vault, at the south end of the main street. Six
-    // villagers and the Librarian (64 px), who stands alone in the
-    // centre of the back (north) row, in front of the Sealed Stacks
-    // (REF-95, `prop::PropKind::SealedStacks`) at the plaza's back-centre.
+    // villagers at their props (approved 2026-11-18) and the Librarian
+    // (64 px), who keeps his grid spot alone in the centre of the back
+    // (north) row, in front of the Sealed Stacks (REF-95,
+    // `prop::PropKind::SealedStacks`) at the plaza's back-centre. Flagstone
+    // with the REF-162 runner up to the Stacks.
     District {
         name: "The Forbidden Library",
         center: Vec2::new(0.0, -1400.0),
         plaza_half: 260.0,
         count: 7,
         interior: None,
-        cast: &[],
+        cast: LIBRARY_CAST,
+        runner: Some(LANDMARK_RUNNER),
     },
     // Act 10: past Tavern Row, at the north end of the main street. Six
-    // villagers and the Compiler (64 px), alone in the centre of the back
-    // (north) row, in front of the Throne Dais (REF-96,
-    // `prop::PropKind::ThroneDais`) at the plaza's back-centre.
+    // villagers at their props (approved 2026-11-18) and the Compiler
+    // (64 px), alone in the centre of the back (north) row on his grid
+    // spot, in front of the Throne Dais (REF-96,
+    // `prop::PropKind::ThroneDais`) at the plaza's back-centre. Flagstone
+    // with the REF-162 runner, two tiles wide, up to the dais.
     District {
         name: "The Throne",
         center: Vec2::new(0.0, 1400.0),
         plaza_half: 260.0,
         count: 7,
         interior: None,
-        cast: &[],
+        cast: THRONE_CAST,
+        runner: Some(LANDMARK_RUNNER),
     },
 ];
 
@@ -696,6 +840,8 @@ pub enum Ground {
     TowerCourt,
     /// Plaza interior of Tavern Row (REF-138 floorboards).
     TavernPlanks,
+    /// Plaza interior of the Vault (REF-154 basalt slabs).
+    VaultFloor,
 }
 
 /// How a paving's two tiles are laid across a plaza: per-district ground
@@ -743,6 +889,7 @@ impl Ground {
                 },
             ),
             Ground::TavernPlanks => (T_PLANK_A, T_PLANK_B, Lay::Mix),
+            Ground::VaultFloor => (T_VAULT_PLAIN, T_VAULT_RING, Lay::OneIn(VAULT_RING_ONE_IN)),
         };
         Some(Paving { first, second, lay })
     }
@@ -884,7 +1031,8 @@ fn base_tile(x: u32, y: u32, ground: Ground) -> u32 {
         | Ground::ForgeSlab
         | Ground::GuildFloor
         | Ground::TowerCourt
-        | Ground::TavernPlanks => match ground.paving() {
+        | Ground::TavernPlanks
+        | Ground::VaultFloor => match ground.paving() {
             Some(p) => {
                 if lays_second(p.lay, x, y, h) {
                     p.second
@@ -928,6 +1076,36 @@ fn on_landmark_ring(x: u32, y: u32, radius: f32) -> bool {
     };
     let r = tile_to_world(x, y).distance(landmark_plot_centre(d));
     (r - radius).abs() < TILE_PX * 0.5
+}
+
+/// The runner tile laid over tile `(x, y)` (REF-162 `runner_mid`, or
+/// `runner_end` on the runner's southmost row), or `None` off every
+/// district's [`Runner`]. Only interior tiles carry one, and they never
+/// carry a grass-edge overlay, so the overlay layer holds both.
+fn runner_tile(x: u32, y: u32) -> Option<u32> {
+    let w = tile_to_world(x, y);
+    DISTRICTS.iter().find_map(|d| {
+        let r = d.runner?;
+        if plaza_zone(d, x, y) != PlazaZone::Interior {
+            return None;
+        }
+        let local = w - d.center;
+        let half = r.tiles_wide as f32 * TILE_PX * 0.5;
+        if local.x.abs() >= half || local.y < r.from_y || local.y > r.to_y {
+            return None;
+        }
+        Some(if local.y - TILE_PX < r.from_y {
+            T_RUNNER_END
+        } else {
+            T_RUNNER_MID
+        })
+    })
+}
+
+/// True when the world point `w` lies on a carpet runner's tile.
+pub fn on_runner(w: Vec2) -> bool {
+    let (x, y) = world_to_tile(w);
+    runner_tile(x, y).is_some()
 }
 
 /// Pick the grass-edge overlay for a NON-grass tile from which of its eight
@@ -1046,6 +1224,7 @@ fn spawn_village(mut commands: Commands, asset_server: Res<AssetServer>) {
     let mut overlay_storage = TileStorage::empty(map_size);
     let (mut grass, mut cobble, mut dirt, mut flagstone, mut district_ground, mut overlays) =
         (0usize, 0usize, 0usize, 0usize, 0usize, 0usize);
+    let mut runners = 0usize;
 
     for x in 0..map_size.x {
         for y in 0..map_size.y {
@@ -1059,7 +1238,8 @@ fn spawn_village(mut commands: Commands, asset_server: Res<AssetServer>) {
                 Ground::ForgeSlab
                 | Ground::GuildFloor
                 | Ground::TowerCourt
-                | Ground::TavernPlanks => district_ground += 1,
+                | Ground::TavernPlanks
+                | Ground::VaultFloor => district_ground += 1,
             }
             let tile = commands
                 .spawn(TileBundle {
@@ -1071,7 +1251,11 @@ fn spawn_village(mut commands: Commands, asset_server: Res<AssetServer>) {
                 .id();
             base_storage.set(&pos, tile);
 
-            if let Some(idx) = overlay_at(x, y, &ground) {
+            let runner = runner_tile(x, y);
+            if runner.is_some() {
+                runners += 1;
+            }
+            if let Some(idx) = overlay_at(x, y, &ground).or(runner) {
                 overlays += 1;
                 let tile = commands
                     .spawn(TileBundle {
@@ -1092,6 +1276,7 @@ fn spawn_village(mut commands: Commands, asset_server: Res<AssetServer>) {
         flagstone,
         district_ground,
         overlays,
+        runners,
         "terrain classified"
     );
 
@@ -1228,6 +1413,7 @@ mod tests {
                 Ground::GuildFloor => t == T_HALL_LIGHT || t == T_HALL_DARK,
                 Ground::TowerCourt => t == T_COURT_PLAIN || t == T_COURT_RUNE,
                 Ground::TavernPlanks => t == T_PLANK_A || t == T_PLANK_B,
+                Ground::VaultFloor => t == T_VAULT_PLAIN || t == T_VAULT_RING,
             };
             assert!(ok, "tile {t} wrong for {g:?}");
         }
@@ -1397,8 +1583,8 @@ mod tests {
             .lines()
             .filter_map(|l| l.strip_prefix("  ")?.strip_suffix(": ["))
             .collect();
-        assert_eq!(names.len(), 32, "REF-76 tile count: {names:?}");
-        let expected: [(u32, &str); 31] = [
+        assert_eq!(names.len(), 36, "REF-76 tile count: {names:?}");
+        let expected: [(u32, &str); 35] = [
             (T_GRASS_A, "grass_a"),
             (T_GRASS_B, "grass_b"),
             (T_GRASS_TUFT, "grass_tuft"),
@@ -1430,6 +1616,10 @@ mod tests {
             (T_COURT_RUNE, "court_rune"),
             (T_PLANK_A, "plank_a"),
             (T_PLANK_B, "plank_b"),
+            (T_VAULT_PLAIN, "vault_plain"),
+            (T_VAULT_RING, "vault_ring"),
+            (T_RUNNER_MID, "runner_mid"),
+            (T_RUNNER_END, "runner_end"),
         ];
         for (idx, name) in expected {
             assert_eq!(names[idx as usize], name, "atlas index {idx}");
@@ -1453,11 +1643,12 @@ mod tests {
     // --- District grounds (REF-97 via the REF-76 atlas) --------------------
 
     /// The districts with a ground of their own, and that ground.
-    const NAMED_GROUNDS: [(&str, Ground); 4] = [
+    const NAMED_GROUNDS: [(&str, Ground); 5] = [
         ("Guildhall Quarter", Ground::GuildFloor),
         ("The Mage's Tower", Ground::TowerCourt),
         ("Tavern Row", Ground::TavernPlanks),
         ("The Forge", Ground::ForgeSlab),
+        ("The Vault", Ground::VaultFloor),
     ];
 
     /// The Forge and the Act 3-5 quarters name their own interior ground;
@@ -1639,16 +1830,109 @@ mod tests {
         assert!((0.12..=0.22).contains(&share), "soot_a {a}, soot_b {b}");
     }
 
+    /// REF-154: the gold ring slab on about one vault tile in six, the
+    /// plain basalt slab everywhere else.
+    #[test]
+    fn vault_ring_is_about_one_tile_in_six() {
+        assert_eq!(
+            Ground::VaultFloor.paving().map(|p| p.lay),
+            Some(Lay::OneIn(VAULT_RING_ONE_IN))
+        );
+        let tiles = laid_tiles("The Vault");
+        assert!(tiles.len() > 500, "{} interior tiles", tiles.len());
+        let ring = tiles.iter().filter(|(_, _, t)| *t == T_VAULT_RING).count();
+        let plain = tiles.iter().filter(|(_, _, t)| *t == T_VAULT_PLAIN).count();
+        assert_eq!(ring + plain, tiles.len());
+        let share = ring as f64 / tiles.len() as f64;
+        assert!((0.12..=0.22).contains(&share), "plain {plain}, ring {ring}");
+    }
+
+    /// REF-162: the Library and the Throne each lay a runner two tiles
+    /// wide down their centre line, from the plaza's last interior row in
+    /// the south (the fringed `runner_end`) up under their back landmark's
+    /// bottom edge (`runner_mid`); no other district has one and no tile
+    /// off a runner gets a runner tile. Runner tiles are interior tiles, so
+    /// they never compete with a grass-edge overlay.
+    #[test]
+    fn the_runner_leads_up_to_the_back_landmarks() {
+        let ground = |x: u32, y: u32| ground_at_tile(x, y);
+        let mut laid = 0usize;
+        for y in 0..MAP_H {
+            for x in 0..MAP_W {
+                let Some(t) = runner_tile(x, y) else {
+                    continue;
+                };
+                laid += 1;
+                assert!(t == T_RUNNER_MID || t == T_RUNNER_END);
+                assert_eq!(overlay_at(x, y, &ground), None, "({x},{y})");
+                let d = DISTRICTS
+                    .iter()
+                    .find(|d| plaza_zone(d, x, y) == PlazaZone::Interior)
+                    .expect("a runner tile inside a plaza");
+                assert!(BACK_LANDMARK_DISTRICTS.contains(&d.name), "{}", d.name);
+            }
+        }
+        for name in BACK_LANDMARK_DISTRICTS {
+            let d = DISTRICTS
+                .iter()
+                .find(|d| d.name == *name)
+                .expect("district");
+            assert_eq!(d.runner, Some(LANDMARK_RUNNER), "{name}");
+            let base = back_landmark_base_of(d).expect("plot");
+            let (_, _, y0, _) = plaza_bounds(d);
+            // The two columns either side of the centre line.
+            let (cx, _) = world_to_tile(d.center + Vec2::new(8.0, 0.0));
+            for x in [cx - 1, cx] {
+                let rows: Vec<u32> = (0..MAP_H)
+                    .filter(|&y| plaza_zone(d, x, y) == PlazaZone::Interior)
+                    .filter(|&y| runner_tile(x, y).is_some())
+                    .collect();
+                // Contiguous, from the first interior row up.
+                assert_eq!(rows.first(), Some(&(y0 + 1)), "{name} x={x}");
+                assert!(rows.windows(2).all(|p| p[1] == p[0] + 1), "{name}");
+                let top = rows.last().copied().expect("rows");
+                assert_eq!(runner_tile(x, y0 + 1), Some(T_RUNNER_END), "{name}");
+                for &y in &rows[1..] {
+                    assert_eq!(runner_tile(x, y), Some(T_RUNNER_MID), "{name}");
+                }
+                // The top row runs under the landmark's bottom edge.
+                let top_w = tile_to_world(x, top);
+                assert!(top_w.y + TILE_PX * 0.5 > base.y, "{name}: stops short");
+                assert!(top_w.y - TILE_PX * 0.5 < base.y + 8.0, "{name}: too far");
+            }
+            // One tile further out either side: no runner.
+            assert!((0..MAP_H).all(|y| runner_tile(cx - 2, y).is_none()));
+            assert!((0..MAP_H).all(|y| runner_tile(cx + 1, y).is_none()));
+            // Walkable: the ground under it is still the plaza's paving.
+            assert_eq!(ground_at(d.center), Ground::Flagstone, "{name}");
+            assert!(on_runner(d.center), "{name}: the runner crosses the centre");
+        }
+        assert_eq!(laid, 2 * 2 * 26, "two runners, two tiles by 26 rows");
+    }
+
     /// A hand-placed cast lists exactly one spot per roster slot, and
-    /// `district_slot` returns it.
+    /// `district_slot` returns it. In the two boss districts the list
+    /// stops one short: the boss (the last slot) keeps his grid spot,
+    /// centred before the back landmark, exactly where the grid stood him
+    /// before the plaza was dressed.
     #[test]
     fn hand_placed_casts_cover_their_district() {
         let mut first = 0usize;
         for d in DISTRICTS {
             if !d.cast.is_empty() {
-                assert_eq!(d.cast.len(), d.count, "{}", d.name);
+                let boss_on_grid = BACK_LANDMARK_DISTRICTS.contains(&d.name);
+                let want = if boss_on_grid { d.count - 1 } else { d.count };
+                assert_eq!(d.cast.len(), want, "{}", d.name);
                 for (i, off) in d.cast.iter().enumerate() {
                     assert_eq!(district_slot(first + i), d.center + *off, "{}", d.name);
+                }
+                if boss_on_grid {
+                    let base = back_landmark_base_of(d).expect("back landmark");
+                    let boss = district_slot(first + d.count - 1);
+                    // The grid's back row, centred: the span's top, the
+                    // landmark gap and half the 64 px boss below the plot.
+                    let want = Vec2::new(d.center.x, base.y - BACK_LANDMARK_GAP - 32.0);
+                    assert_eq!(boss, want, "{}: the boss left his grid spot", d.name);
                 }
             }
             first += d.count;

@@ -25,6 +25,7 @@ use bevy_ecs_tilemap::prelude::{TileStorage, TilemapId};
 use crate::plugins::npc::Npc;
 use crate::plugins::player::Player;
 use crate::plugins::prop::Prop;
+use crate::plugins::townsfolk::Townsfolk;
 
 #[derive(States, Default, Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum GameState {
@@ -145,6 +146,7 @@ fn despawn_session_entities(
         Or<(
             With<Player>,
             With<Npc>,
+            With<Townsfolk>,
             With<Prop>,
             With<TileStorage>,
             With<TilemapId>,

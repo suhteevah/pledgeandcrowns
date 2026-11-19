@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-177 - Townsfolk: merchant, 32x32. Ambient villager, gives no mission.
-// APPROVED by Matt 2026-11-19. Not wired yet.
+// APPROVED by Matt 2026-11-19. Wired as game/assets/sprites/townsfolk/merchant_idle_0.png.
 //
 // A wide forest cap with a brass-leaf feather, a waxed basalt
 // moustache, a cobalt doublet with gold buttons. Third drawing: the

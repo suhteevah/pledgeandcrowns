@@ -598,24 +598,28 @@ const REF97_TILES = {
     /// REF-76 is a mechanical copy, its sources appended in order: the 22
     /// REF-66 terrain tiles (0-21), the 2 REF-75 plaza flagstones (22-23),
     /// the 2 REF-97 Forge slabs (24-25), the 2 REF-122 Guildhall floor
-    /// tiles (26-27), the 2 REF-130 tower court tiles (28-29) and the 2
-    /// REF-138 tavern planks (30-31). Compared on rendered pixels, so any
-    /// edited row, reordering or dropped tile in the combined sheet fails
-    /// here. A later district ground is appended as one more source.
+    /// tiles (26-27), the 2 REF-130 tower court tiles (28-29), the 2
+    /// REF-138 tavern planks (30-31), the 2 REF-154 vault floor tiles
+    /// (32-33) and the 2 REF-162 carpet runner tiles (34-35). Compared on
+    /// rendered pixels, so any edited row, reordering or dropped tile in the
+    /// combined sheet fails here. A later district ground is appended as one
+    /// more source.
     #[test]
     fn ref76_atlas_is_verbatim_copy_of_its_sources() {
         let p = Palette::parse(PALETTE_SRC).unwrap();
         let r76 = render_tiles(baked("ref-76-village-atlas.jsx"), &p).unwrap();
-        // 32 tiles at 8 columns: four full rows.
-        assert_eq!((r76.width(), r76.height()), (128, 64), "REF-76 atlas size");
+        // 36 tiles at 8 columns: four full rows and half a fifth.
+        assert_eq!((r76.width(), r76.height()), (128, 80), "REF-76 atlas size");
         // (source ref, its column count, how many tiles, first REF-76 index)
-        let sources: [(&str, u32, u32, u32); 6] = [
+        let sources: [(&str, u32, u32, u32); 8] = [
             ("ref-66-terrain.jsx", 8, 22, 0),
             ("ref-75-flagstone.jsx", 2, 2, 22),
             ("ref-97-forgeslab.jsx", 2, 2, 24),
             ("ref-122-hallfloor.jsx", 2, 2, 26),
             ("ref-130-courtfloor.jsx", 2, 2, 28),
             ("ref-138-tavernplanks.jsx", 2, 2, 30),
+            ("ref-154-vaultfloor.jsx", 2, 2, 32),
+            ("ref-162-runner.jsx", 2, 2, 34),
         ];
         let mut next = 0;
         for (jsx, cols, count, first) in sources {
@@ -634,8 +638,7 @@ const REF97_TILES = {
             }
             next = first + count;
         }
-        // Any unused cells after the last tile stay transparent (none at
-        // 32 tiles; a later ground starts a fifth row).
+        // The unused cells after the last tile (36-39) stay transparent.
         let cells = (r76.width() / 16) * (r76.height() / 16);
         for i in next..cells {
             assert!(

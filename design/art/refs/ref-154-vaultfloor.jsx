@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-154 - Vault floor, 16x16 tiles, 2-column sheet.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/tiles_village_v3.png (via the REF-76 combined atlas, indices 32-33).
 //
 // Ground for the Vault (Act 8): dark basalt slabs, one per tile, with a
 // coalblack joint and one old-gold stud at the corner; the second tile

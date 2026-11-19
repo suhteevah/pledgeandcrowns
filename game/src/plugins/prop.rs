@@ -2,10 +2,10 @@
 //! Village props: oaks (REF-67, 32x48), cottages (REF-68, 64x64), the
 //! district landmarks (the Sealed Stacks, REF-95, the Throne Dais, REF-96,
 //! and the Great Furnace, REF-98, the Bell Tower, the market stall and the
-//! Checker's Gate, the Guildhall, the Mage's Tower and the tavern, all
-//! 64x64) and the district yard props (REF-99..102, REF-104..106,
-//! REF-108..110, REF-112..121, REF-124..129, REF-132..137, REF-140..145,
-//! 32x32).
+//! Checker's Gate, the Guildhall, the Mage's Tower, the tavern and the vault
+//! door, all 64x64) and the district yard props (REF-99..102,
+//! REF-104..106, REF-108..110, REF-112..121, REF-124..129, REF-132..137,
+//! REF-140..145, REF-156..161, REF-163..172, 32x32).
 //!
 //! Props are ordinary sprites, not tiles. Each one is anchored bottom-centre
 //! at its ground line, y-sorted (lower on screen = drawn in front) and owns
@@ -42,6 +42,13 @@ use crate::assets::{
     SPRITE_PROP_WEAPON_RACK, SPRITE_PROP_WELL, SPRITE_PROP_WOODPILE, SPRITE_PROP_WORKBENCH,
 };
 use crate::assets::{
+    SPRITE_PROP_BOOK_PILE, SPRITE_PROP_BRAZIER, SPRITE_PROP_CANDELABRA, SPRITE_PROP_CHAIN_BARRIER,
+    SPRITE_PROP_CHAINED_CASKET, SPRITE_PROP_COIN_PILE, SPRITE_PROP_COLUMN,
+    SPRITE_PROP_CROWN_PLINTH, SPRITE_PROP_GLOBE, SPRITE_PROP_GUARD_STATUE, SPRITE_PROP_IRON_SAFE,
+    SPRITE_PROP_KEY_RACK, SPRITE_PROP_READING_DESK, SPRITE_PROP_ROYAL_BANNER, SPRITE_PROP_SCALES,
+    SPRITE_PROP_TALL_BOOKSHELF, SPRITE_PROP_VAULT_DOOR,
+};
+use crate::assets::{
     SPRITE_PROP_CAULDRON, SPRITE_PROP_CRYSTAL, SPRITE_PROP_FIREPIT, SPRITE_PROP_GUILD_BANNER,
     SPRITE_PROP_GUILDHALL, SPRITE_PROP_KEG_RACK, SPRITE_PROP_LECTERN, SPRITE_PROP_LEDGER_DESK,
     SPRITE_PROP_MAGES_TOWER, SPRITE_PROP_NOTICE_BOARD, SPRITE_PROP_ORRERY, SPRITE_PROP_ROUND_TABLE,
@@ -52,6 +59,7 @@ use crate::plugins::animation::{SpriteLift, unlifted_anchor};
 use crate::plugins::npc::Npc;
 use crate::plugins::player::Player;
 use crate::plugins::state::GameState;
+use crate::plugins::townsfolk::Townsfolk;
 use crate::plugins::world::{DISTRICTS, WORLD_HALF_H, WORLD_HALF_W};
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
@@ -218,6 +226,33 @@ pub enum PropKind {
     TavernSign,
     RoundTable,
     TabSlate,
+    /// The vault door (REF-155, approved 2026-11-18), the Act 8 district
+    /// landmark: 64x64, placed at [`LANDMARKS`], solid over the whole wall.
+    VaultDoor,
+    /// The Vault props (REF-156..161, approved 2026-11-18), 32x32 each.
+    /// Chain barriers placed side by side 32 px apart join into one cordon;
+    /// the key rack is solid only at its two posts, the scales at the foot.
+    CoinPile,
+    ChainedCasket,
+    ChainBarrier,
+    Scales,
+    KeyRack,
+    IronSafe,
+    /// The Forbidden Library props (REF-163..167, approved 2026-11-18),
+    /// 32x32 each. The globe and the candelabra are solid at their stands.
+    TallBookshelf,
+    ReadingDesk,
+    BookPile,
+    Globe,
+    Candelabra,
+    /// The Throne props (REF-168..172, approved 2026-11-18), 32x32 each.
+    /// Columns are solid over the base, braziers at the tripod, the banner
+    /// and the statue at their foot and plinth.
+    Column,
+    Brazier,
+    RoyalBanner,
+    GuardStatue,
+    CrownPlinth,
 }
 
 // Solid footprints, relative to the bottom-centre anchor. A ref grid of
@@ -407,6 +442,63 @@ const TAB_SLATE_SOLIDS: [Aabb; 2] = [
     },
 ];
 
+// --- Acts 8-10 (approved 2026-11-18) ------------------------------------
+/// REF-155 "solid over the whole wall": rows 2..62 (cornice to footing),
+/// cols 2..61.
+const VAULT_DOOR_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 30.0, 1.0, 62.0)];
+/// REF-156 "solid over the heap": rows 11..29, cols 1..30. The crown and
+/// the loose coins on top are not solid.
+const COIN_PILE_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 15.0, 2.0, 21.0)];
+/// REF-157 "solid over the pedestal": rows 21..30, cols 4..27.
+const CHAINED_CASKET_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 12.0, 1.0, 11.0)];
+/// REF-158 "solid along the chain": rows 13..18, the full 32 px width, so
+/// pieces 32 px apart join into one cordon (like the REF-114 fence).
+const CHAIN_BARRIER_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 16.0, 13.0, 19.0)];
+/// REF-159 "solid at the foot": rows 25..30, cols 8..23.
+const SCALES_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 8.0, 1.0, 7.0)];
+/// REF-160 "solid only at the two posts": below the keys, rows 24..29,
+/// cols 4..6 and 25..27. The 18 px between them stays open.
+const KEY_RACK_SOLIDS: [Aabb; 2] = [
+    Aabb {
+        min: Vec2::new(-12.0, 2.0),
+        max: Vec2::new(-9.0, 8.0),
+    },
+    Aabb {
+        min: Vec2::new(9.0, 2.0),
+        max: Vec2::new(12.0, 8.0),
+    },
+];
+/// REF-161 "solid over the safe": rows 5..30, cols 4..27.
+const IRON_SAFE_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 12.0, 1.0, 27.0)];
+/// REF-163 "solid over the case": rows 0..30, cols 2..29.
+const TALL_BOOKSHELF_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 14.0, 1.0, 32.0)];
+/// REF-164 "solid over the desk": rows 14..29 (desk top to feet), cols
+/// 1..30. The books and the candle on top are not solid.
+const READING_DESK_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 15.0, 2.0, 18.0)];
+/// REF-165 "solid over the pile": rows 3..29, cols 3..27.
+const BOOK_PILE_SOLID: [Aabb; 1] = [Aabb {
+    min: Vec2::new(-13.0, 2.0),
+    max: Vec2::new(12.0, 29.0),
+}];
+/// REF-166 "solid at the stand": the post and its base, rows 23..30, cols
+/// 9..22. The globe and its ring are not solid.
+const GLOBE_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 7.0, 1.0, 9.0)];
+/// REF-167 "solid at the foot": rows 26..30, cols 9..22.
+const CANDELABRA_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 7.0, 1.0, 6.0)];
+/// REF-168 "solid over the base": the lower gold band and the base, rows
+/// 25..30, cols 6..25. The shaft above is not solid (it fades).
+const COLUMN_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 10.0, 1.0, 7.0)];
+/// REF-169 "solid at the tripod": rows 19..30, cols 7..24.
+const BRAZIER_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 9.0, 1.0, 13.0)];
+/// REF-170 "solid only at the foot": the stone foot, rows 27..30, cols
+/// 11..20.
+const ROYAL_BANNER_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 5.0, 1.0, 5.0)];
+/// REF-171 "solid over the plinth": rows 26..30, cols 4..27.
+const GUARD_STATUE_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 12.0, 1.0, 6.0)];
+/// REF-172 "solid over the plinth": the stone plinth under the cushion,
+/// rows 19..30, cols 7..24.
+const CROWN_PLINTH_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 9.0, 1.0, 13.0)];
+
 impl PropKind {
     pub fn sprite_path(self) -> &'static str {
         match self {
@@ -459,6 +551,23 @@ impl PropKind {
             PropKind::TavernSign => SPRITE_PROP_TAVERN_SIGN,
             PropKind::RoundTable => SPRITE_PROP_ROUND_TABLE,
             PropKind::TabSlate => SPRITE_PROP_TAB_SLATE,
+            PropKind::VaultDoor => SPRITE_PROP_VAULT_DOOR,
+            PropKind::CoinPile => SPRITE_PROP_COIN_PILE,
+            PropKind::ChainedCasket => SPRITE_PROP_CHAINED_CASKET,
+            PropKind::ChainBarrier => SPRITE_PROP_CHAIN_BARRIER,
+            PropKind::Scales => SPRITE_PROP_SCALES,
+            PropKind::KeyRack => SPRITE_PROP_KEY_RACK,
+            PropKind::IronSafe => SPRITE_PROP_IRON_SAFE,
+            PropKind::TallBookshelf => SPRITE_PROP_TALL_BOOKSHELF,
+            PropKind::ReadingDesk => SPRITE_PROP_READING_DESK,
+            PropKind::BookPile => SPRITE_PROP_BOOK_PILE,
+            PropKind::Globe => SPRITE_PROP_GLOBE,
+            PropKind::Candelabra => SPRITE_PROP_CANDELABRA,
+            PropKind::Column => SPRITE_PROP_COLUMN,
+            PropKind::Brazier => SPRITE_PROP_BRAZIER,
+            PropKind::RoyalBanner => SPRITE_PROP_ROYAL_BANNER,
+            PropKind::GuardStatue => SPRITE_PROP_GUARD_STATUE,
+            PropKind::CrownPlinth => SPRITE_PROP_CROWN_PLINTH,
         }
     }
 
@@ -481,6 +590,7 @@ impl PropKind {
                 | PropKind::Guildhall
                 | PropKind::MagesTower
                 | PropKind::Tavern
+                | PropKind::VaultDoor
         )
     }
 
@@ -497,7 +607,8 @@ impl PropKind {
             | PropKind::CheckersGate
             | PropKind::Guildhall
             | PropKind::MagesTower
-            | PropKind::Tavern => Vec2::new(64.0, 64.0),
+            | PropKind::Tavern
+            | PropKind::VaultDoor => Vec2::new(64.0, 64.0),
             PropKind::Anvil
             | PropKind::QuenchTrough
             | PropKind::CoalHeap
@@ -536,7 +647,23 @@ impl PropKind {
             | PropKind::Firepit
             | PropKind::TavernSign
             | PropKind::RoundTable
-            | PropKind::TabSlate => Vec2::new(32.0, 32.0),
+            | PropKind::TabSlate
+            | PropKind::CoinPile
+            | PropKind::ChainedCasket
+            | PropKind::ChainBarrier
+            | PropKind::Scales
+            | PropKind::KeyRack
+            | PropKind::IronSafe
+            | PropKind::TallBookshelf
+            | PropKind::ReadingDesk
+            | PropKind::BookPile
+            | PropKind::Globe
+            | PropKind::Candelabra
+            | PropKind::Column
+            | PropKind::Brazier
+            | PropKind::RoyalBanner
+            | PropKind::GuardStatue
+            | PropKind::CrownPlinth => Vec2::new(32.0, 32.0),
         }
     }
 
@@ -594,6 +721,23 @@ impl PropKind {
             PropKind::TavernSign => 1.0,   // REF-143 row 30 is the foot's bottom edge
             PropKind::RoundTable => 2.0,   // REF-144 row 29 is the stools' feet
             PropKind::TabSlate => 2.0,     // REF-145 row 29 is the legs' bottom
+            PropKind::VaultDoor => 1.0,    // REF-155 row 62 is the footing's edge
+            PropKind::CoinPile => 2.0,     // REF-156 row 29 is the heap's bottom
+            PropKind::ChainedCasket => 1.0, // REF-157 row 30 is the pedestal's edge
+            PropKind::ChainBarrier => 1.0, // REF-158 row 30 is the feet's bottom
+            PropKind::Scales => 1.0,       // REF-159 row 30 is the foot's bottom
+            PropKind::KeyRack => 2.0,      // REF-160 row 29 is the posts' bottom
+            PropKind::IronSafe => 1.0,     // REF-161 row 30 is the feet's bottom
+            PropKind::TallBookshelf => 1.0, // REF-163 row 30 is the case's bottom
+            PropKind::ReadingDesk => 2.0,  // REF-164 row 29 is the legs' bottom
+            PropKind::BookPile => 2.0,     // REF-165 row 29 is the pile's bottom
+            PropKind::Globe => 1.0,        // REF-166 row 30 is the base's bottom
+            PropKind::Candelabra => 1.0,   // REF-167 row 30 is the foot's bottom
+            PropKind::Column => 1.0,       // REF-168 row 30 is the base's bottom
+            PropKind::Brazier => 1.0,      // REF-169 row 30 is the tripod's feet
+            PropKind::RoyalBanner => 1.0,  // REF-170 row 30 is the foot's bottom
+            PropKind::GuardStatue => 1.0,  // REF-171 row 30 is the plinth's bottom
+            PropKind::CrownPlinth => 1.0,  // REF-172 row 30 is the plinth's bottom
         }
     }
 
@@ -651,6 +795,23 @@ impl PropKind {
             PropKind::TavernSign => &TAVERN_SIGN_SOLID,
             PropKind::RoundTable => &ROUND_TABLE_SOLID,
             PropKind::TabSlate => &TAB_SLATE_SOLIDS,
+            PropKind::VaultDoor => &VAULT_DOOR_SOLID,
+            PropKind::CoinPile => &COIN_PILE_SOLID,
+            PropKind::ChainedCasket => &CHAINED_CASKET_SOLID,
+            PropKind::ChainBarrier => &CHAIN_BARRIER_SOLID,
+            PropKind::Scales => &SCALES_SOLID,
+            PropKind::KeyRack => &KEY_RACK_SOLIDS,
+            PropKind::IronSafe => &IRON_SAFE_SOLID,
+            PropKind::TallBookshelf => &TALL_BOOKSHELF_SOLID,
+            PropKind::ReadingDesk => &READING_DESK_SOLID,
+            PropKind::BookPile => &BOOK_PILE_SOLID,
+            PropKind::Globe => &GLOBE_SOLID,
+            PropKind::Candelabra => &CANDELABRA_SOLID,
+            PropKind::Column => &COLUMN_SOLID,
+            PropKind::Brazier => &BRAZIER_SOLID,
+            PropKind::RoyalBanner => &ROYAL_BANNER_SOLID,
+            PropKind::GuardStatue => &GUARD_STATUE_SOLID,
+            PropKind::CrownPlinth => &CROWN_PLINTH_SOLID,
         }
     }
 
@@ -825,6 +986,43 @@ impl PropKind {
             PropKind::RoundTable => Aabb::from_base(0.0, 16.0, 2.0, 29.0),
             // REF-145 cols 3..28, rows 3..29 (the frame to the legs).
             PropKind::TabSlate => Aabb::from_base(0.0, 13.0, 2.0, 29.0),
+            // Acts 8-10 (REF-155..161, 163..172): every opaque pixel, so a
+            // pan, rail, globe, flame, shaft, banner or statue fades over a
+            // character behind it. The door, the safe, the bookshelf and
+            // the book pile are solid to their tops: nothing behind them.
+            PropKind::VaultDoor => VAULT_DOOR_SOLID[0],
+            // REF-156 cols 1..30, rows 4..29 (the crown on top).
+            PropKind::CoinPile => Aabb::from_base(0.0, 15.0, 2.0, 28.0),
+            // REF-157 cols 4..27, rows 7..30 (the chains' ends).
+            PropKind::ChainedCasket => Aabb::from_base(0.0, 12.0, 1.0, 25.0),
+            // REF-158 cols 0..31, rows 6..30 (the gold caps).
+            PropKind::ChainBarrier => Aabb::from_base(0.0, 16.0, 1.0, 26.0),
+            // REF-159 cols 0..31, rows 2..30 (the pivot to the foot).
+            PropKind::Scales => Aabb::from_base(0.0, 16.0, 1.0, 30.0),
+            // REF-160 cols 3..28, rows 4..29 (the post caps).
+            PropKind::KeyRack => Aabb::from_base(0.0, 13.0, 2.0, 28.0),
+            PropKind::IronSafe => IRON_SAFE_SOLID[0],
+            PropKind::TallBookshelf => TALL_BOOKSHELF_SOLID[0],
+            // REF-164 cols 1..30, rows 3..29 (the candle flame).
+            PropKind::ReadingDesk => Aabb::from_base(0.0, 15.0, 2.0, 29.0),
+            PropKind::BookPile => BOOK_PILE_SOLID[0],
+            // REF-166 cols 6..27, rows 0..30 (the ring's top to the base).
+            PropKind::Globe => Aabb {
+                min: Vec2::new(-10.0, 1.0),
+                max: Vec2::new(12.0, 32.0),
+            },
+            // REF-167 cols 4..27, rows 2..30 (the middle flame).
+            PropKind::Candelabra => Aabb::from_base(0.0, 12.0, 1.0, 30.0),
+            // REF-168 cols 6..25, rows 0..30 (the capital to the base).
+            PropKind::Column => Aabb::from_base(0.0, 10.0, 1.0, 32.0),
+            // REF-169 cols 5..26, rows 1..30 (the flame tip).
+            PropKind::Brazier => Aabb::from_base(0.0, 11.0, 1.0, 31.0),
+            // REF-170 cols 5..26, rows 0..30 (the finial).
+            PropKind::RoyalBanner => Aabb::from_base(0.0, 11.0, 1.0, 32.0),
+            // REF-171 cols 4..27, rows 0..30 (the helm's crest).
+            PropKind::GuardStatue => Aabb::from_base(0.0, 12.0, 1.0, 32.0),
+            // REF-172 cols 7..24, rows 4..30 (the crown's points).
+            PropKind::CrownPlinth => Aabb::from_base(0.0, 9.0, 1.0, 28.0),
         }
     }
 
@@ -936,6 +1134,8 @@ pub const COTTAGE_SPOTS: &[(usize, Side, f32)] = &[
 /// (REF-139) Tavern Row, the Barkeep and the Bouncer at its door. Their
 /// bosses (the Guildmaster, Vexis, the Barkeep) are ordinary 32 px
 /// villagers who hold a trial, so no boss stands centred on a plot here.
+/// Act 8 (approved by Matt 2026-11-18): the vault door (REF-155) heads the
+/// Vault, guards either side of it.
 pub const LANDMARKS: &[(usize, PropKind)] = &[
     (9, PropKind::SealedStacks),
     (10, PropKind::ThroneDais),
@@ -946,6 +1146,7 @@ pub const LANDMARKS: &[(usize, PropKind)] = &[
     (3, PropKind::Guildhall),
     (4, PropKind::MagesTower),
     (5, PropKind::Tavern),
+    (8, PropKind::VaultDoor),
 ];
 
 /// A district's own yard props: `(district index, kind, offset of the
@@ -1338,6 +1539,156 @@ pub const DISTRICT_PROPS: &[(usize, PropKind, Vec2)] = &[
     (5, PropKind::TavernSign, Vec2::new(200.0, -56.0)),
     (5, PropKind::TavernSign, Vec2::new(-64.0, -236.0)),
     (5, PropKind::TavernSign, Vec2::new(-72.0, 204.0)),
+    // --- The Vault (vault door base (0, 156); the main street through the
+    // north and south edges, the lower cross-street through the west and
+    // east edges at y 80..128). A cross of open floor between the four
+    // mouths; a scene in each quarter.
+    // North-west: the treasury behind a chain cordon, open at both ends.
+    (8, PropKind::ChainBarrier, Vec2::new(-176.0, 148.0)),
+    (8, PropKind::ChainBarrier, Vec2::new(-144.0, 148.0)),
+    (8, PropKind::ChainBarrier, Vec2::new(-112.0, 148.0)),
+    (8, PropKind::CoinPile, Vec2::new(-184.0, 196.0)),
+    (8, PropKind::Strongbox, Vec2::new(-144.0, 200.0)),
+    (8, PropKind::CoinPile, Vec2::new(-104.0, 196.0)),
+    // North-east: an iron safe by the door, the wardens' key rack.
+    (8, PropKind::IronSafe, Vec2::new(60.0, 196.0)),
+    (8, PropKind::KeyRack, Vec2::new(152.0, 196.0)),
+    // Lantern posts either side of the west, east and south mouths (the
+    // north street meets the plaza behind the door).
+    (8, PropKind::LanternPost, Vec2::new(-220.0, 40.0)),
+    (8, PropKind::LanternPost, Vec2::new(-220.0, 160.0)),
+    (8, PropKind::LanternPost, Vec2::new(220.0, 40.0)),
+    (8, PropKind::LanternPost, Vec2::new(220.0, 152.0)),
+    (8, PropKind::LanternPost, Vec2::new(-48.0, -236.0)),
+    (8, PropKind::LanternPost, Vec2::new(64.0, -236.0)),
+    // South-west of the cross: the chained casket between two lantern
+    // posts.
+    (8, PropKind::ChainedCasket, Vec2::new(-136.0, -8.0)),
+    (8, PropKind::LanternPost, Vec2::new(-176.0, 40.0)),
+    (8, PropKind::LanternPost, Vec2::new(-96.0, 40.0)),
+    // South-east of the cross: the scales before a chain of many holders.
+    (8, PropKind::Scales, Vec2::new(136.0, -8.0)),
+    (8, PropKind::ChainBarrier, Vec2::new(104.0, 40.0)),
+    (8, PropKind::ChainBarrier, Vec2::new(136.0, 40.0)),
+    (8, PropKind::ChainBarrier, Vec2::new(168.0, 40.0)),
+    // The south-west stores: safes, a strongbox, a coin pile, a key rack
+    // and a second set of scales.
+    (8, PropKind::IronSafe, Vec2::new(-216.0, -224.0)),
+    (8, PropKind::IronSafe, Vec2::new(-184.0, -224.0)),
+    (8, PropKind::Strongbox, Vec2::new(-152.0, -220.0)),
+    (8, PropKind::CoinPile, Vec2::new(-120.0, -224.0)),
+    (8, PropKind::KeyRack, Vec2::new(-200.0, -136.0)),
+    (8, PropKind::Scales, Vec2::new(-112.0, -128.0)),
+    // The south-east treasury: coin piles and a strongbox behind a cordon
+    // along the south wall, an iron safe by the east wall.
+    (8, PropKind::CoinPile, Vec2::new(112.0, -168.0)),
+    (8, PropKind::Strongbox, Vec2::new(144.0, -164.0)),
+    (8, PropKind::CoinPile, Vec2::new(176.0, -168.0)),
+    (8, PropKind::ChainBarrier, Vec2::new(96.0, -224.0)),
+    (8, PropKind::ChainBarrier, Vec2::new(128.0, -224.0)),
+    (8, PropKind::ChainBarrier, Vec2::new(160.0, -224.0)),
+    (8, PropKind::ChainBarrier, Vec2::new(192.0, -224.0)),
+    (8, PropKind::IronSafe, Vec2::new(208.0, -104.0)),
+    // Lantern posts lining the way up from the south street.
+    (8, PropKind::LanternPost, Vec2::new(-48.0, -120.0)),
+    (8, PropKind::LanternPost, Vec2::new(64.0, -120.0)),
+    // --- The Forbidden Library (Sealed Stacks base (0, 156); the only
+    // street meets the plaza behind them). The REF-162 runner, two tiles
+    // wide, runs from the south wall up to the Stacks (`world::Runner`).
+    // A candelabra either side of the Stacks.
+    (9, PropKind::Candelabra, Vec2::new(-72.0, 164.0)),
+    (9, PropKind::Candelabra, Vec2::new(72.0, 164.0)),
+    // The north reading corners: a desk to the west, a globe to the east.
+    (9, PropKind::ReadingDesk, Vec2::new(-152.0, 168.0)),
+    (9, PropKind::Globe, Vec2::new(152.0, 168.0)),
+    // Three rows of tall bookshelves either side of the runner, two-tile
+    // aisles between the rows, a candelabra at the runner end of the
+    // first and last rows.
+    (9, PropKind::TallBookshelf, Vec2::new(-144.0, 32.0)),
+    (9, PropKind::TallBookshelf, Vec2::new(-112.0, 32.0)),
+    (9, PropKind::TallBookshelf, Vec2::new(-80.0, 32.0)),
+    (9, PropKind::TallBookshelf, Vec2::new(80.0, 32.0)),
+    (9, PropKind::TallBookshelf, Vec2::new(112.0, 32.0)),
+    (9, PropKind::TallBookshelf, Vec2::new(144.0, 32.0)),
+    (9, PropKind::TallBookshelf, Vec2::new(-144.0, -64.0)),
+    (9, PropKind::TallBookshelf, Vec2::new(-112.0, -64.0)),
+    (9, PropKind::TallBookshelf, Vec2::new(-80.0, -64.0)),
+    (9, PropKind::TallBookshelf, Vec2::new(80.0, -64.0)),
+    (9, PropKind::TallBookshelf, Vec2::new(112.0, -64.0)),
+    (9, PropKind::TallBookshelf, Vec2::new(144.0, -64.0)),
+    (9, PropKind::TallBookshelf, Vec2::new(-144.0, -160.0)),
+    (9, PropKind::TallBookshelf, Vec2::new(-112.0, -160.0)),
+    (9, PropKind::TallBookshelf, Vec2::new(-80.0, -160.0)),
+    (9, PropKind::TallBookshelf, Vec2::new(80.0, -160.0)),
+    (9, PropKind::TallBookshelf, Vec2::new(112.0, -160.0)),
+    (9, PropKind::TallBookshelf, Vec2::new(144.0, -160.0)),
+    (9, PropKind::Candelabra, Vec2::new(-48.0, 32.0)),
+    (9, PropKind::Candelabra, Vec2::new(48.0, 32.0)),
+    (9, PropKind::Candelabra, Vec2::new(-48.0, -160.0)),
+    (9, PropKind::Candelabra, Vec2::new(48.0, -160.0)),
+    // The west wall: a book pile, a scroll shelf and a reading bench.
+    (9, PropKind::BookPile, Vec2::new(-208.0, 40.0)),
+    (9, PropKind::ScrollShelf, Vec2::new(-208.0, -64.0)),
+    (9, PropKind::Bench, Vec2::new(-208.0, -152.0)),
+    // The east wall: a globe, a book pile and a reading desk.
+    (9, PropKind::Globe, Vec2::new(208.0, 40.0)),
+    (9, PropKind::BookPile, Vec2::new(208.0, -64.0)),
+    (9, PropKind::ReadingDesk, Vec2::new(208.0, -152.0)),
+    // The south: the lectern with a candelabra, and across the runner a
+    // second desk and its book pile.
+    (9, PropKind::Lectern, Vec2::new(-112.0, -216.0)),
+    (9, PropKind::Candelabra, Vec2::new(-40.0, -216.0)),
+    (9, PropKind::Candelabra, Vec2::new(40.0, -216.0)),
+    (9, PropKind::ReadingDesk, Vec2::new(112.0, -216.0)),
+    (9, PropKind::BookPile, Vec2::new(168.0, -216.0)),
+    // --- The Throne (Throne Dais base (0, 156); the only street enters
+    // through the south edge). The REF-162 runner, two tiles wide, runs
+    // from the street mouth up to the dais (`world::Runner`).
+    // A royal banner either side of the dais.
+    (10, PropKind::RoyalBanner, Vec2::new(-56.0, 164.0)),
+    (10, PropKind::RoyalBanner, Vec2::new(56.0, 164.0)),
+    // The aisle: two rows of columns with braziers between them, guard
+    // statues in a pair at the street mouth.
+    (10, PropKind::Column, Vec2::new(-64.0, -168.0)),
+    (10, PropKind::Column, Vec2::new(64.0, -168.0)),
+    (10, PropKind::Brazier, Vec2::new(-64.0, -128.0)),
+    (10, PropKind::Brazier, Vec2::new(64.0, -128.0)),
+    (10, PropKind::Column, Vec2::new(-64.0, -88.0)),
+    (10, PropKind::Column, Vec2::new(64.0, -88.0)),
+    (10, PropKind::Brazier, Vec2::new(-64.0, -48.0)),
+    (10, PropKind::Brazier, Vec2::new(64.0, -48.0)),
+    (10, PropKind::Column, Vec2::new(-64.0, -8.0)),
+    (10, PropKind::Column, Vec2::new(64.0, -8.0)),
+    (10, PropKind::GuardStatue, Vec2::new(-64.0, -232.0)),
+    (10, PropKind::GuardStatue, Vec2::new(64.0, -232.0)),
+    // The court at the top of the aisle: the Crown on its plinth to the
+    // west, a globe to the east, a column beyond each.
+    (10, PropKind::CrownPlinth, Vec2::new(-104.0, 72.0)),
+    (10, PropKind::Globe, Vec2::new(104.0, 72.0)),
+    (10, PropKind::Column, Vec2::new(-184.0, 72.0)),
+    (10, PropKind::Column, Vec2::new(184.0, 72.0)),
+    // The north-west reading desk; candelabras and a brazier north-east.
+    (10, PropKind::ReadingDesk, Vec2::new(-160.0, 176.0)),
+    (10, PropKind::Candelabra, Vec2::new(112.0, 176.0)),
+    (10, PropKind::Brazier, Vec2::new(160.0, 176.0)),
+    (10, PropKind::Candelabra, Vec2::new(208.0, 176.0)),
+    // Royal banners along the side walls.
+    (10, PropKind::RoyalBanner, Vec2::new(-216.0, -200.0)),
+    (10, PropKind::RoyalBanner, Vec2::new(216.0, -200.0)),
+    (10, PropKind::RoyalBanner, Vec2::new(-216.0, -104.0)),
+    (10, PropKind::RoyalBanner, Vec2::new(216.0, -104.0)),
+    (10, PropKind::RoyalBanner, Vec2::new(-216.0, -8.0)),
+    (10, PropKind::RoyalBanner, Vec2::new(216.0, -8.0)),
+    // Between the aisle and the walls: a brazier, a bench with a
+    // candelabra, and a guard statue on each side.
+    (10, PropKind::Brazier, Vec2::new(-152.0, -168.0)),
+    (10, PropKind::Brazier, Vec2::new(152.0, -168.0)),
+    (10, PropKind::Bench, Vec2::new(-152.0, -104.0)),
+    (10, PropKind::Bench, Vec2::new(152.0, -104.0)),
+    (10, PropKind::Candelabra, Vec2::new(-104.0, -104.0)),
+    (10, PropKind::Candelabra, Vec2::new(104.0, -104.0)),
+    (10, PropKind::GuardStatue, Vec2::new(-152.0, -56.0)),
+    (10, PropKind::GuardStatue, Vec2::new(152.0, -56.0)),
 ];
 
 /// Free-standing oaks in open meadow, between the quarters.
@@ -1555,7 +1906,7 @@ fn spawn_props(mut commands: Commands, asset_server: Res<AssetServer>) {
     );
 }
 
-type YSorted = Or<(With<Prop>, With<Player>, With<Npc>)>;
+type YSorted = Or<(With<Prop>, With<Player>, With<Npc>, With<Townsfolk>)>;
 
 /// Re-derive z from the ground line for every prop, the player and every NPC.
 /// Characters are centre-anchored sprites, so their ground line is the sprite
@@ -1590,7 +1941,10 @@ fn ysort(
     }
 }
 
-type Characters = (Or<(With<Player>, With<Npc>)>, Without<Prop>);
+type Characters = (
+    Or<(With<Player>, With<Npc>, With<Townsfolk>)>,
+    Without<Prop>,
+);
 
 /// Fade props that hide the player or an NPC (see module docs).
 fn fade_occluders(
@@ -2096,7 +2450,24 @@ mod tests {
 
     // --- District dressing (the Forge, R1 wave A1) -------------------------
 
-    const ALL_KINDS: [PropKind; 50] = [
+    const ALL_KINDS: [PropKind; 67] = [
+        PropKind::VaultDoor,
+        PropKind::CoinPile,
+        PropKind::ChainedCasket,
+        PropKind::ChainBarrier,
+        PropKind::Scales,
+        PropKind::KeyRack,
+        PropKind::IronSafe,
+        PropKind::TallBookshelf,
+        PropKind::ReadingDesk,
+        PropKind::BookPile,
+        PropKind::Globe,
+        PropKind::Candelabra,
+        PropKind::Column,
+        PropKind::Brazier,
+        PropKind::RoyalBanner,
+        PropKind::GuardStatue,
+        PropKind::CrownPlinth,
         PropKind::Guildhall,
         PropKind::LedgerDesk,
         PropKind::NoticeBoard,
@@ -2239,6 +2610,39 @@ mod tests {
                 include_str!("../../../design/art/refs/ref-144-roundtable.jsx")
             }
             PropKind::TabSlate => include_str!("../../../design/art/refs/ref-145-tabslate.jsx"),
+            PropKind::VaultDoor => include_str!("../../../design/art/refs/ref-155-vaultdoor.jsx"),
+            PropKind::CoinPile => include_str!("../../../design/art/refs/ref-156-coinpile.jsx"),
+            PropKind::ChainedCasket => {
+                include_str!("../../../design/art/refs/ref-157-chainedcasket.jsx")
+            }
+            PropKind::ChainBarrier => {
+                include_str!("../../../design/art/refs/ref-158-chainbarrier.jsx")
+            }
+            PropKind::Scales => include_str!("../../../design/art/refs/ref-159-scales.jsx"),
+            PropKind::KeyRack => include_str!("../../../design/art/refs/ref-160-keyrack.jsx"),
+            PropKind::IronSafe => include_str!("../../../design/art/refs/ref-161-ironsafe.jsx"),
+            PropKind::TallBookshelf => {
+                include_str!("../../../design/art/refs/ref-163-tallbookshelf.jsx")
+            }
+            PropKind::ReadingDesk => {
+                include_str!("../../../design/art/refs/ref-164-readingdesk.jsx")
+            }
+            PropKind::BookPile => include_str!("../../../design/art/refs/ref-165-bookpile.jsx"),
+            PropKind::Globe => include_str!("../../../design/art/refs/ref-166-globe.jsx"),
+            PropKind::Candelabra => {
+                include_str!("../../../design/art/refs/ref-167-candelabra.jsx")
+            }
+            PropKind::Column => include_str!("../../../design/art/refs/ref-168-column.jsx"),
+            PropKind::Brazier => include_str!("../../../design/art/refs/ref-169-brazier.jsx"),
+            PropKind::RoyalBanner => {
+                include_str!("../../../design/art/refs/ref-170-royalbanner.jsx")
+            }
+            PropKind::GuardStatue => {
+                include_str!("../../../design/art/refs/ref-171-guardstatue.jsx")
+            }
+            PropKind::CrownPlinth => {
+                include_str!("../../../design/art/refs/ref-172-crownplinth.jsx")
+            }
         })
     }
 
@@ -2525,6 +2929,10 @@ mod tests {
             ("Guildhall Quarter", 22..=44),
             ("The Mage's Tower", 22..=44),
             ("Tavern Row", 22..=44),
+            // Acts 8-10: the owner's standard, 35 to 45 each.
+            ("The Vault", 35..=45),
+            ("The Forbidden Library", 35..=45),
+            ("The Throne", 35..=45),
         ] {
             let d = district_index(name);
             let n = DISTRICT_PROPS.iter().filter(|(pd, _, _)| *pd == d).count()
@@ -3563,6 +3971,333 @@ mod tests {
                 .max(b.min.y - a.max.y)
                 .max(a.min.y - b.max.y);
             assert!(gap >= 32.0, "stones {i} and next leave {gap} px");
+        }
+    }
+
+    // --- Acts 8-10: the Vault, the Forbidden Library, the Throne ----------
+
+    /// Each Act 8-10 footprint is exactly what its ref header says is solid,
+    /// re-derived from the approved pixel grid; the visual box is the art's
+    /// opaque bounds; the ground line is the art's bottom row.
+    #[test]
+    fn act8_to_10_footprints_match_their_ref_headers() {
+        type Part = (
+            std::ops::RangeInclusive<usize>,
+            Option<std::ops::RangeInclusive<usize>>,
+        );
+        // (kind, header phrase, solid parts as (rows, cols), visual rows)
+        let cases: Vec<(PropKind, &str, Vec<Part>, std::ops::RangeInclusive<usize>)> = vec![
+            // The cornice (row 2) to the footing (row 62).
+            (
+                PropKind::VaultDoor,
+                "solid over the\n// whole wall",
+                vec![(2..=62, None)],
+                2..=62,
+            ),
+            // The heap, not the crown or the loose coins above it.
+            (
+                PropKind::CoinPile,
+                "solid over the heap",
+                vec![(11..=29, None)],
+                4..=29,
+            ),
+            // The pedestal under the casket.
+            (
+                PropKind::ChainedCasket,
+                "solid over the pedestal",
+                vec![(21..=30, None)],
+                7..=30,
+            ),
+            // The chain's rows, edge to edge.
+            (
+                PropKind::ChainBarrier,
+                "solid along the chain",
+                vec![(13..=18, None)],
+                6..=30,
+            ),
+            // The broad foot.
+            (
+                PropKind::Scales,
+                "solid at the foot",
+                vec![(25..=30, None)],
+                2..=30,
+            ),
+            // The two posts below the keys.
+            (
+                PropKind::KeyRack,
+                "solid\n// only at the two posts",
+                vec![(24..=29, Some(0..=15)), (24..=29, Some(16..=31))],
+                4..=29,
+            ),
+            (
+                PropKind::IronSafe,
+                "solid over\n// the safe",
+                vec![(5..=30, None)],
+                5..=30,
+            ),
+            (
+                PropKind::TallBookshelf,
+                "solid over the\n// case",
+                vec![(0..=30, None)],
+                0..=30,
+            ),
+            // The desk top (row 14) to the legs; not the books or candle.
+            (
+                PropKind::ReadingDesk,
+                "solid over the desk",
+                vec![(14..=29, None)],
+                3..=29,
+            ),
+            (
+                PropKind::BookPile,
+                "solid over the\n// pile",
+                vec![(3..=29, None)],
+                3..=29,
+            ),
+            // The post and its base, under the globe.
+            (
+                PropKind::Globe,
+                "solid at the stand",
+                vec![(23..=30, None)],
+                0..=30,
+            ),
+            (
+                PropKind::Candelabra,
+                "solid at the\n// foot",
+                vec![(26..=30, None)],
+                2..=30,
+            ),
+            // The lower gold band and the base.
+            (
+                PropKind::Column,
+                "solid over the base",
+                vec![(25..=30, None)],
+                0..=30,
+            ),
+            (
+                PropKind::Brazier,
+                "solid at the\n// tripod",
+                vec![(19..=30, None)],
+                1..=30,
+            ),
+            (
+                PropKind::RoyalBanner,
+                "solid only at the foot",
+                vec![(27..=30, None)],
+                0..=30,
+            ),
+            (
+                PropKind::GuardStatue,
+                "solid over\n// the plinth",
+                vec![(26..=30, None)],
+                0..=30,
+            ),
+            // The stone plinth under the cushion.
+            (
+                PropKind::CrownPlinth,
+                "solid over\n// the plinth",
+                vec![(19..=30, None)],
+                4..=30,
+            ),
+        ];
+        for (kind, phrase, parts, visual) in cases {
+            let src = ref_src(kind).expect("a ref");
+            assert!(
+                src.replace('\r', "").contains(phrase),
+                "{kind:?}: header lost {phrase:?}"
+            );
+            let want: Vec<Aabb> = parts
+                .into_iter()
+                .map(|(rows, cols)| grid_box(src, rows, cols))
+                .collect();
+            assert_eq!(kind.solids_local(), want.as_slice(), "{kind:?} solid");
+            assert_eq!(
+                kind.visual_local(),
+                grid_box(src, visual, None),
+                "{kind:?} visual"
+            );
+            let opaque = grid_box(src, 0..=kind.size().y as usize - 1, None);
+            assert_eq!(kind.ground_offset(), opaque.min.y, "{kind:?} ground line");
+        }
+        // A player's feet fit between the key rack's posts.
+        let foot = crate::plugins::player::PLAYER_FOOT;
+        let s = PropKind::KeyRack.solids_local();
+        assert_eq!(s.len(), 2);
+        assert!(s[1].min.x - s[0].max.x > foot.max.x - foot.min.x);
+        // The chain runs edge to edge, so pieces 32 px apart meet.
+        let chain = PropKind::ChainBarrier.solid_local();
+        assert_eq!((chain.min.x, chain.max.x), (-16.0, 16.0));
+    }
+
+    /// The vault door stands once on the Vault's back-centre plot, on a
+    /// clear tile of vault floor all round, with room to walk past either
+    /// side; it is solid to its top (a wall), so a player in front draws in
+    /// front and nobody stands behind it.
+    #[test]
+    fn the_vault_door_heads_the_vault() {
+        let d = district_index("The Vault");
+        let k = PropKind::VaultDoor;
+        assert_eq!(DISTRICTS[d].interior_ground(), Ground::VaultFloor);
+        assert!(LANDMARKS.contains(&(d, k)));
+        assert!(k.is_landmark());
+        let base = crate::plugins::world::landmark_plot_base(d).expect("plot");
+        let placed: Vec<Vec2> = all_props()
+            .into_iter()
+            .filter(|(kk, _)| *kk == k)
+            .map(|(_, b)| b)
+            .collect();
+        assert_eq!(placed, vec![base], "one door, at the back-centre");
+        assert_eq!(k.size(), Vec2::splat(64.0));
+        assert_eq!(crate::plugins::world::back_landmark_base(d), None);
+        let plot = k.sprite_rect_at(base);
+        let grown = Aabb {
+            min: plot.min - Vec2::splat(15.0),
+            max: plot.max + Vec2::splat(15.0),
+        };
+        assert!(rect_all(&grown, Ground::VaultFloor), "not on clear floor");
+        let solid = k.solid_at(base);
+        for side in [
+            Aabb::from_base(solid.min.x - 16.0, 16.0, solid.min.y, solid.max.y),
+            Aabb::from_base(solid.max.x + 16.0, 16.0, solid.min.y, solid.max.y),
+        ] {
+            assert!(rect_all(&side, Ground::VaultFloor), "no way round");
+        }
+        assert_eq!(k.visual_at(base), solid, "nothing to stand behind");
+        let front = Vec2::new(base.x, solid.min.y - 6.0);
+        assert!(!occludes(
+            player_body_at_feet(front),
+            ysort_z(front.y),
+            k.visual_at(base),
+            ysort_z(base.y + k.ground_offset())
+        ));
+    }
+
+    /// Chain barriers at the same height 32 px apart are one cordon: their
+    /// chains meet edge to edge, every cordon has at least three pieces,
+    /// and (`every_talk_spot_in_a_dressed_district_is_reachable`) what
+    /// they rope off is still reached round their ends.
+    #[test]
+    fn chain_barriers_form_joined_cordons() {
+        let mut cordons = 0usize;
+        for (d, district) in DISTRICTS.iter().enumerate() {
+            let mut pieces: Vec<Vec2> = DISTRICT_PROPS
+                .iter()
+                .filter(|(pd, k, _)| *pd == d && *k == PropKind::ChainBarrier)
+                .map(|(_, _, off)| district.center + *off)
+                .collect();
+            pieces.sort_by(|a, b| a.y.total_cmp(&b.y).then(a.x.total_cmp(&b.x)));
+            let mut runs: Vec<Vec<Vec2>> = Vec::new();
+            for p in pieces {
+                match runs.last_mut() {
+                    Some(run) if run.last().is_some_and(|q| q.y == p.y && p.x - q.x == 32.0) => {
+                        run.push(p)
+                    }
+                    _ => runs.push(vec![p]),
+                }
+            }
+            for run in &runs {
+                assert!(
+                    run.len() >= 3,
+                    "{}: a cordon of {}",
+                    district.name,
+                    run.len()
+                );
+                for pair in run.windows(2) {
+                    let a = PropKind::ChainBarrier.solid_at(pair[0]);
+                    let b = PropKind::ChainBarrier.solid_at(pair[1]);
+                    assert_eq!(a.max.x, b.min.x, "chains do not meet at {:?}", pair[1]);
+                }
+                cordons += 1;
+            }
+        }
+        assert_eq!(cordons, 3, "the treasury, the scales and the south wall");
+    }
+
+    /// The carpet runner (REF-162) is a walkway: in the Library and the
+    /// Throne no prop's sprite stands on it, and its line from the plaza's
+    /// south edge to the landmark is clear of every solid for a body two
+    /// tiles wide (the runner itself), so the Throne's street leads
+    /// straight up it to the Compiler and the Library's runner straight up
+    /// to the Librarian.
+    #[test]
+    fn the_runner_is_clear_from_the_south_edge_to_the_landmark() {
+        use crate::plugins::world::on_runner;
+        let solids = every_solid();
+        for name in ["The Forbidden Library", "The Throne"] {
+            let d = district_index(name);
+            let dist = &DISTRICTS[d];
+            for &(pd, k, off) in DISTRICT_PROPS {
+                if pd != d {
+                    continue;
+                }
+                let r = k.sprite_rect_at(dist.center + off);
+                let mut y = r.min.y + 1.0;
+                while y < r.max.y {
+                    let mut x = r.min.x + 1.0;
+                    while x < r.max.x {
+                        assert!(
+                            !on_runner(Vec2::new(x, y)),
+                            "{name}: the {k:?} at {off:?} stands on the runner"
+                        );
+                        x += 2.0;
+                    }
+                    y += 2.0;
+                }
+            }
+            let base = crate::plugins::world::landmark_plot_base(d).expect("plot");
+            let lane = Aabb {
+                min: Vec2::new(dist.center.x - 16.0, dist.center.y - dist.plaza_half),
+                max: Vec2::new(dist.center.x + 16.0, base.y),
+            };
+            for s in &solids {
+                assert!(!s.overlaps(&lane), "{name}: {s:?} on the runner");
+            }
+        }
+    }
+
+    /// No ambient figure stands in a street mouth (four tiles inward of
+    /// where a street meets its plaza) or within reach of a lane's end:
+    /// they are not solid, but a player walking in should not wade through
+    /// a crowd at the gate. Each stands in a dressed district.
+    #[test]
+    fn townsfolk_keep_the_street_mouths_open() {
+        use crate::plugins::townsfolk::{FOLK_PX, TOWNSFOLK, townsperson_pos};
+        let dressed = dressed_districts();
+        for t in TOWNSFOLK {
+            assert!(dressed.contains(&t.district), "{t:?} in an undressed plaza");
+            let p = townsperson_pos(t).expect("district");
+            let r = Aabb::from_base(p.x, FOLK_PX * 0.5, p.y - FOLK_PX * 0.5, p.y + FOLK_PX * 0.5);
+            for lane in mouth_lanes(&DISTRICTS[t.district]) {
+                assert!(!r.overlaps(&lane), "{t:?} stands in a street mouth");
+            }
+        }
+    }
+
+    /// The Act 8-10 casts stand in the scenes their missions belong to,
+    /// and the Librarian and the Compiler keep the spots the boss grid
+    /// gives them (checked against the landmark in `landmark_plot_is_sound`
+    /// via the two landmark tests above): dressing the plazas moved no
+    /// boss.
+    #[test]
+    fn the_act9_and_10_bosses_keep_their_grid_spots() {
+        for (name, boss) in [
+            ("The Forbidden Library", "The Librarian"),
+            ("The Throne", "The Compiler"),
+        ] {
+            let d = district_index(name);
+            let first: usize = DISTRICTS[..d].iter().map(|x| x.count).sum();
+            let i = first + DISTRICTS[d].count - 1;
+            assert_eq!(NPC_ROSTER[i].name, boss);
+            let base = crate::plugins::world::back_landmark_base(d).expect("plot");
+            assert_eq!(
+                district_slot(i),
+                Vec2::new(
+                    base.x,
+                    base.y - crate::plugins::world::BACK_LANDMARK_GAP - 32.0
+                ),
+                "{boss} moved"
+            );
+            assert_eq!(DISTRICTS[d].cast.len(), DISTRICTS[d].count - 1, "{name}");
         }
     }
 }

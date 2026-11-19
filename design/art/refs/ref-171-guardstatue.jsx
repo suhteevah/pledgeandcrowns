@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-171 - Guard statue, Act 10 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/guard_statue.png.
 //
 // A broad stone knight on a plinth: closed helm with a visor slit,
 // square pauldrons, both gauntlets on a sword set point-down in front

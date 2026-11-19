@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-178 - Townsfolk: guard, 32x32. Ambient villager, gives no mission.
-// APPROVED by Matt 2026-11-19. Not wired yet.
+// APPROVED by Matt 2026-11-19. Wired as game/assets/sprites/townsfolk/guard_idle_0.png.
 //
 // A stone-grey helm with a nose guard, grey sleeves, a wine tabard
 // with a brass-leaf badge. Third drawing: the head is kept, the body
