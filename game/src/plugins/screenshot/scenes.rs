@@ -706,9 +706,12 @@ fn world_scenes(v: &mut Vec<Scene>) {
     district_dressing_scenes(v);
 }
 
-/// Camera height for a whole-district overview: twice the play view, so a
-/// 520 px plaza and its cobble ring fit in one frame.
-const OVERVIEW_VIEW_HEIGHT: f32 = crate::plugins::VIEW_HEIGHT * 2.0;
+/// Camera height for a whole-district overview: at least twice the play
+/// view, and enough for the whole plaza plus a tile and a half either side
+/// (the 600 px Hearthstone Square needs 648; a 520 px plaza fits in 560).
+fn overview_view_height(plaza_half: f32) -> f32 {
+    (crate::plugins::VIEW_HEIGHT * 2.0).max(plaza_half * 2.0 + 48.0)
+}
 
 /// Set the camera's vertical view (world units); the play view is
 /// [`crate::plugins::VIEW_HEIGHT`].
@@ -800,7 +803,7 @@ fn district_dressing_scenes(v: &mut Vec<Scene>) {
             vec![
                 Action::EnterState(GameState::InGame, ENTER_GAME_SETTLE),
                 act(hide_next_pin),
-                act(|w| set_view_height(w, OVERVIEW_VIEW_HEIGHT)),
+                act(move |w| set_view_height(w, overview_view_height(half))),
                 teleport_to(center),
                 act(log_layout),
             ],

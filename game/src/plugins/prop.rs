@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 //! Village props: oaks (REF-67, 32x48), cottages (REF-68, 64x64), the
 //! district landmarks (the Sealed Stacks, REF-95, the Throne Dais, REF-96,
-//! and the Great Furnace, REF-98, all 64x64) and the district yard props
-//! (the Forge's anvil, quench trough, coal heap and tool rack, REF-99..102,
-//! 32x32).
+//! and the Great Furnace, REF-98, the Bell Tower, the market stall and the
+//! Checker's Gate, all 64x64) and the district yard props (REF-99..102,
+//! REF-104..106, REF-108..110, REF-112..121, REF-128, REF-129, 32x32).
 //!
 //! Props are ordinary sprites, not tiles. Each one is anchored bottom-centre
 //! at its ground line, y-sorted (lower on screen = drawn in front) and owns
@@ -30,12 +30,14 @@
 //! decision ([`occludes`]) and the ramp ([`step_alpha`]) are pure functions.
 
 use crate::assets::{
-    SPRITE_PROP_ANVIL, SPRITE_PROP_BARRELS, SPRITE_PROP_BELL_TOWER, SPRITE_PROP_BENCH,
-    SPRITE_PROP_CHECKERS_GATE, SPRITE_PROP_CHICKEN_COOP, SPRITE_PROP_COAL_HEAP,
-    SPRITE_PROP_COTTAGE, SPRITE_PROP_CRATES, SPRITE_PROP_FENCE, SPRITE_PROP_GREAT_FURNACE,
-    SPRITE_PROP_HANDCART, SPRITE_PROP_LANTERN_POST, SPRITE_PROP_MARKET_STALL, SPRITE_PROP_OAK,
-    SPRITE_PROP_QUENCH_TROUGH, SPRITE_PROP_SEALED_STACKS, SPRITE_PROP_SIGNPOST,
-    SPRITE_PROP_THRONE_DAIS, SPRITE_PROP_TOOL_RACK, SPRITE_PROP_WELL, SPRITE_PROP_WOODPILE,
+    SPRITE_PROP_ANVIL, SPRITE_PROP_BARRELS, SPRITE_PROP_BELL_TOWER, SPRITE_PROP_BELLOWS,
+    SPRITE_PROP_BENCH, SPRITE_PROP_BUCKET_SHOVEL, SPRITE_PROP_CHECKERS_GATE,
+    SPRITE_PROP_CHICKEN_COOP, SPRITE_PROP_COAL_HEAP, SPRITE_PROP_COTTAGE, SPRITE_PROP_CRATES,
+    SPRITE_PROP_FENCE, SPRITE_PROP_GREAT_FURNACE, SPRITE_PROP_GRINDSTONE, SPRITE_PROP_HANDCART,
+    SPRITE_PROP_INGOTS, SPRITE_PROP_LANTERN_POST, SPRITE_PROP_MARKET_STALL, SPRITE_PROP_OAK,
+    SPRITE_PROP_PLANTER, SPRITE_PROP_QUENCH_TROUGH, SPRITE_PROP_SEALED_STACKS,
+    SPRITE_PROP_SIGNPOST, SPRITE_PROP_STRONGBOX, SPRITE_PROP_THRONE_DAIS, SPRITE_PROP_TOOL_RACK,
+    SPRITE_PROP_WEAPON_RACK, SPRITE_PROP_WELL, SPRITE_PROP_WOODPILE, SPRITE_PROP_WORKBENCH,
 };
 use crate::plugins::animation::{SpriteLift, unlifted_anchor};
 use crate::plugins::npc::Npc;
@@ -162,6 +164,17 @@ pub enum PropKind {
     LanternPost,
     Bench,
     Fence,
+    /// The density pass (approved 2026-11-18), 32x32 each: the Forge yard
+    /// set (REF-116..121) and the strongbox (REF-128) and planter
+    /// (REF-129), placed in any plaza where they fit.
+    Grindstone,
+    Ingots,
+    Bellows,
+    WeaponRack,
+    Workbench,
+    BucketShovel,
+    Strongbox,
+    Planter,
 }
 
 // Solid footprints, relative to the bottom-centre anchor. A ref grid of
@@ -245,6 +258,34 @@ const BENCH_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 13.0, 9.0, 14.0)];
 /// REF-114 "solid along the rails": rows 13..23 (upper rail top to lower
 /// rail bottom), the full 32 px width, so pieces 32 px apart join.
 const FENCE_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 16.0, 8.0, 19.0)];
+/// REF-116 "solid over the frame": rows 14..29 (the uprights' tops to
+/// their feet, crossbar and water tray included), cols 5..26. The wheel
+/// above stands behind it and is not solid.
+const GRINDSTONE_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 11.0, 2.0, 18.0)];
+/// REF-117 "solid over the stack": rows 18..30, cols 2..29.
+const INGOTS_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 14.0, 1.0, 14.0)];
+/// REF-118 "solid over the stand": rows 19..29, cols 4..24.
+const BELLOWS_SOLID: [Aabb; 1] = [Aabb {
+    min: Vec2::new(-12.0, 2.0),
+    max: Vec2::new(9.0, 13.0),
+}];
+/// REF-119 "solid over the rack": rows 8..29 (top rail to feet), cols
+/// 3..28. The sword hilts above are not solid.
+const WEAPON_RACK_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 13.0, 2.0, 24.0)];
+/// REF-120 "solid over the bench": rows 15..29 (bench top to feet), cols
+/// 1..30.
+const WORKBENCH_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 15.0, 2.0, 17.0)];
+/// REF-121 "solid over the bucket": rows 14..29 (handle to base), cols
+/// 3..14. The shovel to the east is not solid.
+const BUCKET_SHOVEL_SOLID: [Aabb; 1] = [Aabb {
+    min: Vec2::new(-13.0, 2.0),
+    max: Vec2::new(-1.0, 18.0),
+}];
+/// REF-128 "solid over the chest": rows 12..29, cols 4..27.
+const STRONGBOX_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 12.0, 2.0, 20.0)];
+/// REF-129 "solid over the planter": rows 21..29, cols 7..24. The bush
+/// above it is not solid.
+const PLANTER_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 9.0, 2.0, 11.0)];
 
 impl PropKind {
     pub fn sprite_path(self) -> &'static str {
@@ -271,6 +312,14 @@ impl PropKind {
             PropKind::LanternPost => SPRITE_PROP_LANTERN_POST,
             PropKind::Bench => SPRITE_PROP_BENCH,
             PropKind::Fence => SPRITE_PROP_FENCE,
+            PropKind::Grindstone => SPRITE_PROP_GRINDSTONE,
+            PropKind::Ingots => SPRITE_PROP_INGOTS,
+            PropKind::Bellows => SPRITE_PROP_BELLOWS,
+            PropKind::WeaponRack => SPRITE_PROP_WEAPON_RACK,
+            PropKind::Workbench => SPRITE_PROP_WORKBENCH,
+            PropKind::BucketShovel => SPRITE_PROP_BUCKET_SHOVEL,
+            PropKind::Strongbox => SPRITE_PROP_STRONGBOX,
+            PropKind::Planter => SPRITE_PROP_PLANTER,
         }
     }
 
@@ -318,7 +367,15 @@ impl PropKind {
             | PropKind::Handcart
             | PropKind::LanternPost
             | PropKind::Bench
-            | PropKind::Fence => Vec2::new(32.0, 32.0),
+            | PropKind::Fence
+            | PropKind::Grindstone
+            | PropKind::Ingots
+            | PropKind::Bellows
+            | PropKind::WeaponRack
+            | PropKind::Workbench
+            | PropKind::BucketShovel
+            | PropKind::Strongbox
+            | PropKind::Planter => Vec2::new(32.0, 32.0),
         }
     }
 
@@ -349,6 +406,14 @@ impl PropKind {
             PropKind::LanternPost => 1.0,  // REF-112 row 30 is the foot's bottom edge
             PropKind::Bench => 3.0,        // REF-113 row 28 is the legs' bottom
             PropKind::Fence => 3.0,        // REF-114 row 28 is the posts' bottom
+            PropKind::Grindstone => 2.0,   // REF-116 row 29 is the frame's feet
+            PropKind::Ingots => 1.0,       // REF-117 row 30 is the pallet's bottom
+            PropKind::Bellows => 2.0,      // REF-118 row 29 is the stand's feet
+            PropKind::WeaponRack => 2.0,   // REF-119 row 29 is the rack's feet
+            PropKind::Workbench => 2.0,    // REF-120 row 29 is the legs' bottom
+            PropKind::BucketShovel => 1.0, // REF-121 row 30 is the shovel's tip
+            PropKind::Strongbox => 2.0,    // REF-128 row 29 is the chest's bottom
+            PropKind::Planter => 2.0,      // REF-129 row 29 is the planter's bottom
         }
     }
 
@@ -379,6 +444,14 @@ impl PropKind {
             PropKind::LanternPost => &LANTERN_POST_SOLID,
             PropKind::Bench => &BENCH_SOLID,
             PropKind::Fence => &FENCE_SOLID,
+            PropKind::Grindstone => &GRINDSTONE_SOLID,
+            PropKind::Ingots => &INGOTS_SOLID,
+            PropKind::Bellows => &BELLOWS_SOLID,
+            PropKind::WeaponRack => &WEAPON_RACK_SOLID,
+            PropKind::Workbench => &WORKBENCH_SOLID,
+            PropKind::BucketShovel => &BUCKET_SHOVEL_SOLID,
+            PropKind::Strongbox => &STRONGBOX_SOLID,
+            PropKind::Planter => &PLANTER_SOLID,
         }
     }
 
@@ -484,6 +557,27 @@ impl PropKind {
             PropKind::Bench => Aabb::from_base(0.0, 13.0, 3.0, 22.0),
             // REF-114 cols 0..31, rows 7..28.
             PropKind::Fence => Aabb::from_base(0.0, 16.0, 3.0, 25.0),
+            // The density pass (REF-116..121, 128, 129): every opaque pixel.
+            // REF-116 cols 5..26, rows 4..29 (the wheel included).
+            PropKind::Grindstone => Aabb::from_base(0.0, 11.0, 2.0, 28.0),
+            PropKind::Ingots => INGOTS_SOLID[0],
+            // REF-118 cols 0..29 (handle to nozzle), rows 5..29.
+            PropKind::Bellows => Aabb {
+                min: Vec2::new(-16.0, 2.0),
+                max: Vec2::new(14.0, 27.0),
+            },
+            // REF-119 cols 3..28, rows 1..29 (pommels to feet).
+            PropKind::WeaponRack => Aabb::from_base(0.0, 13.0, 2.0, 31.0),
+            // REF-120 cols 1..30, rows 9..29 (the vice on top).
+            PropKind::Workbench => Aabb::from_base(0.0, 15.0, 2.0, 23.0),
+            // REF-121 cols 3..27, rows 1..30 (the shovel's grip to its tip).
+            PropKind::BucketShovel => Aabb {
+                min: Vec2::new(-13.0, 1.0),
+                max: Vec2::new(12.0, 31.0),
+            },
+            PropKind::Strongbox => STRONGBOX_SOLID[0],
+            // REF-129 cols 7..24, rows 2..29 (the bush above the planter).
+            PropKind::Planter => Aabb::from_base(0.0, 9.0, 2.0, 30.0),
         }
     }
 
@@ -601,87 +695,235 @@ pub const LANDMARKS: &[(usize, PropKind)] = &[
 /// A district's own yard props: `(district index, kind, offset of the
 /// bottom-centre anchor from the plaza centre)`. They stand ON the plaza
 /// paving, clear of its street mouths and of the routes to every NPC (see
-/// `tests`). Approved sets so far: the Forge (REF-99..102, approved by Matt
-/// 2026-11-18), composed round the Great Furnace (its plot's base is at
-/// (0, 156)): anvil and quench trough either side of the furnace mouth,
-/// the coal heap to the furnace's west, the tool rack against the back
-/// wall to its east. The free demo's three plazas (REF-104..106,
-/// REF-108..110, REF-112..115, approved by Matt 2026-11-18) are dressed
-/// across their whole area, a kind used as often as it fits and outside
-/// its home district where it belongs (crates and barrels by the well, a
-/// fence and lantern posts in Hearthstone, a signpost and a lantern post
-/// at Market Row's street mouth). Each plaza's composition is described
-/// on its cast in `world.rs`. Same-y fence pieces 32 px apart form one
-/// run (`tests::fences_form_joined_runs`); the Commons runs meet the
-/// Checker's Gate pillars, so the gate is a boundary you pass through.
+/// `tests`). A kind is used wherever it belongs and as often as it fits.
+///
+/// Each plaza is composed, not scattered: small scenes with open paving
+/// between them, two-tile lanes from every street mouth to the centre and
+/// to the landmark (`tests::lanes_from_the_streets_are_two_tiles_wide`),
+/// and the cast gathered at the props people would stand at (the groups
+/// are listed on each cast in `world.rs`). Approved sets: the Forge
+/// (REF-99..102), the free demo's three plazas (REF-104..106,
+/// REF-108..110, REF-112..115) and the density pass (REF-116..121 Forge
+/// yard set, REF-128 strongbox, REF-129 planter), all approved by Matt
+/// 2026-11-18. Same-y fence pieces 32 px apart form one run
+/// (`tests::fences_form_joined_runs`); the Commons runs meet the Checker's
+/// Gate pillars, so the gate is a boundary you pass through.
 pub const DISTRICT_PROPS: &[(usize, PropKind, Vec2)] = &[
-    (6, PropKind::Anvil, Vec2::new(-72.0, 92.0)),
-    (6, PropKind::QuenchTrough, Vec2::new(72.0, 88.0)),
-    (6, PropKind::CoalHeap, Vec2::new(-96.0, 168.0)),
-    (6, PropKind::ToolRack, Vec2::new(104.0, 196.0)),
-    // Hearthstone Square: the well before the Bell Tower with the
-    // Cooper's barrels and a crate stack either side of it.
+    // --- The Forge (Great Furnace base (0, 156); street in from the east).
+    // The furnace mouth: anvil and quench trough either side, the
+    // bellows pointed at the furnace from the west, a water bucket east.
+    (6, PropKind::Anvil, Vec2::new(-48.0, 120.0)),
+    (6, PropKind::QuenchTrough, Vec2::new(48.0, 120.0)),
+    (6, PropKind::Bellows, Vec2::new(-60.0, 176.0)),
+    (6, PropKind::BucketShovel, Vec2::new(64.0, 180.0)),
+    // Fuel to the north-west: two coal heaps.
+    (6, PropKind::CoalHeap, Vec2::new(-108.0, 176.0)),
+    (6, PropKind::CoalHeap, Vec2::new(-140.0, 204.0)),
+    // The work corner to the north-east: tool rack, the finished swords,
+    // the workbench, and the day's ingots by the east wall.
+    (6, PropKind::ToolRack, Vec2::new(120.0, 200.0)),
+    (6, PropKind::WeaponRack, Vec2::new(152.0, 200.0)),
+    (6, PropKind::Workbench, Vec2::new(200.0, 196.0)),
+    (6, PropKind::Ingots, Vec2::new(200.0, 100.0)),
+    // A grindstone by the west wall.
+    (6, PropKind::Grindstone, Vec2::new(-200.0, 100.0)),
+    // The stock yard to the south: fuel west, iron east.
+    (6, PropKind::CoalHeap, Vec2::new(-192.0, -200.0)),
+    (6, PropKind::Woodpile, Vec2::new(-160.0, -208.0)),
+    (6, PropKind::Barrels, Vec2::new(-120.0, -208.0)),
+    (6, PropKind::BucketShovel, Vec2::new(-200.0, -152.0)),
+    (6, PropKind::Ingots, Vec2::new(120.0, -200.0)),
+    (6, PropKind::Ingots, Vec2::new(152.0, -200.0)),
+    (6, PropKind::Crates, Vec2::new(184.0, -200.0)),
+    (6, PropKind::Handcart, Vec2::new(184.0, -152.0)),
+    // A finishing station in the south middle.
+    (6, PropKind::Workbench, Vec2::new(-40.0, -168.0)),
+    (6, PropKind::Grindstone, Vec2::new(8.0, -168.0)),
+    (6, PropKind::Anvil, Vec2::new(56.0, -168.0)),
+    (6, PropKind::WeaponRack, Vec2::new(104.0, -152.0)),
+    // A second fuel store in the west lower half.
+    (6, PropKind::CoalHeap, Vec2::new(-176.0, -80.0)),
+    (6, PropKind::Woodpile, Vec2::new(-208.0, -48.0)),
+    (6, PropKind::BucketShovel, Vec2::new(-136.0, -72.0)),
+    // A second smithing station in the west middle.
+    (6, PropKind::Anvil, Vec2::new(-136.0, 32.0)),
+    (6, PropKind::QuenchTrough, Vec2::new(-184.0, 32.0)),
+    // Lantern posts either side of the street mouth, deliveries south of
+    // it, more ingots north.
+    (6, PropKind::LanternPost, Vec2::new(220.0, 52.0)),
+    (6, PropKind::LanternPost, Vec2::new(220.0, -60.0)),
+    (6, PropKind::Crates, Vec2::new(168.0, -104.0)),
+    (6, PropKind::Barrels, Vec2::new(200.0, -104.0)),
+    (6, PropKind::Ingots, Vec2::new(168.0, 100.0)),
+    // --- Hearthstone Square (Bell Tower base (0, 196); four streets meet
+    // at the spawn, and the cross between them stays open).
+    // The well before the tower, the Cooper's barrels west of it, crates
+    // and a handcart east, two-tile lanes between.
     (0, PropKind::Well, Vec2::new(0.0, 120.0)),
-    (0, PropKind::Barrels, Vec2::new(-40.0, 120.0)),
-    (0, PropKind::Crates, Vec2::new(40.0, 120.0)),
-    // North-west: the woodpile, two stacks.
-    (0, PropKind::Woodpile, Vec2::new(-184.0, 204.0)),
-    (0, PropKind::Woodpile, Vec2::new(-216.0, 196.0)),
-    // North-east: the chicken coop behind a three-piece fence.
-    (0, PropKind::ChickenCoop, Vec2::new(176.0, 200.0)),
-    (0, PropKind::Fence, Vec2::new(144.0, 152.0)),
-    (0, PropKind::Fence, Vec2::new(176.0, 152.0)),
-    (0, PropKind::Fence, Vec2::new(208.0, 152.0)),
-    // A signpost at each side street: east to The Commons, west (the
-    // mirrored sign) to Market Row.
-    (0, PropKind::Signpost, Vec2::new(248.0, 52.0)),
-    (0, PropKind::SignpostWest, Vec2::new(-248.0, 52.0)),
-    // South-east: lantern posts either side of the Borrow Checker.
+    (0, PropKind::Barrels, Vec2::new(-88.0, 124.0)),
+    (0, PropKind::Barrels, Vec2::new(-120.0, 124.0)),
+    (0, PropKind::Crates, Vec2::new(88.0, 124.0)),
+    (0, PropKind::Handcart, Vec2::new(124.0, 124.0)),
+    // Planters flanking the tower, well clear of the way round it.
+    (0, PropKind::Planter, Vec2::new(-88.0, 228.0)),
+    (0, PropKind::Planter, Vec2::new(88.0, 228.0)),
+    // North-west: the Smith's corner, woodpile, anvil and bucket.
+    (0, PropKind::Woodpile, Vec2::new(-248.0, 228.0)),
+    (0, PropKind::Woodpile, Vec2::new(-216.0, 228.0)),
+    (0, PropKind::BucketShovel, Vec2::new(-176.0, 232.0)),
+    (0, PropKind::Anvil, Vec2::new(-176.0, 184.0)),
+    // North-east: the chicken yard behind a five-piece fence, open at
+    // its west end.
+    (0, PropKind::Fence, Vec2::new(140.0, 148.0)),
+    (0, PropKind::Fence, Vec2::new(172.0, 148.0)),
+    (0, PropKind::Fence, Vec2::new(204.0, 148.0)),
+    (0, PropKind::Fence, Vec2::new(236.0, 148.0)),
+    (0, PropKind::Fence, Vec2::new(268.0, 148.0)),
+    (0, PropKind::ChickenCoop, Vec2::new(196.0, 212.0)),
+    (0, PropKind::Crates, Vec2::new(244.0, 212.0)),
+    // East street: lantern posts either side, the signpost to The
+    // Commons north of it.
+    (0, PropKind::LanternPost, Vec2::new(264.0, 40.0)),
+    (0, PropKind::LanternPost, Vec2::new(264.0, -56.0)),
+    (0, PropKind::Signpost, Vec2::new(224.0, 56.0)),
+    // West street, the same, the mirrored signpost to Market Row.
+    (0, PropKind::LanternPost, Vec2::new(-264.0, 40.0)),
+    (0, PropKind::LanternPost, Vec2::new(-264.0, -56.0)),
+    (0, PropKind::SignpostWest, Vec2::new(-224.0, 56.0)),
+    // South street: lantern posts either side of the mouth.
+    (0, PropKind::LanternPost, Vec2::new(-48.0, -268.0)),
+    (0, PropKind::LanternPost, Vec2::new(64.0, -268.0)),
+    // South-east: the Borrow Checker's two lantern posts, stores in the
+    // corner.
     (0, PropKind::LanternPost, Vec2::new(112.0, -208.0)),
     (0, PropKind::LanternPost, Vec2::new(240.0, -208.0)),
-    // South-west: a bench, and crates by the west street.
-    (0, PropKind::Bench, Vec2::new(-136.0, -244.0)),
-    (0, PropKind::Crates, Vec2::new(-232.0, -104.0)),
-    // Either side of the south street: barrels west, a bench east.
-    (0, PropKind::Barrels, Vec2::new(-136.0, -72.0)),
-    (0, PropKind::Bench, Vec2::new(128.0, -88.0)),
-    // Market Row: crates and barrels either side of the stall, a handcart
-    // in front of it, more stock in the north corners.
-    (1, PropKind::Crates, Vec2::new(-56.0, 160.0)),
-    (1, PropKind::Barrels, Vec2::new(56.0, 156.0)),
-    (1, PropKind::Handcart, Vec2::new(96.0, 96.0)),
-    (1, PropKind::Barrels, Vec2::new(-184.0, 200.0)),
-    (1, PropKind::Crates, Vec2::new(176.0, 184.0)),
-    // The street mouth (east edge): a signpost north of it pointing to
-    // the hub, a lantern post south of it.
-    (1, PropKind::Signpost, Vec2::new(200.0, 64.0)),
-    (1, PropKind::LanternPost, Vec2::new(200.0, -72.0)),
-    // South-west: a second handcart being unloaded, barrels and crates.
-    (1, PropKind::Handcart, Vec2::new(-120.0, -100.0)),
-    (1, PropKind::Barrels, Vec2::new(-176.0, -108.0)),
-    (1, PropKind::Crates, Vec2::new(-136.0, -168.0)),
-    // South: a bench, and crates in the south-east corner.
-    (1, PropKind::Bench, Vec2::new(72.0, -200.0)),
-    (1, PropKind::Crates, Vec2::new(184.0, -184.0)),
-    // The Commons: a fence run either side of the Checker's Gate, the
-    // inner pieces meeting its pillars.
+    (0, PropKind::Barrels, Vec2::new(264.0, -264.0)),
+    (0, PropKind::Crates, Vec2::new(232.0, -264.0)),
+    // South-west: a seating corner (two benches, a planter between),
+    // planters by Ferris, clear of the walk from the spawn to him.
+    (0, PropKind::Bench, Vec2::new(-248.0, -136.0)),
+    (0, PropKind::Planter, Vec2::new(-216.0, -136.0)),
+    (0, PropKind::Bench, Vec2::new(-184.0, -136.0)),
+    (0, PropKind::Planter, Vec2::new(-268.0, -268.0)),
+    (0, PropKind::Planter, Vec2::new(-188.0, -276.0)),
+    // Stores south-east of Ferris, off the walk to him.
+    (0, PropKind::Crates, Vec2::new(-120.0, -256.0)),
+    (0, PropKind::Barrels, Vec2::new(-88.0, -256.0)),
+    // Planters lining the east, west and south approaches to the spawn.
+    (0, PropKind::Planter, Vec2::new(-136.0, 56.0)),
+    (0, PropKind::Planter, Vec2::new(-136.0, -72.0)),
+    (0, PropKind::Planter, Vec2::new(136.0, 56.0)),
+    (0, PropKind::Planter, Vec2::new(136.0, -72.0)),
+    (0, PropKind::Planter, Vec2::new(-56.0, -136.0)),
+    (0, PropKind::Planter, Vec2::new(72.0, -136.0)),
+    // A bench looking onto the east street.
+    (0, PropKind::Bench, Vec2::new(200.0, -112.0)),
+    // --- Market Row (stall base (0, 156); street in from the east).
+    // The market: stock either side of the stall, the strongbox at its
+    // west end, a loaded handcart parked east.
+    (1, PropKind::Strongbox, Vec2::new(-48.0, 180.0)),
+    (1, PropKind::Crates, Vec2::new(-80.0, 196.0)),
+    (1, PropKind::Barrels, Vec2::new(-80.0, 164.0)),
+    (1, PropKind::Barrels, Vec2::new(-112.0, 196.0)),
+    (1, PropKind::Barrels, Vec2::new(48.0, 180.0)),
+    (1, PropKind::Crates, Vec2::new(80.0, 196.0)),
+    (1, PropKind::Crates, Vec2::new(80.0, 164.0)),
+    (1, PropKind::Handcart, Vec2::new(128.0, 176.0)),
+    (1, PropKind::Planter, Vec2::new(-200.0, 196.0)),
+    (1, PropKind::Planter, Vec2::new(200.0, 196.0)),
+    // The street mouth: lantern posts either side, the signpost to the
+    // hub.
+    (1, PropKind::LanternPost, Vec2::new(220.0, 40.0)),
+    (1, PropKind::LanternPost, Vec2::new(220.0, -56.0)),
+    (1, PropKind::Signpost, Vec2::new(184.0, 56.0)),
+    // South-east, by the street: a handcart being unloaded.
+    (1, PropKind::Handcart, Vec2::new(144.0, -104.0)),
+    (1, PropKind::Crates, Vec2::new(176.0, -104.0)),
+    (1, PropKind::Barrels, Vec2::new(208.0, -104.0)),
+    (1, PropKind::Barrels, Vec2::new(168.0, -200.0)),
+    (1, PropKind::Crates, Vec2::new(200.0, -200.0)),
+    // South-west: a seating corner.
+    (1, PropKind::LanternPost, Vec2::new(-208.0, -136.0)),
+    (1, PropKind::Bench, Vec2::new(-160.0, -136.0)),
+    (1, PropKind::Planter, Vec2::new(-120.0, -136.0)),
+    (1, PropKind::Bench, Vec2::new(-80.0, -136.0)),
+    (1, PropKind::Planter, Vec2::new(-208.0, -200.0)),
+    // The west wall: more stock.
+    (1, PropKind::Barrels, Vec2::new(-208.0, 48.0)),
+    (1, PropKind::Crates, Vec2::new(-208.0, 16.0)),
+    // A second pitch in the west middle: a handcart and its stock.
+    (1, PropKind::Handcart, Vec2::new(-120.0, 40.0)),
+    (1, PropKind::Crates, Vec2::new(-88.0, 40.0)),
+    (1, PropKind::Barrels, Vec2::new(-88.0, 72.0)),
+    // Planters lining the way in from the street.
+    (1, PropKind::Planter, Vec2::new(120.0, 64.0)),
+    (1, PropKind::Planter, Vec2::new(120.0, -56.0)),
+    // South middle: a lantern post, a bench and a planter.
+    (1, PropKind::LanternPost, Vec2::new(0.0, -196.0)),
+    (1, PropKind::Bench, Vec2::new(32.0, -200.0)),
+    (1, PropKind::Planter, Vec2::new(64.0, -200.0)),
+    (1, PropKind::Planter, Vec2::new(32.0, -120.0)),
+    // West, below the centre: goods waiting to be shelved.
+    (1, PropKind::Crates, Vec2::new(-160.0, -56.0)),
+    (1, PropKind::Barrels, Vec2::new(-128.0, -56.0)),
+    (1, PropKind::Crates, Vec2::new(-160.0, -24.0)),
+    // --- The Commons (Checker's Gate base (0, 156); street in from the
+    // west). A fence run either side of the gate, the inner pieces
+    // meeting its pillars, so the north is a court entered through the
+    // arch or round the fence ends.
+    (2, PropKind::Fence, Vec2::new(-168.0, 156.0)),
+    (2, PropKind::Fence, Vec2::new(-136.0, 156.0)),
     (2, PropKind::Fence, Vec2::new(-104.0, 156.0)),
     (2, PropKind::Fence, Vec2::new(-72.0, 156.0)),
     (2, PropKind::Fence, Vec2::new(-40.0, 156.0)),
     (2, PropKind::Fence, Vec2::new(40.0, 156.0)),
     (2, PropKind::Fence, Vec2::new(72.0, 156.0)),
     (2, PropKind::Fence, Vec2::new(104.0, 156.0)),
-    // A bench in the court behind the gate.
+    (2, PropKind::Fence, Vec2::new(136.0, 156.0)),
+    (2, PropKind::Fence, Vec2::new(168.0, 156.0)),
+    // The court: a bench and a planter either side of the arch.
+    (2, PropKind::Bench, Vec2::new(-72.0, 196.0)),
+    (2, PropKind::Planter, Vec2::new(-104.0, 200.0)),
     (2, PropKind::Bench, Vec2::new(72.0, 196.0)),
-    // Lantern posts flanking the approach, and one by the street mouth.
+    (2, PropKind::Planter, Vec2::new(104.0, 200.0)),
+    // The approach to the gate: lantern posts, planters outside them.
     (2, PropKind::LanternPost, Vec2::new(-40.0, 40.0)),
     (2, PropKind::LanternPost, Vec2::new(40.0, 40.0)),
-    (2, PropKind::LanternPost, Vec2::new(-208.0, 64.0)),
-    // The south half: two benches, the stores (crates and barrels).
-    (2, PropKind::Bench, Vec2::new(-104.0, -120.0)),
-    (2, PropKind::Bench, Vec2::new(104.0, -160.0)),
-    (2, PropKind::Crates, Vec2::new(-192.0, -168.0)),
-    (2, PropKind::Barrels, Vec2::new(-192.0, -120.0)),
+    (2, PropKind::Planter, Vec2::new(-88.0, 88.0)),
+    (2, PropKind::Planter, Vec2::new(88.0, 88.0)),
+    // The street mouth: lantern posts either side, the signpost to the
+    // hub.
+    (2, PropKind::LanternPost, Vec2::new(-220.0, 40.0)),
+    (2, PropKind::LanternPost, Vec2::new(-220.0, -56.0)),
+    (2, PropKind::SignpostWest, Vec2::new(-184.0, 56.0)),
+    // South-east: a seating corner, two benches with a planter between
+    // and a lantern post at the end.
+    (2, PropKind::Bench, Vec2::new(64.0, -152.0)),
+    (2, PropKind::Planter, Vec2::new(92.0, -152.0)),
+    (2, PropKind::Bench, Vec2::new(120.0, -152.0)),
+    (2, PropKind::LanternPost, Vec2::new(176.0, -124.0)),
+    // South-west: the stores.
+    (2, PropKind::Barrels, Vec2::new(-200.0, -136.0)),
+    (2, PropKind::Crates, Vec2::new(-200.0, -168.0)),
+    (2, PropKind::Crates, Vec2::new(-168.0, -200.0)),
+    (2, PropKind::Handcart, Vec2::new(-128.0, -200.0)),
+    // West middle: a bench between two planters, south of the street.
+    (2, PropKind::Planter, Vec2::new(-136.0, -56.0)),
+    (2, PropKind::Bench, Vec2::new(-104.0, -60.0)),
+    (2, PropKind::Planter, Vec2::new(-72.0, -56.0)),
+    // East middle: a bench and a planter.
+    (2, PropKind::Planter, Vec2::new(120.0, 56.0)),
+    (2, PropKind::Bench, Vec2::new(152.0, 56.0)),
+    // South middle: the commons well and its bucket.
+    (2, PropKind::Well, Vec2::new(-48.0, -176.0)),
+    (2, PropKind::BucketShovel, Vec2::new(-8.0, -176.0)),
+    // Planters at the court's two ends, and a second bench between
+    // planters in the east middle.
+    (2, PropKind::Planter, Vec2::new(-200.0, 200.0)),
+    (2, PropKind::Planter, Vec2::new(200.0, 200.0)),
+    (2, PropKind::Planter, Vec2::new(120.0, -24.0)),
+    (2, PropKind::Bench, Vec2::new(152.0, -24.0)),
+    (2, PropKind::Planter, Vec2::new(184.0, -24.0)),
 ];
 
 /// Free-standing oaks in open meadow, between the quarters.
@@ -1285,10 +1527,13 @@ mod tests {
 
     #[test]
     fn no_prop_covers_an_npc_slot() {
-        // An NPC is a 32px (Borrow Checker: 64px) centre-anchored sprite.
-        for i in 0..NPC_ROSTER.len() {
+        // An NPC is a centre-anchored sprite of its roster `native_px`
+        // (32 px; the bosses 64 px). Gathered NPCs stand right beside a
+        // prop's sprite but never on it.
+        for (i, spec) in NPC_ROSTER.iter().enumerate() {
             let s = district_slot(i);
-            let npc = Aabb::from_base(s.x, 32.0, s.y - 32.0, s.y + 32.0);
+            let half = spec.native_px * 0.5;
+            let npc = Aabb::from_base(s.x, half, s.y - half, s.y + half);
             for (kind, base) in all_props() {
                 assert!(
                     !kind.sprite_rect_at(base).overlaps(&npc),
@@ -1437,7 +1682,15 @@ mod tests {
 
     // --- District dressing (the Forge, R1 wave A1) -------------------------
 
-    const ALL_KINDS: [PropKind; 23] = [
+    const ALL_KINDS: [PropKind; 31] = [
+        PropKind::Grindstone,
+        PropKind::Ingots,
+        PropKind::Bellows,
+        PropKind::WeaponRack,
+        PropKind::Workbench,
+        PropKind::BucketShovel,
+        PropKind::Strongbox,
+        PropKind::Planter,
         PropKind::Oak,
         PropKind::Cottage,
         PropKind::ThroneDais,
@@ -1504,6 +1757,20 @@ mod tests {
             }
             PropKind::Bench => include_str!("../../../design/art/refs/ref-113-bench.jsx"),
             PropKind::Fence => include_str!("../../../design/art/refs/ref-114-fence.jsx"),
+            PropKind::Grindstone => {
+                include_str!("../../../design/art/refs/ref-116-grindstone.jsx")
+            }
+            PropKind::Ingots => include_str!("../../../design/art/refs/ref-117-ingots.jsx"),
+            PropKind::Bellows => include_str!("../../../design/art/refs/ref-118-bellows.jsx"),
+            PropKind::WeaponRack => {
+                include_str!("../../../design/art/refs/ref-119-weaponrack.jsx")
+            }
+            PropKind::Workbench => include_str!("../../../design/art/refs/ref-120-workbench.jsx"),
+            PropKind::BucketShovel => {
+                include_str!("../../../design/art/refs/ref-121-bucketshovel.jsx")
+            }
+            PropKind::Strongbox => include_str!("../../../design/art/refs/ref-128-strongbox.jsx"),
+            PropKind::Planter => include_str!("../../../design/art/refs/ref-129-planter.jsx"),
         })
     }
 
@@ -1779,32 +2046,92 @@ mod tests {
                 }
             }
         }
-        // Each demo plaza is dressed across its area: 10 to 18 props,
-        // landmark included (Hearthstone, 600 px across, has the most).
-        for name in ["Hearthstone Square", "Market Row", "The Commons"] {
-            let d = DISTRICTS
-                .iter()
-                .position(|x| x.name == name)
-                .expect("demo plaza");
+        // Each dressed plaza is dressed densely across its area (the
+        // density pass): landmark included, 28 to 48 props in Hearthstone
+        // (600 px across), 22 to 44 in each 520 px plaza.
+        for (name, range) in [
+            ("Hearthstone Square", 28..=48),
+            ("Market Row", 22..=44),
+            ("The Commons", 22..=44),
+            ("The Forge", 22..=44),
+        ] {
+            let d = district_index(name);
             let n = DISTRICT_PROPS.iter().filter(|(pd, _, _)| *pd == d).count()
                 + LANDMARKS.iter().filter(|(ld, _)| *ld == d).count();
-            assert!((10..=18).contains(&n), "{name} has {n} props");
+            assert!(range.contains(&n), "{name} has {n} props");
         }
-        // The Forge yard is the four approved REF-99..102 props.
+        // The Forge yard still has its four REF-99..102 props.
         let forge: Vec<PropKind> = DISTRICT_PROPS
             .iter()
             .filter(|(d, _, _)| DISTRICTS[*d].name == "The Forge")
             .map(|(_, k, _)| *k)
             .collect();
-        assert_eq!(
-            forge,
-            [
-                PropKind::Anvil,
-                PropKind::QuenchTrough,
-                PropKind::CoalHeap,
-                PropKind::ToolRack
-            ]
-        );
+        for k in [
+            PropKind::Anvil,
+            PropKind::QuenchTrough,
+            PropKind::CoalHeap,
+            PropKind::ToolRack,
+        ] {
+            assert!(forge.contains(&k), "the Forge lost its {k:?}");
+        }
+    }
+
+    /// The walking lanes are two tiles (32 px) wide: a body 32 px wide
+    /// and 32 px tall, flood-filled from each dressed plaza's street
+    /// mouths against every solid, reaches the plaza centre and the front
+    /// of the landmark (a tile in front of its base). So nothing in the
+    /// dressing narrows a way in below two tiles, including the way round
+    /// the Bell Tower at the end of Hearthstone's north street and the
+    /// lanes either side of the well.
+    #[test]
+    fn lanes_from_the_streets_are_two_tiles_wide() {
+        use std::collections::{HashSet, VecDeque};
+        // Centred on the player's foot box, two tiles each way.
+        let body = Aabb {
+            min: Vec2::new(-16.0, -29.0),
+            max: Vec2::new(16.0, 3.0),
+        };
+        let solids = every_solid();
+        for d in dressed_districts() {
+            let dist = &DISTRICTS[d];
+            let n = (dist.plaza_half / 4.0).floor() as i32;
+            let at = |i: i32, j: i32| dist.center + Vec2::new(i as f32, j as f32) * 4.0;
+            let free = |c: (i32, i32)| {
+                let b = body.translated(at(c.0, c.1));
+                c.0.abs() <= n && c.1.abs() <= n && !solids.iter().any(|s| b.overlaps(s))
+            };
+            let mut seen: HashSet<(i32, i32)> = HashSet::new();
+            let mut queue: VecDeque<(i32, i32)> = VecDeque::new();
+            for m in street_mouths(dist) {
+                let o = ((m - dist.center) / 4.0).round();
+                let c = (o.x as i32, o.y as i32);
+                if free(c) && seen.insert(c) {
+                    queue.push_back(c);
+                }
+            }
+            assert!(!seen.is_empty(), "{}: no street mouth fits", dist.name);
+            while let Some((i, j)) = queue.pop_front() {
+                for next in [(i + 1, j), (i - 1, j), (i, j + 1), (i, j - 1)] {
+                    if free(next) && seen.insert(next) {
+                        queue.push_back(next);
+                    }
+                }
+            }
+            let mut targets = vec![("the centre", dist.center)];
+            if let Some(k) = LANDMARKS.iter().find(|(ld, _)| *ld == d).map(|(_, k)| *k) {
+                let base = crate::plugins::world::landmark_plot_base(d).expect("plot");
+                targets.push(("the landmark", Vec2::new(base.x, base.y - 16.0)));
+                assert!(k.is_landmark());
+            }
+            for (what, p) in targets {
+                let o = ((p - dist.center) / 4.0).round();
+                assert!(
+                    seen.contains(&(o.x as i32, o.y as i32)),
+                    "{}: no two-tile lane to {what} at {p:?}",
+                    dist.name
+                );
+            }
+        }
     }
 
     /// Points just inside `d`'s plaza edge where a street meets it (the
@@ -2103,6 +2430,58 @@ mod tests {
                 vec![(13..=23, None)],
                 7..=28,
             ),
+            // The density pass (REF-116..121, REF-128, REF-129).
+            // The frame: the uprights' tops (row 14) to their feet.
+            (
+                PropKind::Grindstone,
+                "solid over the frame",
+                vec![(14..=29, None)],
+                4..=29,
+            ),
+            (
+                PropKind::Ingots,
+                "solid over the stack",
+                vec![(18..=30, None)],
+                18..=30,
+            ),
+            (
+                PropKind::Bellows,
+                "solid over the stand",
+                vec![(19..=29, None)],
+                5..=29,
+            ),
+            // Top rail (row 8) to the feet; the hilts above are not solid.
+            (
+                PropKind::WeaponRack,
+                "solid over the rack",
+                vec![(8..=29, None)],
+                1..=29,
+            ),
+            (
+                PropKind::Workbench,
+                "solid over\n// the bench",
+                vec![(15..=29, None)],
+                9..=29,
+            ),
+            // The bucket and its handle, west of the shovel (cols 17..27).
+            (
+                PropKind::BucketShovel,
+                "solid over the\n// bucket",
+                vec![(14..=29, Some(0..=15))],
+                1..=30,
+            ),
+            (
+                PropKind::Strongbox,
+                "solid over the\n// chest",
+                vec![(12..=29, None)],
+                12..=29,
+            ),
+            (
+                PropKind::Planter,
+                "solid over the planter",
+                vec![(21..=29, None)],
+                2..=29,
+            ),
         ];
         for (kind, phrase, parts, visual) in cases {
             let src = ref_src(kind).expect("a ref");
@@ -2377,7 +2756,8 @@ mod tests {
             );
         }
         // The north street: down to the tower, which stops a straight walk,
-        // then round its east side and between the well and the crates.
+        // then round either side of it and down the two-tile lane between
+        // the well and the barrels (west) or the crates (east).
         let tower = PropKind::BellTower
             .solid_at(crate::plugins::world::landmark_plot_base(0).expect("plot"));
         let street = Vec2::new(8.0, h);
@@ -2387,17 +2767,17 @@ mod tests {
             "walked through the tower: {straight:?}"
         );
         let above = tower.max.y - PLAYER_FOOT.min.y + 2.0;
-        let mut p = street;
-        for to in [
-            Vec2::new(8.0, above),
-            Vec2::new(40.0, above),
-            Vec2::new(40.0, 170.0),
-            Vec2::new(20.0, 170.0),
-            Vec2::new(20.0, 0.0),
-            PLAYER_SPAWN,
-        ] {
-            p = slide_move(p, to - p, PLAYER_FOOT, &solids);
-            assert!(p.distance(to) < 0.01, "stopped at {p:?} heading for {to:?}");
+        for side in [-1.0, 1.0] {
+            let mut p = street;
+            for to in [
+                Vec2::new(8.0, above),
+                Vec2::new(44.0 * side, above),
+                Vec2::new(44.0 * side, 60.0),
+                PLAYER_SPAWN,
+            ] {
+                p = slide_move(p, to - p, PLAYER_FOOT, &solids);
+                assert!(p.distance(to) < 0.01, "stopped at {p:?} heading for {to:?}");
+            }
         }
     }
 }

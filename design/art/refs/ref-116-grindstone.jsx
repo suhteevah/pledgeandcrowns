@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-116 - Grindstone, Act 6 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/grindstone.png.
 //
 // A stone-grey wheel with a basalt rim and a brass hub in a bronze
 // frame, a crank on the right, a water tray below. Bottom-centre

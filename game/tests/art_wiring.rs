@@ -668,3 +668,71 @@ fn the_demo_plaza_set_ships_its_approved_renders() {
         assert!(!src.contains("Not wired yet"), "{jsx} still says not wired");
     }
 }
+
+/// The density pass set (approved by Matt 2026-11-18): the REF-116..121
+/// Forge yard props, the REF-128 strongbox and the REF-129 planter ship
+/// byte-identical to their renders, preloaded, 32x32, with approval
+/// headers naming their game file and no DRAFT left.
+#[test]
+fn the_density_pass_set_ships_its_approved_renders() {
+    use pledge_and_crown::assets::{
+        ALL_SPRITE_PATHS, SPRITE_PROP_BELLOWS, SPRITE_PROP_BUCKET_SHOVEL, SPRITE_PROP_GRINDSTONE,
+        SPRITE_PROP_INGOTS, SPRITE_PROP_PLANTER, SPRITE_PROP_STRONGBOX, SPRITE_PROP_WEAPON_RACK,
+        SPRITE_PROP_WORKBENCH,
+    };
+    let root = game_assets();
+    let refs = refs_dir();
+    for (path, file, n, jsx) in [
+        (
+            SPRITE_PROP_GRINDSTONE,
+            "grindstone",
+            116,
+            "ref-116-grindstone.jsx",
+        ),
+        (SPRITE_PROP_INGOTS, "ingots", 117, "ref-117-ingots.jsx"),
+        (SPRITE_PROP_BELLOWS, "bellows", 118, "ref-118-bellows.jsx"),
+        (
+            SPRITE_PROP_WEAPON_RACK,
+            "weapon_rack",
+            119,
+            "ref-119-weaponrack.jsx",
+        ),
+        (
+            SPRITE_PROP_WORKBENCH,
+            "workbench",
+            120,
+            "ref-120-workbench.jsx",
+        ),
+        (
+            SPRITE_PROP_BUCKET_SHOVEL,
+            "bucket_shovel",
+            121,
+            "ref-121-bucketshovel.jsx",
+        ),
+        (
+            SPRITE_PROP_STRONGBOX,
+            "strongbox",
+            128,
+            "ref-128-strongbox.jsx",
+        ),
+        (SPRITE_PROP_PLANTER, "planter", 129, "ref-129-planter.jsx"),
+    ] {
+        let want = format!("sprites/props/{file}.png");
+        let render = format!("png/REF{n}.png");
+        assert_eq!(path, want);
+        assert!(ALL_SPRITE_PATHS.contains(&path), "{path} is not preloaded");
+        assert!(
+            read(&root.join(path)) == read(&refs.join(&render)),
+            "{path} is not the {render} render"
+        );
+        assert_eq!(png_size(&root.join(path)), (32, 32), "{path}");
+        let src = std::fs::read_to_string(refs.join(jsx)).expect(jsx);
+        let header = format!("// APPROVED by Matt 2026-11-18. Wired as game/assets/{want}.");
+        assert!(
+            src.lines().any(|l| l.trim_end() == header),
+            "{jsx}: no approval header"
+        );
+        assert!(!src.contains("DRAFT"), "{jsx} still says DRAFT");
+        assert!(!src.contains("Not wired yet"), "{jsx} still says not wired");
+    }
+}

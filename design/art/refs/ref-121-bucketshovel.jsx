@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-121 - Bucket and shovel, Act 6 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/bucket_shovel.png.
 //
 // A stone-grey iron bucket of water with two basalt bands and a wire
 // handle, and a coal shovel stood on its blade beside it. A small

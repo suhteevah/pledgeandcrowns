@@ -281,6 +281,12 @@ runs `scripts/ci.ps1` on the merged result as the sign-off gate.
   at things (`District::cast`), Ferris unmoved. The Borrow Checker is a
   Hearthstone NPC, so the gate's keeper is the Auditor. Capture:
   `scene-district-{hearthstone-square,market-row,the-commons}[-yard].png`.
+- **Density pass 2026-11-18:** REF-116..121, REF-128, REF-129 wired; props
+  per plaza (landmark incl.) Hearthstone 18->45, Market Row 13->38, The
+  Commons 15->42, the Forge 5->34, composed as scenes with two-tile lanes
+  (`prop::tests::lanes_from_the_streets_are_two_tiles_wide`); the casts
+  gather 2-3 to a prop, centres >= 56 px apart (`world::CAST_MIN_SPACING`).
+  Overview captures now fit the whole plaza.
 - **Awaiting approval:** no landmark.
 - **Not drawn:** boss intro/defeat frames (Librarian, Compiler), the
   Librarian's lectern, pixel font pick, title redraw, a renderable Borrow

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-118 - Bellows, Act 6 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/bellows.png.
 //
 // A wine-leather bellows with crypt-dark folds on a brass-wood stand,
 // a brass nozzle to the right (point it at the furnace) and a bronze

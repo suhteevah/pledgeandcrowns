@@ -13,7 +13,8 @@ use pledge_and_crown::plugins::npc::{INTERACT_RADIUS_PX, NPC_ROSTER, TALK_SPOT_O
 use pledge_and_crown::plugins::player::PLAYER_FOOT;
 use pledge_and_crown::plugins::prop::{Aabb, all_props};
 use pledge_and_crown::plugins::world::{
-    DISTRICTS, Ground, PLAYER_SPAWN, WORLD_HALF_H, WORLD_HALF_W, district_slot, ground_at,
+    CAST_MIN_SPACING, DISTRICTS, Ground, PLAYER_SPAWN, WORLD_HALF_H, WORLD_HALF_W, district_slot,
+    ground_at,
 };
 
 const TILE: f32 = 16.0;
@@ -246,91 +247,13 @@ fn acts_9_and_10_stand_in_the_library_and_the_throne() {
     );
 }
 
-/// The Act 6 cast stands at the Forge's yard, not in a grid: the Smelter
-/// at the Great Furnace's mouth, the Riveter at the anvil, the Bondsmith at
-/// the quench trough, the Sifter at the coal heap, the Tallywright at the
-/// tool rack, each one clear tile (16 px) beside their thing; the
-/// Keymaster by the street where it comes in. Same roster order, ids and
-/// missions as before.
+/// The four dressed plazas' casts (the Forge, Act 6, and the free demo's
+/// Hearthstone Square, Market Row and The Commons) are placed by hand:
+/// one spot per roster slot, the roster order, names and missions as
+/// before.
 #[test]
-fn the_forge_cast_stands_at_their_work() {
-    use pledge_and_crown::plugins::prop::{DISTRICT_PROPS, LANDMARKS, PropKind};
-    use pledge_and_crown::plugins::world::landmark_plot_base;
-    let forge = DISTRICTS
-        .iter()
-        .position(|d| d.name == "The Forge")
-        .expect("the Forge");
-    let d = &DISTRICTS[forge];
-    assert_eq!(d.cast.len(), d.count, "every Forge NPC is placed by hand");
-    let first: usize = DISTRICTS[..forge].iter().map(|x| x.count).sum();
-    let cast: Vec<(&str, &str)> = NPC_ROSTER[first..first + d.count]
-        .iter()
-        .map(|s| (s.name, s.mission_id))
-        .collect();
-    assert_eq!(
-        cast,
-        [
-            ("The Keymaster", "hashmap_basic"),
-            ("The Sifter", "iter_filter"),
-            ("The Smelter", "iter_fold"),
-            ("The Tallywright", "iter_enumerate"),
-            ("The Riveter", "iter_zip"),
-            ("The Bondsmith", "closure_move"),
-        ],
-        "the Act 6 roster is unchanged"
-    );
-    let slot = |name: &str| {
-        let i = NPC_ROSTER
-            .iter()
-            .position(|s| s.name == name)
-            .unwrap_or_else(|| panic!("{name}"));
-        sprite_rect(i)
-    };
-    let prop_rect = |kind: PropKind| {
-        let base = if LANDMARKS.contains(&(forge, kind)) {
-            landmark_plot_base(forge).expect("plot")
-        } else {
-            let (_, _, off) = DISTRICT_PROPS
-                .iter()
-                .find(|(pd, k, _)| *pd == forge && *k == kind)
-                .unwrap_or_else(|| panic!("{kind:?} in the Forge"));
-            d.center + *off
-        };
-        kind.sprite_rect_at(base)
-    };
-    for (npc, kind) in [
-        ("The Smelter", PropKind::GreatFurnace),
-        ("The Riveter", PropKind::Anvil),
-        ("The Bondsmith", PropKind::QuenchTrough),
-        ("The Sifter", PropKind::CoalHeap),
-        ("The Tallywright", PropKind::ToolRack),
-    ] {
-        let g = gap(&slot(npc), &prop_rect(kind));
-        assert!(
-            (TILE..=TILE + 0.5).contains(&g),
-            "{npc} stands {g} px from the {kind:?}, not one tile"
-        );
-    }
-    // The Keymaster: in the east half, just south of where the street
-    // comes in (its three road rows span -20..+28 from the centre).
-    let k = slot("The Keymaster");
-    assert!(k.min.x > d.center.x && k.max.y < d.center.y - 24.0, "{k:?}");
-}
-
-/// The free demo's casts stand at things in their dressed plazas, not in
-/// a grid, each one clear tile (16 px) from the nearest prop of the kind
-/// they are matched with. Matches by the mission registry where it has
-/// one: the Bellringer (`loop_break`) at the Bell Tower, the Cooper
-/// (`vec_iter`, his barrel) at the barrels, the Cartographer
-/// (`if_else_sign`, the road fork) at a signpost, the Borrow Checker
-/// (whose trial ends with the Lifetime Lantern, `bridge_lantern`) at the
-/// lantern posts. Ferris stays where the grid stood him. Same roster
-/// order, ids and missions as before.
-#[test]
-fn the_demo_casts_stand_at_their_things() {
-    use pledge_and_crown::plugins::prop::{DISTRICT_PROPS, LANDMARKS, PropKind};
-    use pledge_and_crown::plugins::world::landmark_plot_base;
-    let casts: [(&str, &[(&str, &str)]); 3] = [
+fn the_dressed_casts_keep_their_roster() {
+    let casts: [(&str, &[(&str, &str)]); 4] = [
         (
             "Hearthstone Square",
             &[
@@ -367,33 +290,59 @@ fn the_demo_casts_stand_at_their_things() {
                 ("The Heraldic Sage", "enum_match"),
             ],
         ),
+        (
+            "The Forge",
+            &[
+                ("The Keymaster", "hashmap_basic"),
+                ("The Sifter", "iter_filter"),
+                ("The Smelter", "iter_fold"),
+                ("The Tallywright", "iter_enumerate"),
+                ("The Riveter", "iter_zip"),
+                ("The Bondsmith", "closure_move"),
+            ],
+        ),
     ];
-    let mut first = 0usize;
     for (name, want) in casts {
-        let d = DISTRICTS
+        let d_index = DISTRICTS
             .iter()
-            .find(|x| x.name == name)
+            .position(|x| x.name == name)
             .unwrap_or_else(|| panic!("{name}"));
+        let d = &DISTRICTS[d_index];
         assert_eq!(d.cast.len(), d.count, "{name}: every NPC is placed by hand");
+        let first: usize = DISTRICTS[..d_index].iter().map(|x| x.count).sum();
         let got: Vec<(&str, &str)> = NPC_ROSTER[first..first + d.count]
             .iter()
             .map(|s| (s.name, s.mission_id))
             .collect();
         assert_eq!(got, want, "{name}: the roster is unchanged");
-        first += d.count;
     }
+    // Ferris has not moved: the first quest finds him where it always did.
+    assert_eq!(district_slot(0), Vec2::new(-228.0, -228.0));
+}
+
+/// The townsfolk gather at props where people would stand together: each
+/// dressed plaza reads as two or three small groups, not an even
+/// sprinkle. Every NPC listed stands within reach of their prop (their
+/// sprite at most one tile, 16 px, from the nearest placed prop of that
+/// kind, never on it), and a group's members stand together (each within
+/// 96 px of another member) yet at least `CAST_MIN_SPACING` apart (checked
+/// for every pair in `npc_placement_invariants`), so the player can pick
+/// each one with F. The rest stand alone at their own thing.
+#[test]
+fn the_dressed_casts_gather_at_their_props() {
+    use pledge_and_crown::plugins::prop::{DISTRICT_PROPS, LANDMARKS, PropKind};
+    use pledge_and_crown::plugins::world::landmark_plot_base;
     let district = |name: &str| {
         DISTRICTS
             .iter()
             .position(|d| d.name == name)
             .unwrap_or_else(|| panic!("{name}"))
     };
-    let slot = |name: &str| {
-        let i = NPC_ROSTER
+    let index = |name: &str| {
+        NPC_ROSTER
             .iter()
             .position(|s| s.name == name)
-            .unwrap_or_else(|| panic!("{name}"));
-        sprite_rect(i)
+            .unwrap_or_else(|| panic!("{name}"))
     };
     // Every placed prop of `kind` in district `d`, as sprite rectangles.
     let rects = |d: usize, kind: PropKind| -> Vec<Aabb> {
@@ -407,50 +356,118 @@ fn the_demo_casts_stand_at_their_things() {
         }
         out
     };
-    for (plaza, npc, kind) in [
-        ("Hearthstone Square", "The Bellringer", PropKind::BellTower),
-        ("Hearthstone Square", "The Herald", PropKind::BellTower),
-        ("Hearthstone Square", "The Smith", PropKind::Woodpile),
-        ("Hearthstone Square", "The Cartographer", PropKind::Signpost),
-        ("Hearthstone Square", "The Oracle", PropKind::Well),
-        ("Hearthstone Square", "The Cooper", PropKind::Barrels),
-        (
-            "Hearthstone Square",
-            "The Borrow Checker",
-            PropKind::LanternPost,
-        ),
-        ("Hearthstone Square", "Trait Mage", PropKind::Bench),
-        ("Market Row", "The Twin", PropKind::MarketStall),
-        ("Market Row", "The Tinker", PropKind::Handcart),
-        ("Market Row", "The Forgewright", PropKind::Barrels),
-        ("Market Row", "The Linguist", PropKind::Bench),
-        ("Market Row", "The Pilgrim", PropKind::LanternPost),
-        ("Market Row", "The Drillmaster", PropKind::Crates),
-        ("The Commons", "The Reckoner", PropKind::Bench),
-        ("The Commons", "The Quartermaster", PropKind::Crates),
-        ("The Commons", "The Auditor", PropKind::CheckersGate),
-        ("The Commons", "The Chronicler", PropKind::Bench),
-        ("The Commons", "The Alchemist", PropKind::LanternPost),
-        ("The Commons", "The Heraldic Sage", PropKind::Fence),
-    ] {
-        let d = district(plaza);
-        let me = slot(npc);
-        let g = rects(d, kind)
+    let within_reach = |plaza: &str, npc: &str, kind: PropKind| {
+        let me = sprite_rect(index(npc));
+        let g = rects(district(plaza), kind)
             .iter()
             .map(|r| gap(&me, r))
             .fold(f32::MAX, f32::min);
         assert!(
-            (TILE..=TILE + 0.5).contains(&g),
-            "{npc} stands {g} px from the nearest {kind:?} in {plaza}, not one tile"
+            (0.0..=TILE).contains(&g),
+            "{npc} stands {g} px from the nearest {kind:?} in {plaza}"
         );
+    };
+    // (plaza, the prop they gather at, who)
+    let groups: [(&str, PropKind, &[&str]); 8] = [
+        (
+            "Hearthstone Square",
+            PropKind::Well,
+            &["The Oracle", "The Cooper", "The Herald"],
+        ),
+        (
+            "Hearthstone Square",
+            PropKind::LanternPost,
+            &["The Borrow Checker", "Trait Mage"],
+        ),
+        (
+            "Market Row",
+            PropKind::MarketStall,
+            &["The Drillmaster", "The Twin", "The Forgewright"],
+        ),
+        (
+            "Market Row",
+            PropKind::Handcart,
+            &["The Tinker", "The Pilgrim"],
+        ),
+        (
+            "The Commons",
+            PropKind::CheckersGate,
+            &["The Auditor", "The Heraldic Sage"],
+        ),
+        (
+            "The Commons",
+            PropKind::Bench,
+            &["The Reckoner", "The Chronicler"],
+        ),
+        ("The Forge", PropKind::GreatFurnace, &["The Smelter"]),
+        ("The Forge", PropKind::WeaponRack, &["The Tallywright"]),
+    ];
+    for (plaza, kind, who) in groups {
+        for npc in who {
+            within_reach(plaza, npc, kind);
+        }
+    }
+    // Members gathered with a group at a neighbouring prop of the same
+    // scene, and the people who stand alone.
+    for (plaza, npc, kind) in [
+        // The furnace mouth: the Riveter at the anvil, the Bondsmith at
+        // the quench trough, either side of the Smelter.
+        ("The Forge", "The Riveter", PropKind::Anvil),
+        ("The Forge", "The Bondsmith", PropKind::QuenchTrough),
+        // The work corner: the Keymaster at the workbench beside the
+        // Tallywright.
+        ("The Forge", "The Keymaster", PropKind::Workbench),
+        // The seating corner: the Alchemist at its lantern post.
+        ("The Commons", "The Alchemist", PropKind::LanternPost),
+        // Alone at their own thing.
+        ("Hearthstone Square", "The Bellringer", PropKind::BellTower),
+        ("Hearthstone Square", "The Smith", PropKind::Woodpile),
+        ("Hearthstone Square", "The Cartographer", PropKind::Signpost),
+        ("Hearthstone Square", "The Cooper", PropKind::Barrels),
+        ("Market Row", "The Linguist", PropKind::Bench),
+        ("The Commons", "The Quartermaster", PropKind::Crates),
+        ("The Forge", "The Sifter", PropKind::CoalHeap),
+    ] {
+        within_reach(plaza, npc, kind);
+    }
+    // Who stands together: each member within 96 px of another member.
+    let gatherings: [&[&str]; 8] = [
+        &["The Oracle", "The Cooper", "The Herald"],
+        &["The Borrow Checker", "Trait Mage"],
+        &["The Drillmaster", "The Twin", "The Forgewright"],
+        &["The Tinker", "The Pilgrim"],
+        &["The Auditor", "The Heraldic Sage"],
+        &["The Reckoner", "The Chronicler", "The Alchemist"],
+        &["The Riveter", "The Smelter", "The Bondsmith"],
+        &["The Tallywright", "The Keymaster"],
+    ];
+    for group in gatherings {
+        for a in group {
+            let pa = district_slot(index(a));
+            let nearest = group
+                .iter()
+                .filter(|b| *b != a)
+                .map(|b| district_slot(index(b)).distance(pa))
+                .fold(f32::MAX, f32::min);
+            assert!(
+                nearest <= 96.0,
+                "{a} stands {nearest} px from the rest of {group:?}"
+            );
+        }
     }
     // The Borrow Checker stands between his two lantern posts.
-    let checker = slot("The Borrow Checker");
+    let checker = sprite_rect(index("The Borrow Checker"));
     let lanterns = rects(district("Hearthstone Square"), PropKind::LanternPost);
-    assert!(lanterns.iter().any(|r| r.max.x <= checker.min.x));
-    assert!(lanterns.iter().any(|r| r.min.x >= checker.max.x));
-    // Ferris has not moved: the first quest finds him where it always did.
-    assert_eq!(district_slot(0), Vec2::new(-228.0, -228.0));
+    assert!(
+        lanterns
+            .iter()
+            .any(|r| r.max.x <= checker.min.x && r.min.y < checker.max.y)
+    );
+    assert!(
+        lanterns
+            .iter()
+            .any(|r| r.min.x >= checker.max.x && r.min.y < checker.max.y)
+    );
 }
 
 /// The placement gate for every roster NPC, so a new act cannot put a
@@ -461,8 +478,9 @@ fn the_demo_casts_stand_at_their_things() {
 /// 3. no prop's sprite overlaps it (so not its collision box either);
 /// 4. the talk spot in front (south) is in range, nearest to this NPC, on the
 ///    same ground, clear of every prop's collision box and every other NPC;
-/// 5. any two NPC sprites are at least two tiles apart, and none is within
-///    two tiles of the new-game player spawn.
+/// 5. no two NPC sprites overlap and any two centres are at least
+///    `CAST_MIN_SPACING` (two talk radii) apart, so no spot is in talk
+///    range of two NPCs; none is within two tiles of the new-game spawn.
 #[test]
 fn npc_placement_invariants() {
     assert!(TALK_SPOT_OFFSET.length() <= INTERACT_RADIUS_PX);
@@ -543,11 +561,18 @@ fn npc_placement_invariants() {
             }
         }
 
-        // 5. Spacing.
+        // 5. Spacing: sprites never overlap, and centres keep
+        // `CAST_MIN_SPACING` (two talk radii) apart, so no spot is in talk
+        // range of two NPCs at once (people gathered at one prop stand
+        // close, but each is clearly their own F-press).
         for (j, other) in rects.iter().enumerate().skip(i + 1) {
-            if gap(&rect, other) < 2.0 * TILE {
+            if other.overlaps(&rect) {
+                failures.push(format!("{name}: overlaps {}", NPC_ROSTER[j].name));
+            }
+            let d = district_slot(j).distance(pos);
+            if d < CAST_MIN_SPACING {
                 failures.push(format!(
-                    "{name}: within two tiles of {}",
+                    "{name}: {d} px from {}, under {CAST_MIN_SPACING}",
                     NPC_ROSTER[j].name
                 ));
             }

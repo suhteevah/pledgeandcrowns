@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-119 - Weapon rack, Act 6 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/weapon_rack.png.
 //
 // Three finished swords, points down, in a brass-wood rack: aged-paper
 // and stone-grey blades, old-gold guards, bronze grips. What the Forge

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-117 - Ingot stack, Act 6 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/ingots.png.
 //
 // Five stone-grey iron bars stacked three and two on a bronze pallet,
 // with one old-gold bar on top (one specular-white pixel). Bottom-centre

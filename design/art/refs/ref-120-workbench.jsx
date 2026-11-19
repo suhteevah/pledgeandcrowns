@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-120 - Workbench, Act 6 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/workbench.png.
 //
 // A brass-wood bench with a shelf, a stone-grey vice on the left and a
 // bar of hot metal cooling on the right: gold to parchment cream at its

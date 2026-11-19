@@ -215,6 +215,19 @@ pub const SPRITE_PROP_LANTERN_POST: &str = "sprites/props/lantern_post.png";
 pub const SPRITE_PROP_BENCH: &str = "sprites/props/bench.png";
 pub const SPRITE_PROP_FENCE: &str = "sprites/props/fence.png";
 pub const SPRITE_PROP_CHICKEN_COOP: &str = "sprites/props/chicken_coop.png";
+// The density pass (approved by Matt 2026-11-18): the Forge yard set
+// REF-116 grindstone, REF-117 ingots, REF-118 bellows, REF-119 weapon
+// rack, REF-120 workbench, REF-121 bucket and shovel, plus REF-128
+// strongbox and REF-129 planter, all 32x32 and used in any plaza where
+// they fit. Bottom-centre anchor, y-sorted, solid per their ref headers.
+pub const SPRITE_PROP_GRINDSTONE: &str = "sprites/props/grindstone.png";
+pub const SPRITE_PROP_INGOTS: &str = "sprites/props/ingots.png";
+pub const SPRITE_PROP_BELLOWS: &str = "sprites/props/bellows.png";
+pub const SPRITE_PROP_WEAPON_RACK: &str = "sprites/props/weapon_rack.png";
+pub const SPRITE_PROP_WORKBENCH: &str = "sprites/props/workbench.png";
+pub const SPRITE_PROP_BUCKET_SHOVEL: &str = "sprites/props/bucket_shovel.png";
+pub const SPRITE_PROP_STRONGBOX: &str = "sprites/props/strongbox.png";
+pub const SPRITE_PROP_PLANTER: &str = "sprites/props/planter.png";
 
 // Audio (Stable Audio Open generated, baked via tools/synthwave-gen).
 // Generation is a Matt-action: `powershell -ExecutionPolicy Bypass
@@ -342,4 +355,12 @@ pub const ALL_SPRITE_PATHS: &[&str] = &[
     SPRITE_PROP_BENCH,
     SPRITE_PROP_FENCE,
     SPRITE_PROP_CHICKEN_COOP,
+    SPRITE_PROP_GRINDSTONE,
+    SPRITE_PROP_INGOTS,
+    SPRITE_PROP_BELLOWS,
+    SPRITE_PROP_WEAPON_RACK,
+    SPRITE_PROP_WORKBENCH,
+    SPRITE_PROP_BUCKET_SHOVEL,
+    SPRITE_PROP_STRONGBOX,
+    SPRITE_PROP_PLANTER,
 ];
