@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT
 // REF-179 - Townsfolk: girl, 32x32. Ambient villager, gives no mission.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// DRAFT 2026-11-19. NOT approved, NOT wired. Awaiting Matt on the design canvas.
 //
 // Child height. Old-gold hair with a brass-leaf lock and two braids
 // tied with wine ribbons, a mist-teal smock over a teal skirt.
-// For anywhere a parent stands, and beside the boy.
+// Third drawing: the head is kept, the body is new. Her hands are
+// clasped in front of her. For anywhere a parent stands, and
+// beside the boy.
 //
 // Legend: X coalblack  G old gold  L brass leaf  N antique brass
 //         P pink quartz  R dusty rose  W wineflesh  M mist teal
@@ -28,20 +30,20 @@ const REF179_GRID = [
   '........XGXPPPRRRRPPWXGX........', // 13
   '..........XPPPRWWRPPRX..........', // 14
   '...........XXPRRRRWXX...........', // 15
-  '........XXXMMMIIIIMMMIXXX.......', // 16 smock
-  '......XXMMMMTTTTTTTTMMMIIXX.....', // 17
-  '.....XMMMMIXIITTTTTTXMMMIIX.....', // 18
-  '.....XMMMIIXITTTTTTTXMMIIIX.....', // 19
-  '.....XPPRXXXITTTTTTTXXXPPRX.....', // 20
-  '.....XPRRX.XITTTTTTDX.XPRRX.....', // 21
-  '.........XTXITTTTTTDXTX.........', // 22
-  '.........XTXXXXXXXXXXTX.........', // 23
-  '.........XTTTTTTTTTTTDX.........', // 24 skirt
-  '.........XDDDDDDDDDDDDX.........', // 25
-  '.........XXXXXXXXXXXXXX.........', // 26
-  '..........XUUX....XUUX..........', // 27
-  '..........XXXX....XXXX..........', // 28
-  '................................', // 29
+  '........XXXCMMMMMMMMIXXX........', // 16 smock
+  '.......XCMMMMMMMMMMMMMIIX.......', // 17
+  '.......XCMMXMMMMMMMMXMIIX.......', // 18
+  '.......XCMMMXMMMMMMXMIIIX.......', // 19
+  '........XXMMMMMPPRMIIIXX........', // 20 clasped hands
+  '.........XXXXXXXXXXXXXX.........', // 21
+  '.........XTTTTTTTTTTTDX.........', // 22 skirt
+  '........XTTTTTTTTTTTTTDX........', // 23
+  '........XTTTTTTTTTTTTTDX........', // 24
+  '........XTITTTTTTTTTTTDX........', // 25
+  '........XDDDDDDDDDDDDDDX........', // 26
+  '........XXXXXXXXXXXXXXXX........', // 27
+  '..........XUUX....XUUX..........', // 28
+  '..........XXXX....XXXX..........', // 29
   '................................', // 30
   '................................', // 31
 ];

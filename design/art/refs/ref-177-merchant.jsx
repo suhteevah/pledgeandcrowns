@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: MIT
 // REF-177 - Townsfolk: merchant, 32x32. Ambient villager, gives no mission.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// DRAFT 2026-11-19. NOT approved, NOT wired. Awaiting Matt on the design canvas.
 //
 // A wide forest cap with a brass-leaf feather, a waxed basalt
-// moustache, a cobalt doublet with gold buttons down the front.
-// For the market stall and the Guildhall.
+// moustache, a cobalt doublet with gold buttons. Third drawing: the
+// head is kept, the body is new. He is broad, with his arms folded
+// across his chest. For the market stall and the Guildhall.
 //
 // Legend: X coalblack  E forest  F pine  H spring meadow
 //         L brass leaf  G old gold  P pink quartz  R dusty rose
-//         W wineflesh  B basalt  > cobalt  < cobalt deep
-//         U bog umber
+//         W wineflesh  B basalt  Z bronze  > cobalt
+//         < cobalt deep  U bog umber
 
 const REF177_GRID = [
   '................................', //  0
@@ -24,19 +25,19 @@ const REF177_GRID = [
   '..........XPBBRRRRBBWX..........', //  9 moustache
   '..........XPPBBWWBBPRX..........', // 10
   '...........XXPRRRRWXX...........', // 11
-  '........XXX>>><<<<>>><XXX.......', // 12 doublet
-  '......XX>>>>>>>G>>>>>>><<XX.....', // 13
-  '.....X>>>><XLL>>>>>>X>>><<X.....', // 14
-  '.....X>>><<XL>>>>>>>X>><<<X.....', // 15
-  '.....XPPRXXXL>>G>>>>XXXPPRX.....', // 16
-  '.....XPRRX.XL>>>>>><X.XPRRX.....', // 17
-  '......XXX..XL>>>>>><X..XXX......', // 18
-  '..........XXL>>G>>><XX..........', // 19
-  '.........XBXL>>GG>><XBX.........', // 20
-  '.........XBXL>>>>>><XBX.........', // 21
-  '.........XBXL>>G>>><XBX.........', // 22
-  '.........XBXXXXXXXXXXBX.........', // 23
-  '.........XBBBBBXXBBBBBX.........', // 24
+  '........XXX>>>>>>>>><XXX........', // 12
+  '.......X>>>>>>>G>>>>>><<X.......', // 13
+  '......X>>>>>>>>>>>>>>>><<X......', // 14
+  '......X>>XXXXXXXXXXXXXX><X......', // 15 folded arms
+  '......X>>XPP>>>>>>>>><X><X......', // 16
+  '......X>>X>>>>>>>>><PPX><X......', // 17
+  '......XXXXXXXXXXXXXXXXXXXX......', // 18
+  '.........X>>>>>G>>>>><X.........', // 19
+  '.........XZZZZZGGZZZZZX.........', // 20 belt
+  '.........X>>>>>G>>>>><X.........', // 21
+  '.........XXXXXXXXXXXXXX.........', // 22
+  '.........XBBBBBXXBBBBBX.........', // 23
+  '.........XBBBBX..XBBBBX.........', // 24
   '.........XBBBBX..XBBBBX.........', // 25
   '.........XBBBBX..XBBBBX.........', // 26
   '.........XUUUUX..XUUUUX.........', // 27

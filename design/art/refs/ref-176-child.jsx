@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT
 // REF-176 - Townsfolk: boy, 32x32. Ambient villager, gives no mission.
-// DRAFT 2026-11-18. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// DRAFT 2026-11-19. NOT approved, NOT wired. Awaiting Matt on the design canvas.
 //
 // Four pixels shorter than an adult with the same size head, a mop
 // of bronze hair with a brass-lit lock, a dusty-rose tunic, cobalt
-// trousers. For anywhere a parent stands.
+// trousers. Third drawing: the head is kept, the body is new. One
+// arm is up in a wave, the other at his side. For anywhere a
+// parent stands.
 //
 // Legend: X coalblack  Z bronze  N antique brass  U bog umber
 //         P pink quartz  R dusty rose  W wineflesh  L brass leaf
@@ -21,26 +23,26 @@ const REF176_GRID = [
   '..........XXXXXXXXXXXX..........', //  7 head
   '..........XZZZZNZZZZUX..........', //  8
   '..........XZZPPPPPZZUX..........', //  9
-  '..........XPXXPPPPXXRX..........', // 10
-  '..........XPPXPPPPXPRX..........', // 11
-  '..........XPPPPRRPPPWX..........', // 12
-  '..........XPPPRRRRPPWX..........', // 13
-  '..........XPPPRWWRPPRX..........', // 14
-  '...........XXPRRRRWXX...........', // 15
-  '........XXXRRRWWWWRRRWXXX.......', // 16 tunic
-  '......XXRRRRRRRRRRRRRRRWWXX.....', // 17
-  '.....XRRRRWXRRRRRRRRXRRRWWX.....', // 18
-  '.....XRRRWWXRRRRRRRRXRRWWWX.....', // 19
-  '.....XPPRXXXRRRRRRRRXXXPPRX.....', // 20
-  '.....XPRRX.XRRRRRRRWX.XPRRX.....', // 21
-  '.........X<XRRRRRRRWX<X.........', // 22
-  '.........X<XXXXXXXXXX<X.........', // 23
-  '.........X<<<<<XX<<<<<X.........', // 24 trousers
-  '.........X<<<<X..X<<<<X.........', // 25
-  '.........X<<<<X..X<<<<X.........', // 26
-  '.........XUUUUX..XUUUUX.........', // 27
-  '........XUUUUUX..XUUUUUX........', // 28
-  '........XXXXXXX..XXXXXXX........', // 29
+  '..........XPXXPPPPXXRX.XXXX.....', // 10
+  '..........XPPXPPPPXPRX.XPRX.....', // 11 waving hand
+  '..........XPPPPRRPPPWX.XPRX.....', // 12
+  '..........XPPPRRRRPPWX.XXXX.....', // 13
+  '..........XPPPRWWRPPRX.XRWX.....', // 14
+  '...........XXPRRRRWXX..XRWX.....', // 15
+  '........XXXRRRRRRRRRWXRRRWX.....', // 16 tunic
+  '.......XRRRRRRRRRRRRRRRRWXX.....', // 17
+  '.......XRRRXRRRRRRRRXXXXX.......', // 18
+  '.......XRRRXZZZLLZZZX...........', // 19
+  '.......XPPRXRRRRRRRWX...........', // 20
+  '........XXXXRRRRRRRWX...........', // 21
+  '...........XXXXXXXXXX...........', // 22
+  '...........X<<<<<<<<X...........', // 23 trousers
+  '...........X<<<XX<<<X...........', // 24
+  '...........X<<<XX<<<X...........', // 25
+  '...........X<<<XX<<<X...........', // 26
+  '...........XUUUXXUUUX...........', // 27
+  '..........XUUUUXXUUUUX..........', // 28
+  '..........XXXXXXXXXXXX..........', // 29
   '................................', // 30
   '................................', // 31
 ];
