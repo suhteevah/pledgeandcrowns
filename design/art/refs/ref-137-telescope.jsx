@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-137 - Telescope, Act 4 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/telescope.png.
 //
 // A brass telescope on a bronze tripod, pointed up and to the right,
 // with a cobalt lens and two bronze collars. Bottom-centre anchor;

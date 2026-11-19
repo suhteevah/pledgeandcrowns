@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-127 - Scroll shelf, Act 3 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/scroll_shelf.png.
 //
 // A bronze shelf unit: a row of books with coloured spines on top,
 // four rolled scrolls seen end-on in the middle, two ledgers lying flat

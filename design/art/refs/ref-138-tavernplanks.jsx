@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-138 - Tavern plank floor, 16x16 tiles, 2-column sheet.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/tiles_village_v3.png (via the REF-76 combined atlas, indices 30-31).
 //
 // Ground for Tavern Row (Act 5): wide bronze floorboards, two to a
 // tile, with a bog-umber seam between them, one butt joint and one

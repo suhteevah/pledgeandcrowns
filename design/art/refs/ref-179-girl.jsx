@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-179 - Townsfolk: girl, 32x32. Ambient villager, gives no mission.
-// DRAFT 2026-11-19. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-19. Not wired yet.
 //
 // Child height. Old-gold hair with a brass-leaf lock and two braids
 // tied with wine ribbons, a mist-teal smock over a teal skirt.

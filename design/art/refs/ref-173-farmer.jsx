@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-173 - Townsfolk: farmer, 32x32. Ambient villager, gives no mission.
-// DRAFT 2026-11-19. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-19. Not wired yet.
 //
 // A hayfield straw hat with a wide brim, bronze hair and a short bronze
 // beard, a forest tunic with a spring-meadow lit edge, bronze

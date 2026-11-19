@@ -7,19 +7,22 @@
 //! those plazas in roster order. Oaks and cottages are sprites, not tiles —
 //! see `prop.rs`.
 //!
-//! Tiles come from the REF-76 village atlas (26 tiles, 8 columns): the 22
-//! REF-66 terrain v2 tiles, the 2 REF-75 plaza flagstones and the 2 REF-97
-//! Forge slabs, copied verbatim (render-refs tests guard the copy). A
-//! tilemap binds one texture, which is why every plaza ground shares the
-//! terrain sheet instead of having its own; a new district ground is
-//! appended to it, so existing indices never move. Two tilemap layers share
-//! it:
+//! Tiles come from the REF-76 village atlas (32 tiles, 8 columns): the 22
+//! REF-66 terrain v2 tiles, the 2 REF-75 plaza flagstones, the 2 REF-97
+//! Forge slabs, the 2 REF-122 Guildhall floor squares, the 2 REF-130 tower
+//! court slabs and the 2 REF-138 tavern planks, copied verbatim
+//! (render-refs tests guard the copy). A tilemap binds one texture, which
+//! is why every plaza ground shares the terrain sheet instead of having its
+//! own; a new district ground is appended to it, so existing indices never
+//! move. Two tilemap layers share it:
 //!
 //! 1. **Base** — every tile is classified [`Ground::Grass`], `Cobble`,
-//!    `Dirt`, `Flagstone` or a district ground (`ForgeSlab`) by
-//!    [`ground_at_tile`]; the variant (grass_a/b/tuft/flowers, cobble_a/b,
-//!    dirt_a/b, flag_a/b, soot_a/b) is picked by a deterministic per-tile
-//!    hash. No tinting. Each plaza is its district's interior ground
+//!    `Dirt`, `Flagstone` or a district ground (`ForgeSlab`, `GuildFloor`,
+//!    `TowerCourt`, `TavernPlanks`) by [`ground_at_tile`]. Grass, cobble
+//!    and dirt variants are picked by a deterministic per-tile hash; a
+//!    paving's two tiles are laid by its own rule ([`Ground::paving`],
+//!    [`Lay`]: mixed, one in n, a chequer, or a ring round the landmark).
+//!    No tinting. Each plaza is its district's interior ground
 //!    ([`District::interior`], flagstone unless named) inside a one-tile
 //!    cobble border (see [`plaza_zone`]), so cobble is always the paving
 //!    that meets grass and roads.
@@ -82,6 +85,20 @@ const T_SOOT_A: u32 = 24;
 const T_SOOT_B: u32 = 25;
 /// One Forge slab tile in this many carries the scorch mark (REF-97).
 const SOOT_B_ONE_IN: u32 = 6;
+/// REF-122 Guildhall floor: aged-paper and stone-grey squares, laid as a
+/// chequer (light where tile x + tile y is even).
+const T_HALL_LIGHT: u32 = 26;
+const T_HALL_DARK: u32 = 27;
+/// REF-130 tower court: a plain slab and a slab with a teal rune inlaid,
+/// the rune slab laid in a ring round the tower ([`RUNE_RING_RADIUS_PX`]).
+const T_COURT_PLAIN: u32 = 28;
+const T_COURT_RUNE: u32 = 29;
+/// Radius of the REF-130 rune ring, from the centre of the Mage's Tower
+/// plot to the tile centres that carry the rune slab.
+const RUNE_RING_RADIUS_PX: f32 = 80.0;
+/// REF-138 tavern floorboards, two tiles mixed freely.
+const T_PLANK_A: u32 = 30;
+const T_PLANK_B: u32 = 31;
 
 /// z of the overlay tilemap; the base layer sits at 0. Y-sorted sprites live
 /// above both (see `prop::ysort_z`).
@@ -248,6 +265,94 @@ const COMMONS_CAST: &[Vec2] = &[
     Vec2::new(44.0, 124.0),
 ];
 
+/// The Guildhall Quarter cast (Act 3), offsets from the plaza centre, in
+/// roster order. The quarter is formal and symmetric: the Guildhall at the
+/// back-centre (base (0, 156)) between a pair of guild banners, archive
+/// wings of scroll shelves and strongboxes either side of it, the ledger
+/// desk in front of its steps, a notice board in each wing, planters
+/// lining the avenue, and a garden of benches to the south; the street
+/// enters through the east edge at about y = 0. Three gatherings: the
+/// ledger desk (the Guildmaster and the Recruiter, who both work on the
+/// guild's `Hero` record: its methods, its `new`), the west notice board
+/// (the Surveyor and the Locksmith) and the east one (the Armorer and the
+/// Porter).
+const GUILDHALL_CAST: &[Vec2] = &[
+    // The Guildmaster (`impl_method`, then the Variant Wraith trial): at
+    // the ledger desk, west side, before the hall steps.
+    Vec2::new(-40.0, 72.0),
+    // The Recruiter (`assoc_new`, `Hero::new`): signing recruits in at
+    // the ledger desk, east side.
+    Vec2::new(40.0, 72.0),
+    // The Locksmith (`if_let`): at the west notice board, east of it.
+    Vec2::new(-128.0, 100.0),
+    // The Porter (`while_let`, the stack he works through): at the east
+    // notice board, west of it, putting up the day's postings.
+    Vec2::new(128.0, 100.0),
+    // The Surveyor (`tuple_struct`, `Meters`): at the west notice board,
+    // west of it, posting measurements.
+    Vec2::new(-208.0, 100.0),
+    // The Armorer (`enum_data_match`, items that carry data): at the east
+    // notice board, east of it.
+    Vec2::new(208.0, 100.0),
+];
+
+/// The Mage's Tower cast (Act 4), offsets from the plaza centre, in
+/// roster order. The court is scholarly and a little strange: the tower
+/// at the back-centre (base (0, 156)) with a crystal either side of its
+/// door, the lectern before it, a reading corner of scroll shelves to the
+/// north-west, the orrery and the telescopes to the east, and a ring of
+/// rune stones round the cauldron in the south; rune slabs ring the tower
+/// in the floor. The street enters through the west edge at about y = 0.
+/// Three gatherings: the lectern (Vexis and the Lanternkeeper), the orrery
+/// (the Wandwright and the Loremaster) and the cauldron (the Conjurer and
+/// the Familiar).
+const TOWER_CAST: &[Vec2] = &[
+    // Vexis the Archmage (`trait_def`, then the Chimera trial): at the
+    // lectern before his tower, west side.
+    Vec2::new(-40.0, 84.0),
+    // The Wandwright (`generic_fn`): at the orrery, west side.
+    Vec2::new(128.0, 60.0),
+    // The Conjurer (`generic_struct`, `Pair<T>`): at the cauldron, west
+    // side, inside the stone ring.
+    Vec2::new(-44.0, -124.0),
+    // The Familiar (`dyn_trait`, elements of every kind in one `Vec`): at
+    // the cauldron, east side.
+    Vec2::new(44.0, -124.0),
+    // The Lanternkeeper (`lifetimes`, the borrow that must not outlive
+    // its book): reading at the lectern, east side.
+    Vec2::new(40.0, 84.0),
+    // The Loremaster (`assoc_type`): at the orrery, east side.
+    Vec2::new(208.0, 60.0),
+];
+
+/// The Tavern Row cast (Act 5), offsets from the plaza centre, in roster
+/// order. The row is crowded and warm: the tavern at the back-centre
+/// (base (0, 156)) with the tab slate by its door and keg racks and
+/// barrels along its flanks, the firepit to the west, trestle tables to
+/// the east, round tables and stools across the south, and a tavern sign
+/// at each street mouth. Streets enter from the north (behind the tavern),
+/// the south, and the west and east at about y = -104. Three gatherings:
+/// the tavern door (the Barkeep, by his tab slate, and the Bouncer), the
+/// firepit (the Interpreter and the Mixologist) and the trestle tables
+/// (the Tabkeeper and the Cellarer).
+const TAVERN_CAST: &[Vec2] = &[
+    // The Barkeep (`result_match`, then the Wager trial): at the tavern
+    // door, west side, by the tab slate.
+    Vec2::new(-40.0, 124.0),
+    // The Bouncer (`custom_error`): at the tavern door, east side.
+    Vec2::new(40.0, 124.0),
+    // The Interpreter (`from_error`): at the firepit, east side.
+    Vec2::new(-56.0, 20.0),
+    // The Mixologist (`option_map`): at the firepit, west side.
+    Vec2::new(-136.0, 20.0),
+    // The Tabkeeper (`and_then`, the chained tab): at the west trestle
+    // table.
+    Vec2::new(96.0, 16.0),
+    // The Cellarer (`unwrap_or_else`, the cellar's fallback): at the east
+    // trestle table.
+    Vec2::new(176.0, 16.0),
+];
+
 /// Hub + a ring of eight quarters + two districts at the ends of the
 /// north-south main street. `count`s sum to the 71-NPC roster
 /// (9 + 8*6 + 7 + 7). Roster order fills them, so the earliest (Act 1-2)
@@ -284,14 +389,18 @@ pub const DISTRICTS: &[District] = &[
         interior: None,
         cast: COMMONS_CAST,
     },
+    // Acts 3-5 (approved 2026-11-18), dressed like the Forge: each its own
+    // ground (REF-122 chequered hall floor, REF-130 court slabs with a
+    // rune ring, REF-138 planks), a landmark (`prop::LANDMARKS`), props
+    // (`prop::DISTRICT_PROPS`) and the cast gathered at them.
     // Act 3: the Guildhall Quarter.
     District {
         name: "Guildhall Quarter",
         center: Vec2::new(-720.0, 700.0),
         plaza_half: 260.0,
         count: 6,
-        interior: None,
-        cast: &[],
+        interior: Some(Ground::GuildFloor),
+        cast: GUILDHALL_CAST,
     },
     // Act 4: the Trait Mage's Tower (Vexis the Archmage's cast).
     District {
@@ -299,8 +408,8 @@ pub const DISTRICTS: &[District] = &[
         center: Vec2::new(720.0, 700.0),
         plaza_half: 260.0,
         count: 6,
-        interior: None,
-        cast: &[],
+        interior: Some(Ground::TowerCourt),
+        cast: TOWER_CAST,
     },
     // Act 5: the Tavern of Tribulations.
     District {
@@ -308,8 +417,8 @@ pub const DISTRICTS: &[District] = &[
         center: Vec2::new(0.0, 800.0),
         plaza_half: 260.0,
         count: 6,
-        interior: None,
-        cast: &[],
+        interior: Some(Ground::TavernPlanks),
+        cast: TAVERN_CAST,
     },
     // Act 6: the Iterator Forge, the first dressed district (R1 wave A1,
     // approved 2026-11-18): REF-97 soot slab inside the cobble ring, the
@@ -581,13 +690,67 @@ pub enum Ground {
     /// Plaza interior of the Forge (REF-97 soot slab), named by the
     /// district's [`District::interior`].
     ForgeSlab,
+    /// Plaza interior of the Guildhall Quarter (REF-122 chequered floor).
+    GuildFloor,
+    /// Plaza interior of the Mage's Tower (REF-130 court slabs).
+    TowerCourt,
+    /// Plaza interior of Tavern Row (REF-138 floorboards).
+    TavernPlanks,
+}
+
+/// How a paving's two tiles are laid across a plaza: per-district ground
+/// data ([`Ground::paving`]), so each district ground states its own rule
+/// in one place.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Lay {
+    /// Either tile on any square, half each, by the per-tile hash
+    /// (REF-75 flagstone, REF-138 planks).
+    Mix,
+    /// The second tile on about one square in `n`, by the per-tile hash
+    /// (REF-97: the scorch mark on one slab in six).
+    OneIn(u32),
+    /// A chequer: the first tile where tile x + tile y is even, the second
+    /// where it is odd, never at random (REF-122).
+    Chequer,
+    /// The second tile on a one-tile ring of `radius` px round the centre
+    /// of the district's landmark plot, the first everywhere else (REF-130:
+    /// the rune slabs ring the Mage's Tower).
+    RingRoundLandmark { radius: f32 },
+}
+
+/// A plaza paving: its two atlas tiles and how they are laid.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Paving {
+    pub first: u32,
+    pub second: u32,
+    pub lay: Lay,
 }
 
 impl Ground {
+    /// The paving a plaza interior of this ground is laid in, or `None`
+    /// for grass, cobble and dirt.
+    pub fn paving(self) -> Option<Paving> {
+        let (first, second, lay) = match self {
+            Ground::Grass | Ground::Cobble | Ground::Dirt => return None,
+            Ground::Flagstone => (T_FLAG_A, T_FLAG_B, Lay::Mix),
+            Ground::ForgeSlab => (T_SOOT_A, T_SOOT_B, Lay::OneIn(SOOT_B_ONE_IN)),
+            Ground::GuildFloor => (T_HALL_LIGHT, T_HALL_DARK, Lay::Chequer),
+            Ground::TowerCourt => (
+                T_COURT_PLAIN,
+                T_COURT_RUNE,
+                Lay::RingRoundLandmark {
+                    radius: RUNE_RING_RADIUS_PX,
+                },
+            ),
+            Ground::TavernPlanks => (T_PLANK_A, T_PLANK_B, Lay::Mix),
+        };
+        Some(Paving { first, second, lay })
+    }
+
     /// True for the pavings a plaza interior can be laid in (flagstone or
     /// a district's own ground), false for grass, cobble and dirt.
     pub fn is_plaza_interior(self) -> bool {
-        matches!(self, Ground::Flagstone | Ground::ForgeSlab)
+        self.paving().is_some()
     }
 }
 
@@ -717,21 +880,54 @@ fn base_tile(x: u32, y: u32, ground: Ground) -> u32 {
                 T_DIRT_B
             }
         }
-        Ground::Flagstone => {
-            if h % 2 == 0 {
+        Ground::Flagstone
+        | Ground::ForgeSlab
+        | Ground::GuildFloor
+        | Ground::TowerCourt
+        | Ground::TavernPlanks => match ground.paving() {
+            Some(p) => {
+                if lays_second(p.lay, x, y, h) {
+                    p.second
+                } else {
+                    p.first
+                }
+            }
+            None => {
+                tracing::warn!(?ground, "paving ground without a paving; flagstone used");
                 T_FLAG_A
-            } else {
-                T_FLAG_B
             }
-        }
-        Ground::ForgeSlab => {
-            if h % SOOT_B_ONE_IN == 0 {
-                T_SOOT_B
-            } else {
-                T_SOOT_A
-            }
-        }
+        },
     }
+}
+
+/// True when the paving rule `lay` puts its second tile on tile `(x, y)`
+/// (per-tile hash `h`).
+fn lays_second(lay: Lay, x: u32, y: u32, h: u32) -> bool {
+    match lay {
+        Lay::Mix => h % 2 == 1,
+        Lay::OneIn(n) => h % n.max(1) == 0,
+        Lay::Chequer => (x + y) % 2 == 1,
+        Lay::RingRoundLandmark { radius } => on_landmark_ring(x, y, radius),
+    }
+}
+
+/// Centre of district `d`'s landmark plot (the middle of its 64x64 sprite).
+fn landmark_plot_centre(d: &District) -> Vec2 {
+    landmark_plot_of(d) + Vec2::new(0.0, BACK_LANDMARK_PX * 0.5)
+}
+
+/// True when tile `(x, y)` is an interior tile of some district whose
+/// centre lies within half a tile of `radius` from that district's
+/// landmark plot centre: a one-tile ring.
+fn on_landmark_ring(x: u32, y: u32, radius: f32) -> bool {
+    let Some(d) = DISTRICTS
+        .iter()
+        .find(|d| plaza_zone(d, x, y) == PlazaZone::Interior)
+    else {
+        return false;
+    };
+    let r = tile_to_world(x, y).distance(landmark_plot_centre(d));
+    (r - radius).abs() < TILE_PX * 0.5
 }
 
 /// Pick the grass-edge overlay for a NON-grass tile from which of its eight
@@ -860,7 +1056,10 @@ fn spawn_village(mut commands: Commands, asset_server: Res<AssetServer>) {
                 Ground::Cobble => cobble += 1,
                 Ground::Dirt => dirt += 1,
                 Ground::Flagstone => flagstone += 1,
-                Ground::ForgeSlab => district_ground += 1,
+                Ground::ForgeSlab
+                | Ground::GuildFloor
+                | Ground::TowerCourt
+                | Ground::TavernPlanks => district_ground += 1,
             }
             let tile = commands
                 .spawn(TileBundle {
@@ -1026,6 +1225,9 @@ mod tests {
                 Ground::Dirt => t == T_DIRT_A || t == T_DIRT_B,
                 Ground::Flagstone => t == T_FLAG_A || t == T_FLAG_B,
                 Ground::ForgeSlab => t == T_SOOT_A || t == T_SOOT_B,
+                Ground::GuildFloor => t == T_HALL_LIGHT || t == T_HALL_DARK,
+                Ground::TowerCourt => t == T_COURT_PLAIN || t == T_COURT_RUNE,
+                Ground::TavernPlanks => t == T_PLANK_A || t == T_PLANK_B,
             };
             assert!(ok, "tile {t} wrong for {g:?}");
         }
@@ -1195,8 +1397,8 @@ mod tests {
             .lines()
             .filter_map(|l| l.strip_prefix("  ")?.strip_suffix(": ["))
             .collect();
-        assert_eq!(names.len(), 26, "REF-76 tile count: {names:?}");
-        let expected: [(u32, &str); 25] = [
+        assert_eq!(names.len(), 32, "REF-76 tile count: {names:?}");
+        let expected: [(u32, &str); 31] = [
             (T_GRASS_A, "grass_a"),
             (T_GRASS_B, "grass_b"),
             (T_GRASS_TUFT, "grass_tuft"),
@@ -1222,6 +1424,12 @@ mod tests {
             (T_FLAG_B, "flag_b"),
             (T_SOOT_A, "soot_a"),
             (T_SOOT_B, "soot_b"),
+            (T_HALL_LIGHT, "hall_light"),
+            (T_HALL_DARK, "hall_dark"),
+            (T_COURT_PLAIN, "court_plain"),
+            (T_COURT_RUNE, "court_rune"),
+            (T_PLANK_A, "plank_a"),
+            (T_PLANK_B, "plank_b"),
         ];
         for (idx, name) in expected {
             assert_eq!(names[idx as usize], name, "atlas index {idx}");
@@ -1244,20 +1452,45 @@ mod tests {
 
     // --- District grounds (REF-97 via the REF-76 atlas) --------------------
 
-    /// The Forge names its own interior ground; every other district names
-    /// none and keeps flagstone. Every named ground is a paving.
+    /// The districts with a ground of their own, and that ground.
+    const NAMED_GROUNDS: [(&str, Ground); 4] = [
+        ("Guildhall Quarter", Ground::GuildFloor),
+        ("The Mage's Tower", Ground::TowerCourt),
+        ("Tavern Row", Ground::TavernPlanks),
+        ("The Forge", Ground::ForgeSlab),
+    ];
+
+    /// The Forge and the Act 3-5 quarters name their own interior ground;
+    /// every other district names none and keeps flagstone. Every named
+    /// ground is a paving, and no two districts share one.
     #[test]
     fn district_ground_lookup_defaults_to_flagstone() {
         for d in DISTRICTS {
             if let Some(g) = d.interior {
                 assert!(g.is_plaza_interior(), "{} names {g:?}", d.name);
             }
-            let want = if d.name == "The Forge" {
-                Ground::ForgeSlab
-            } else {
-                Ground::Flagstone
-            };
+            let want = NAMED_GROUNDS
+                .iter()
+                .find(|(name, _)| *name == d.name)
+                .map_or(Ground::Flagstone, |(_, g)| *g);
             assert_eq!(d.interior_ground(), want, "{}", d.name);
+        }
+        for (name, g) in NAMED_GROUNDS {
+            let d = DISTRICTS
+                .iter()
+                .find(|d| d.name == name)
+                .unwrap_or_else(|| panic!("{name}"));
+            let (x0, x1, y0, y1) = plaza_bounds(d);
+            assert_eq!(ground_at_tile((x0 + x1) / 2, (y0 + y1) / 2), g, "{name}");
+            assert_eq!(ground_at(d.center), g, "{name}");
+            // Only this district's interior is laid in its ground.
+            for y in 0..MAP_H {
+                for x in 0..MAP_W {
+                    if ground_at_tile(x, y) == g {
+                        assert_eq!(plaza_zone(d, x, y), PlazaZone::Interior, "{name} ({x},{y})");
+                    }
+                }
+            }
         }
         // The lookup goes through the tile classifier: the Forge's interior
         // is slab, its ring is still cobble and the street into it dirt.
@@ -1277,14 +1510,113 @@ mod tests {
             Ground::Dirt,
             "east street"
         );
-        // No tile outside the Forge's interior is slab.
-        for y in 0..MAP_H {
-            for x in 0..MAP_W {
-                if ground_at_tile(x, y) == Ground::ForgeSlab {
-                    assert_eq!(plaza_zone(forge, x, y), PlazaZone::Interior, "({x},{y})");
-                }
+    }
+
+    /// Every interior tile of district `name`, as (tile x, tile y, atlas
+    /// index the base layer lays there).
+    fn laid_tiles(name: &str) -> Vec<(u32, u32, u32)> {
+        let d = DISTRICTS
+            .iter()
+            .find(|d| d.name == name)
+            .unwrap_or_else(|| panic!("{name}"));
+        let g = d.interior_ground();
+        let (x0, x1, y0, y1) = plaza_bounds(d);
+        (y0..=y1)
+            .flat_map(|y| (x0..=x1).map(move |x| (x, y)))
+            .filter(|&(x, y)| plaza_zone(d, x, y) == PlazaZone::Interior)
+            .map(|(x, y)| (x, y, base_tile(x, y, g)))
+            .collect()
+    }
+
+    /// Each paving names its rule in one place, the Forge's and the
+    /// flagstone's unchanged.
+    #[test]
+    fn each_paving_names_its_two_tiles_and_its_rule() {
+        let p = |g: Ground| g.paving().expect("a paving");
+        assert_eq!(p(Ground::Flagstone).lay, Lay::Mix);
+        assert_eq!(p(Ground::ForgeSlab).lay, Lay::OneIn(SOOT_B_ONE_IN));
+        assert_eq!(p(Ground::GuildFloor).lay, Lay::Chequer);
+        assert_eq!(
+            p(Ground::TowerCourt).lay,
+            Lay::RingRoundLandmark {
+                radius: RUNE_RING_RADIUS_PX
+            }
+        );
+        assert_eq!(p(Ground::TavernPlanks).lay, Lay::Mix);
+        assert_eq!(
+            (p(Ground::GuildFloor).first, p(Ground::GuildFloor).second),
+            (T_HALL_LIGHT, T_HALL_DARK)
+        );
+        for g in [Ground::Grass, Ground::Cobble, Ground::Dirt] {
+            assert_eq!(g.paving(), None, "{g:?}");
+            assert!(!g.is_plaza_interior());
+        }
+    }
+
+    /// REF-122: the Guildhall floor is a chequer, light where tile x +
+    /// tile y is even, dark where it is odd, never at random.
+    #[test]
+    fn the_guildhall_floor_is_a_chequer() {
+        let tiles = laid_tiles("Guildhall Quarter");
+        assert!(tiles.len() > 500, "{} interior tiles", tiles.len());
+        for (x, y, t) in tiles {
+            let want = if (x + y) % 2 == 0 {
+                T_HALL_LIGHT
+            } else {
+                T_HALL_DARK
+            };
+            assert_eq!(t, want, "({x},{y})");
+        }
+    }
+
+    /// REF-130: the rune slab rings the Mage's Tower, one tile wide at
+    /// [`RUNE_RING_RADIUS_PX`] from the centre of its plot, and lies nowhere
+    /// else; the rest is plain slab. The ring is long enough to read as one
+    /// (the plaza edge and the tower hide part of it).
+    #[test]
+    fn the_rune_slab_rings_the_tower() {
+        let d = DISTRICTS
+            .iter()
+            .find(|d| d.name == "The Mage's Tower")
+            .expect("the Mage's Tower");
+        let centre = landmark_plot_centre(d);
+        let mut runes = 0usize;
+        for (x, y, t) in laid_tiles("The Mage's Tower") {
+            let r = tile_to_world(x, y).distance(centre);
+            let on_ring = (r - RUNE_RING_RADIUS_PX).abs() < TILE_PX * 0.5;
+            let want = if on_ring { T_COURT_RUNE } else { T_COURT_PLAIN };
+            assert_eq!(t, want, "({x},{y}) r={r}");
+            if t == T_COURT_RUNE {
+                runes += 1;
+                // Every rune tile has a ring neighbour (8-way): one ring,
+                // not scattered specks.
+                let near = (-1i32..=1)
+                    .flat_map(|dy| (-1i32..=1).map(move |dx| (dx, dy)))
+                    .filter(|&(dx, dy)| (dx, dy) != (0, 0))
+                    .any(|(dx, dy)| {
+                        let (nx, ny) = (x.wrapping_add_signed(dx), y.wrapping_add_signed(dy));
+                        ground_at_tile(nx, ny) == Ground::TowerCourt
+                            && base_tile(nx, ny, Ground::TowerCourt) == T_COURT_RUNE
+                    });
+                assert!(near, "lone rune tile at ({x},{y})");
             }
         }
+        assert!((16..=60).contains(&runes), "{runes} rune tiles");
+        // The ring passes in front of the tower door, across the approach.
+        let front = landmark_plot_of(d) - Vec2::new(0.0, RUNE_RING_RADIUS_PX - 32.0);
+        let (fx, fy) = world_to_tile(front);
+        assert_eq!(base_tile(fx, fy, Ground::TowerCourt), T_COURT_RUNE);
+    }
+
+    /// REF-138: the two plank tiles are mixed freely, about half each.
+    #[test]
+    fn tavern_planks_are_mixed_about_half_each() {
+        let tiles = laid_tiles("Tavern Row");
+        let b = tiles.iter().filter(|(_, _, t)| *t == T_PLANK_B).count();
+        let a = tiles.iter().filter(|(_, _, t)| *t == T_PLANK_A).count();
+        assert_eq!(a + b, tiles.len());
+        let share = a as f64 / tiles.len() as f64;
+        assert!((0.4..=0.6).contains(&share), "plank_a {a}, plank_b {b}");
     }
 
     /// REF-97: `soot_b` (the scorch mark) on about one slab in six.

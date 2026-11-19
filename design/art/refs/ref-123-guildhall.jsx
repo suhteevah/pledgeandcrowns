@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-123 - The Guildhall, Act 3 district landmark, 64x64.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/guildhall.png.
 //
 // A pale stone hall front under an oxblood roof with a gold cornice and
 // a wine pennant. Over the gold-framed double door hang four shields,

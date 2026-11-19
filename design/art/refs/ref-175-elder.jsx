@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-175 - Townsfolk: elder, 32x32. Ambient villager, gives no mission.
-// DRAFT 2026-11-19. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-19. Not wired yet.
 //
 // Bald on top with white hair at the sides and a long aged-paper
 // beard that falls to a point on his chest. Third drawing: the head

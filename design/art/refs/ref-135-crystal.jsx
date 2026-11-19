@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-135 - Crystal on a pedestal, Act 4 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/crystal.png.
 //
 // A tall teal crystal, mist-teal on its lit facet and main teal in
 // shadow, with one specular-white pixel, on a pale stone pedestal.

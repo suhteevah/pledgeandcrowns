@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-132 - Orrery, Act 4 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/orrery.png.
 //
 // A brass orrery on a stand: a brass ring and a tilted bronze ring
 // round a gold sun, with three small worlds on them (cobalt, teal,

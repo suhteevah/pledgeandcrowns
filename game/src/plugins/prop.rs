@@ -2,8 +2,10 @@
 //! Village props: oaks (REF-67, 32x48), cottages (REF-68, 64x64), the
 //! district landmarks (the Sealed Stacks, REF-95, the Throne Dais, REF-96,
 //! and the Great Furnace, REF-98, the Bell Tower, the market stall and the
-//! Checker's Gate, all 64x64) and the district yard props (REF-99..102,
-//! REF-104..106, REF-108..110, REF-112..121, REF-128, REF-129, 32x32).
+//! Checker's Gate, the Guildhall, the Mage's Tower and the tavern, all
+//! 64x64) and the district yard props (REF-99..102, REF-104..106,
+//! REF-108..110, REF-112..121, REF-124..129, REF-132..137, REF-140..145,
+//! 32x32).
 //!
 //! Props are ordinary sprites, not tiles. Each one is anchored bottom-centre
 //! at its ground line, y-sorted (lower on screen = drawn in front) and owns
@@ -38,6 +40,13 @@ use crate::assets::{
     SPRITE_PROP_PLANTER, SPRITE_PROP_QUENCH_TROUGH, SPRITE_PROP_SEALED_STACKS,
     SPRITE_PROP_SIGNPOST, SPRITE_PROP_STRONGBOX, SPRITE_PROP_THRONE_DAIS, SPRITE_PROP_TOOL_RACK,
     SPRITE_PROP_WEAPON_RACK, SPRITE_PROP_WELL, SPRITE_PROP_WOODPILE, SPRITE_PROP_WORKBENCH,
+};
+use crate::assets::{
+    SPRITE_PROP_CAULDRON, SPRITE_PROP_CRYSTAL, SPRITE_PROP_FIREPIT, SPRITE_PROP_GUILD_BANNER,
+    SPRITE_PROP_GUILDHALL, SPRITE_PROP_KEG_RACK, SPRITE_PROP_LECTERN, SPRITE_PROP_LEDGER_DESK,
+    SPRITE_PROP_MAGES_TOWER, SPRITE_PROP_NOTICE_BOARD, SPRITE_PROP_ORRERY, SPRITE_PROP_ROUND_TABLE,
+    SPRITE_PROP_RUNE_STONE, SPRITE_PROP_SCROLL_SHELF, SPRITE_PROP_TAB_SLATE, SPRITE_PROP_TAVERN,
+    SPRITE_PROP_TAVERN_SIGN, SPRITE_PROP_TELESCOPE, SPRITE_PROP_TRESTLE_TABLE,
 };
 use crate::plugins::animation::{SpriteLift, unlifted_anchor};
 use crate::plugins::npc::Npc;
@@ -175,6 +184,40 @@ pub enum PropKind {
     BucketShovel,
     Strongbox,
     Planter,
+    /// The Guildhall (REF-123, approved 2026-11-18), the Guildhall Quarter
+    /// landmark: 64x64, placed at [`LANDMARKS`].
+    Guildhall,
+    /// Guildhall Quarter props (REF-124..127, approved 2026-11-18), 32x32
+    /// each. The notice board is solid only at its two posts, the banner
+    /// only at its foot; the scroll shelf serves the Tower too.
+    LedgerDesk,
+    NoticeBoard,
+    GuildBanner,
+    ScrollShelf,
+    /// The Mage's Tower (REF-131, approved 2026-11-18), the Act 4 district
+    /// landmark: 64x64, placed at [`LANDMARKS`].
+    MagesTower,
+    /// The Mage's Tower props (REF-132..137, approved 2026-11-18), 32x32
+    /// each. The orrery and the lectern are solid at their stands, the
+    /// telescope at its tripod's feet.
+    Orrery,
+    RuneStone,
+    Lectern,
+    Crystal,
+    Cauldron,
+    Telescope,
+    /// The tavern (REF-139, approved 2026-11-18), the Tavern Row landmark:
+    /// 64x64, placed at [`LANDMARKS`].
+    Tavern,
+    /// Tavern Row props (REF-140..145, approved 2026-11-18), 32x32 each.
+    /// The tavern sign's post is at the left of its sprite, solid at the
+    /// foot; the tab slate is solid at its legs.
+    TrestleTable,
+    KegRack,
+    Firepit,
+    TavernSign,
+    RoundTable,
+    TabSlate,
 }
 
 // Solid footprints, relative to the bottom-centre anchor. A ref grid of
@@ -287,6 +330,83 @@ const STRONGBOX_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 12.0, 2.0, 20.0)];
 /// above it is not solid.
 const PLANTER_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 9.0, 2.0, 11.0)];
 
+// --- Acts 3-5 (approved 2026-11-18) -------------------------------------
+/// REF-123 "solid from the steps to the eave": rows 18..62 (the cornice
+/// to the bottom step), cols 4..59 (the cornice, the widest part).
+const GUILDHALL_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 28.0, 1.0, 46.0)];
+/// REF-124 "solid over the desk": rows 15..29 (desk top to feet), cols
+/// 4..27. The ledger, inkpot and quill on top are not solid.
+const LEDGER_DESK_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 12.0, 2.0, 17.0)];
+/// REF-125 "solid only at the two posts": rows 23..29, cols 5..7 and
+/// 24..26. The 16 px between them stays open under the board.
+const NOTICE_BOARD_SOLIDS: [Aabb; 2] = [
+    Aabb {
+        min: Vec2::new(-11.0, 2.0),
+        max: Vec2::new(-8.0, 9.0),
+    },
+    Aabb {
+        min: Vec2::new(8.0, 2.0),
+        max: Vec2::new(11.0, 9.0),
+    },
+];
+/// REF-126 "solid only at the foot": the stone foot, rows 27..30, cols
+/// 11..20.
+const GUILD_BANNER_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 5.0, 1.0, 5.0)];
+/// REF-127 "solid over the unit": rows 3..29, cols 4..27.
+const SCROLL_SHELF_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 12.0, 2.0, 29.0)];
+/// REF-131 "solid from the base to the eave": rows 22..61 (the gold band
+/// under the roof to the base), cols 14..49 (the band, the widest part).
+const MAGES_TOWER_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 18.0, 2.0, 42.0)];
+/// REF-132 "solid at the stand": the post and its foot, rows 23..30,
+/// cols 9..22. The rings and worlds above are not solid.
+const ORRERY_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 7.0, 1.0, 9.0)];
+/// REF-133 "solid over the stone": rows 3..29, cols 9..22 (the grass at
+/// its foot, cols 6..8, is not solid).
+const RUNE_STONE_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 7.0, 2.0, 29.0)];
+/// REF-134 "solid at the post": the post and its foot, rows 16..30, cols
+/// 9..22. The tome above is not solid.
+const LECTERN_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 7.0, 1.0, 16.0)];
+/// REF-135 "solid over the pedestal": rows 20..30, cols 9..22.
+const CRYSTAL_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 7.0, 1.0, 12.0)];
+/// REF-136 "solid over the cauldron": rows 11..30 (the rim to the legs'
+/// feet), cols 3..28. The fire's last pixels (row 31) and the motes above
+/// are not solid.
+const CAULDRON_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 13.0, 1.0, 21.0)];
+/// REF-137 "solid at the tripod's feet": rows 29..30, cols 8..23.
+const TELESCOPE_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 8.0, 1.0, 3.0)];
+/// REF-139 "solid from the step to the eave": rows 21..62 (the eave to
+/// the step), cols 2..61 (the eave, the widest part).
+const TAVERN_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 30.0, 1.0, 43.0)];
+/// REF-140 "solid over the table": rows 14..29 (table top to trestle
+/// feet), cols 1..30. The tankards and the loaf are not solid.
+const TRESTLE_TABLE_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 15.0, 2.0, 18.0)];
+/// REF-141 "solid over the rack": rows 5..29, cols 3..28.
+const KEG_RACK_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 13.0, 2.0, 27.0)];
+/// REF-142 "solid over the stone ring": rows 22..29 (the ring and the
+/// spit posts' feet), cols 3..28. The flames and the spit are not solid.
+const FIREPIT_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 13.0, 2.0, 10.0)];
+/// REF-143 "solid at the foot": the post's stone foot at the LEFT of the
+/// sprite, rows 27..30, cols 2..11. The hanging board is not solid.
+const TAVERN_SIGN_SOLID: [Aabb; 1] = [Aabb {
+    min: Vec2::new(-14.0, 1.0),
+    max: Vec2::new(-4.0, 5.0),
+}];
+/// REF-144 "solid over the table": rows 9..29 (the top to the leg's
+/// foot), cols 4..27. The stools' outer halves (cols 0..3, 28..31) and
+/// the candle are not solid.
+const ROUND_TABLE_SOLID: [Aabb; 1] = [Aabb::from_base(0.0, 12.0, 2.0, 23.0)];
+/// REF-145 "solid at the legs": rows 24..29, cols 6..8 and 23..25.
+const TAB_SLATE_SOLIDS: [Aabb; 2] = [
+    Aabb {
+        min: Vec2::new(-10.0, 2.0),
+        max: Vec2::new(-7.0, 8.0),
+    },
+    Aabb {
+        min: Vec2::new(7.0, 2.0),
+        max: Vec2::new(10.0, 8.0),
+    },
+];
+
 impl PropKind {
     pub fn sprite_path(self) -> &'static str {
         match self {
@@ -320,6 +440,25 @@ impl PropKind {
             PropKind::BucketShovel => SPRITE_PROP_BUCKET_SHOVEL,
             PropKind::Strongbox => SPRITE_PROP_STRONGBOX,
             PropKind::Planter => SPRITE_PROP_PLANTER,
+            PropKind::Guildhall => SPRITE_PROP_GUILDHALL,
+            PropKind::LedgerDesk => SPRITE_PROP_LEDGER_DESK,
+            PropKind::NoticeBoard => SPRITE_PROP_NOTICE_BOARD,
+            PropKind::GuildBanner => SPRITE_PROP_GUILD_BANNER,
+            PropKind::ScrollShelf => SPRITE_PROP_SCROLL_SHELF,
+            PropKind::MagesTower => SPRITE_PROP_MAGES_TOWER,
+            PropKind::Orrery => SPRITE_PROP_ORRERY,
+            PropKind::RuneStone => SPRITE_PROP_RUNE_STONE,
+            PropKind::Lectern => SPRITE_PROP_LECTERN,
+            PropKind::Crystal => SPRITE_PROP_CRYSTAL,
+            PropKind::Cauldron => SPRITE_PROP_CAULDRON,
+            PropKind::Telescope => SPRITE_PROP_TELESCOPE,
+            PropKind::Tavern => SPRITE_PROP_TAVERN,
+            PropKind::TrestleTable => SPRITE_PROP_TRESTLE_TABLE,
+            PropKind::KegRack => SPRITE_PROP_KEG_RACK,
+            PropKind::Firepit => SPRITE_PROP_FIREPIT,
+            PropKind::TavernSign => SPRITE_PROP_TAVERN_SIGN,
+            PropKind::RoundTable => SPRITE_PROP_ROUND_TABLE,
+            PropKind::TabSlate => SPRITE_PROP_TAB_SLATE,
         }
     }
 
@@ -339,6 +478,9 @@ impl PropKind {
                 | PropKind::BellTower
                 | PropKind::MarketStall
                 | PropKind::CheckersGate
+                | PropKind::Guildhall
+                | PropKind::MagesTower
+                | PropKind::Tavern
         )
     }
 
@@ -352,7 +494,10 @@ impl PropKind {
             | PropKind::GreatFurnace
             | PropKind::BellTower
             | PropKind::MarketStall
-            | PropKind::CheckersGate => Vec2::new(64.0, 64.0),
+            | PropKind::CheckersGate
+            | PropKind::Guildhall
+            | PropKind::MagesTower
+            | PropKind::Tavern => Vec2::new(64.0, 64.0),
             PropKind::Anvil
             | PropKind::QuenchTrough
             | PropKind::CoalHeap
@@ -375,7 +520,23 @@ impl PropKind {
             | PropKind::Workbench
             | PropKind::BucketShovel
             | PropKind::Strongbox
-            | PropKind::Planter => Vec2::new(32.0, 32.0),
+            | PropKind::Planter
+            | PropKind::LedgerDesk
+            | PropKind::NoticeBoard
+            | PropKind::GuildBanner
+            | PropKind::ScrollShelf
+            | PropKind::Orrery
+            | PropKind::RuneStone
+            | PropKind::Lectern
+            | PropKind::Crystal
+            | PropKind::Cauldron
+            | PropKind::Telescope
+            | PropKind::TrestleTable
+            | PropKind::KegRack
+            | PropKind::Firepit
+            | PropKind::TavernSign
+            | PropKind::RoundTable
+            | PropKind::TabSlate => Vec2::new(32.0, 32.0),
         }
     }
 
@@ -414,6 +575,25 @@ impl PropKind {
             PropKind::BucketShovel => 1.0, // REF-121 row 30 is the shovel's tip
             PropKind::Strongbox => 2.0,    // REF-128 row 29 is the chest's bottom
             PropKind::Planter => 2.0,      // REF-129 row 29 is the planter's bottom
+            PropKind::Guildhall => 1.0,    // REF-123 row 62 is the bottom step's edge
+            PropKind::LedgerDesk => 2.0,   // REF-124 row 29 is the legs' bottom
+            PropKind::NoticeBoard => 2.0,  // REF-125 row 29 is the posts' bottom
+            PropKind::GuildBanner => 1.0,  // REF-126 row 30 is the foot's bottom edge
+            PropKind::ScrollShelf => 2.0,  // REF-127 row 29 is the unit's bottom
+            PropKind::MagesTower => 2.0,   // REF-131 row 61 is the base's bottom edge
+            PropKind::Orrery => 1.0,       // REF-132 row 30 is the foot's bottom edge
+            PropKind::RuneStone => 2.0,    // REF-133 row 29 is the stone's foot
+            PropKind::Lectern => 1.0,      // REF-134 row 30 is the foot's bottom edge
+            PropKind::Crystal => 1.0,      // REF-135 row 30 is the pedestal's bottom
+            PropKind::Cauldron => 0.0,     // REF-136 row 31 is the fire's last pixels
+            PropKind::Telescope => 1.0,    // REF-137 row 30 is the tripod's feet
+            PropKind::Tavern => 1.0,       // REF-139 row 62 is the step's bottom edge
+            PropKind::TrestleTable => 2.0, // REF-140 row 29 is the trestles' feet
+            PropKind::KegRack => 2.0,      // REF-141 row 29 is the rack's bottom
+            PropKind::Firepit => 2.0,      // REF-142 row 29 is the ring's bottom edge
+            PropKind::TavernSign => 1.0,   // REF-143 row 30 is the foot's bottom edge
+            PropKind::RoundTable => 2.0,   // REF-144 row 29 is the stools' feet
+            PropKind::TabSlate => 2.0,     // REF-145 row 29 is the legs' bottom
         }
     }
 
@@ -452,6 +632,25 @@ impl PropKind {
             PropKind::BucketShovel => &BUCKET_SHOVEL_SOLID,
             PropKind::Strongbox => &STRONGBOX_SOLID,
             PropKind::Planter => &PLANTER_SOLID,
+            PropKind::Guildhall => &GUILDHALL_SOLID,
+            PropKind::LedgerDesk => &LEDGER_DESK_SOLID,
+            PropKind::NoticeBoard => &NOTICE_BOARD_SOLIDS,
+            PropKind::GuildBanner => &GUILD_BANNER_SOLID,
+            PropKind::ScrollShelf => &SCROLL_SHELF_SOLID,
+            PropKind::MagesTower => &MAGES_TOWER_SOLID,
+            PropKind::Orrery => &ORRERY_SOLID,
+            PropKind::RuneStone => &RUNE_STONE_SOLID,
+            PropKind::Lectern => &LECTERN_SOLID,
+            PropKind::Crystal => &CRYSTAL_SOLID,
+            PropKind::Cauldron => &CAULDRON_SOLID,
+            PropKind::Telescope => &TELESCOPE_SOLID,
+            PropKind::Tavern => &TAVERN_SOLID,
+            PropKind::TrestleTable => &TRESTLE_TABLE_SOLID,
+            PropKind::KegRack => &KEG_RACK_SOLID,
+            PropKind::Firepit => &FIREPIT_SOLID,
+            PropKind::TavernSign => &TAVERN_SIGN_SOLID,
+            PropKind::RoundTable => &ROUND_TABLE_SOLID,
+            PropKind::TabSlate => &TAB_SLATE_SOLIDS,
         }
     }
 
@@ -578,6 +777,54 @@ impl PropKind {
             PropKind::Strongbox => STRONGBOX_SOLID[0],
             // REF-129 cols 7..24, rows 2..29 (the bush above the planter).
             PropKind::Planter => Aabb::from_base(0.0, 9.0, 2.0, 30.0),
+            // Acts 3-5 (REF-123..127, 131..137, 139..145): every opaque
+            // pixel, so a roof, banner, board, tome, ring or sign fades
+            // over a character behind it.
+            // REF-123 cols 4..59, rows 0..62 (pennant to bottom step).
+            PropKind::Guildhall => Aabb::from_base(0.0, 28.0, 1.0, 64.0),
+            // REF-124 cols 4..27, rows 5..29 (the quill's tip to the feet).
+            PropKind::LedgerDesk => Aabb::from_base(0.0, 12.0, 2.0, 27.0),
+            // REF-125 cols 2..29, rows 4..29 (the roof to the posts).
+            PropKind::NoticeBoard => Aabb::from_base(0.0, 14.0, 2.0, 28.0),
+            // REF-126 cols 5..26, rows 0..30 (the finial to the foot).
+            PropKind::GuildBanner => Aabb::from_base(0.0, 11.0, 1.0, 32.0),
+            PropKind::ScrollShelf => SCROLL_SHELF_SOLID[0],
+            // REF-131 cols 14..49, rows 0..61 (the finial to the base).
+            PropKind::MagesTower => Aabb::from_base(0.0, 18.0, 2.0, 64.0),
+            // REF-132 cols 4..27, rows 1..30 (the rings and worlds).
+            PropKind::Orrery => Aabb::from_base(0.0, 12.0, 1.0, 31.0),
+            // REF-133 cols 6..22, rows 3..29 (the grass at its foot).
+            PropKind::RuneStone => Aabb {
+                min: Vec2::new(-10.0, 2.0),
+                max: Vec2::new(7.0, 29.0),
+            },
+            // REF-134 cols 5..26, rows 4..30 (the tome to the foot).
+            PropKind::Lectern => Aabb::from_base(0.0, 11.0, 1.0, 28.0),
+            // REF-135 cols 9..22, rows 2..30 (the crystal's tip).
+            PropKind::Crystal => Aabb::from_base(0.0, 7.0, 1.0, 30.0),
+            // REF-136 cols 3..28, rows 3..31 (the top mote to the fire).
+            PropKind::Cauldron => Aabb::from_base(0.0, 13.0, 0.0, 29.0),
+            // REF-137 cols 4..26, rows 3..30 (the eyepiece to the feet).
+            PropKind::Telescope => Aabb {
+                min: Vec2::new(-12.0, 1.0),
+                max: Vec2::new(11.0, 29.0),
+            },
+            // REF-139 cols 2..61, rows 0..62 (the chimney to the step).
+            PropKind::Tavern => Aabb::from_base(0.0, 30.0, 1.0, 64.0),
+            // REF-140 cols 1..30, rows 7..29 (the tankards' foam).
+            PropKind::TrestleTable => Aabb::from_base(0.0, 15.0, 2.0, 25.0),
+            PropKind::KegRack => KEG_RACK_SOLID[0],
+            // REF-142 cols 3..28, rows 4..29 (the spit posts' tops).
+            PropKind::Firepit => Aabb::from_base(0.0, 13.0, 2.0, 28.0),
+            // REF-143 cols 2..27, rows 2..30 (the post's cap to its foot).
+            PropKind::TavernSign => Aabb {
+                min: Vec2::new(-14.0, 1.0),
+                max: Vec2::new(12.0, 30.0),
+            },
+            // REF-144 cols 0..31, rows 3..29 (the candle flame, the stools).
+            PropKind::RoundTable => Aabb::from_base(0.0, 16.0, 2.0, 29.0),
+            // REF-145 cols 3..28, rows 3..29 (the frame to the legs).
+            PropKind::TabSlate => Aabb::from_base(0.0, 13.0, 2.0, 29.0),
         }
     }
 
@@ -682,7 +929,13 @@ pub const COTTAGE_SPOTS: &[(usize, Side, f32)] = &[
 /// (approved by Matt 2026-11-18): the Bell Tower (REF-103) heads
 /// Hearthstone Square, the Bellringer beside it; the market stall
 /// (REF-107) heads Market Row, the Twin at its counter; the Checker's Gate
-/// (REF-111) heads The Commons, the Auditor at the arch.
+/// (REF-111) heads The Commons, the Auditor at the arch. Acts 3-5
+/// (approved by Matt 2026-11-18): the Guildhall (REF-123) heads the
+/// Guildhall Quarter, the ledger desk before its steps; the Mage's Tower
+/// (REF-131) its court, Vexis at the lectern before the door; the tavern
+/// (REF-139) Tavern Row, the Barkeep and the Bouncer at its door. Their
+/// bosses (the Guildmaster, Vexis, the Barkeep) are ordinary 32 px
+/// villagers who hold a trial, so no boss stands centred on a plot here.
 pub const LANDMARKS: &[(usize, PropKind)] = &[
     (9, PropKind::SealedStacks),
     (10, PropKind::ThroneDais),
@@ -690,6 +943,9 @@ pub const LANDMARKS: &[(usize, PropKind)] = &[
     (0, PropKind::BellTower),
     (1, PropKind::MarketStall),
     (2, PropKind::CheckersGate),
+    (3, PropKind::Guildhall),
+    (4, PropKind::MagesTower),
+    (5, PropKind::Tavern),
 ];
 
 /// A district's own yard props: `(district index, kind, offset of the
@@ -704,8 +960,9 @@ pub const LANDMARKS: &[(usize, PropKind)] = &[
 /// are listed on each cast in `world.rs`). Approved sets: the Forge
 /// (REF-99..102), the free demo's three plazas (REF-104..106,
 /// REF-108..110, REF-112..115) and the density pass (REF-116..121 Forge
-/// yard set, REF-128 strongbox, REF-129 planter), all approved by Matt
-/// 2026-11-18. Same-y fence pieces 32 px apart form one run
+/// yard set, REF-128 strongbox, REF-129 planter) and the Acts 3-5 sets
+/// (REF-124..127 Guildhall, REF-132..137 Mage's Tower, REF-140..145
+/// Tavern Row), all approved by Matt 2026-11-18. Same-y fence pieces 32 px apart form one run
 /// (`tests::fences_form_joined_runs`); the Commons runs meet the Checker's
 /// Gate pillars, so the gate is a boundary you pass through.
 pub const DISTRICT_PROPS: &[(usize, PropKind, Vec2)] = &[
@@ -924,6 +1181,163 @@ pub const DISTRICT_PROPS: &[(usize, PropKind, Vec2)] = &[
     (2, PropKind::Planter, Vec2::new(120.0, -24.0)),
     (2, PropKind::Bench, Vec2::new(152.0, -24.0)),
     (2, PropKind::Planter, Vec2::new(184.0, -24.0)),
+    // --- Guildhall Quarter (Guildhall base (0, 156); street in from the
+    // east). Formal and symmetric about the avenue x = 0.
+    // The hall between a pair of banners, an archive wing either side.
+    (3, PropKind::GuildBanner, Vec2::new(-48.0, 168.0)),
+    (3, PropKind::GuildBanner, Vec2::new(48.0, 168.0)),
+    (3, PropKind::ScrollShelf, Vec2::new(-112.0, 196.0)),
+    (3, PropKind::ScrollShelf, Vec2::new(-144.0, 196.0)),
+    (3, PropKind::Strongbox, Vec2::new(-184.0, 196.0)),
+    (3, PropKind::ScrollShelf, Vec2::new(112.0, 196.0)),
+    (3, PropKind::ScrollShelf, Vec2::new(144.0, 196.0)),
+    (3, PropKind::Strongbox, Vec2::new(184.0, 196.0)),
+    // The ledger desk before the steps, a notice board in each wing.
+    (3, PropKind::LedgerDesk, Vec2::new(0.0, 76.0)),
+    (3, PropKind::NoticeBoard, Vec2::new(-168.0, 112.0)),
+    (3, PropKind::NoticeBoard, Vec2::new(168.0, 112.0)),
+    // Planters lining the avenue from the south garden to the hall.
+    (3, PropKind::Planter, Vec2::new(-72.0, 116.0)),
+    (3, PropKind::Planter, Vec2::new(72.0, 116.0)),
+    (3, PropKind::Planter, Vec2::new(-72.0, 24.0)),
+    (3, PropKind::Planter, Vec2::new(72.0, 24.0)),
+    (3, PropKind::Planter, Vec2::new(-72.0, -72.0)),
+    (3, PropKind::Planter, Vec2::new(72.0, -72.0)),
+    (3, PropKind::Planter, Vec2::new(-72.0, -136.0)),
+    (3, PropKind::Planter, Vec2::new(72.0, -136.0)),
+    // The south garden: a bench between two planters either side.
+    (3, PropKind::Planter, Vec2::new(-192.0, -120.0)),
+    (3, PropKind::Bench, Vec2::new(-152.0, -120.0)),
+    (3, PropKind::Planter, Vec2::new(-112.0, -120.0)),
+    (3, PropKind::Planter, Vec2::new(112.0, -120.0)),
+    (3, PropKind::Bench, Vec2::new(152.0, -120.0)),
+    (3, PropKind::Planter, Vec2::new(192.0, -120.0)),
+    // The south wall: a banner pair closing the avenue, lantern corners.
+    (3, PropKind::GuildBanner, Vec2::new(-40.0, -220.0)),
+    (3, PropKind::GuildBanner, Vec2::new(40.0, -220.0)),
+    (3, PropKind::LanternPost, Vec2::new(-200.0, -212.0)),
+    (3, PropKind::LanternPost, Vec2::new(200.0, -212.0)),
+    // The street mouth: lantern posts either side, the signpost.
+    (3, PropKind::LanternPost, Vec2::new(220.0, 44.0)),
+    (3, PropKind::LanternPost, Vec2::new(220.0, -72.0)),
+    (3, PropKind::Signpost, Vec2::new(184.0, -72.0)),
+    // The west wall answers the mouth with its own lantern pair.
+    (3, PropKind::LanternPost, Vec2::new(-220.0, 44.0)),
+    (3, PropKind::LanternPost, Vec2::new(-220.0, -72.0)),
+    // Banners flanking the wings' outer corners, benches either side of
+    // the middle, benches along the south wall.
+    (3, PropKind::GuildBanner, Vec2::new(-216.0, 152.0)),
+    (3, PropKind::GuildBanner, Vec2::new(216.0, 152.0)),
+    (3, PropKind::Bench, Vec2::new(-152.0, -40.0)),
+    (3, PropKind::Bench, Vec2::new(152.0, -40.0)),
+    (3, PropKind::Bench, Vec2::new(-136.0, -212.0)),
+    (3, PropKind::Bench, Vec2::new(136.0, -212.0)),
+    // --- The Mage's Tower (tower base (0, 156); street in from the west).
+    // A crystal either side of the door, the lectern before it, a pair of
+    // rune stones flanking the approach.
+    (4, PropKind::Crystal, Vec2::new(-40.0, 164.0)),
+    (4, PropKind::Crystal, Vec2::new(40.0, 164.0)),
+    (4, PropKind::Lectern, Vec2::new(0.0, 88.0)),
+    (4, PropKind::RuneStone, Vec2::new(-96.0, 140.0)),
+    (4, PropKind::RuneStone, Vec2::new(96.0, 140.0)),
+    // The reading corner to the north-west: shelves, a lectern, a bench.
+    (4, PropKind::ScrollShelf, Vec2::new(-112.0, 196.0)),
+    (4, PropKind::ScrollShelf, Vec2::new(-144.0, 196.0)),
+    (4, PropKind::ScrollShelf, Vec2::new(-176.0, 196.0)),
+    (4, PropKind::Lectern, Vec2::new(-144.0, 140.0)),
+    (4, PropKind::Bench, Vec2::new(-200.0, 140.0)),
+    // The observatory to the north-east: two telescopes and a crystal.
+    (4, PropKind::Telescope, Vec2::new(112.0, 196.0)),
+    (4, PropKind::Crystal, Vec2::new(144.0, 196.0)),
+    (4, PropKind::Telescope, Vec2::new(176.0, 196.0)),
+    // The orrery to the east, a crystal by it.
+    (4, PropKind::Orrery, Vec2::new(168.0, 64.0)),
+    (4, PropKind::Crystal, Vec2::new(216.0, 120.0)),
+    // The stone ring in the south: eight rune stones, 88 px round
+    // (0, -116), the cauldron at its heart.
+    (4, PropKind::RuneStone, Vec2::new(81.0, -82.0)),
+    (4, PropKind::RuneStone, Vec2::new(34.0, -35.0)),
+    (4, PropKind::RuneStone, Vec2::new(-34.0, -35.0)),
+    (4, PropKind::RuneStone, Vec2::new(-81.0, -82.0)),
+    (4, PropKind::RuneStone, Vec2::new(-81.0, -150.0)),
+    (4, PropKind::RuneStone, Vec2::new(-34.0, -197.0)),
+    (4, PropKind::RuneStone, Vec2::new(34.0, -197.0)),
+    (4, PropKind::RuneStone, Vec2::new(81.0, -150.0)),
+    (4, PropKind::Cauldron, Vec2::new(0.0, -128.0)),
+    // The street mouth: crystals either side, the signpost.
+    (4, PropKind::Crystal, Vec2::new(-220.0, 44.0)),
+    (4, PropKind::Crystal, Vec2::new(-220.0, -72.0)),
+    (4, PropKind::SignpostWest, Vec2::new(-184.0, 56.0)),
+    // South-west: a bench between planters.
+    (4, PropKind::Planter, Vec2::new(-208.0, -200.0)),
+    (4, PropKind::Bench, Vec2::new(-168.0, -200.0)),
+    (4, PropKind::Planter, Vec2::new(-128.0, -200.0)),
+    // South-east: a second reading spot.
+    (4, PropKind::ScrollShelf, Vec2::new(168.0, -208.0)),
+    (4, PropKind::ScrollShelf, Vec2::new(200.0, -208.0)),
+    (4, PropKind::Lectern, Vec2::new(184.0, -152.0)),
+    // A third telescope by the reading corner, a crystal in the west
+    // middle, standing stones by the walls, a bench and a crystal in the
+    // east lower half.
+    (4, PropKind::Telescope, Vec2::new(-200.0, 96.0)),
+    (4, PropKind::Crystal, Vec2::new(-120.0, 56.0)),
+    (4, PropKind::RuneStone, Vec2::new(-200.0, -104.0)),
+    (4, PropKind::RuneStone, Vec2::new(200.0, -40.0)),
+    (4, PropKind::Bench, Vec2::new(152.0, -104.0)),
+    (4, PropKind::Crystal, Vec2::new(200.0, -104.0)),
+    // --- Tavern Row (tavern base (0, 156); streets in from the north,
+    // behind the tavern, the south, and west and east at y = -104).
+    // The tavern's flanks: keg racks, barrels and crates, clear of the
+    // way round it from the north street.
+    (5, PropKind::KegRack, Vec2::new(-112.0, 196.0)),
+    (5, PropKind::KegRack, Vec2::new(-144.0, 196.0)),
+    (5, PropKind::Barrels, Vec2::new(-176.0, 196.0)),
+    (5, PropKind::Crates, Vec2::new(-208.0, 196.0)),
+    (5, PropKind::KegRack, Vec2::new(96.0, 196.0)),
+    (5, PropKind::KegRack, Vec2::new(128.0, 196.0)),
+    (5, PropKind::Barrels, Vec2::new(160.0, 196.0)),
+    (5, PropKind::Crates, Vec2::new(192.0, 196.0)),
+    // The door: the tab slate west of it, a tavern sign east.
+    (5, PropKind::TabSlate, Vec2::new(-88.0, 128.0)),
+    (5, PropKind::TavernSign, Vec2::new(88.0, 128.0)),
+    // The firepit to the west, a bench either side, logs and barrels.
+    (5, PropKind::Firepit, Vec2::new(-96.0, 24.0)),
+    (5, PropKind::Bench, Vec2::new(-96.0, -28.0)),
+    (5, PropKind::Bench, Vec2::new(-96.0, 72.0)),
+    (5, PropKind::Woodpile, Vec2::new(-176.0, 64.0)),
+    (5, PropKind::Barrels, Vec2::new(-208.0, 24.0)),
+    // The trestle tables to the east, benches behind them, a barrel.
+    (5, PropKind::TrestleTable, Vec2::new(96.0, 48.0)),
+    (5, PropKind::TrestleTable, Vec2::new(176.0, 48.0)),
+    (5, PropKind::Bench, Vec2::new(96.0, 88.0)),
+    (5, PropKind::Bench, Vec2::new(176.0, 88.0)),
+    (5, PropKind::Barrels, Vec2::new(216.0, 120.0)),
+    // The south: round tables and stools either side of the south
+    // street, lantern posts between.
+    (5, PropKind::RoundTable, Vec2::new(-64.0, -176.0)),
+    (5, PropKind::RoundTable, Vec2::new(-136.0, -208.0)),
+    (5, PropKind::RoundTable, Vec2::new(-208.0, -176.0)),
+    (5, PropKind::RoundTable, Vec2::new(64.0, -176.0)),
+    (5, PropKind::RoundTable, Vec2::new(136.0, -208.0)),
+    (5, PropKind::RoundTable, Vec2::new(208.0, -176.0)),
+    (5, PropKind::LanternPost, Vec2::new(-104.0, -120.0)),
+    (5, PropKind::LanternPost, Vec2::new(104.0, -120.0)),
+    // The middle row, between the two cross-street mouths: a round table
+    // and a trestle table either side of the way down from the door.
+    (5, PropKind::RoundTable, Vec2::new(-160.0, -72.0)),
+    (5, PropKind::TrestleTable, Vec2::new(-72.0, -80.0)),
+    (5, PropKind::TrestleTable, Vec2::new(72.0, -80.0)),
+    (5, PropKind::RoundTable, Vec2::new(160.0, -72.0)),
+    // More stock: a keg rack and barrels by the west wall, crates by the
+    // east barrels.
+    (5, PropKind::KegRack, Vec2::new(-208.0, 128.0)),
+    (5, PropKind::Barrels, Vec2::new(-176.0, 128.0)),
+    (5, PropKind::Crates, Vec2::new(216.0, 152.0)),
+    // A tavern sign at the west, east, south and north street mouths.
+    (5, PropKind::TavernSign, Vec2::new(-216.0, -56.0)),
+    (5, PropKind::TavernSign, Vec2::new(200.0, -56.0)),
+    (5, PropKind::TavernSign, Vec2::new(-64.0, -236.0)),
+    (5, PropKind::TavernSign, Vec2::new(-72.0, 204.0)),
 ];
 
 /// Free-standing oaks in open meadow, between the quarters.
@@ -1682,7 +2096,26 @@ mod tests {
 
     // --- District dressing (the Forge, R1 wave A1) -------------------------
 
-    const ALL_KINDS: [PropKind; 31] = [
+    const ALL_KINDS: [PropKind; 50] = [
+        PropKind::Guildhall,
+        PropKind::LedgerDesk,
+        PropKind::NoticeBoard,
+        PropKind::GuildBanner,
+        PropKind::ScrollShelf,
+        PropKind::MagesTower,
+        PropKind::Orrery,
+        PropKind::RuneStone,
+        PropKind::Lectern,
+        PropKind::Crystal,
+        PropKind::Cauldron,
+        PropKind::Telescope,
+        PropKind::Tavern,
+        PropKind::TrestleTable,
+        PropKind::KegRack,
+        PropKind::Firepit,
+        PropKind::TavernSign,
+        PropKind::RoundTable,
+        PropKind::TabSlate,
         PropKind::Grindstone,
         PropKind::Ingots,
         PropKind::Bellows,
@@ -1771,6 +2204,41 @@ mod tests {
             }
             PropKind::Strongbox => include_str!("../../../design/art/refs/ref-128-strongbox.jsx"),
             PropKind::Planter => include_str!("../../../design/art/refs/ref-129-planter.jsx"),
+            PropKind::Guildhall => include_str!("../../../design/art/refs/ref-123-guildhall.jsx"),
+            PropKind::LedgerDesk => {
+                include_str!("../../../design/art/refs/ref-124-ledgerdesk.jsx")
+            }
+            PropKind::NoticeBoard => {
+                include_str!("../../../design/art/refs/ref-125-noticeboard.jsx")
+            }
+            PropKind::GuildBanner => {
+                include_str!("../../../design/art/refs/ref-126-guildbanner.jsx")
+            }
+            PropKind::ScrollShelf => {
+                include_str!("../../../design/art/refs/ref-127-scrollshelf.jsx")
+            }
+            PropKind::MagesTower => {
+                include_str!("../../../design/art/refs/ref-131-magestower.jsx")
+            }
+            PropKind::Orrery => include_str!("../../../design/art/refs/ref-132-orrery.jsx"),
+            PropKind::RuneStone => include_str!("../../../design/art/refs/ref-133-runestone.jsx"),
+            PropKind::Lectern => include_str!("../../../design/art/refs/ref-134-lectern.jsx"),
+            PropKind::Crystal => include_str!("../../../design/art/refs/ref-135-crystal.jsx"),
+            PropKind::Cauldron => include_str!("../../../design/art/refs/ref-136-cauldron.jsx"),
+            PropKind::Telescope => include_str!("../../../design/art/refs/ref-137-telescope.jsx"),
+            PropKind::Tavern => include_str!("../../../design/art/refs/ref-139-tavern.jsx"),
+            PropKind::TrestleTable => {
+                include_str!("../../../design/art/refs/ref-140-trestletable.jsx")
+            }
+            PropKind::KegRack => include_str!("../../../design/art/refs/ref-141-kegrack.jsx"),
+            PropKind::Firepit => include_str!("../../../design/art/refs/ref-142-firepit.jsx"),
+            PropKind::TavernSign => {
+                include_str!("../../../design/art/refs/ref-143-tavernsign.jsx")
+            }
+            PropKind::RoundTable => {
+                include_str!("../../../design/art/refs/ref-144-roundtable.jsx")
+            }
+            PropKind::TabSlate => include_str!("../../../design/art/refs/ref-145-tabslate.jsx"),
         })
     }
 
@@ -2054,6 +2522,9 @@ mod tests {
             ("Market Row", 22..=44),
             ("The Commons", 22..=44),
             ("The Forge", 22..=44),
+            ("Guildhall Quarter", 22..=44),
+            ("The Mage's Tower", 22..=44),
+            ("Tavern Row", 22..=44),
         ] {
             let d = district_index(name);
             let n = DISTRICT_PROPS.iter().filter(|(pd, _, _)| *pd == d).count()
@@ -2778,6 +3249,320 @@ mod tests {
                 p = slide_move(p, to - p, PLAYER_FOOT, &solids);
                 assert!(p.distance(to) < 0.01, "stopped at {p:?} heading for {to:?}");
             }
+        }
+    }
+
+    // --- Acts 3-5: the Guildhall Quarter, the Mage's Tower, Tavern Row ------
+
+    /// Each Act 3-5 footprint is exactly what its ref header says is solid,
+    /// re-derived from the approved pixel grid; the visual box is the art's
+    /// opaque bounds; the ground line is the art's bottom row.
+    #[test]
+    fn act3_to_5_footprints_match_their_ref_headers() {
+        type Part = (
+            std::ops::RangeInclusive<usize>,
+            Option<std::ops::RangeInclusive<usize>>,
+        );
+        // (kind, header phrase, solid parts as (rows, cols), visual rows)
+        let cases: Vec<(PropKind, &str, Vec<Part>, std::ops::RangeInclusive<usize>)> = vec![
+            // The cornice (row 18) to the bottom step.
+            (
+                PropKind::Guildhall,
+                "solid\n// from the steps to the eave",
+                vec![(18..=62, None)],
+                0..=62,
+            ),
+            // Desk top (row 15) to the feet; not the ledger or the quill.
+            (
+                PropKind::LedgerDesk,
+                "solid over the desk",
+                vec![(15..=29, None)],
+                5..=29,
+            ),
+            // The two posts below the board.
+            (
+                PropKind::NoticeBoard,
+                "solid only at the two posts",
+                vec![(23..=29, Some(0..=15)), (23..=29, Some(16..=31))],
+                4..=29,
+            ),
+            // The stone foot.
+            (
+                PropKind::GuildBanner,
+                "solid only at the foot",
+                vec![(27..=30, None)],
+                0..=30,
+            ),
+            (
+                PropKind::ScrollShelf,
+                "solid over the unit",
+                vec![(3..=29, None)],
+                3..=29,
+            ),
+            // The gold band under the roof (row 22) to the base.
+            (
+                PropKind::MagesTower,
+                "solid from the base to\n// the eave",
+                vec![(22..=61, None)],
+                0..=61,
+            ),
+            // The post and its foot, under the rings.
+            (
+                PropKind::Orrery,
+                "solid at the stand",
+                vec![(23..=30, None)],
+                1..=30,
+            ),
+            // The stone, not the grass at its foot (cols 6..8).
+            (
+                PropKind::RuneStone,
+                "solid\n// over the stone",
+                vec![(3..=29, Some(9..=22))],
+                3..=29,
+            ),
+            // The post and its foot, under the tome.
+            (
+                PropKind::Lectern,
+                "solid at the post",
+                vec![(16..=30, None)],
+                4..=30,
+            ),
+            (
+                PropKind::Crystal,
+                "solid over the pedestal",
+                vec![(20..=30, None)],
+                2..=30,
+            ),
+            // The rim (row 11) to the legs' feet; not the fire's last row.
+            (
+                PropKind::Cauldron,
+                "solid over the cauldron",
+                vec![(11..=30, None)],
+                3..=31,
+            ),
+            (
+                PropKind::Telescope,
+                "solid at the tripod's feet",
+                vec![(29..=30, None)],
+                3..=30,
+            ),
+            // The eave (row 21) to the step.
+            (
+                PropKind::Tavern,
+                "solid from the step to the eave",
+                vec![(21..=62, None)],
+                0..=62,
+            ),
+            // The table top (row 14) to the trestle feet.
+            (
+                PropKind::TrestleTable,
+                "solid over the table",
+                vec![(14..=29, None)],
+                7..=29,
+            ),
+            (
+                PropKind::KegRack,
+                "solid over\n// the rack",
+                vec![(5..=29, None)],
+                5..=29,
+            ),
+            // The stone ring and the posts' feet; not the flames.
+            (
+                PropKind::Firepit,
+                "solid over the stone ring",
+                vec![(22..=29, None)],
+                4..=29,
+            ),
+            // The post's foot, at the LEFT of the sprite.
+            (
+                PropKind::TavernSign,
+                "solid at the foot",
+                vec![(27..=30, None)],
+                2..=30,
+            ),
+            // The table and its leg, inside the two stools.
+            (
+                PropKind::RoundTable,
+                "solid over the table",
+                vec![(9..=29, Some(4..=27))],
+                3..=29,
+            ),
+            // The two legs below the slate.
+            (
+                PropKind::TabSlate,
+                "solid at the legs",
+                vec![(24..=29, Some(0..=15)), (24..=29, Some(16..=31))],
+                3..=29,
+            ),
+        ];
+        for (kind, phrase, parts, visual) in cases {
+            let src = ref_src(kind).expect("a ref");
+            assert!(
+                src.replace('\r', "").contains(phrase),
+                "{kind:?}: header lost {phrase:?}"
+            );
+            let want: Vec<Aabb> = parts
+                .into_iter()
+                .map(|(rows, cols)| grid_box(src, rows, cols))
+                .collect();
+            assert_eq!(kind.solids_local(), want.as_slice(), "{kind:?} solid");
+            assert_eq!(
+                kind.visual_local(),
+                grid_box(src, visual, None),
+                "{kind:?} visual"
+            );
+            let opaque = grid_box(src, 0..=kind.size().y as usize - 1, None);
+            assert_eq!(kind.ground_offset(), opaque.min.y, "{kind:?} ground line");
+        }
+        // A player's feet fit between the notice board's posts and the tab
+        // slate's legs (they walk under the board).
+        let foot = crate::plugins::player::PLAYER_FOOT;
+        for k in [PropKind::NoticeBoard, PropKind::TabSlate] {
+            let s = k.solids_local();
+            assert_eq!(s.len(), 2, "{k:?}");
+            assert!(s[1].min.x - s[0].max.x > foot.max.x - foot.min.x, "{k:?}");
+        }
+        // The tavern sign's post is at the left: its solid foot lies wholly
+        // west of the anchor, the board hangs east of it.
+        let sign = PropKind::TavernSign.solid_local();
+        assert!(sign.max.x < 0.0, "the sign's foot is not at the left");
+        assert!(PropKind::TavernSign.visual_local().max.x > 8.0);
+    }
+
+    /// The three Act 3-5 landmarks each stand once on their plaza's
+    /// back-centre plot, on a clear tile of their district's own paving all
+    /// round, with room to walk past either side; a player in front of the
+    /// base draws in front, behind the eave the roof fades over them.
+    #[test]
+    fn the_act3_to_5_landmarks_head_their_plazas() {
+        for (name, k) in [
+            ("Guildhall Quarter", PropKind::Guildhall),
+            ("The Mage's Tower", PropKind::MagesTower),
+            ("Tavern Row", PropKind::Tavern),
+        ] {
+            let d = district_index(name);
+            let ground = DISTRICTS[d].interior_ground();
+            assert_ne!(ground, Ground::Flagstone, "{name} has its own ground");
+            assert!(LANDMARKS.contains(&(d, k)), "{name}: {k:?}");
+            assert!(k.is_landmark());
+            let base = crate::plugins::world::landmark_plot_base(d).expect("plot");
+            let placed: Vec<Vec2> = all_props()
+                .into_iter()
+                .filter(|(kk, _)| *kk == k)
+                .map(|(_, b)| b)
+                .collect();
+            assert_eq!(placed, vec![base], "one {k:?}, at the back-centre");
+            assert_eq!(k.size(), Vec2::splat(64.0));
+            assert_eq!(
+                crate::plugins::world::back_landmark_base(d),
+                None,
+                "{name}: no boss grid"
+            );
+            let plot = k.sprite_rect_at(base);
+            let grown = Aabb {
+                min: plot.min - Vec2::splat(15.0),
+                max: plot.max + Vec2::splat(15.0),
+            };
+            assert!(rect_all(&grown, ground), "{k:?}: not on clear {ground:?}");
+            let solid = k.solid_at(base);
+            for side in [
+                Aabb::from_base(solid.min.x - 16.0, 16.0, solid.min.y, solid.max.y),
+                Aabb::from_base(solid.max.x + 16.0, 16.0, solid.min.y, solid.max.y),
+            ] {
+                assert!(rect_all(&side, ground), "{k:?}: no way round");
+            }
+            let prop_z = ysort_z(base.y + k.ground_offset());
+            let front = Vec2::new(base.x, solid.min.y - 6.0);
+            assert!(!occludes(
+                player_body_at_feet(front),
+                ysort_z(front.y),
+                k.visual_at(base),
+                prop_z
+            ));
+            let behind = Vec2::new(base.x, solid.max.y);
+            assert!(
+                occludes(
+                    player_body_at_feet(behind),
+                    ysort_z(behind.y),
+                    k.visual_at(base),
+                    prop_z
+                ),
+                "{k:?}: no fade behind it"
+            );
+        }
+    }
+
+    /// The Guildhall Quarter is symmetric about its avenue: every prop but
+    /// the signpost at the street mouth has a twin mirrored across x = 0
+    /// (banners come in pairs), and the ledger desk stands on the avenue
+    /// itself.
+    #[test]
+    fn the_guildhall_quarter_is_symmetric() {
+        let d = district_index("Guildhall Quarter");
+        let props: Vec<(PropKind, Vec2)> = DISTRICT_PROPS
+            .iter()
+            .filter(|(pd, _, _)| *pd == d)
+            .map(|(_, k, off)| (*k, *off))
+            .collect();
+        let mut banners = 0usize;
+        for &(k, off) in &props {
+            if k == PropKind::GuildBanner {
+                banners += 1;
+            }
+            // The signpost at the street mouth points down the one street.
+            if k != PropKind::Signpost {
+                let twin = Vec2::new(-off.x, off.y);
+                assert!(
+                    props.contains(&(k, twin)),
+                    "the {k:?} at {off:?} has no twin at {twin:?}"
+                );
+            }
+        }
+        assert!(banners >= 6 && banners % 2 == 0, "{banners} banners");
+        assert!(props.contains(&(PropKind::LedgerDesk, Vec2::new(0.0, 76.0))));
+    }
+
+    /// The Mage's Tower court has its stone ring: eight rune stones at one
+    /// distance round the cauldron, evenly spread, with a two-tile gap
+    /// between neighbours so the ring is walked through, not round.
+    #[test]
+    fn the_rune_stones_ring_the_cauldron() {
+        let d = district_index("The Mage's Tower");
+        let cauldron = DISTRICT_PROPS
+            .iter()
+            .find(|(pd, k, _)| *pd == d && *k == PropKind::Cauldron)
+            .map(|(_, _, off)| *off)
+            .expect("a cauldron");
+        // The ring's centre: the middle of the cauldron's solid. Stones
+        // are measured by their anchors (the foot of each stone).
+        let s = PropKind::Cauldron.solid_local();
+        let heart = cauldron + Vec2::new(0.0, (s.min.y + s.max.y) * 0.5);
+        let mut stones: Vec<Vec2> = DISTRICT_PROPS
+            .iter()
+            .filter(|(pd, k, off)| {
+                *pd == d && *k == PropKind::RuneStone && off.distance(heart) < 120.0
+            })
+            .map(|(_, _, off)| *off)
+            .collect();
+        assert_eq!(stones.len(), 8, "the ring has eight stones");
+        let r0 = stones[0].distance(heart);
+        for st in &stones {
+            let r = st.distance(heart);
+            assert!(
+                (r - r0).abs() <= 2.0,
+                "stone {st:?} off the ring ({r} vs {r0})"
+            );
+        }
+        let angle = |p: &Vec2| (p.y - heart.y).atan2(p.x - heart.x);
+        stones.sort_by(|a, b| angle(a).total_cmp(&angle(b)));
+        for i in 0..stones.len() {
+            let a = PropKind::RuneStone.solid_at(stones[i]);
+            let b = PropKind::RuneStone.solid_at(stones[(i + 1) % stones.len()]);
+            let gap = (b.min.x - a.max.x)
+                .max(a.min.x - b.max.x)
+                .max(b.min.y - a.max.y)
+                .max(a.min.y - b.max.y);
+            assert!(gap >= 32.0, "stones {i} and next leave {gap} px");
         }
     }
 }

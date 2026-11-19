@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-133 - Rune stone, Act 4 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/rune_stone.png.
 //
 // A standing stone with a rounded top, carved with two bright-teal
 // runes (marks, not letters) that catch the light, grass at its foot.

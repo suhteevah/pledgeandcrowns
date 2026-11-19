@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-131 - The Mage's Tower, Act 4 district landmark, 64x64.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/mages_tower.png.
 //
 // A round stone tower lit from the left, wound with a gold band, under a
 // cobalt cone roof with four brass stars and a gold finial. One window

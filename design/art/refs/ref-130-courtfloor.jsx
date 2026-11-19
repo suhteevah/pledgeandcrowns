@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-130 - Tower court floor, 16x16 tiles, 2-column sheet.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/tiles_village_v3.png (via the REF-76 combined atlas, indices 28-29).
 //
 // Ground for the Mage's Tower district (Act 4): pale aged-paper slabs,
 // one whole slab per tile, and a second tile with a teal diamond inlaid

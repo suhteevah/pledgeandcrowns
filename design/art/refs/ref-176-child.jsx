@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-176 - Townsfolk: boy, 32x32. Ambient villager, gives no mission.
-// DRAFT 2026-11-19. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-19. Not wired yet.
 //
 // Four pixels shorter than an adult with the same size head, a mop
 // of bronze hair with a brass-lit lock, a dusty-rose tunic, cobalt

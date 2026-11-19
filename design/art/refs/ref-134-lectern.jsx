@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-134 - Lectern, Act 4 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/lectern.png.
 //
 // A brass-wood lectern on a single bronze post, with an open tome:
 // parchment pages, stone-grey lines, two teal initials and a wine

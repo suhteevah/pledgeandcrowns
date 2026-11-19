@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-126 - Guild banner, Act 3 district prop, 32x32.
-// APPROVED by Matt 2026-11-18. Not wired yet.
+// APPROVED by Matt 2026-11-18. Wired as game/assets/sprites/props/guild_banner.png.
 //
 // An oxblood banner with a gold ring emblem, a gold hem and fringe, on
 // a bronze pole with a stone foot. The district's colours on a stick:
