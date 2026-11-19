@@ -130,8 +130,7 @@ is drawn and approved first as the style sample; the rest follow it.
 
 About 55 new pieces before characters. (There is no bridge in the world: Acts 1-2 play across Hearthstone Square, Market Row and The Commons.)
 
-Status 2026-11-18: the Forge (REF-97..102) is approved and in the game. Hearthstone (REF-103..106) and Market Row (REF-107..110) are approved, not wired. The Commons (REF-111..115) is drafted, awaiting approval. Engineering for each wave follows
-its approval, never before.
+Status 2026-11-19: waves A1 to A4 are done. Every district is dressed (REF-97..172), all approved by the owner and in the game, with each cast gathered at props, 29 ambient townsfolk (REF-173..179, seven figures on bodies of their own) and the Wharf's harbour water. REF-122 (Guildhall floor) and REF-154 (Vault floor) are second drawings: the owner agreed both were too loud. The itch demo is at 0.2.1 and covers the first three districts. Next in art is wave A5, characters, then UI and store.
 
 ## Risks
 
