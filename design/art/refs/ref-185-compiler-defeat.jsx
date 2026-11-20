@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-185 - The Compiler, defeat frame, 64x64.
-// DRAFT 2026-11-19. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-19. Wired as game/assets/sprites/npc/compiler_defeat_0.png.
 //
 // The moment the player's last program passes. The colossus kneels:
 // the REF-94 figure with twelve rows taken out below the belt, so

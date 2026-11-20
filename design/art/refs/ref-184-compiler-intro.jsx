@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-184 - The Compiler, intro frame, 64x64.
-// DRAFT 2026-11-19. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-19. Wired as game/assets/sprites/npc/compiler_intro_0.png.
 //
 // The moment the last trial begins. The approved REF-94 figure: both
 // eyes burn specular white, the row of vents lights up cobalt, the

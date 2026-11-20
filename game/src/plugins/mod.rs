@@ -8,6 +8,7 @@ use bevy::prelude::*;
 
 pub mod animation;
 pub mod audio;
+pub mod boss_frames;
 pub mod compile_client;
 pub mod dialogue;
 pub mod editor;
@@ -55,7 +56,11 @@ impl Plugin for CorePlugin {
                 audio::GameAudioPlugin,
             ))
             // Outside the tuple above: Bevy plugin tuples stop at 15.
-            .add_plugins((animation::AnimationPlugin, townsfolk::TownsfolkPlugin));
+            .add_plugins((
+                animation::AnimationPlugin,
+                townsfolk::TownsfolkPlugin,
+                boss_frames::BossFramesPlugin,
+            ));
     }
 }
 

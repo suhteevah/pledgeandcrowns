@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-183 - The Librarian, defeat frame, 64x64.
-// DRAFT 2026-11-19. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-19. Wired as game/assets/sprites/npc/librarian_defeat_0.png.
 //
 // The moment the player's code passes her trial. She kneels: the
 // REF-93 figure with twelve rows taken out, so the hem stays on the

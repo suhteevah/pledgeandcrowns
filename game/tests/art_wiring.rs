@@ -1213,3 +1213,74 @@ fn the_townsfolk_ship_their_approved_renders() {
         );
     }
 }
+
+/// The boss intro and defeat frames (REF-180..185, approved by Matt
+/// 2026-11-19) ship byte-identical to their 64x64 renders, preloaded, with
+/// approval headers naming their game file, and are exactly the frames
+/// `boss_frames::BOSS_FRAMES` swaps in for the three bosses, whose idle
+/// sprites are their own renders (REF-03, REF-93, REF-94).
+#[test]
+fn the_boss_frames_ship_their_approved_renders() {
+    use pledge_and_crown::assets::{
+        SPRITE_BORROW_CHECKER_DEFEAT, SPRITE_BORROW_CHECKER_INTRO, SPRITE_COMPILER_DEFEAT,
+        SPRITE_COMPILER_INTRO, SPRITE_LIBRARIAN_DEFEAT, SPRITE_LIBRARIAN_INTRO,
+    };
+    use pledge_and_crown::plugins::boss_frames::BOSS_FRAMES;
+    for (path, file, n, jsx) in [
+        (
+            SPRITE_BORROW_CHECKER_INTRO,
+            "borrow_checker_intro_0",
+            180,
+            "ref-180-checker-intro.jsx",
+        ),
+        (
+            SPRITE_BORROW_CHECKER_DEFEAT,
+            "borrow_checker_defeat_0",
+            181,
+            "ref-181-checker-defeat.jsx",
+        ),
+        (
+            SPRITE_LIBRARIAN_INTRO,
+            "librarian_intro_0",
+            182,
+            "ref-182-librarian-intro.jsx",
+        ),
+        (
+            SPRITE_LIBRARIAN_DEFEAT,
+            "librarian_defeat_0",
+            183,
+            "ref-183-librarian-defeat.jsx",
+        ),
+        (
+            SPRITE_COMPILER_INTRO,
+            "compiler_intro_0",
+            184,
+            "ref-184-compiler-intro.jsx",
+        ),
+        (
+            SPRITE_COMPILER_DEFEAT,
+            "compiler_defeat_0",
+            185,
+            "ref-185-compiler-defeat.jsx",
+        ),
+    ] {
+        assert_wired(path, "npc", file, n, jsx, 64, "2026-11-19");
+    }
+    let root = game_assets();
+    let refs = refs_dir();
+    let renders = [
+        ("03", "180", "181"),
+        ("93", "182", "183"),
+        ("94", "184", "185"),
+    ];
+    assert_eq!(BOSS_FRAMES.len(), renders.len());
+    for (f, (idle, intro, defeat)) in BOSS_FRAMES.iter().zip(renders) {
+        for (path, r) in [(f.idle, idle), (f.intro, intro), (f.defeat, defeat)] {
+            assert!(
+                read(&root.join(path)) == read(&refs.join(format!("png/REF{r}.png"))),
+                "{}: {path} is not the REF{r}.png render",
+                f.npc
+            );
+        }
+    }
+}

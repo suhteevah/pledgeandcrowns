@@ -20,13 +20,14 @@ use crate::plugins::animation::{
     CharacterSheets, Facing, IdleBob, Scuttle, SpriteLift, WalkAnim, apply_frame, ferris_frame,
     player_frame,
 };
+use crate::plugins::boss_frames::{BossFrames, BossPose};
 use crate::plugins::compile_client::CompileMode;
 use crate::plugins::compile_client::outcome::{HttpReply, classify, verdict_with_server};
 use crate::plugins::dialogue::Dialogue;
 use crate::plugins::editor::{EditorSession, EditorState};
 use crate::plugins::menu::{MenuScreen, MenuUi};
 use crate::plugins::mission::{
-    ActiveMission, CompletionView, HideNextPinForCapture, MissionRegistry,
+    ActiveMission, CompletionView, EpilogueView, HideNextPinForCapture, MissionRegistry,
 };
 use crate::plugins::npc::{NPC_ROSTER, Npc, TALK_SPOT_OFFSET};
 use crate::plugins::player::Player;
@@ -395,6 +396,7 @@ pub(super) fn all_scenes() -> Vec<Scene> {
     title_scenes(&mut v);
     world_scenes(&mut v);
     district_npc_scenes(&mut v);
+    boss_frame_scenes(&mut v);
     animation_scenes(&mut v);
     ysort_scenes(&mut v);
     collision_scenes(&mut v);
@@ -430,6 +432,7 @@ fn reset_trial_scene(world: &mut World) {
     world.resource_mut::<ActiveMission>().current = None;
     *world.resource_mut::<crate::plugins::trial::TrialView>() = Default::default();
     fresh_progress(world);
+    settle_bosses(world);
 }
 
 /// The Borrow Checker's trial: the offer dialogue, the prompt (mission)
@@ -1038,6 +1041,150 @@ fn district_npc_scenes(v: &mut Vec<Scene>) {
                 ],
                 0.7,
                 boxed(show_next_pin),
+            ));
+        }
+    }
+}
+
+/// Put the boss with roster key `npc` into `pose` for a capture (a beat
+/// far longer than any settle), marking his trial's completion as already
+/// seen so the progress a scene sets does not restart the beat. The frame
+/// system swaps the sprite on the next update.
+fn force_boss_pose(world: &mut World, npc: &str, pose: BossPose) {
+    let complete = {
+        let progress = world.resource::<MissionProgress>();
+        crate::plugins::trial::trial_for_npc(npc)
+            .is_some_and(|t| crate::plugins::trial::is_complete(t, progress))
+    };
+    let mut q = world.query::<&mut BossFrames>();
+    let mut n = 0usize;
+    for mut f in q.iter_mut(world) {
+        if f.set.npc == npc {
+            f.pose = pose;
+            f.was_complete = complete;
+            n += 1;
+        }
+    }
+    if n == 0 {
+        tracing::warn!(npc, "boss scene: no BossFrames for this NPC");
+    }
+}
+
+/// Stand every boss idle with his trial's completion marked as seen, so a
+/// beat started by one scene's progress (the Compiler's defeat scene clears
+/// every trial) never shows in the next capture.
+fn settle_bosses(world: &mut World) {
+    let done: Vec<&'static str> = {
+        let progress = world.resource::<MissionProgress>();
+        crate::plugins::trial::TRIALS
+            .iter()
+            .filter(|t| crate::plugins::trial::is_complete(t, progress))
+            .map(|t| t.npc)
+            .collect()
+    };
+    let mut q = world.query::<&mut BossFrames>();
+    for mut f in q.iter_mut(world) {
+        f.pose = BossPose::Idle;
+        f.was_complete = done.contains(&f.set.npc);
+    }
+    tracing::debug!(?done, "scene: bosses settled idle");
+}
+
+/// Log the boss's transform, anchor, lift and shown frame, so the frame
+/// can be checked to sit exactly where the idle sprite sits.
+fn log_boss(world: &mut World, label: &str, npc: &'static str) {
+    let mut q = world.query::<(
+        &Transform,
+        &Anchor,
+        Option<&SpriteLift>,
+        &Sprite,
+        &BossFrames,
+    )>();
+    let lines: Vec<String> = q
+        .iter(world)
+        .filter(|(.., f)| f.set.npc == npc)
+        .map(|(t, a, lift, s, f)| {
+            format!(
+                "boss {label}: {npc} at ({:.1},{:.1},{:.2}) anchor={:?} lift={:?} size={:?} pose={:?} shown={}",
+                t.translation.x,
+                t.translation.y,
+                t.translation.z,
+                a.as_vec(),
+                lift.map(|l| l.0),
+                s.custom_size,
+                f.pose,
+                f.shown_path()
+            )
+        })
+        .collect();
+    if lines.is_empty() {
+        tracing::warn!(label, npc, "boss scene: boss not found");
+    }
+    for line in lines {
+        tracing::info!("{line}");
+        world.resource_mut::<ShotLog>().0.push(line);
+    }
+}
+
+/// Each boss with drawn frames, in his plaza, at play zoom with the player
+/// standing beside him (east, a little south, as `npcs-*-back` does):
+/// `boss-<name>-idle` (reference), `-intro` and `-defeat`, the frame forced
+/// for the capture. Intro and idle are shot with the trial open (stage 1
+/// offered, so the quest marker shows); defeat with the trial complete.
+/// The Borrow Checker stands in Hearthstone Square, the Librarian before
+/// the Sealed Stacks, the Compiler before the Throne Dais.
+fn boss_frame_scenes(v: &mut Vec<Scene>) {
+    for (name, npc) in [
+        ("checker", "borrow_preview"),
+        ("librarian", "librarian_index"),
+        ("compiler", "compiler_alloc"),
+    ] {
+        let Some(slot) = npc_slot(npc) else {
+            tracing::warn!(npc, "boss scene: no slot");
+            continue;
+        };
+        let Some(trial) = crate::plugins::trial::trial_for_npc(npc) else {
+            tracing::warn!(npc, "boss scene: no trial");
+            continue;
+        };
+        let first = trial.stages[0];
+        let last = trial.stages[trial.stages.len() - 1];
+        let spot = Vec2::new(slot.x + 64.0, slot.y - 20.0);
+        for (pose_name, pose) in [
+            ("idle", BossPose::Idle),
+            ("intro", BossPose::Intro { left: 1.0e6 }),
+            ("defeat", BossPose::Defeat { left: 1.0e6 }),
+        ] {
+            let label = format!("{name}-{pose_name}");
+            let log_label = label.clone();
+            v.push(scene(
+                &format!("boss-{label}"),
+                vec![
+                    Action::EnterState(GameState::InGame, ENTER_GAME_SETTLE),
+                    act(hide_next_pin),
+                    act(move |w| {
+                        if pose_name == "defeat" {
+                            clear_before(w, last);
+                            clear_missions(w, &[last]);
+                            // The Compiler's last stage clears every
+                            // mission: keep the epilogue off the capture.
+                            w.resource_mut::<EpilogueView>().dismissed_this_session = true;
+                        } else {
+                            clear_before(w, first);
+                        }
+                        force_boss_pose(w, npc, pose);
+                    }),
+                    teleport_to(spot),
+                    Action::Wait(0.3),
+                    act(move |w| log_boss(w, &log_label, npc)),
+                ],
+                0.5,
+                boxed(move |w| {
+                    w.resource_mut::<EpilogueView>().dismissed_this_session = false;
+                    fresh_progress(w);
+                    settle_bosses(w);
+                    show_next_pin(w);
+                }),
             ));
         }
     }

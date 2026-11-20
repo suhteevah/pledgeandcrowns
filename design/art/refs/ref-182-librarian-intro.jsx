@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-182 - The Librarian, intro frame, 64x64.
-// DRAFT 2026-11-19. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-19. Wired as game/assets/sprites/npc/librarian_intro_0.png.
 //
 // The moment her trial begins. The approved REF-93 figure: her cream
 // eyes widen to three pixels, the sigil on the scapular flares from

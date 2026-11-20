@@ -172,6 +172,18 @@ pub const SPRITE_HERMIT: &str = "sprites/npc/hermit_idle_0.png";
 pub const SPRITE_REGISTRAR: &str = "sprites/npc/registrar_idle_0.png";
 pub const SPRITE_COMPILER: &str = "sprites/npc/compiler_idle_0.png";
 
+// Boss intro and defeat frames (approved by Matt 2026-11-19): same 64x64
+// canvas and anchor as each boss's idle sprite, swapped in place by
+// `plugins::boss_frames::BOSS_FRAMES`. REF-180/181 the Borrow Checker,
+// REF-182/183 the Librarian, REF-184/185 the Compiler. Sources:
+// design/art/refs/ref-180..185-*.jsx, rendered via `cargo run -p render-refs`.
+pub const SPRITE_BORROW_CHECKER_INTRO: &str = "sprites/npc/borrow_checker_intro_0.png";
+pub const SPRITE_BORROW_CHECKER_DEFEAT: &str = "sprites/npc/borrow_checker_defeat_0.png";
+pub const SPRITE_LIBRARIAN_INTRO: &str = "sprites/npc/librarian_intro_0.png";
+pub const SPRITE_LIBRARIAN_DEFEAT: &str = "sprites/npc/librarian_defeat_0.png";
+pub const SPRITE_COMPILER_INTRO: &str = "sprites/npc/compiler_intro_0.png";
+pub const SPRITE_COMPILER_DEFEAT: &str = "sprites/npc/compiler_defeat_0.png";
+
 // Act 10 district landmark (approved by Matt 2026-11-15): the Throne Dais,
 // REF-96, a 64x64 prop like the cottage (bottom-centre anchor, y-sorted,
 // solid). Source: design/art/refs/ref-96-thronedais.jsx.
@@ -417,6 +429,12 @@ pub const ALL_SPRITE_PATHS: &[&str] = &[
     SPRITE_HERMIT,
     SPRITE_REGISTRAR,
     SPRITE_COMPILER,
+    SPRITE_BORROW_CHECKER_INTRO,
+    SPRITE_BORROW_CHECKER_DEFEAT,
+    SPRITE_LIBRARIAN_INTRO,
+    SPRITE_LIBRARIAN_DEFEAT,
+    SPRITE_COMPILER_INTRO,
+    SPRITE_COMPILER_DEFEAT,
     SPRITE_PROP_THRONE_DAIS,
     SPRITE_PROP_SEALED_STACKS,
     SPRITE_PROP_GREAT_FURNACE,

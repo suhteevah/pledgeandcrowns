@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-181 - Borrow Checker, defeat frame, 64x64.
-// DRAFT 2026-11-19. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-19. Wired as game/assets/sprites/npc/borrow_checker_defeat_0.png.
 //
 // The moment the player's code passes his trial. He kneels: the same
 // REF-03 figure with twelve rows taken out of the middle of the robe,

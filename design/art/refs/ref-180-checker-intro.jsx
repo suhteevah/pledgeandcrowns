@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // REF-180 - Borrow Checker, intro frame, 64x64.
-// DRAFT 2026-11-19. NOT approved, NOT wired. Awaiting Matt on the design canvas.
+// APPROVED by Matt 2026-11-19. Wired as game/assets/sprites/npc/borrow_checker_intro_0.png.
 //
 // The moment his trial begins. The approved REF-03 figure, without
 // the bridge strip (there is no bridge in the world): his eyes blaze

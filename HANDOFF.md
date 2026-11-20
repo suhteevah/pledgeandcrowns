@@ -345,10 +345,27 @@ runs `scripts/ci.ps1` on the merged result as the sign-off gate.
   fish crates, elder at the menders' bench, girl at the net racks, boy at
   a bollard. Capture: `scene-district-the-wharf[-yard,-jetty,-quay]`,
   `scene-landmark-harbour-crane`, `scene-townsfolk-the-wharf`.
+- **Wired 2026-11-19 (boss intro/defeat frames):** REF-180..185 (approved
+  2026-11-19) as `sprites/npc/{borrow_checker,librarian,compiler}_{intro,
+  defeat}_0.png`, one frame each on the idle sprite's canvas, swapped in
+  place by `plugins::boss_frames` (`BOSS_FRAMES`, roster key -> idle,
+  intro, defeat; `BossFrames` component, `BossPose` state machine). Intro:
+  a conversation with the boss about an open, uncleared trial stage
+  (status Offer/InProgress with a trial header); holds while it is open,
+  then `INTRO_SECS` 1.2 s. Defeat: his trial goes not-complete -> complete
+  in play; counts `DEFEAT_SECS` 4 s only while no editor, completion panel
+  or epilogue covers him, then idle (a cleared boss in the world stands
+  idle). A boss complete at spawn (loaded save) stands idle. Virtual time,
+  so pause freezes both. The six Act 3-8 bosses have no frames and are
+  untouched. Capture: `scene-boss-{checker,librarian,compiler}-{idle,
+  intro,defeat}`. Note: the existing `trial-offer*` scenes now show the
+  intro frame (the dialogue is open). Scenes that set progress can start a
+  real defeat beat for a boss whose trial they complete; the boss scenes'
+  teardown and `reset_trial_scene` call `settle_bosses` so it does not
+  leak into the next capture (other scenes do not).
 - **Awaiting approval:** no landmark.
-- **Not drawn:** boss intro/defeat frames (Librarian, Compiler), the
-  Librarian's lectern, pixel font pick, title redraw, a renderable Borrow
-  Checker.
+- **Not drawn:** intro/defeat frames for the Act 3-8 bosses, the
+  Librarian's lectern, pixel font pick, title redraw.
 
 
 ### Known-open, in priority order
@@ -364,9 +381,10 @@ runs `scripts/ci.ps1` on the merged result as the sign-off gate.
    because a player's `unsafe` code can forge them; the nine Act 10
    missions are stdout checks).
 4. **Art still owed by the designer (see Art status above):** pixel font,
-   Borrow Checker, Librarian and Compiler intro/defeat frames, the
-   Librarian's lectern, title redraw. (The Sealed Stacks, REF-95, was
-   approved and wired 2026-11-16.)
+   the Librarian's lectern, title redraw. (The Sealed Stacks, REF-95, was
+   approved and wired 2026-11-16; the Borrow Checker, Librarian and
+   Compiler intro/defeat frames, REF-180..185, were approved and wired
+   2026-11-19.)
 5. **Linux verification at `e86b519` on cnc (2026-11-16) passed**
    (`.claude/reviews/linux-verification-2026-11-16-e86b519.md`): 410
    normal + 45/45 ignored compile-api tests on rustc 1.99.0, the bwrap
